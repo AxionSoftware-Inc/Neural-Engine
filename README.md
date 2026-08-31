@@ -988,6 +988,12 @@ V0.8 serial circuit composition was rejected as the default: it slightly helps
 depth-2, but is about 2.1x slower and weakens depth-3. The optional mode and
 controlled result are recorded in `results/V0_8_SERIAL_CIRCUITS.md`.
 
+The held-out benchmark is now available in `results/HELDOUT_COMPOSITION.md`.
+It shows that the original in-distribution score should not be treated as
+systematic generalization: NE-V0.3 reaches 49.95% on held-out combinations,
+roughly matching the Transformer’s 50.81%. The next focus is adaptive execution
+and per-input active-compute measurement.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.

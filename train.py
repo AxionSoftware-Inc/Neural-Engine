@@ -48,6 +48,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["task_context"] = config.get("task_context", False)
     model_kwargs["task_context_update"] = config.get("task_context_update", True)
     model_kwargs["circuit_mode"] = config.get("circuit_mode", "parallel")
+    model_kwargs["numeric_value_encoding"] = config.get("numeric_value_encoding", False)
     return NeuralEngineV0(**model_kwargs)
 
 
@@ -118,10 +119,22 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     composition_strength = (args.composition_strength
                             if args.composition_strength > 0
                             else 1.0 if args.composition_train else 0.0)
-    train_source = BatchSource(SyntheticTaskGenerator(config["seq_len"], int(config["seed"]) + 1),
+    train_value_min = int(config.get("train_value_min", 0))
+    train_value_max = int(config.get("train_value_max", 63))
+    eval_value_min = int(config.get("eval_value_min", train_value_min))
+    eval_value_max = int(config.get("eval_value_max", train_value_max))
+    train_split = str(config.get("train_split", "all"))
+    eval_split = str(config.get("eval_split", "all"))
+    train_source = BatchSource(SyntheticTaskGenerator(
+                               config["seq_len"], int(config["seed"]) + 1,
+                               value_min=train_value_min, value_max=train_value_max,
+                               split=train_split),
                                config["batch_size"], device, task_balanced=args.balanced_train,
                                composition_strength=composition_strength)
-    eval_source = BatchSource(SyntheticTaskGenerator(config["seq_len"], int(config["seed"]) + 2), 256, device)
+    eval_source = BatchSource(SyntheticTaskGenerator(
+                              config["seq_len"], int(config["seed"]) + 2,
+                              value_min=eval_value_min, value_max=eval_value_max,
+                              split=eval_split), 256, device)
     steps = args.steps if args.steps is not None else (20 if args.smoke else 1000)
     model.train()
     start = time.perf_counter()
@@ -156,6 +169,17 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             print(f"step={step:04d} loss={losses[-1]:.4f}")
     elapsed = time.perf_counter() - start
     validation = evaluate(model, eval_source, batches=2 if args.smoke else 8)
+    heldout_min = config.get("heldout_value_min")
+    heldout_max = config.get("heldout_value_max")
+    heldout_split = str(config.get("heldout_split", "all"))
+    if heldout_min is not None and heldout_max is not None and (heldout_split != "all" or heldout_min != eval_value_min or heldout_max != eval_value_max):
+        heldout_source = BatchSource(SyntheticTaskGenerator(
+                                     config["seq_len"], int(config["seed"]) + 3,
+                                     value_min=int(heldout_min), value_max=int(heldout_max),
+                                     split=heldout_split),
+                                     256, device)
+        heldout = evaluate(model, heldout_source, batches=2 if args.smoke else 8)
+        validation.update({f"heldout_{key}": value for key, value in heldout.items()})
     report: dict[str, Any] = {
         "run_id": args.run_id, "model_name": config["model"], "seed": config["seed"], "device": str(device),
         "gpu": torch.cuda.get_device_name(device) if device.type == "cuda" else None, "steps": steps,
@@ -163,6 +187,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "samples_per_second": steps * config["batch_size"] / max(elapsed, 1e-9), "peak_vram_mb": int(peak_vram),
         "task_balanced": bool(args.balanced_train), "composition_strength": composition_strength,
         "stage_loss_weight": float(config.get("stage_loss_weight", 0.0)),
+        "train_value_range": [train_value_min, train_value_max],
+        "eval_value_range": [eval_value_min, eval_value_max],
+        "train_split": train_split, "eval_split": eval_split,
         "total_params": count_parameters(model), "train_loss_first": losses[0], "train_loss_last": losses[-1],
         **validation,
     }

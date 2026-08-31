@@ -26,11 +26,33 @@ class Batch:
 class SyntheticTaskGenerator:
     """Generate fresh exact-label algorithmic examples."""
 
-    def __init__(self, seq_len: int = 32, seed: int = 17):
+    def __init__(self, seq_len: int = 32, seed: int = 17,
+                 value_min: int = 0, value_max: int = MODULUS - 1,
+                 split: str = "all"):
         if seq_len < 6:
             raise ValueError("seq_len must leave room for task and operand tokens")
+        if not 0 <= value_min <= value_max < MODULUS:
+            raise ValueError(f"value range must be within [0, {MODULUS - 1}]")
+        if split not in {"all", "train", "heldout"}:
+            raise ValueError("split must be 'all', 'train', or 'heldout'")
         self.seq_len = seq_len
+        self.value_min = value_min
+        self.value_max = value_max
+        self.split = split
         self.rng = np.random.default_rng(seed)
+
+    @staticmethod
+    def _combination_bucket(task: TaskSpec, values: list[int]) -> int:
+        """Stable task-aware bucket used to hold out operand combinations."""
+        accumulator = 0x811C9DC5 ^ (task.task_id + 1)
+        for index, value in enumerate(values, start=1):
+            accumulator ^= (index * (value + 1)) & 0xFFFFFFFF
+            accumulator = (accumulator * 0x01000193) & 0xFFFFFFFF
+        return accumulator % 4
+
+    def _accept_values(self, task: TaskSpec, values: list[int]) -> bool:
+        bucket = self._combination_bucket(task, values)
+        return self.split == "all" or (self.split == "train" and bucket < 3) or (self.split == "heldout" and bucket == 3)
 
     def _stage_targets(self, task: TaskSpec, values: list[int], target: int) -> tuple[list[int], list[bool]]:
         """Return deterministic supervision for the recurrent reasoning steps.
@@ -74,7 +96,10 @@ class SyntheticTaskGenerator:
         return stages, mask
 
     def _one(self, task: TaskSpec) -> tuple[list[int], int, list[int], list[bool]]:
-        values = self.rng.integers(0, MODULUS, size=task.arity).tolist()
+        while True:
+            values = self.rng.integers(self.value_min, self.value_max + 1, size=task.arity).tolist()
+            if self._accept_values(task, values):
+                break
         tokens = [TASK_TOKEN_OFFSET + task.task_id]
         tokens += [VALUE_TOKEN_OFFSET + value for value in values]
         tokens += [PAD_TOKEN] * (self.seq_len - len(tokens))

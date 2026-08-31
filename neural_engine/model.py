@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import torch
 from torch import nn
 
@@ -7,6 +9,11 @@ from .circuits import MicroCircuitBank
 from .instrumentation import count_parameters
 from .router import HierarchicalRouter
 from .state import PersistentState
+
+
+VALUE_TOKEN_OFFSET = 32
+VALUE_MODULUS = 64
+VALUE_HARMONICS = (1, 2, 4, 8, 16, 32)
 
 
 class NeuralEngineV0(nn.Module):
@@ -17,7 +24,8 @@ class NeuralEngineV0(nn.Module):
                  circuit_rank: int = 16, router_branch: int = 8, router_depth: int = 4,
                  candidate_pool: int = 32, active_circuits: int = 8, internal_steps: int = 3,
                  router_addresses: int = 1, slot_count: int = 0, task_context: bool = False,
-                 task_context_update: bool = True, circuit_mode: str = "parallel"):
+                 task_context_update: bool = True, circuit_mode: str = "parallel",
+                 numeric_value_encoding: bool = False):
         super().__init__()
         if circuit_mode not in {"parallel", "serial"}:
             raise ValueError("circuit_mode must be 'parallel' or 'serial'")
@@ -28,7 +36,10 @@ class NeuralEngineV0(nn.Module):
         self.use_task_context = task_context
         self.task_context_update = task_context_update
         self.circuit_mode = circuit_mode
-        self.token_embedding = nn.Embedding(vocab_size, d_model, padding_idx=0)
+        self.numeric_value_encoding = numeric_value_encoding
+        embedding_vocab = 16 if numeric_value_encoding else vocab_size
+        self.token_embedding = nn.Embedding(embedding_vocab, d_model, padding_idx=0)
+        self.value_encoder = nn.Linear(1 + 2 * len(VALUE_HARMONICS), d_model) if numeric_value_encoding else None
         self.position_embedding = nn.Parameter(torch.zeros(seq_len, d_model))
         # Multiplicative position conditioning binds a token to its slot before
         # pooling; this preserves operand order without attention.
@@ -50,7 +61,18 @@ class NeuralEngineV0(nn.Module):
         self._last_route: dict[str, torch.Tensor] = {}
 
     def encode(self, inputs: torch.Tensor) -> torch.Tensor:
-        tokens = self.token_embedding(inputs)
+        embedding_inputs = inputs.clamp_max(self.token_embedding.num_embeddings - 1)
+        tokens = self.token_embedding(embedding_inputs)
+        if self.value_encoder is not None:
+            values = (inputs.float() - VALUE_TOKEN_OFFSET).clamp(0, VALUE_MODULUS - 1)
+            angles = values.unsqueeze(-1) * (2.0 * math.pi / VALUE_MODULUS)
+            features = [values.unsqueeze(-1) / (VALUE_MODULUS - 1)]
+            for harmonic in VALUE_HARMONICS:
+                features.append(torch.sin(angles * harmonic))
+                features.append(torch.cos(angles * harmonic))
+            numeric_tokens = self.value_encoder(torch.cat(features, dim=-1))
+            value_mask = inputs.ge(VALUE_TOKEN_OFFSET) & inputs.lt(VALUE_TOKEN_OFFSET + VALUE_MODULUS)
+            tokens = torch.where(value_mask.unsqueeze(-1), numeric_tokens, tokens)
         positions = self.position_embedding[: inputs.shape[1]]
         scale = self.position_scale[: inputs.shape[1]]
         bias = self.position_bias[: inputs.shape[1]]
@@ -108,6 +130,8 @@ class NeuralEngineV0(nn.Module):
     def parameter_report(self) -> dict[str, int | float]:
         total = count_parameters(self)
         shared = count_parameters(self.token_embedding) + self.position_embedding.numel()
+        if self.value_encoder is not None:
+            shared += count_parameters(self.value_encoder)
         shared += self.position_scale.numel() + self.position_bias.numel() + count_parameters(self.encoder)
         shared += count_parameters(self.state) + self.step_embedding.numel()
         shared += self.router.level_projections.numel() + self.router.level_bias.numel()

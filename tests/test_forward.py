@@ -66,3 +66,20 @@ def test_serial_circuit_mode_has_same_shapes_and_gradients():
     torch.nn.functional.cross_entropy(logits, batch.targets).backward()
     assert logits.shape == (4, 64)
     assert model.circuits.down.grad is not None
+
+
+def test_numeric_value_encoding_handles_unseen_value_tokens():
+    model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
+                           num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,
+                           candidate_pool=4, active_circuits=2, internal_steps=2, slot_count=5,
+                           numeric_value_encoding=True)
+    low = torch.zeros(1, 32, dtype=torch.long)
+    low[0, :3] = torch.tensor([1, 32 + 7, 32 + 11])
+    high = low.clone()
+    high[0, 1] = 32 + 39
+    encoded = model.encode(high)
+    assert encoded.shape == (1, 32)
+    logits, _ = model(high)
+    assert logits.shape == (1, 64)
+    torch.nn.functional.cross_entropy(logits, torch.tensor([0])).backward()
+    assert model.value_encoder.weight.grad is not None
