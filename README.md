@@ -999,6 +999,9 @@ Adaptive halting is implemented and evaluated in
 average, saving about 46.7% of recurrent routed execution at a 0.57-point
 balanced-accuracy cost. It is optional; V0.3 remains the default.
 
+On held-out combinations, V0.11 reaches 47.58% while retaining the same 1.60
+average steps; this is tracked in `results/HELDOUT_COMPOSITION.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.

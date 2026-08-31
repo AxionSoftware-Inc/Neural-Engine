@@ -27,6 +27,11 @@ training batches, 5,000 steps, batch size 128.
 V0.11 learned the intended schedule: depth-1 tasks execute 1.00 steps on
 average, depth-2 tasks 2.00, and depth-3 tasks 2.99.
 
+On the held-out-combination split, V0.11 reached 68.23% on the train split and
+47.58% on unseen combinations while still executing 1.60 steps on average.
+This is close to the fixed V0.3 held-out result of 49.95%, so the compute saving
+does not depend on memorizing the validation examples.
+
 ## Decision
 
 Keep V0.11 as an optional fast-inference mode, not the default quality mode. It

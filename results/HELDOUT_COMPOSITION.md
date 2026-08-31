@@ -31,6 +31,10 @@ All values `0..63` are visible during training. A stable task-aware hash puts
 |---|---:|---:|---:|---:|
 | NE-V0.3 | **68.98%** | 49.95% | 20.284M | 9.93% |
 | Transformer | 51.02% | **50.81%** | 20.582M | 100% |
+| NE-V0.11 adaptive | 68.23% | 47.58% | 20.285M | 9.93% |
+
+NE-V0.11 reaches these numbers with 1.60 of 3 recurrent steps on average,
+approximately 46.7% fewer routed recurrent executions than fixed V0.3.
 
 The held-out gap is much smaller than in the disjoint-value test, proving that
 the split is less dominated by unseen token embeddings. However, neither model
