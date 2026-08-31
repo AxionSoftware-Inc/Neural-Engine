@@ -961,6 +961,9 @@ The subsequent NE-20/NE-50/NE-100 scaling result is documented in
 estimated active budget; NE-100 currently plateaus because router coverage does
 not yet scale with the circuit bank.
 
+NE-V0.2 also includes an optional two-address router. Its coverage and tradeoff
+are recorded in `results/V0_2_MULTI_ADDRESS.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.

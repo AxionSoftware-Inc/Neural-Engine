@@ -42,7 +42,9 @@ def make_model(config: dict[str, Any]) -> nn.Module:
         return DenseTransformerBaseline(**{key: config[key] for key in fields})
     fields = ("vocab_size", "num_classes", "seq_len", "d_model", "state_dim", "num_circuits", "circuit_rank",
               "router_branch", "router_depth", "candidate_pool", "active_circuits", "internal_steps")
-    return NeuralEngineV0(**{key: config[key] for key in fields})
+    model_kwargs = {key: config[key] for key in fields}
+    model_kwargs["router_addresses"] = config.get("router_addresses", 1)
+    return NeuralEngineV0(**model_kwargs)
 
 
 class BatchSource:
@@ -142,7 +144,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     if isinstance(model, NeuralEngineV0):
         report.update(model.parameter_report())
         report.update({"active_circuits": model.active_circuits, "internal_steps": model.internal_steps,
-                       "router_type": "hierarchical-tree-local-pool",
+                       "router_type": f"hierarchical-tree-{model.router.num_addresses}-address-local-pool",
                        "router_entropy": float(model._last_route["router_entropy"].detach().cpu())})
     else:
         report.update({"active_params_estimate": count_parameters(model), "active_fraction": 1.0, "router_type": "dense"})

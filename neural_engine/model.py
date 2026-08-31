@@ -15,7 +15,8 @@ class NeuralEngineV0(nn.Module):
     def __init__(self, vocab_size: int = 128, num_classes: int = 64, seq_len: int = 32,
                  d_model: int = 384, state_dim: int = 384, num_circuits: int = 2048,
                  circuit_rank: int = 16, router_branch: int = 8, router_depth: int = 4,
-                 candidate_pool: int = 32, active_circuits: int = 8, internal_steps: int = 3):
+                 candidate_pool: int = 32, active_circuits: int = 8, internal_steps: int = 3,
+                 router_addresses: int = 1):
         super().__init__()
         self.state_dim = state_dim
         self.active_circuits = active_circuits
@@ -30,7 +31,7 @@ class NeuralEngineV0(nn.Module):
         self.state = PersistentState(state_dim, state_dim)
         self.step_embedding = nn.Parameter(torch.zeros(internal_steps, state_dim))
         self.router = HierarchicalRouter(state_dim, num_circuits, router_branch, router_depth,
-                                         candidate_pool, active_circuits)
+                                         candidate_pool, active_circuits, router_addresses)
         self.circuits = MicroCircuitBank(num_circuits, state_dim, circuit_rank)
         self.output = nn.Sequential(nn.LayerNorm(state_dim), nn.Linear(state_dim, num_classes))
         nn.init.normal_(self.position_embedding, std=0.02)
