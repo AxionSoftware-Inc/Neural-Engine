@@ -8,3 +8,6 @@ positive signal.
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.
+
+Router utilization and task-overlap analysis is documented in
+`ROUTE_STABILITY.md`; the reproducible entry point is `analyze_routes.py`.

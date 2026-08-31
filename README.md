@@ -1018,6 +1018,12 @@ NE-V0.12, and dense Transformer weights. The result is documented in
 parameter-read proxy is 16.9% of the dense model. The MAC and byte figures are
 explicit estimates; the measured GPU latency is reported separately.
 
+The trained-router utilization check is recorded in
+`results/ROUTE_STABILITY.md`. V0.12 uses 96.4% of its circuit bank with no
+always-hot circuit group, and reduces mean task-union route overlap from
+31.22% (V0.9) to 19.43%; controlled counterfactual route pairs are the next
+test before kernel-level optimization.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.
