@@ -936,11 +936,26 @@ If that also works, custom kernels and much larger models become justified.
 ## 24. Current status
 
 ```text
-Status: research specification / V0 not yet implemented
+Status: V0 implemented; first CUDA controlled comparison completed
 Primary hardware: RTX 3060 12 GB
-Immediate task: implement Milestone 0 and Milestone 1
+Immediate task: improve multi-step composition and run capacity scaling
 ```
 
-Do not assume any result before it is measured.
+Quick start:
+
+```powershell
+python -m pip install -r requirements-cuda.txt
+python -m pytest -q
+python train.py --model ne --steps 5000 --device cuda --balanced-train --run-id ne_v0
+python train.py --model baseline --steps 5000 --device cuda --balanced-train --run-id baseline
+```
+
+The first controlled result is documented in
+`results/V0_CUDA_CONTROLLED_COMPARISON.md`. It shows comparable balanced
+accuracy with an estimated 4.98% active parameter fraction for NE-V0. This is
+an architectural signal, not a final claim: multi-hop composition, exact total
+parameter matching, and hardware-level sparse byte accounting remain open.
+
+Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.
