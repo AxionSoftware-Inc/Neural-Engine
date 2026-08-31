@@ -1011,6 +1011,13 @@ average of 1.60/3 recurrent steps. Its report is
 `results/V0_12_NUMERIC_ADAPTIVE.md`. V0.3 remains the simpler lookup-embedding
 baseline, and V0.9 remains the maximum-quality held-out reference.
 
+Checkpoint-backed inference was then measured on the trained NE-V0.9,
+NE-V0.12, and dense Transformer weights. The result is documented in
+`results/CHECKPOINTED_INFERENCE.md`: V0.12 reaches 15,382 samples/s versus
+3,761 samples/s for the dense control at batch size 128, while its analytical
+parameter-read proxy is 16.9% of the dense model. The MAC and byte figures are
+explicit estimates; the measured GPU latency is reported separately.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.
