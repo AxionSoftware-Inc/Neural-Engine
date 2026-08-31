@@ -25,10 +25,13 @@ class NeuralEngineV0(nn.Module):
                  candidate_pool: int = 32, active_circuits: int = 8, internal_steps: int = 3,
                  router_addresses: int = 1, slot_count: int = 0, task_context: bool = False,
                  task_context_update: bool = True, circuit_mode: str = "parallel",
-                 numeric_value_encoding: bool = False):
+                 numeric_value_encoding: bool = False, adaptive_halting: bool = False,
+                 halt_threshold: float = 0.5):
         super().__init__()
         if circuit_mode not in {"parallel", "serial"}:
             raise ValueError("circuit_mode must be 'parallel' or 'serial'")
+        if not 0.0 < halt_threshold < 1.0:
+            raise ValueError("halt_threshold must be between 0 and 1")
         self.state_dim = state_dim
         self.active_circuits = active_circuits
         self.internal_steps = internal_steps
@@ -37,6 +40,9 @@ class NeuralEngineV0(nn.Module):
         self.task_context_update = task_context_update
         self.circuit_mode = circuit_mode
         self.numeric_value_encoding = numeric_value_encoding
+        self.adaptive_halting = adaptive_halting
+        self.adaptive_inference = adaptive_halting
+        self.halt_threshold = halt_threshold
         embedding_vocab = 16 if numeric_value_encoding else vocab_size
         self.token_embedding = nn.Embedding(embedding_vocab, d_model, padding_idx=0)
         self.value_encoder = nn.Linear(1 + 2 * len(VALUE_HARMONICS), d_model) if numeric_value_encoding else None
@@ -50,6 +56,7 @@ class NeuralEngineV0(nn.Module):
         self.state = PersistentState(state_dim, state_dim)
         self.step_embedding = nn.Parameter(torch.zeros(internal_steps, state_dim))
         self.task_context_embedding = nn.Embedding(16, state_dim) if task_context else None
+        self.halt_head = nn.Linear(state_dim, 1) if adaptive_halting else None
         self.router = HierarchicalRouter(state_dim, num_circuits, router_branch, router_depth,
                                          candidate_pool, active_circuits, router_addresses)
         self.circuits = MicroCircuitBank(num_circuits, state_dim, circuit_rank)
@@ -87,45 +94,86 @@ class NeuralEngineV0(nn.Module):
             encoded_input = tokens.sum(dim=1) / mask.sum(dim=1).clamp_min(1)
         return self.encoder(encoded_input)
 
-    def forward(self, inputs: torch.Tensor) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    def forward(self, inputs: torch.Tensor, adaptive: bool | None = None) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        use_adaptive = self.adaptive_inference if adaptive is None else adaptive
+        if use_adaptive and self.halt_head is None:
+            raise ValueError("adaptive inference requires adaptive_halting=True")
         encoded = self.encode(inputs)
         state = self.state.initialize(encoded)
         task_context = None
         if self.task_context_embedding is not None:
             task_ids = (inputs[:, 0] - 1).clamp(0, self.task_context_embedding.num_embeddings - 1)
             task_context = self.task_context_embedding(task_ids)
+        batch_size = inputs.shape[0]
+        num_classes = self.output[-1].out_features
         selected_steps = []
-        entropies = []
-        step_logits = []
+        step_entropies = torch.zeros(batch_size, self.internal_steps, device=inputs.device)
+        executed_mask = torch.zeros(batch_size, self.internal_steps, dtype=torch.bool, device=inputs.device)
+        step_logits = torch.zeros(batch_size, self.internal_steps, num_classes, device=inputs.device)
+        halt_logits = torch.zeros(batch_size, self.internal_steps, device=inputs.device)
+        last_logits = torch.zeros(batch_size, num_classes, device=inputs.device)
+        active = torch.ones(batch_size, dtype=torch.bool, device=inputs.device)
         for step in range(self.internal_steps):
+            active_indices = active.nonzero(as_tuple=False).squeeze(-1)
+            selected_step = torch.full((batch_size, self.active_circuits), -1,
+                                       dtype=torch.long, device=inputs.device)
+            if active_indices.numel() == 0:
+                selected_steps.append(selected_step)
+                step_logits[:, step] = last_logits
+                continue
+            active_state = state[active_indices]
             # A distinct query per recurrent step encourages compositional
             # paths instead of routing every step from the same representation.
-            step_query = state + self.step_embedding[step]
+            step_query = active_state + self.step_embedding[step]
             if task_context is not None:
-                step_query = step_query + task_context
+                step_query = step_query + task_context[active_indices]
             selected, weights, route_stats = self.router(step_query)
             if self.circuit_mode == "serial":
                 circuit_delta = self.circuits.forward_serial(step_query, selected, weights)
             else:
                 circuit_delta = self.circuits(step_query, selected, weights)
             delta = circuit_delta * route_stats["route_gain"].unsqueeze(-1)
-            update = delta + encoded + self.step_embedding[step]
+            update = delta + encoded[active_indices] + self.step_embedding[step]
             if task_context is not None and self.task_context_update:
-                update = update + task_context
-            state = self.state.step(state, update)
-            selected_steps.append(selected)
-            entropies.append(route_stats["router_entropy"])
-            step_logits.append(self.output(state))
-        logits = step_logits[-1]
+                update = update + task_context[active_indices]
+            updated_state = self.state.step(active_state, update)
+            if active_indices.numel() == batch_size:
+                state = updated_state
+            else:
+                next_state = state.clone()
+                next_state[active_indices] = updated_state
+                state = next_state
+            selected_step[active_indices] = selected
+            selected_steps.append(selected_step)
+            executed_mask[active_indices, step] = True
+            step_entropies[active_indices, step] = route_stats["router_entropy"]
+            updated_logits = self.output(updated_state)
+            next_logits = last_logits.clone()
+            next_logits[active_indices] = updated_logits
+            last_logits = next_logits
+            step_logits[:, step] = last_logits
+            if self.halt_head is not None:
+                updated_halt_logits = self.halt_head(updated_state).squeeze(-1)
+                halt_logits[active_indices, step] = updated_halt_logits
+                if use_adaptive:
+                    should_halt = torch.sigmoid(updated_halt_logits) >= self.halt_threshold
+                    if step == self.internal_steps - 1:
+                        should_halt = torch.ones_like(should_halt, dtype=torch.bool)
+                    next_active = active.clone()
+                    next_active[active_indices[should_halt]] = False
+                    active = next_active
         stats = {
             "active_circuits": torch.tensor(self.active_circuits, device=inputs.device),
             "internal_steps": torch.tensor(self.internal_steps, device=inputs.device),
-            "router_entropy": torch.stack(entropies).mean(),
+            "router_entropy": step_entropies.sum() / executed_mask.sum().clamp_min(1),
             "selected_ids": torch.stack(selected_steps, dim=1),
-            "step_logits": torch.stack(step_logits, dim=1),
+            "step_logits": step_logits,
+            "halt_logits": halt_logits,
+            "executed_steps": executed_mask.sum(dim=1),
+            "executed_mask": executed_mask,
         }
         self._last_route = stats
-        return logits, stats
+        return last_logits, stats
 
     def parameter_report(self) -> dict[str, int | float]:
         total = count_parameters(self)
@@ -138,6 +186,8 @@ class NeuralEngineV0(nn.Module):
         shared += count_parameters(self.output)
         if self.task_context_embedding is not None:
             shared += count_parameters(self.task_context_embedding)
+        if self.halt_head is not None:
+            shared += count_parameters(self.halt_head)
         one_circuit = self.circuits.down[0].numel() + self.circuits.up[0].numel() + self.circuits.bias[0].numel()
         candidate_key_params = self.router.keys[0].numel() * self.router.candidate_pool
         active = shared + candidate_key_params + one_circuit * self.active_circuits

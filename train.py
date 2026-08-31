@@ -49,6 +49,8 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["task_context_update"] = config.get("task_context_update", True)
     model_kwargs["circuit_mode"] = config.get("circuit_mode", "parallel")
     model_kwargs["numeric_value_encoding"] = config.get("numeric_value_encoding", False)
+    model_kwargs["adaptive_halting"] = config.get("adaptive_halting", False)
+    model_kwargs["halt_threshold"] = config.get("halt_threshold", 0.5)
     return NeuralEngineV0(**model_kwargs)
 
 
@@ -76,9 +78,13 @@ class BatchSource:
 def evaluate(model: nn.Module, source: BatchSource, batches: int = 8) -> dict[str, Any]:
     model.eval()
     losses, predictions, targets, task_ids, depths, selected_ids = [], [], [], [], [], []
+    executed_step_values = []
     for _ in range(batches):
         batch = source.balanced(16 if batches <= 2 else 32)
-        logits, route_stats = model(batch.inputs)
+        if isinstance(model, NeuralEngineV0):
+            logits, route_stats = model(batch.inputs, adaptive=model.adaptive_inference)
+        else:
+            logits, route_stats = model(batch.inputs)
         losses.append(float(nn.functional.cross_entropy(logits, batch.targets).cpu()))
         predictions.append(logits.argmax(dim=-1).cpu())
         targets.append(batch.targets.cpu())
@@ -86,6 +92,8 @@ def evaluate(model: nn.Module, source: BatchSource, batches: int = 8) -> dict[st
         depths.append(batch.depths.cpu())
         if "selected_ids" in route_stats:
             selected_ids.append(route_stats["selected_ids"].detach().cpu().reshape(-1))
+        if "executed_steps" in route_stats:
+            executed_step_values.append(route_stats["executed_steps"].detach().cpu())
     joined = Batch(inputs=torch.empty(0, dtype=torch.long), targets=torch.cat(targets),
                    task_ids=torch.cat(task_ids), depths=torch.cat(depths))
     pred = torch.cat(predictions)
@@ -97,6 +105,7 @@ def evaluate(model: nn.Module, source: BatchSource, batches: int = 8) -> dict[st
     }
     if selected_ids and hasattr(model, "router"):
         routed = torch.cat(selected_ids)
+        routed = routed[routed.ge(0)]
         counts = torch.bincount(routed, minlength=model.router.num_circuits).float()
         probabilities = counts / counts.sum().clamp_min(1)
         result.update({
@@ -104,6 +113,17 @@ def evaluate(model: nn.Module, source: BatchSource, batches: int = 8) -> dict[st
             "dead_circuit_fraction": float((counts == 0).float().mean()),
             "routing_entropy": float(-(probabilities[probabilities > 0] * probabilities[probabilities > 0].log()).sum()),
             "routing_max_load_fraction": float(probabilities.max()),
+        })
+    if executed_step_values:
+        executed = torch.cat(executed_step_values).float()
+        depth_execution = {}
+        for depth in torch.unique(joined.depths).tolist():
+            mask = joined.depths.eq(depth)
+            depth_execution[str(int(depth))] = float(executed[mask].mean())
+        result.update({
+            "avg_executed_steps": float(executed.mean()),
+            "active_step_fraction": float(executed.mean() / getattr(model, "internal_steps", 1)),
+            "executed_steps_by_depth": depth_execution,
         })
     return result
 
@@ -143,7 +163,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     for step in range(1, steps + 1):
         batch = train_source.batch()
         optimizer.zero_grad(set_to_none=True)
-        logits, route_stats = model(batch.inputs)
+        if isinstance(model, NeuralEngineV0):
+            logits, route_stats = model(batch.inputs, adaptive=False)
+        else:
+            logits, route_stats = model(batch.inputs)
         loss = nn.functional.cross_entropy(logits, batch.targets)
         stage_loss_weight = float(config.get("stage_loss_weight", 0.0))
         if stage_loss_weight and batch.stage_targets is not None and batch.stage_mask is not None:
@@ -157,6 +180,18 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                             step_logits[mask, stage], batch.stage_targets[mask, stage]))
                 if stage_losses:
                     loss = loss + stage_loss_weight * torch.stack(stage_losses).mean()
+        if isinstance(model, NeuralEngineV0) and config.get("adaptive_halting", False):
+            halt_targets = (torch.arange(model.internal_steps, device=device).unsqueeze(0)
+                            >= (batch.depths.unsqueeze(1) - 1)).float()
+            halt_loss = nn.functional.binary_cross_entropy_with_logits(
+                route_stats["halt_logits"], halt_targets)
+            loss = loss + float(config.get("halt_loss_weight", 0.1)) * halt_loss
+            exit_loss_weight = float(config.get("exit_loss_weight", 0.0))
+            if exit_loss_weight:
+                exit_steps = (batch.depths - 1).clamp(0, model.internal_steps - 1)
+                row_indices = torch.arange(batch.inputs.shape[0], device=device)
+                exit_logits = route_stats["step_logits"][row_indices, exit_steps]
+                loss = loss + exit_loss_weight * nn.functional.cross_entropy(exit_logits, batch.targets)
         if "router_entropy" in route_stats:
             loss = loss - 0.0001 * route_stats["router_entropy"]
         loss.backward()
@@ -187,6 +222,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "samples_per_second": steps * config["batch_size"] / max(elapsed, 1e-9), "peak_vram_mb": int(peak_vram),
         "task_balanced": bool(args.balanced_train), "composition_strength": composition_strength,
         "stage_loss_weight": float(config.get("stage_loss_weight", 0.0)),
+        "halt_loss_weight": float(config.get("halt_loss_weight", 0.0)),
+        "exit_loss_weight": float(config.get("exit_loss_weight", 0.0)),
         "train_value_range": [train_value_min, train_value_max],
         "eval_value_range": [eval_value_min, eval_value_max],
         "train_split": train_split, "eval_split": eval_split,
@@ -197,8 +234,16 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         report.update(model.parameter_report())
         report.update({"active_circuits": model.active_circuits, "internal_steps": model.internal_steps,
                        "circuit_mode": model.circuit_mode, "task_context": model.use_task_context,
+                       "adaptive_halting": model.adaptive_halting,
                        "router_type": f"hierarchical-tree-{model.router.num_addresses}-address-local-pool",
                        "router_entropy": float(model._last_route["router_entropy"].detach().cpu())})
+        if model.adaptive_halting and "avg_executed_steps" in report:
+            shared_params = report["active_params_estimate"] - report["active_circuit_params"]
+            average_active = shared_params + report["active_circuit_params"] * report["avg_executed_steps"]
+            report.update({
+                "average_active_params_estimate": average_active,
+                "average_active_fraction": average_active / report["total_params"],
+            })
     else:
         report.update({"active_params_estimate": count_parameters(model), "active_fraction": 1.0, "router_type": "dense"})
     output_path = Path(args.output) / f"{args.run_id}.json"

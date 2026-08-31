@@ -994,6 +994,11 @@ systematic generalization: NE-V0.3 reaches 49.95% on held-out combinations,
 roughly matching the Transformer’s 50.81%. The next focus is adaptive execution
 and per-input active-compute measurement.
 
+Adaptive halting is implemented and evaluated in
+`results/V0_10_11_ADAPTIVE_HALTING.md`. V0.11 executes 1.60 of 3 steps on
+average, saving about 46.7% of recurrent routed execution at a 0.57-point
+balanced-accuracy cost. It is optional; V0.3 remains the default.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.

@@ -83,3 +83,17 @@ def test_numeric_value_encoding_handles_unseen_value_tokens():
     assert logits.shape == (1, 64)
     torch.nn.functional.cross_entropy(logits, torch.tensor([0])).backward()
     assert model.value_encoder.weight.grad is not None
+
+
+def test_adaptive_halting_skips_later_circuits():
+    model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
+                           num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,
+                           candidate_pool=4, active_circuits=2, internal_steps=3,
+                           adaptive_halting=True)
+    model.halt_head.bias.data.fill_(10.0)
+    batch = SyntheticTaskGenerator(seed=12).batch(4)
+    with torch.no_grad():
+        logits, stats = model(batch.inputs, adaptive=True)
+    assert logits.shape == (4, 64)
+    assert stats["executed_steps"].tolist() == [1, 1, 1, 1]
+    assert bool(stats["selected_ids"][:, 1:].eq(-1).all())
