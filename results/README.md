@@ -21,3 +21,6 @@ The stronger causal route-replay test is documented in
 
 Route replacement at 0/25/50/100% global and within-task rates is documented
 in `ROUTE_SWAP_ABLATION.md`; use `analyze_route_ablation.py` to reproduce it.
+
+The active-circuit k=4/8/16 quality and latency sweep is documented in
+`ACTIVE_CIRCUIT_BUDGET.md`; use `analyze_active_budget.py` to reproduce it.

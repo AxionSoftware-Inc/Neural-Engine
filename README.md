@@ -1037,6 +1037,11 @@ Route-swap dose-response is recorded in `results/ROUTE_SWAP_ABLATION.md`:
 replacing 100% of routes lowers accuracy by 1.35–1.98 points and raises loss
 monotonically as the replacement fraction increases.
 
+The active circuit budget sweep is recorded in
+`results/ACTIVE_CIRCUIT_BUDGET.md`: k=4 is the fastest setting (15,457/s) with
+only a 0.21-point full-benchmark cost versus k=8, while k=16 adds no quality.
+The next run will train k=4 from scratch and verify it with a second seed.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.
