@@ -248,6 +248,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         report.update({"active_params_estimate": count_parameters(model), "active_fraction": 1.0, "router_type": "dense"})
     output_path = Path(args.output) / f"{args.run_id}.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    if args.checkpoint:
+        checkpoint_path = Path(args.checkpoint)
+        checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+        report["checkpoint"] = str(checkpoint_path)
+        torch.save({"model_state": model.state_dict(), "config": config, "report": report}, checkpoint_path)
     output_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))
     return report
@@ -261,6 +266,8 @@ def main() -> None:
     parser.add_argument("--device", default="auto")
     parser.add_argument("--run-id", default="local_smoke")
     parser.add_argument("--output", default="results/runs")
+    parser.add_argument("--checkpoint", default=None,
+                        help="Save model weights plus effective config/report to this path")
     parser.add_argument("--log-every", type=int, default=10)
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--balanced-train", action="store_true",
