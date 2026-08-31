@@ -968,6 +968,10 @@ NE-V0.3 adds an attention-free structured slot encoder and is now the main
 variant. Its fixed-active NE-20/50/100 result is recorded in
 `results/V0_3_SLOT_SCALING.md`.
 
+The five-step recurrent ablation was rejected and is recorded in
+`results/V0_4_FIVE_STEP_ABLATION.md`; simply increasing internal depth did not
+improve composition.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.
