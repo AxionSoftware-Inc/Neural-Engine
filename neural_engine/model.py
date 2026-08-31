@@ -94,7 +94,18 @@ class NeuralEngineV0(nn.Module):
             encoded_input = tokens.sum(dim=1) / mask.sum(dim=1).clamp_min(1)
         return self.encoder(encoded_input)
 
-    def forward(self, inputs: torch.Tensor, adaptive: bool | None = None) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    def forward(self, inputs: torch.Tensor, adaptive: bool | None = None,
+                forced_selected_ids: torch.Tensor | None = None,
+                forced_selected_weights: torch.Tensor | None = None,
+                forced_route_gains: torch.Tensor | None = None) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        """Run the model, optionally replaying a previously recorded route.
+
+        The forced-route arguments are an analysis hook for causal route
+        replay. Normal training and inference leave them unset. When supplied,
+        the router is still evaluated for control statistics, but the selected
+        circuit IDs (and, when supplied, their weights/gains) come from the
+        recorded route.
+        """
         use_adaptive = self.adaptive_inference if adaptive is None else adaptive
         if use_adaptive and self.halt_head is None:
             raise ValueError("adaptive inference requires adaptive_halting=True")
@@ -107,12 +118,30 @@ class NeuralEngineV0(nn.Module):
         batch_size = inputs.shape[0]
         num_classes = self.output[-1].out_features
         selected_steps = []
+        selected_weights = torch.zeros(batch_size, self.internal_steps, self.active_circuits,
+                                       device=inputs.device)
+        route_gains = torch.ones(batch_size, self.internal_steps, device=inputs.device)
         step_entropies = torch.zeros(batch_size, self.internal_steps, device=inputs.device)
         executed_mask = torch.zeros(batch_size, self.internal_steps, dtype=torch.bool, device=inputs.device)
         step_logits = torch.zeros(batch_size, self.internal_steps, num_classes, device=inputs.device)
         halt_logits = torch.zeros(batch_size, self.internal_steps, device=inputs.device)
         last_logits = torch.zeros(batch_size, num_classes, device=inputs.device)
         active = torch.ones(batch_size, dtype=torch.bool, device=inputs.device)
+        if forced_selected_ids is not None:
+            expected_shape = (batch_size, self.internal_steps, self.active_circuits)
+            if tuple(forced_selected_ids.shape) != expected_shape:
+                raise ValueError(f"forced_selected_ids must have shape {expected_shape}")
+            if (forced_selected_ids < 0).any():
+                raise ValueError("forced_selected_ids must contain valid circuit IDs for every step")
+            if forced_selected_weights is not None and tuple(forced_selected_weights.shape) != expected_shape:
+                raise ValueError(f"forced_selected_weights must have shape {expected_shape}")
+            if forced_route_gains is not None and tuple(forced_route_gains.shape) != (batch_size, self.internal_steps):
+                raise ValueError(f"forced_route_gains must have shape {(batch_size, self.internal_steps)}")
+            forced_selected_ids = forced_selected_ids.to(device=inputs.device)
+            if forced_selected_weights is not None:
+                forced_selected_weights = forced_selected_weights.to(device=inputs.device)
+            if forced_route_gains is not None:
+                forced_route_gains = forced_route_gains.to(device=inputs.device)
         for step in range(self.internal_steps):
             active_indices = active.nonzero(as_tuple=False).squeeze(-1)
             selected_step = torch.full((batch_size, self.active_circuits), -1,
@@ -128,11 +157,26 @@ class NeuralEngineV0(nn.Module):
             if task_context is not None:
                 step_query = step_query + task_context[active_indices]
             selected, weights, route_stats = self.router(step_query)
-            if self.circuit_mode == "serial":
+            route_gain = route_stats["route_gain"]
+            if forced_selected_ids is not None:
+                selected = forced_selected_ids[active_indices, step].to(device=inputs.device)
+                if forced_selected_weights is None:
+                    weights = torch.full((active_indices.numel(), self.active_circuits),
+                                         1.0 / self.active_circuits, device=inputs.device)
+                else:
+                    weights = forced_selected_weights[active_indices, step].to(device=inputs.device)
+                route_gain = (torch.ones_like(route_gain)
+                              if forced_route_gains is None
+                              else forced_route_gains[active_indices, step].to(device=inputs.device))
+                if self.circuit_mode == "serial":
+                    circuit_delta = self.circuits.forward_serial(step_query, selected, weights)
+                else:
+                    circuit_delta = self.circuits(step_query, selected, weights)
+            elif self.circuit_mode == "serial":
                 circuit_delta = self.circuits.forward_serial(step_query, selected, weights)
             else:
                 circuit_delta = self.circuits(step_query, selected, weights)
-            delta = circuit_delta * route_stats["route_gain"].unsqueeze(-1)
+            delta = circuit_delta * route_gain.unsqueeze(-1)
             update = delta + encoded[active_indices] + self.step_embedding[step]
             if task_context is not None and self.task_context_update:
                 update = update + task_context[active_indices]
@@ -145,6 +189,8 @@ class NeuralEngineV0(nn.Module):
                 state = next_state
             selected_step[active_indices] = selected
             selected_steps.append(selected_step)
+            selected_weights[active_indices, step] = weights
+            route_gains[active_indices, step] = route_gain
             executed_mask[active_indices, step] = True
             step_entropies[active_indices, step] = route_stats["router_entropy"]
             updated_logits = self.output(updated_state)
@@ -167,6 +213,8 @@ class NeuralEngineV0(nn.Module):
             "internal_steps": torch.tensor(self.internal_steps, device=inputs.device),
             "router_entropy": step_entropies.sum() / executed_mask.sum().clamp_min(1),
             "selected_ids": torch.stack(selected_steps, dim=1),
+            "selected_weights": selected_weights,
+            "route_gains": route_gains,
             "step_logits": step_logits,
             "halt_logits": halt_logits,
             "executed_steps": executed_mask.sum(dim=1),

@@ -1029,6 +1029,10 @@ The controlled counterfactual test is now recorded in
 about 81% of the route set, while changing only the operation token leaves
 about 2% overlap. Route replay/ablation is the next causal test.
 
+Route replay now supplies that causal check in
+`results/ROUTE_REPLAY_CAUSALITY.md`: forcing a mismatched circuit path raises
+loss by 0.028–0.063 and lowers accuracy by roughly 1–2 percentage points.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.

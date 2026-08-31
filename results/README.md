@@ -15,3 +15,6 @@ Router utilization and task-overlap analysis is documented in
 Controlled one-operand and one-operation route sensitivity is documented in
 `COUNTERFACTUAL_ROUTE_SENSITIVITY.md`; use `analyze_counterfactual_routes.py`
 to reproduce it.
+
+The stronger causal route-replay test is documented in
+`ROUTE_REPLAY_CAUSALITY.md`; use `analyze_route_replay.py` to reproduce it.
