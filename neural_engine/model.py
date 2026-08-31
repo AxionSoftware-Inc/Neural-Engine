@@ -22,17 +22,29 @@ class NeuralEngineV0(nn.Module):
         self.internal_steps = internal_steps
         self.token_embedding = nn.Embedding(vocab_size, d_model, padding_idx=0)
         self.position_embedding = nn.Parameter(torch.zeros(seq_len, d_model))
+        # Multiplicative position conditioning binds a token to its slot before
+        # pooling; this preserves operand order without attention.
+        self.position_scale = nn.Parameter(torch.zeros(seq_len, d_model))
+        self.position_bias = nn.Parameter(torch.zeros(seq_len, d_model))
         self.encoder = nn.Sequential(nn.LayerNorm(d_model), nn.Linear(d_model, state_dim), nn.GELU())
         self.state = PersistentState(state_dim, state_dim)
+        self.step_embedding = nn.Parameter(torch.zeros(internal_steps, state_dim))
         self.router = HierarchicalRouter(state_dim, num_circuits, router_branch, router_depth,
                                          candidate_pool, active_circuits)
         self.circuits = MicroCircuitBank(num_circuits, state_dim, circuit_rank)
         self.output = nn.Sequential(nn.LayerNorm(state_dim), nn.Linear(state_dim, num_classes))
         nn.init.normal_(self.position_embedding, std=0.02)
+        nn.init.normal_(self.position_scale, std=0.01)
+        nn.init.normal_(self.position_bias, std=0.01)
+        nn.init.normal_(self.step_embedding, std=0.02)
         self._last_route: dict[str, torch.Tensor] = {}
 
     def encode(self, inputs: torch.Tensor) -> torch.Tensor:
-        tokens = self.token_embedding(inputs) + self.position_embedding[: inputs.shape[1]]
+        tokens = self.token_embedding(inputs)
+        positions = self.position_embedding[: inputs.shape[1]]
+        scale = self.position_scale[: inputs.shape[1]]
+        bias = self.position_bias[: inputs.shape[1]]
+        tokens = tokens * (1.0 + scale) + positions + bias
         mask = inputs.ne(0).unsqueeze(-1)
         pooled = (tokens * mask).sum(dim=1) / mask.sum(dim=1).clamp_min(1)
         return self.encoder(pooled)
@@ -42,10 +54,13 @@ class NeuralEngineV0(nn.Module):
         state = self.state.initialize(encoded)
         selected_steps = []
         entropies = []
-        for _ in range(self.internal_steps):
-            selected, weights, route_stats = self.router(state)
-            delta = self.circuits(state, selected, weights) * route_stats["route_gain"].unsqueeze(-1)
-            state = self.state.step(state, delta + encoded)
+        for step in range(self.internal_steps):
+            # A distinct query per recurrent step encourages compositional
+            # paths instead of routing every step from the same representation.
+            step_query = state + self.step_embedding[step]
+            selected, weights, route_stats = self.router(step_query)
+            delta = self.circuits(step_query, selected, weights) * route_stats["route_gain"].unsqueeze(-1)
+            state = self.state.step(state, delta + encoded + self.step_embedding[step])
             selected_steps.append(selected)
             entropies.append(route_stats["router_entropy"])
         logits = self.output(state)
@@ -61,7 +76,8 @@ class NeuralEngineV0(nn.Module):
     def parameter_report(self) -> dict[str, int | float]:
         total = count_parameters(self)
         shared = count_parameters(self.token_embedding) + self.position_embedding.numel()
-        shared += count_parameters(self.encoder) + count_parameters(self.state)
+        shared += self.position_scale.numel() + self.position_bias.numel() + count_parameters(self.encoder)
+        shared += count_parameters(self.state) + self.step_embedding.numel()
         shared += self.router.level_projections.numel() + self.router.level_bias.numel()
         shared += count_parameters(self.output)
         one_circuit = self.circuits.down[0].numel() + self.circuits.up[0].numel() + self.circuits.bias[0].numel()
