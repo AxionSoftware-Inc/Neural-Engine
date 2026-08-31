@@ -27,3 +27,12 @@ def test_position_conditioning_preserves_operand_order():
     second = first.clone()
     second[0, 1], second[0, 2] = second[0, 2], second[0, 1]
     assert not torch.allclose(model.encode(first), model.encode(second))
+
+
+def test_slot_encoder_preserves_structured_input():
+    model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
+                           num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,
+                           candidate_pool=4, active_circuits=2, internal_steps=2, slot_count=5)
+    batch = SyntheticTaskGenerator(seed=8).batch(3)
+    encoded = model.encode(batch.inputs)
+    assert encoded.shape == (3, 32)

@@ -44,6 +44,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
               "router_branch", "router_depth", "candidate_pool", "active_circuits", "internal_steps")
     model_kwargs = {key: config[key] for key in fields}
     model_kwargs["router_addresses"] = config.get("router_addresses", 1)
+    model_kwargs["slot_count"] = config.get("slot_count", 0)
     return NeuralEngineV0(**model_kwargs)
 
 

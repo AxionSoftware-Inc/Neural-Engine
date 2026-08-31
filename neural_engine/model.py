@@ -16,18 +16,20 @@ class NeuralEngineV0(nn.Module):
                  d_model: int = 384, state_dim: int = 384, num_circuits: int = 2048,
                  circuit_rank: int = 16, router_branch: int = 8, router_depth: int = 4,
                  candidate_pool: int = 32, active_circuits: int = 8, internal_steps: int = 3,
-                 router_addresses: int = 1):
+                 router_addresses: int = 1, slot_count: int = 0):
         super().__init__()
         self.state_dim = state_dim
         self.active_circuits = active_circuits
         self.internal_steps = internal_steps
+        self.slot_count = slot_count
         self.token_embedding = nn.Embedding(vocab_size, d_model, padding_idx=0)
         self.position_embedding = nn.Parameter(torch.zeros(seq_len, d_model))
         # Multiplicative position conditioning binds a token to its slot before
         # pooling; this preserves operand order without attention.
         self.position_scale = nn.Parameter(torch.zeros(seq_len, d_model))
         self.position_bias = nn.Parameter(torch.zeros(seq_len, d_model))
-        self.encoder = nn.Sequential(nn.LayerNorm(d_model), nn.Linear(d_model, state_dim), nn.GELU())
+        encoder_input = d_model * slot_count if slot_count else d_model
+        self.encoder = nn.Sequential(nn.LayerNorm(encoder_input), nn.Linear(encoder_input, state_dim), nn.GELU())
         self.state = PersistentState(state_dim, state_dim)
         self.step_embedding = nn.Parameter(torch.zeros(internal_steps, state_dim))
         self.router = HierarchicalRouter(state_dim, num_circuits, router_branch, router_depth,
@@ -47,8 +49,14 @@ class NeuralEngineV0(nn.Module):
         bias = self.position_bias[: inputs.shape[1]]
         tokens = tokens * (1.0 + scale) + positions + bias
         mask = inputs.ne(0).unsqueeze(-1)
-        pooled = (tokens * mask).sum(dim=1) / mask.sum(dim=1).clamp_min(1)
-        return self.encoder(pooled)
+        tokens = tokens * mask
+        if self.slot_count:
+            if inputs.shape[1] < self.slot_count:
+                raise ValueError("inputs are shorter than configured slot_count")
+            encoded_input = tokens[:, :self.slot_count].reshape(inputs.shape[0], -1)
+        else:
+            encoded_input = tokens.sum(dim=1) / mask.sum(dim=1).clamp_min(1)
+        return self.encoder(encoded_input)
 
     def forward(self, inputs: torch.Tensor) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         encoded = self.encode(inputs)
