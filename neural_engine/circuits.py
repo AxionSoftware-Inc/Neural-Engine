@@ -27,3 +27,22 @@ class MicroCircuitBank(nn.Module):
         hidden = F.gelu(hidden)
         outputs = torch.einsum("bkr,bkrd->bkd", hidden, up) + bias
         return (outputs * weights.unsqueeze(-1)).sum(dim=1)
+
+    def forward_serial(self, state: torch.Tensor, circuit_ids: torch.Tensor,
+                       weights: torch.Tensor) -> torch.Tensor:
+        """Compose the selected circuits in score order instead of mixing them.
+
+        The same active circuit budget is preserved. Each selected block sees
+        the residual produced by the previous block, which gives the routed
+        bank an explicit compositional execution mode.
+        """
+        current = state
+        for slot in range(circuit_ids.shape[1]):
+            down = self.down[circuit_ids[:, slot]]
+            up = self.up[circuit_ids[:, slot]]
+            bias = self.bias[circuit_ids[:, slot]]
+            hidden = torch.einsum("bd,bdr->br", current, down)
+            hidden = F.gelu(hidden)
+            output = torch.einsum("br,brd->bd", hidden, up) + bias
+            current = current + weights[:, slot].unsqueeze(-1) * output
+        return current - state

@@ -54,3 +54,15 @@ def test_task_context_binds_operation_identity():
         second_logits, _ = model(second)
     assert not torch.allclose(first_encoded, model.encode(second))
     assert not torch.allclose(first_logits, second_logits)
+
+
+def test_serial_circuit_mode_has_same_shapes_and_gradients():
+    model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
+                           num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,
+                           candidate_pool=4, active_circuits=2, internal_steps=2,
+                           circuit_mode="serial")
+    batch = SyntheticTaskGenerator(seed=9).batch(4)
+    logits, _ = model(batch.inputs)
+    torch.nn.functional.cross_entropy(logits, batch.targets).backward()
+    assert logits.shape == (4, 64)
+    assert model.circuits.down.grad is not None

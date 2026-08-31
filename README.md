@@ -984,6 +984,10 @@ tradeoff is recorded in `results/TRAINING_SAMPLING_ABLATION.md`.
 V0.6/V0.7 task-context routing was also rejected because the small overall gain
 did not improve composition. See `results/V0_6_TASK_CONTEXT_ABLATION.md`.
 
+V0.8 serial circuit composition was rejected as the default: it slightly helps
+depth-2, but is about 2.1x slower and weakens depth-3. The optional mode and
+controlled result are recorded in `results/V0_8_SERIAL_CIRCUITS.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.

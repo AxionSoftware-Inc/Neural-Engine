@@ -17,14 +17,17 @@ class NeuralEngineV0(nn.Module):
                  circuit_rank: int = 16, router_branch: int = 8, router_depth: int = 4,
                  candidate_pool: int = 32, active_circuits: int = 8, internal_steps: int = 3,
                  router_addresses: int = 1, slot_count: int = 0, task_context: bool = False,
-                 task_context_update: bool = True):
+                 task_context_update: bool = True, circuit_mode: str = "parallel"):
         super().__init__()
+        if circuit_mode not in {"parallel", "serial"}:
+            raise ValueError("circuit_mode must be 'parallel' or 'serial'")
         self.state_dim = state_dim
         self.active_circuits = active_circuits
         self.internal_steps = internal_steps
         self.slot_count = slot_count
         self.use_task_context = task_context
         self.task_context_update = task_context_update
+        self.circuit_mode = circuit_mode
         self.token_embedding = nn.Embedding(vocab_size, d_model, padding_idx=0)
         self.position_embedding = nn.Parameter(torch.zeros(seq_len, d_model))
         # Multiplicative position conditioning binds a token to its slot before
@@ -79,7 +82,11 @@ class NeuralEngineV0(nn.Module):
             if task_context is not None:
                 step_query = step_query + task_context
             selected, weights, route_stats = self.router(step_query)
-            delta = self.circuits(step_query, selected, weights) * route_stats["route_gain"].unsqueeze(-1)
+            if self.circuit_mode == "serial":
+                circuit_delta = self.circuits.forward_serial(step_query, selected, weights)
+            else:
+                circuit_delta = self.circuits(step_query, selected, weights)
+            delta = circuit_delta * route_stats["route_gain"].unsqueeze(-1)
             update = delta + encoded + self.step_embedding[step]
             if task_context is not None and self.task_context_update:
                 update = update + task_context

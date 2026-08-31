@@ -47,6 +47,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["slot_count"] = config.get("slot_count", 0)
     model_kwargs["task_context"] = config.get("task_context", False)
     model_kwargs["task_context_update"] = config.get("task_context_update", True)
+    model_kwargs["circuit_mode"] = config.get("circuit_mode", "parallel")
     return NeuralEngineV0(**model_kwargs)
 
 
@@ -114,11 +115,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = make_model(config).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=config["learning_rate"], weight_decay=config["weight_decay"])
+    composition_strength = (args.composition_strength
+                            if args.composition_strength > 0
+                            else 1.0 if args.composition_train else 0.0)
     train_source = BatchSource(SyntheticTaskGenerator(config["seq_len"], int(config["seed"]) + 1),
                                config["batch_size"], device, task_balanced=args.balanced_train,
-                               composition_strength=(args.composition_strength
-                                                     if args.composition_strength > 0
-                                                     else 1.0 if args.composition_train else 0.0))
+                               composition_strength=composition_strength)
     eval_source = BatchSource(SyntheticTaskGenerator(config["seq_len"], int(config["seed"]) + 2), 256, device)
     steps = args.steps if args.steps is not None else (20 if args.smoke else 1000)
     model.train()
@@ -159,12 +161,15 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "gpu": torch.cuda.get_device_name(device) if device.type == "cuda" else None, "steps": steps,
         "batch_size": config["batch_size"], "training_seconds": elapsed,
         "samples_per_second": steps * config["batch_size"] / max(elapsed, 1e-9), "peak_vram_mb": int(peak_vram),
+        "task_balanced": bool(args.balanced_train), "composition_strength": composition_strength,
+        "stage_loss_weight": float(config.get("stage_loss_weight", 0.0)),
         "total_params": count_parameters(model), "train_loss_first": losses[0], "train_loss_last": losses[-1],
         **validation,
     }
     if isinstance(model, NeuralEngineV0):
         report.update(model.parameter_report())
         report.update({"active_circuits": model.active_circuits, "internal_steps": model.internal_steps,
+                       "circuit_mode": model.circuit_mode, "task_context": model.use_task_context,
                        "router_type": f"hierarchical-tree-{model.router.num_addresses}-address-local-pool",
                        "router_entropy": float(model._last_route["router_entropy"].detach().cpu())})
     else:
