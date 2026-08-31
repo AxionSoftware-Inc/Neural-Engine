@@ -964,6 +964,10 @@ not yet scale with the circuit bank.
 NE-V0.2 also includes an optional two-address router. Its coverage and tradeoff
 are recorded in `results/V0_2_MULTI_ADDRESS.md`.
 
+NE-V0.3 adds an attention-free structured slot encoder and is now the main
+variant. Its fixed-active NE-20/50/100 result is recorded in
+`results/V0_3_SLOT_SCALING.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.
