@@ -1040,7 +1040,10 @@ monotonically as the replacement fraction increases.
 The active circuit budget sweep is recorded in
 `results/ACTIVE_CIRCUIT_BUDGET.md`: k=4 is the fastest setting (15,457/s) with
 only a 0.21-point full-benchmark cost versus k=8, while k=16 adds no quality.
-The next run will train k=4 from scratch and verify it with a second seed.
+The follow-up two-seed scratch validation is recorded in
+`results/V0_12_MULTI_SEED_BUDGET.md`: k=8 is now the safer default because its
+routers leave only 1.85–2.63% dead circuits, versus 17.6–21.2% for k=4. k=4
+remains an optional low-compute mode.
 
 Do not assume any result beyond the recorded measurements.
 

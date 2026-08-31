@@ -42,13 +42,11 @@ the circuit component while leaving the control path in place.
 
 ## Decision
 
-**Use k=4 as the next efficiency candidate.** On this checkpoint it is only
-0.21 percentage points below k=8 on the full split, wins the small held-out
-sample, and is the fastest setting. k=16 adds no quality and is slower, so it
-does not justify a larger active budget at this scale.
+The inference-only sweep made k=4 a strong efficiency candidate, but the
+follow-up scratch and multi-seed validation is now documented in
+`V0_12_MULTI_SEED_BUDGET.md`. It shows that k=4 has competitive held-out
+quality but 17.6–21.2% dead circuits, versus 1.85–2.63% for k=8.
 
-This is an inference-only sweep from a k=8-trained model. The next validation
-is to train a k=4 model from scratch and repeat it with a second seed. If k=4
-retains the quality advantage, it becomes the default architecture budget;
-otherwise k=8 remains the safer quality setting.
-
+**Keep k=8 as the default V0.12 budget** for its more reliable quality and
+router coverage. Keep k=4 as an optional low-compute mode until a
+coverage-aware low-k training method is tested.

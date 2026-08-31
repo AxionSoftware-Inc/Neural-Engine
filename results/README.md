@@ -24,3 +24,6 @@ in `ROUTE_SWAP_ABLATION.md`; use `analyze_route_ablation.py` to reproduce it.
 
 The active-circuit k=4/8/16 quality and latency sweep is documented in
 `ACTIVE_CIRCUIT_BUDGET.md`; use `analyze_active_budget.py` to reproduce it.
+
+Scratch training and second-seed validation for k=4 versus k=8 is documented
+in `V0_12_MULTI_SEED_BUDGET.md`.
