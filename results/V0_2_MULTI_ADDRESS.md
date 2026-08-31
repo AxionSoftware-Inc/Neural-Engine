@@ -47,6 +47,20 @@ coverage and slightly improves aggregate accuracy while preserving the central
 active-computation property. It is not a free improvement: routing overhead
 reduces throughput by about 26% relative to the one-address NE-20 model.
 
-The next step is to test whether the extra address head helps NE-50/NE-100, where
-coverage is the primary scaling bottleneck. If it does not improve held-out
-composition, the one-address router remains preferable for simplicity.
+## NE-50 follow-up
+
+The same two-address router was tested on the 49.77M-parameter NE-50 model:
+
+| Metric | NE-50 one address | NE-50 two addresses |
+|---|---:|---:|
+| Balanced exact accuracy | **54.77%** | 53.10% |
+| Estimated active parameters | 1.422M | 1.434M |
+| Training throughput | **3,401/s** | 2,863/s |
+| Circuits used | 2,755 / 3,712 | **3,318 / 3,712** |
+| Dead circuit fraction | 25.78% | **10.61%** |
+
+The extra address head improves coverage but lowers quality and throughput at
+NE-50. Coverage alone is therefore not the objective; circuits must also be
+specialized and composable for the selected state. The one-address router
+remains the default for capacity scaling, while multi-address routing is kept
+as an ablation for future load-balanced designs.
