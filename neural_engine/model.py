@@ -1,0 +1,75 @@
+from __future__ import annotations
+
+import torch
+from torch import nn
+
+from .circuits import MicroCircuitBank
+from .instrumentation import count_parameters
+from .router import HierarchicalRouter
+from .state import PersistentState
+
+
+class NeuralEngineV0(nn.Module):
+    """Non-Transformer recurrent state + hierarchical routing + micro-circuits."""
+
+    def __init__(self, vocab_size: int = 128, num_classes: int = 64, seq_len: int = 32,
+                 d_model: int = 384, state_dim: int = 384, num_circuits: int = 2048,
+                 circuit_rank: int = 16, router_branch: int = 8, router_depth: int = 4,
+                 candidate_pool: int = 32, active_circuits: int = 8, internal_steps: int = 3):
+        super().__init__()
+        self.state_dim = state_dim
+        self.active_circuits = active_circuits
+        self.internal_steps = internal_steps
+        self.token_embedding = nn.Embedding(vocab_size, d_model, padding_idx=0)
+        self.position_embedding = nn.Parameter(torch.zeros(seq_len, d_model))
+        self.encoder = nn.Sequential(nn.LayerNorm(d_model), nn.Linear(d_model, state_dim), nn.GELU())
+        self.state = PersistentState(state_dim, state_dim)
+        self.router = HierarchicalRouter(state_dim, num_circuits, router_branch, router_depth,
+                                         candidate_pool, active_circuits)
+        self.circuits = MicroCircuitBank(num_circuits, state_dim, circuit_rank)
+        self.output = nn.Sequential(nn.LayerNorm(state_dim), nn.Linear(state_dim, num_classes))
+        nn.init.normal_(self.position_embedding, std=0.02)
+        self._last_route: dict[str, torch.Tensor] = {}
+
+    def encode(self, inputs: torch.Tensor) -> torch.Tensor:
+        tokens = self.token_embedding(inputs) + self.position_embedding[: inputs.shape[1]]
+        mask = inputs.ne(0).unsqueeze(-1)
+        pooled = (tokens * mask).sum(dim=1) / mask.sum(dim=1).clamp_min(1)
+        return self.encoder(pooled)
+
+    def forward(self, inputs: torch.Tensor) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        encoded = self.encode(inputs)
+        state = self.state.initialize(encoded)
+        selected_steps = []
+        entropies = []
+        for _ in range(self.internal_steps):
+            selected, weights, route_stats = self.router(state)
+            delta = self.circuits(state, selected, weights) * route_stats["route_gain"].unsqueeze(-1)
+            state = self.state.step(state, delta + encoded)
+            selected_steps.append(selected)
+            entropies.append(route_stats["router_entropy"])
+        logits = self.output(state)
+        stats = {
+            "active_circuits": torch.tensor(self.active_circuits, device=inputs.device),
+            "internal_steps": torch.tensor(self.internal_steps, device=inputs.device),
+            "router_entropy": torch.stack(entropies).mean(),
+            "selected_ids": torch.stack(selected_steps, dim=1),
+        }
+        self._last_route = stats
+        return logits, stats
+
+    def parameter_report(self) -> dict[str, int | float]:
+        total = count_parameters(self)
+        shared = count_parameters(self.token_embedding) + self.position_embedding.numel()
+        shared += count_parameters(self.encoder) + count_parameters(self.state)
+        shared += self.router.level_projections.numel() + self.router.level_bias.numel()
+        shared += count_parameters(self.output)
+        one_circuit = self.circuits.down[0].numel() + self.circuits.up[0].numel() + self.circuits.bias[0].numel()
+        candidate_key_params = self.router.keys[0].numel() * self.router.candidate_pool
+        active = shared + candidate_key_params + one_circuit * self.active_circuits
+        return {
+            "total_params": total,
+            "active_params_estimate": active,
+            "active_fraction": active / total,
+            "active_circuit_params": one_circuit * self.active_circuits,
+        }
