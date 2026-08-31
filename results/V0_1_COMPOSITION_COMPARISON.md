@@ -9,7 +9,7 @@ V0.1 adds two attention-free changes to NE-V0:
 
 ## Controlled run
 
-- Commit: `90b8dde` plus the V0.1 changes in the next commit
+- Commit: `ba37c85`
 - GPU: NVIDIA GeForce RTX 3060, 12 GB
 - Runtime: `torch 2.6.0+cu124`, CUDA 12.4
 - Dataset: same 15-task synthetic benchmark
