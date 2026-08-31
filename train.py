@@ -122,6 +122,18 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         optimizer.zero_grad(set_to_none=True)
         logits, route_stats = model(batch.inputs)
         loss = nn.functional.cross_entropy(logits, batch.targets)
+        stage_loss_weight = float(config.get("stage_loss_weight", 0.0))
+        if stage_loss_weight and batch.stage_targets is not None and batch.stage_mask is not None:
+            step_logits = route_stats.get("step_logits")
+            if step_logits is not None:
+                stage_losses = []
+                for stage in range(min(step_logits.shape[1], batch.stage_targets.shape[1])):
+                    mask = batch.stage_mask[:, stage]
+                    if mask.any():
+                        stage_losses.append(nn.functional.cross_entropy(
+                            step_logits[mask, stage], batch.stage_targets[mask, stage]))
+                if stage_losses:
+                    loss = loss + stage_loss_weight * torch.stack(stage_losses).mean()
         if "router_entropy" in route_stats:
             loss = loss - 0.0001 * route_stats["router_entropy"]
         loss.backward()

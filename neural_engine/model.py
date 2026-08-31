@@ -63,6 +63,7 @@ class NeuralEngineV0(nn.Module):
         state = self.state.initialize(encoded)
         selected_steps = []
         entropies = []
+        step_logits = []
         for step in range(self.internal_steps):
             # A distinct query per recurrent step encourages compositional
             # paths instead of routing every step from the same representation.
@@ -72,12 +73,14 @@ class NeuralEngineV0(nn.Module):
             state = self.state.step(state, delta + encoded + self.step_embedding[step])
             selected_steps.append(selected)
             entropies.append(route_stats["router_entropy"])
-        logits = self.output(state)
+            step_logits.append(self.output(state))
+        logits = step_logits[-1]
         stats = {
             "active_circuits": torch.tensor(self.active_circuits, device=inputs.device),
             "internal_steps": torch.tensor(self.internal_steps, device=inputs.device),
             "router_entropy": torch.stack(entropies).mean(),
             "selected_ids": torch.stack(selected_steps, dim=1),
+            "step_logits": torch.stack(step_logits, dim=1),
         }
         self._last_route = stats
         return logits, stats

@@ -972,6 +972,11 @@ The five-step recurrent ablation was rejected and is recorded in
 `results/V0_4_FIVE_STEP_ABLATION.md`; simply increasing internal depth did not
 improve composition.
 
+The V0.5 intermediate-supervision ablation was also rejected: exposing partial
+task results to recurrent steps increased training cost without improving final
+or depth-3 accuracy. The controlled result is recorded in
+`results/V0_5_INTERMEDIATE_SUPERVISION.md`; V0.3 remains the reference model.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.

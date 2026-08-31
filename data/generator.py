@@ -19,6 +19,8 @@ class Batch:
     targets: torch.Tensor
     task_ids: torch.Tensor
     depths: torch.Tensor
+    stage_targets: torch.Tensor | None = None
+    stage_mask: torch.Tensor | None = None
 
 
 class SyntheticTaskGenerator:
@@ -30,31 +32,75 @@ class SyntheticTaskGenerator:
         self.seq_len = seq_len
         self.rng = np.random.default_rng(seed)
 
-    def _one(self, task: TaskSpec) -> tuple[list[int], int]:
+    def _stage_targets(self, task: TaskSpec, values: list[int], target: int) -> tuple[list[int], list[bool]]:
+        """Return deterministic supervision for the recurrent reasoning steps.
+
+        The final target remains the only required label. These optional targets
+        expose natural partial results of composed tasks so later recurrent
+        steps can learn to consume a useful state instead of rediscovering the
+        whole computation from scratch.
+        """
+        stages = [int(target), int(target), int(target)]
+        mask = [False, False, False]
+        if task.depth == 1:
+            mask[0] = True
+        elif task.name == "reverse_sum":
+            stages[:2] = [(values[2] * 4 + values[1] * 2) % MODULUS, int(target)]
+            mask[:2] = [True, True]
+        elif task.name == "lookup":
+            selected = values[1] if values[2] % 2 == 0 else values[3]
+            stages[:2] = [int(selected), int(target)]
+            mask[:2] = [True, True]
+        elif task.name == "chain3":
+            partial = (values[0] + values[1] + values[2]) % MODULUS
+            stages[:2] = [int(partial), int(target)]
+            mask[:2] = [True, True]
+        elif task.name == "compose_add_mul":
+            partial = (values[0] + values[1]) % MODULUS
+            stages[:3] = [int(partial), int(target), int(target)]
+            mask[:3] = [True, True, True]
+        elif task.name == "compose_if":
+            condition = int(values[0] > values[1])
+            selected = (values[2] - values[3]) if condition else (values[2] + values[3])
+            stages[:3] = [condition, int(selected % MODULUS), int(target)]
+            mask[:3] = [True, True, True]
+        elif task.name == "state_machine":
+            left = (values[0] + values[1]) % MODULUS
+            right = (values[2] * 3 + values[3]) % MODULUS
+            stages[:3] = [int(left), int(right), int(target)]
+            mask[:3] = [True, True, True]
+        else:
+            raise ValueError(f"missing stage target definition for depth-{task.depth} task {task.name}")
+        return stages, mask
+
+    def _one(self, task: TaskSpec) -> tuple[list[int], int, list[int], list[bool]]:
         values = self.rng.integers(0, MODULUS, size=task.arity).tolist()
         tokens = [TASK_TOKEN_OFFSET + task.task_id]
         tokens += [VALUE_TOKEN_OFFSET + value for value in values]
         tokens += [PAD_TOKEN] * (self.seq_len - len(tokens))
-        return tokens, int(task.fn(values))
+        target = int(task.fn(values))
+        stage_targets, stage_mask = self._stage_targets(task, values, target)
+        return tokens, target, stage_targets, stage_mask
+
+    @staticmethod
+    def _make_batch(rows: list[tuple[list[int], int, int, int, list[int], list[bool]]],
+                    device: str | torch.device) -> Batch:
+        return Batch(
+            inputs=torch.tensor([row[0] for row in rows], dtype=torch.long, device=device),
+            targets=torch.tensor([row[1] for row in rows], dtype=torch.long, device=device),
+            task_ids=torch.tensor([row[2] for row in rows], dtype=torch.long, device=device),
+            depths=torch.tensor([row[3] for row in rows], dtype=torch.long, device=device),
+            stage_targets=torch.tensor([row[4] for row in rows], dtype=torch.long, device=device),
+            stage_mask=torch.tensor([row[5] for row in rows], dtype=torch.bool, device=device),
+        )
 
     def batch(self, batch_size: int, device: str | torch.device = "cpu") -> Batch:
-        inputs: list[list[int]] = []
-        targets: list[int] = []
-        task_ids: list[int] = []
-        depths: list[int] = []
+        rows: list[tuple[list[int], int, int, int, list[int], list[bool]]] = []
         for _ in range(batch_size):
             task = TASKS[int(self.rng.integers(0, len(TASKS)))]
-            tokens, target = self._one(task)
-            inputs.append(tokens)
-            targets.append(target)
-            task_ids.append(task.task_id)
-            depths.append(task.depth)
-        return Batch(
-            inputs=torch.tensor(inputs, dtype=torch.long, device=device),
-            targets=torch.tensor(targets, dtype=torch.long, device=device),
-            task_ids=torch.tensor(task_ids, dtype=torch.long, device=device),
-            depths=torch.tensor(depths, dtype=torch.long, device=device),
-        )
+            tokens, target, stage_targets, stage_mask = self._one(task)
+            rows.append((tokens, target, task.task_id, task.depth, stage_targets, stage_mask))
+        return self._make_batch(rows, device)
 
     def fixed_dataset(self, examples: int, device: str | torch.device = "cpu") -> Batch:
         return self.batch(examples, device=device)
@@ -62,36 +108,26 @@ class SyntheticTaskGenerator:
     def balanced_batch(self, examples_per_task: int = 32,
                        device: str | torch.device = "cpu") -> Batch:
         """Return equal task counts so easy task families cannot dominate accuracy."""
-        rows: list[tuple[list[int], int, int, int]] = []
+        rows: list[tuple[list[int], int, int, int, list[int], list[bool]]] = []
         for task in TASKS:
             for _ in range(examples_per_task):
-                tokens, target = self._one(task)
-                rows.append((tokens, target, task.task_id, task.depth))
+                tokens, target, stage_targets, stage_mask = self._one(task)
+                rows.append((tokens, target, task.task_id, task.depth, stage_targets, stage_mask))
         order = self.rng.permutation(len(rows))
         rows = [rows[int(index)] for index in order]
-        return Batch(
-            inputs=torch.tensor([row[0] for row in rows], dtype=torch.long, device=device),
-            targets=torch.tensor([row[1] for row in rows], dtype=torch.long, device=device),
-            task_ids=torch.tensor([row[2] for row in rows], dtype=torch.long, device=device),
-            depths=torch.tensor([row[3] for row in rows], dtype=torch.long, device=device),
-        )
+        return self._make_batch(rows, device)
 
     def task_balanced_batch(self, batch_size: int,
                             device: str | torch.device = "cpu") -> Batch:
         """Sample an exactly near-uniform task mix for training."""
         task_indices = np.arange(batch_size) % len(TASKS)
         self.rng.shuffle(task_indices)
-        rows: list[tuple[list[int], int, int, int]] = []
+        rows: list[tuple[list[int], int, int, int, list[int], list[bool]]] = []
         for task_index in task_indices:
             task = TASKS[int(task_index)]
-            tokens, target = self._one(task)
-            rows.append((tokens, target, task.task_id, task.depth))
-        return Batch(
-            inputs=torch.tensor([row[0] for row in rows], dtype=torch.long, device=device),
-            targets=torch.tensor([row[1] for row in rows], dtype=torch.long, device=device),
-            task_ids=torch.tensor([row[2] for row in rows], dtype=torch.long, device=device),
-            depths=torch.tensor([row[3] for row in rows], dtype=torch.long, device=device),
-        )
+            tokens, target, stage_targets, stage_mask = self._one(task)
+            rows.append((tokens, target, task.task_id, task.depth, stage_targets, stage_mask))
+        return self._make_batch(rows, device)
 
 
 def accuracy_by_task(predictions: torch.Tensor, batch: Batch) -> dict[str, float]:

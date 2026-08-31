@@ -16,6 +16,7 @@ def test_neural_engine_forward_and_gradients():
     assert model.circuits.down.grad is not None
     assert model.router.level_projections.grad is not None
     assert stats["selected_ids"].shape == (8, 2, 2)
+    assert stats["step_logits"].shape == (8, 2, 64)
 
 
 def test_position_conditioning_preserves_operand_order():

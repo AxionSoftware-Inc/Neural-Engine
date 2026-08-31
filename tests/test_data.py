@@ -10,3 +10,6 @@ def test_generator_shapes_and_exact_targets():
     assert int(batch.targets.min()) >= 0
     assert int(batch.targets.max()) < 64
     assert batch.inputs.dtype == torch.long
+    assert batch.stage_targets.shape == (128, 3)
+    assert batch.stage_mask.shape == (128, 3)
+    assert batch.stage_mask.dtype == torch.bool
