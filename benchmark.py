@@ -50,6 +50,11 @@ def main() -> None:
         result["router_entropy"] = float(stats["router_entropy"].cpu())
         result["active_circuits"] = int(stats["active_circuits"].cpu())
         result["internal_steps"] = int(stats["internal_steps"].cpu())
+        if "executed_steps" in stats:
+            executed = stats["executed_steps"].float()
+            result["avg_executed_steps"] = float(executed.mean().cpu())
+            result["active_step_fraction"] = float((executed / stats["internal_steps"].float()).mean().cpu())
+            result["adaptive_inference"] = bool(getattr(model, "adaptive_inference", False))
     print(json.dumps(result, indent=2))
 
 

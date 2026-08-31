@@ -1002,11 +1002,14 @@ balanced-accuracy cost. It is optional; V0.3 remains the default.
 On held-out combinations, V0.11 reaches 47.58% while retaining the same 1.60
 average steps; this is tracked in `results/HELDOUT_COMPOSITION.md`.
 
-V0.9 structured numeric value encoding is now the strongest quality/reference
-variant. It reaches 71.59% balanced accuracy and 57.11% on held-out
-combinations; see `results/V0_9_NUMERIC_ENCODING.md`. V0.3 remains available as
-the faster lookup-embedding baseline, while V0.11 remains the optional
-adaptive-compute mode.
+V0.9 structured numeric value encoding reaches 71.59% balanced accuracy and
+57.11% on held-out combinations; see `results/V0_9_NUMERIC_ENCODING.md`.
+
+V0.12 combines numeric encoding with learned adaptive halting and is now the
+recommended quality/active-compute variant: 71.98% balanced accuracy with an
+average of 1.60/3 recurrent steps. Its report is
+`results/V0_12_NUMERIC_ADAPTIVE.md`. V0.3 remains the simpler lookup-embedding
+baseline, and V0.9 remains the maximum-quality held-out reference.
 
 Do not assume any result beyond the recorded measurements.
 
