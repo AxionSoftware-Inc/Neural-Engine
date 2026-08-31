@@ -938,7 +938,7 @@ If that also works, custom kernels and much larger models become justified.
 ```text
 Status: V0 implemented; first CUDA controlled comparison completed
 Primary hardware: RTX 3060 12 GB
-Immediate task: improve multi-step composition and run capacity scaling
+Immediate task: improve multi-step composition and router coverage at scale
 ```
 
 Quick start:
@@ -955,6 +955,11 @@ The first controlled result is documented in
 accuracy with an estimated 4.98% active parameter fraction for NE-V0. This is
 an architectural signal, not a final claim: multi-hop composition, exact total
 parameter matching, and hardware-level sparse byte accounting remain open.
+
+The subsequent NE-20/NE-50/NE-100 scaling result is documented in
+`results/CAPACITY_SCALING.md`. NE-20 and NE-50 improve quality at a fixed
+estimated active budget; NE-100 currently plateaus because router coverage does
+not yet scale with the circuit bank.
 
 Do not assume any result beyond the recorded measurements.
 
