@@ -129,6 +129,30 @@ class SyntheticTaskGenerator:
             rows.append((tokens, target, task.task_id, task.depth, stage_targets, stage_mask))
         return self._make_batch(rows, device)
 
+    def composition_batch(self, batch_size: int,
+                          device: str | torch.device = "cpu",
+                          strength: float = 1.0) -> Batch:
+        """Oversample multi-step tasks while retaining every task family.
+
+        Depth-1, depth-2, and depth-3 tasks receive weights 1, 1+strength, and
+        1+2*strength. This is a training-only curriculum/mixture experiment;
+        evaluation remains uniformly balanced across all task IDs.
+        """
+        if strength < 0:
+            raise ValueError("composition sampling strength must be non-negative")
+        weights = np.array([
+            1.0 + strength * (task.depth - 1)
+            for task in TASKS
+        ])
+        probabilities = weights / weights.sum()
+        task_indices = self.rng.choice(len(TASKS), size=batch_size, p=probabilities)
+        rows: list[tuple[list[int], int, int, int, list[int], list[bool]]] = []
+        for task_index in task_indices:
+            task = TASKS[int(task_index)]
+            tokens, target, stage_targets, stage_mask = self._one(task)
+            rows.append((tokens, target, task.task_id, task.depth, stage_targets, stage_mask))
+        return self._make_batch(rows, device)
+
 
 def accuracy_by_task(predictions: torch.Tensor, batch: Batch) -> dict[str, float]:
     from .tasks import TASK_BY_ID

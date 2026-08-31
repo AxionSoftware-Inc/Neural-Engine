@@ -16,12 +16,15 @@ class NeuralEngineV0(nn.Module):
                  d_model: int = 384, state_dim: int = 384, num_circuits: int = 2048,
                  circuit_rank: int = 16, router_branch: int = 8, router_depth: int = 4,
                  candidate_pool: int = 32, active_circuits: int = 8, internal_steps: int = 3,
-                 router_addresses: int = 1, slot_count: int = 0):
+                 router_addresses: int = 1, slot_count: int = 0, task_context: bool = False,
+                 task_context_update: bool = True):
         super().__init__()
         self.state_dim = state_dim
         self.active_circuits = active_circuits
         self.internal_steps = internal_steps
         self.slot_count = slot_count
+        self.use_task_context = task_context
+        self.task_context_update = task_context_update
         self.token_embedding = nn.Embedding(vocab_size, d_model, padding_idx=0)
         self.position_embedding = nn.Parameter(torch.zeros(seq_len, d_model))
         # Multiplicative position conditioning binds a token to its slot before
@@ -32,6 +35,7 @@ class NeuralEngineV0(nn.Module):
         self.encoder = nn.Sequential(nn.LayerNorm(encoder_input), nn.Linear(encoder_input, state_dim), nn.GELU())
         self.state = PersistentState(state_dim, state_dim)
         self.step_embedding = nn.Parameter(torch.zeros(internal_steps, state_dim))
+        self.task_context_embedding = nn.Embedding(16, state_dim) if task_context else None
         self.router = HierarchicalRouter(state_dim, num_circuits, router_branch, router_depth,
                                          candidate_pool, active_circuits, router_addresses)
         self.circuits = MicroCircuitBank(num_circuits, state_dim, circuit_rank)
@@ -61,6 +65,10 @@ class NeuralEngineV0(nn.Module):
     def forward(self, inputs: torch.Tensor) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         encoded = self.encode(inputs)
         state = self.state.initialize(encoded)
+        task_context = None
+        if self.task_context_embedding is not None:
+            task_ids = (inputs[:, 0] - 1).clamp(0, self.task_context_embedding.num_embeddings - 1)
+            task_context = self.task_context_embedding(task_ids)
         selected_steps = []
         entropies = []
         step_logits = []
@@ -68,9 +76,14 @@ class NeuralEngineV0(nn.Module):
             # A distinct query per recurrent step encourages compositional
             # paths instead of routing every step from the same representation.
             step_query = state + self.step_embedding[step]
+            if task_context is not None:
+                step_query = step_query + task_context
             selected, weights, route_stats = self.router(step_query)
             delta = self.circuits(step_query, selected, weights) * route_stats["route_gain"].unsqueeze(-1)
-            state = self.state.step(state, delta + encoded + self.step_embedding[step])
+            update = delta + encoded + self.step_embedding[step]
+            if task_context is not None and self.task_context_update:
+                update = update + task_context
+            state = self.state.step(state, update)
             selected_steps.append(selected)
             entropies.append(route_stats["router_entropy"])
             step_logits.append(self.output(state))
@@ -92,6 +105,8 @@ class NeuralEngineV0(nn.Module):
         shared += count_parameters(self.state) + self.step_embedding.numel()
         shared += self.router.level_projections.numel() + self.router.level_bias.numel()
         shared += count_parameters(self.output)
+        if self.task_context_embedding is not None:
+            shared += count_parameters(self.task_context_embedding)
         one_circuit = self.circuits.down[0].numel() + self.circuits.up[0].numel() + self.circuits.bias[0].numel()
         candidate_key_params = self.router.keys[0].numel() * self.router.candidate_pool
         active = shared + candidate_key_params + one_circuit * self.active_circuits

@@ -45,18 +45,23 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs = {key: config[key] for key in fields}
     model_kwargs["router_addresses"] = config.get("router_addresses", 1)
     model_kwargs["slot_count"] = config.get("slot_count", 0)
+    model_kwargs["task_context"] = config.get("task_context", False)
+    model_kwargs["task_context_update"] = config.get("task_context_update", True)
     return NeuralEngineV0(**model_kwargs)
 
 
 class BatchSource:
     def __init__(self, generator: SyntheticTaskGenerator, batch_size: int, device: torch.device,
-                 task_balanced: bool = False):
+                 task_balanced: bool = False, composition_strength: float = 0.0):
         self.generator = generator
         self.batch_size = batch_size
         self.device = device
         self.task_balanced = task_balanced
+        self.composition_strength = composition_strength
 
     def batch(self) -> Batch:
+        if self.composition_strength > 0:
+            return self.generator.composition_batch(self.batch_size, self.device, self.composition_strength)
         if self.task_balanced:
             return self.generator.task_balanced_batch(self.batch_size, self.device)
         return self.generator.batch(self.batch_size, self.device)
@@ -110,7 +115,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     model = make_model(config).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=config["learning_rate"], weight_decay=config["weight_decay"])
     train_source = BatchSource(SyntheticTaskGenerator(config["seq_len"], int(config["seed"]) + 1),
-                               config["batch_size"], device, task_balanced=args.balanced_train)
+                               config["batch_size"], device, task_balanced=args.balanced_train,
+                               composition_strength=(args.composition_strength
+                                                     if args.composition_strength > 0
+                                                     else 1.0 if args.composition_train else 0.0))
     eval_source = BatchSource(SyntheticTaskGenerator(config["seq_len"], int(config["seed"]) + 2), 256, device)
     steps = args.steps if args.steps is not None else (20 if args.smoke else 1000)
     model.train()
@@ -180,6 +188,10 @@ def main() -> None:
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--balanced-train", action="store_true",
                         help="Use an equal task mix in every training batch")
+    parser.add_argument("--composition-train", action="store_true",
+                        help="Oversample depth-2/3 tasks during training")
+    parser.add_argument("--composition-strength", type=float, default=0.0,
+                        help="Extra sampling weight per depth level (e.g. 0.5 gives 1:1.5:2)")
     args = parser.parse_args()
     if args.model == "baseline":
         args.config = "configs/transformer_30m.yaml"

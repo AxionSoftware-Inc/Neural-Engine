@@ -977,6 +977,13 @@ task results to recurrent steps increased training cost without improving final
 or depth-3 accuracy. The controlled result is recorded in
 `results/V0_5_INTERMEDIATE_SUPERVISION.md`; V0.3 remains the reference model.
 
+Composition-focused sampling improves depth-3 accuracy only by trading away
+depth-1 accuracy, so uniform task-balanced training remains the default. The
+tradeoff is recorded in `results/TRAINING_SAMPLING_ABLATION.md`.
+
+V0.6/V0.7 task-context routing was also rejected because the small overall gain
+did not improve composition. See `results/V0_6_TASK_CONTEXT_ABLATION.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.
