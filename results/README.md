@@ -18,3 +18,6 @@ to reproduce it.
 
 The stronger causal route-replay test is documented in
 `ROUTE_REPLAY_CAUSALITY.md`; use `analyze_route_replay.py` to reproduce it.
+
+Route replacement at 0/25/50/100% global and within-task rates is documented
+in `ROUTE_SWAP_ABLATION.md`; use `analyze_route_ablation.py` to reproduce it.

@@ -1033,6 +1033,10 @@ Route replay now supplies that causal check in
 `results/ROUTE_REPLAY_CAUSALITY.md`: forcing a mismatched circuit path raises
 loss by 0.028–0.063 and lowers accuracy by roughly 1–2 percentage points.
 
+Route-swap dose-response is recorded in `results/ROUTE_SWAP_ABLATION.md`:
+replacing 100% of routes lowers accuracy by 1.35–1.98 points and raises loss
+monotonically as the replacement fraction increases.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.
