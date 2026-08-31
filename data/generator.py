@@ -59,6 +59,40 @@ class SyntheticTaskGenerator:
     def fixed_dataset(self, examples: int, device: str | torch.device = "cpu") -> Batch:
         return self.batch(examples, device=device)
 
+    def balanced_batch(self, examples_per_task: int = 32,
+                       device: str | torch.device = "cpu") -> Batch:
+        """Return equal task counts so easy task families cannot dominate accuracy."""
+        rows: list[tuple[list[int], int, int, int]] = []
+        for task in TASKS:
+            for _ in range(examples_per_task):
+                tokens, target = self._one(task)
+                rows.append((tokens, target, task.task_id, task.depth))
+        order = self.rng.permutation(len(rows))
+        rows = [rows[int(index)] for index in order]
+        return Batch(
+            inputs=torch.tensor([row[0] for row in rows], dtype=torch.long, device=device),
+            targets=torch.tensor([row[1] for row in rows], dtype=torch.long, device=device),
+            task_ids=torch.tensor([row[2] for row in rows], dtype=torch.long, device=device),
+            depths=torch.tensor([row[3] for row in rows], dtype=torch.long, device=device),
+        )
+
+    def task_balanced_batch(self, batch_size: int,
+                            device: str | torch.device = "cpu") -> Batch:
+        """Sample an exactly near-uniform task mix for training."""
+        task_indices = np.arange(batch_size) % len(TASKS)
+        self.rng.shuffle(task_indices)
+        rows: list[tuple[list[int], int, int, int]] = []
+        for task_index in task_indices:
+            task = TASKS[int(task_index)]
+            tokens, target = self._one(task)
+            rows.append((tokens, target, task.task_id, task.depth))
+        return Batch(
+            inputs=torch.tensor([row[0] for row in rows], dtype=torch.long, device=device),
+            targets=torch.tensor([row[1] for row in rows], dtype=torch.long, device=device),
+            task_ids=torch.tensor([row[2] for row in rows], dtype=torch.long, device=device),
+            depths=torch.tensor([row[3] for row in rows], dtype=torch.long, device=device),
+        )
+
 
 def accuracy_by_task(predictions: torch.Tensor, batch: Batch) -> dict[str, float]:
     from .tasks import TASK_BY_ID

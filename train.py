@@ -46,36 +46,56 @@ def make_model(config: dict[str, Any]) -> nn.Module:
 
 
 class BatchSource:
-    def __init__(self, generator: SyntheticTaskGenerator, batch_size: int, device: torch.device):
+    def __init__(self, generator: SyntheticTaskGenerator, batch_size: int, device: torch.device,
+                 task_balanced: bool = False):
         self.generator = generator
         self.batch_size = batch_size
         self.device = device
+        self.task_balanced = task_balanced
 
     def batch(self) -> Batch:
+        if self.task_balanced:
+            return self.generator.task_balanced_batch(self.batch_size, self.device)
         return self.generator.batch(self.batch_size, self.device)
+
+    def balanced(self, examples_per_task: int = 32) -> Batch:
+        return self.generator.balanced_batch(examples_per_task, self.device)
 
 
 @torch.no_grad()
 def evaluate(model: nn.Module, source: BatchSource, batches: int = 8) -> dict[str, Any]:
     model.eval()
-    losses, predictions, targets, task_ids, depths = [], [], [], [], []
+    losses, predictions, targets, task_ids, depths, selected_ids = [], [], [], [], [], []
     for _ in range(batches):
-        batch = source.batch()
-        logits, _ = model(batch.inputs)
+        batch = source.balanced(16 if batches <= 2 else 32)
+        logits, route_stats = model(batch.inputs)
         losses.append(float(nn.functional.cross_entropy(logits, batch.targets).cpu()))
         predictions.append(logits.argmax(dim=-1).cpu())
         targets.append(batch.targets.cpu())
         task_ids.append(batch.task_ids.cpu())
         depths.append(batch.depths.cpu())
+        if "selected_ids" in route_stats:
+            selected_ids.append(route_stats["selected_ids"].detach().cpu().reshape(-1))
     joined = Batch(inputs=torch.empty(0, dtype=torch.long), targets=torch.cat(targets),
                    task_ids=torch.cat(task_ids), depths=torch.cat(depths))
     pred = torch.cat(predictions)
-    return {
+    result: dict[str, Any] = {
         "val_loss": float(np.mean(losses)),
         "exact_accuracy": float(pred.eq(joined.targets).float().mean()),
         "task_accuracy": accuracy_by_task(pred, joined),
         "depth_accuracy": accuracy_by_depth(pred, joined),
     }
+    if selected_ids and hasattr(model, "router"):
+        routed = torch.cat(selected_ids)
+        counts = torch.bincount(routed, minlength=model.router.num_circuits).float()
+        probabilities = counts / counts.sum().clamp_min(1)
+        result.update({
+            "circuits_used": int((counts > 0).sum()),
+            "dead_circuit_fraction": float((counts == 0).float().mean()),
+            "routing_entropy": float(-(probabilities[probabilities > 0] * probabilities[probabilities > 0].log()).sum()),
+            "routing_max_load_fraction": float(probabilities.max()),
+        })
+    return result
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
@@ -86,7 +106,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = make_model(config).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=config["learning_rate"], weight_decay=config["weight_decay"])
-    train_source = BatchSource(SyntheticTaskGenerator(config["seq_len"], int(config["seed"]) + 1), config["batch_size"], device)
+    train_source = BatchSource(SyntheticTaskGenerator(config["seq_len"], int(config["seed"]) + 1),
+                               config["batch_size"], device, task_balanced=args.balanced_train)
     eval_source = BatchSource(SyntheticTaskGenerator(config["seq_len"], int(config["seed"]) + 2), 256, device)
     steps = args.steps if args.steps is not None else (20 if args.smoke else 1000)
     model.train()
@@ -142,6 +163,8 @@ def main() -> None:
     parser.add_argument("--output", default="results/runs")
     parser.add_argument("--log-every", type=int, default=10)
     parser.add_argument("--smoke", action="store_true")
+    parser.add_argument("--balanced-train", action="store_true",
+                        help="Use an equal task mix in every training batch")
     args = parser.parse_args()
     if args.model == "baseline":
         args.config = "configs/transformer_30m.yaml"
