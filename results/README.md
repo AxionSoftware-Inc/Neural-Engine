@@ -11,3 +11,7 @@ local `results/checkpoints/` directory and are ignored by Git.
 
 Router utilization and task-overlap analysis is documented in
 `ROUTE_STABILITY.md`; the reproducible entry point is `analyze_routes.py`.
+
+Controlled one-operand and one-operation route sensitivity is documented in
+`COUNTERFACTUAL_ROUTE_SENSITIVITY.md`; use `analyze_counterfactual_routes.py`
+to reproduce it.

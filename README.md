@@ -1024,6 +1024,11 @@ always-hot circuit group, and reduces mean task-union route overlap from
 31.22% (V0.9) to 19.43%; controlled counterfactual route pairs are the next
 test before kernel-level optimization.
 
+The controlled counterfactual test is now recorded in
+`results/COUNTERFACTUAL_ROUTE_SENSITIVITY.md`: changing one operand changes
+about 81% of the route set, while changing only the operation token leaves
+about 2% overlap. Route replay/ablation is the next causal test.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.
