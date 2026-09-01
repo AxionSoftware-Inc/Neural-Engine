@@ -1102,6 +1102,13 @@ RAM offload, GPU circuit caching, and H2D measurements remain open. It also
 passes a 300M early screen with nearly identical 200-step quality and lower
 peak VRAM. See `results/V0_20_LAZY_ADAMW.md`.
 
+V0.21 adds an inference-only CPU-RAM circuit cache. On the 100M checkpoint, a
+full working-set cache reaches 97.61% hit-rate and reduces measured H2D traffic
+to 167 MB over 100 batches, but runs at 9,422 samples/s versus roughly 14.6k/s
+for the GPU-resident path. Pinned memory, asynchronous prefetch, and batched
+row packing remain before training offload; see
+`results/V0_21_CPU_CACHE_PAGING.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.

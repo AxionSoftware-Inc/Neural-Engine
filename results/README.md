@@ -63,3 +63,8 @@ The first route-indexed batched `LazyAdamW` prototype is documented in
 is only about 4.7% slower at 20M, but does not yet implement RAM offload or
 cache/prefetch. The same optimizer remains within 0.47 points of the 100M
 dense reference in a single seed and passes a 300M early feasibility screen.
+
+The CPU-RAM LRU circuit paging prototype is documented in
+`V0_21_CPU_CACHE_PAGING.md`. A full working-set cache reaches 97.61% hit-rate
+and reduces 100M benchmark H2D traffic from 6.99 GB to 167 MB, but still needs
+pinned-memory, asynchronous-prefetch, and batched-kernel work.
