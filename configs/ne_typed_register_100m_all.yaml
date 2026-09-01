@@ -1,4 +1,4 @@
-model: ne_typed_register_100m
+model: ne_typed_register_100m_all
 architecture: typed_register
 vocab_size: 128
 num_classes: 64
@@ -24,6 +24,3 @@ weight_decay: 0.01
 grad_clip: 1.0
 optimizer: lazy_adamw
 seed: 17
-heldout_pairs:
-  - [add, multiply]
-  - [multiply, add]

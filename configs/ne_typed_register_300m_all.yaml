@@ -1,14 +1,14 @@
-model: ne_typed_register_100m
+model: ne_typed_register_300m_all
 architecture: typed_register
 vocab_size: 128
 num_classes: 64
 seq_len: 8
 d_model: 384
 state_dim: 384
-num_circuits: 7800
+num_circuits: 23600
 circuit_rank: 16
 router_branch: 8
-router_depth: 5
+router_depth: 6
 candidate_pool: 32
 active_circuits: 8
 router_addresses: 1
@@ -24,6 +24,3 @@ weight_decay: 0.01
 grad_clip: 1.0
 optimizer: lazy_adamw
 seed: 17
-heldout_pairs:
-  - [add, multiply]
-  - [multiply, add]

@@ -1152,6 +1152,14 @@ grids and adds a longer curriculum. Two 300M curriculum runs average 13.79%
 step is circuit-composition/working-memory research, not 700M/1B scaling. See
 `results/V0_27_CURRICULUM_SCALE_AUDIT.md`.
 
+V0.28 implements that architecture pivot as a separate typed-register core:
+explicit operand/partial/final registers, operator-conditioned routing, and
+serial circuit execution without attention. Under the same deterministic
+16^3 hidden-pair grid, it reaches 65.56% at 20M, 63.34% at 50M, 89.87% at
+100M, and 89.20% at 300M. The 100M checkpoint is the current quality winner;
+the 300M model remains a useful feasibility point but does not improve over
+100M. See `results/V0_28_TYPED_REGISTER_SCALE.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.

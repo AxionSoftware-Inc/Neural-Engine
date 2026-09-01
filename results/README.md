@@ -104,3 +104,10 @@ The V0.27 audited curriculum scaling study is documented in
 grids, 300M curriculum averages 13.79% ± 0.96 across two seeds, while 500M
 curriculum growth averages 12.77% ± 0.24. Curriculum is a weak positive, but
 500M still does not beat 300M, so 700M/1B quality scaling remains blocked.
+
+The V0.28 typed-register architecture and 20M/50M/100M/300M scale audit is
+documented in `V0_28_TYPED_REGISTER_SCALE.md`. Explicit operand/partial/final
+registers and typed serial circuit execution raise hidden-pair grid accuracy
+to 65.56% at 20M and 89.87% at 100M; 300M reaches 89.20% and is not better
+than 100M. The result is a strong architecture positive, but not a reason to
+scale to 700M/1B before route sharing and a second-seed validation.
