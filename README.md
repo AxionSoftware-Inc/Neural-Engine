@@ -1058,6 +1058,13 @@ depth-3 accuracy from 33.33% to 36.46%, but lowers mean full accuracy from
 an optional composition-focused recipe, documented in
 `results/V0_14_STAGE_SUPERVISION.md`, not the default training loss.
 
+V0.15 scales the numeric/adaptive model from NE-20 to NE-100 with eight active
+circuits. Total capacity grows 4.96x while the average active path stays near
+2.04M parameters (10.07% → 2.03% active fraction); NE-100 reaches 72.92% on
+the fresh held-out split. Full-benchmark quality does not yet scale above
+NE-20, so this is a fixed-active capacity signal rather than a final quality
+win. Details are in `results/V0_15_NUMERIC_CAPACITY_SCALING.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.
