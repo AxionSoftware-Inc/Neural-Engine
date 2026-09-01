@@ -68,3 +68,9 @@ The CPU-RAM LRU circuit paging prototype is documented in
 `V0_21_CPU_CACHE_PAGING.md`. A full working-set cache reaches 97.61% hit-rate
 and reduces 100M benchmark H2D traffic from 6.99 GB to 167 MB, but still needs
 pinned-memory, asynchronous-prefetch, and batched-kernel work.
+
+The 300M/500M sparse scaling and route-coverage study is documented in
+`V0_22_SCALE_300M_500M.md`. The 300M model reaches 56.80% after 5,000 steps;
+500M fits on a 12 GiB RTX 3060 but reaches only 44.32% without coverage and
+44.11% with coverage, so the larger bank is feasible but not yet a useful
+quality scaling step.

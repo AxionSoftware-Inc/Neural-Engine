@@ -1109,6 +1109,13 @@ for the GPU-resident path. Pinned memory, asynchronous prefetch, and batched
 row packing remain before training offload; see
 `results/V0_21_CPU_CACHE_PAGING.md`.
 
+V0.22 tests the sparse path at 300M and 500M. The 300M model reaches 56.80%
+after 5,000 steps with 1.60 average executed steps and 0.68% average active
+parameters. The 500M model fits on a 12 GiB RTX 3060, but reaches 44.32% with
+plain routing and 44.11% with a coverage regularizer; the larger circuit bank
+is therefore hardware-feasible but not yet a useful quality scaling step. See
+`results/V0_22_SCALE_300M_500M.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.
