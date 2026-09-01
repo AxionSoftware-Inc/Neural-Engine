@@ -1137,6 +1137,12 @@ do not provide a reliable rescue. The richer benchmark therefore gives a
 NO-GO for jumping to 700M/1B before improving circuit composition and credit
 assignment. See `results/V0_25_COMPOSITION_GROWTH.md`.
 
+V0.26 adds training-only 5% hard-routing exploration. On the same hidden-pair
+composition task it raises 300M held-out accuracy to 11.72% and 500M
+parent-growth to 10.94%, but remains below the prior 20M reference at 12.50%
+in one seed. This is a weak signal requiring multi-seed confirmation, not a
+reason to jump to 700M/1B. See `results/V0_26_ROUTE_EXPLORATION.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.

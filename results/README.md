@@ -91,3 +91,9 @@ The V0.25 composition scaling falsification is documented in
 300M and 500M remain underfit; 500M scratch reaches 10.16% held-out accuracy,
 while parent-growth reaches 9.38%. This is a NO-GO for a 700M/1B quality jump
 until circuit credit assignment or composition is improved.
+
+The V0.26 training-only route exploration test is documented in
+`V0_26_ROUTE_EXPLORATION.md`. A 5% random tree-branch exploration probability
+raises 300M held-out accuracy from 7.03% to 11.72% and 500M growth from 9.38%
+to 10.94% in one seed. This is a useful but still weak signal; 700M/1B remains
+blocked pending multi-seed confirmation.
