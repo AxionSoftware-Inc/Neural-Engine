@@ -35,7 +35,8 @@ class TypedRegisterNeuralEngine(nn.Module):
                  route_exploration_prob: float = 0.0,
                  routing_capacity: int | None = None,
                  routing_depth: int | None = None,
-                 circuit_mode: str = "serial"):
+                 circuit_mode: str = "serial",
+                 readout_mode: str = "routed"):
         super().__init__()
         if slot_count < 6:
             raise ValueError("TypedRegisterNeuralEngine requires six input slots")
@@ -43,6 +44,8 @@ class TypedRegisterNeuralEngine(nn.Module):
             raise ValueError("TypedRegisterNeuralEngine currently requires internal_steps=3")
         if circuit_mode not in {"parallel", "serial"}:
             raise ValueError("circuit_mode must be 'parallel' or 'serial'")
+        if readout_mode not in {"routed", "direct"}:
+            raise ValueError("readout_mode must be 'routed' or 'direct'")
         if not 0.0 <= route_exploration_prob <= 1.0:
             raise ValueError("route_exploration_prob must be between 0 and 1")
 
@@ -50,6 +53,7 @@ class TypedRegisterNeuralEngine(nn.Module):
         self.internal_steps = internal_steps
         self.slot_count = slot_count
         self.circuit_mode = circuit_mode
+        self.readout_mode = readout_mode
         self.numeric_value_encoding = numeric_value_encoding
         self.route_exploration_prob = route_exploration_prob
         # The register graph is deliberately fixed-depth; adaptive halting
@@ -179,9 +183,20 @@ class TypedRegisterNeuralEngine(nn.Module):
         final = self.final_writer(torch.cat([second_query, second_delta], dim=-1))
 
         readout_query = final
-        readout_delta = self._route_stage(
-            readout_query, 2, selected_steps, selected_weights, route_gains, step_entropies)
-        readout = self.readout_writer(torch.cat([readout_query, readout_delta], dim=-1))
+        if self.readout_mode == "routed":
+            readout_delta = self._route_stage(
+                readout_query, 2, selected_steps, selected_weights, route_gains, step_entropies)
+            readout = self.readout_writer(torch.cat([readout_query, readout_delta], dim=-1))
+        else:
+            # The final register is already the typed result of op2.  A third
+            # bank lookup adds a value-conditioned lookup table at readout and
+            # was observed to use nearly the entire bank with little reuse.
+            # Keep the route tensor shape stable for analysis/optimizers while
+            # marking this deterministic stage as non-routed.
+            selected_steps.append(torch.full(
+                (batch_size, self.router.active_circuits), -1,
+                dtype=torch.long, device=device))
+            readout = final
         stage_states = torch.stack([partial, final, readout], dim=1)
         step_logits = self.output(stage_states.reshape(-1, self.state_dim))
         step_logits = step_logits.reshape(batch_size, self.internal_steps, -1)
@@ -189,7 +204,8 @@ class TypedRegisterNeuralEngine(nn.Module):
         stats = {
             "active_circuits": torch.tensor(self.router.active_circuits, device=device),
             "internal_steps": torch.tensor(self.internal_steps, device=device),
-            "router_entropy": step_entropies.mean(),
+            "router_entropy": (step_entropies.mean() if self.readout_mode == "routed"
+                                else step_entropies[:, :2].mean()),
             "selected_ids": torch.stack(selected_steps, dim=1),
             "selected_weights": selected_weights,
             "route_gains": route_gains,
@@ -238,4 +254,5 @@ class TypedRegisterNeuralEngine(nn.Module):
             "active_circuit_params": one_circuit * self.router.active_circuits,
             "route_exploration_prob": self.route_exploration_prob,
             "register_graph": "operands->partial->final->readout",
+            "readout_mode": self.readout_mode,
         }

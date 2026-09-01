@@ -103,13 +103,15 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         if hasattr(optimizer, "set_active_rows") and hasattr(model, "circuits"):
             selected = route_stats.get("selected_ids")
             if selected is not None:
-                selected = selected.detach().reshape(-1).unique()
-                optimizer.set_active_rows({
-                    model.circuits.down: selected,
-                    model.circuits.up: selected,
-                    model.circuits.bias: selected,
-                    model.router.keys: selected,
-                })
+                selected = selected.detach().reshape(-1)
+                selected = selected[selected.ge(0)].unique()
+                if selected.numel():
+                    optimizer.set_active_rows({
+                        model.circuits.down: selected,
+                        model.circuits.up: selected,
+                        model.circuits.bias: selected,
+                        model.router.keys: selected,
+                    })
         loss = nn.functional.cross_entropy(logits, batch.targets)
         stage_loss_weight = float(config.get("stage_loss_weight", 0.0))
         if stage_loss_weight and "step_logits" in route_stats:

@@ -68,3 +68,18 @@ def test_typed_register_model_exposes_serial_register_graph_and_gradients():
     loss.backward()
     assert model.circuits.down.grad is not None
     assert model.operation_embedding.weight.grad is not None
+
+
+def test_typed_register_direct_readout_skips_third_bank_lookup():
+    model = TypedRegisterNeuralEngine(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,
+        candidate_pool=4, active_circuits=2, internal_steps=3, slot_count=6,
+        numeric_value_encoding=True, readout_mode="direct",
+    )
+    generator = CompositionalProgramGenerator(seed=5, split="heldout")
+    batch = generator.task_balanced_batch(4)
+    logits, stats = model(batch.inputs)
+    assert logits.shape == (4, 64)
+    assert stats["selected_ids"][:, 2].eq(-1).all()
+    assert stats["executed_steps"].eq(3).all()

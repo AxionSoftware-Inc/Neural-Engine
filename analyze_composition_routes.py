@@ -55,7 +55,8 @@ def analyze(checkpoint: str, grid_size: int, batch_size: int,
         op_ids = (inputs[index, 1:3] - 2).tolist()
         for stage, op_id in enumerate((*op_ids, -1)):
             group = f"stage_{stage + 1}:{op_names[op_id] if op_id >= 0 else 'readout'}"
-            route = set(int(value) for value in selected[index, stage].flatten().tolist())
+            route = set(int(value) for value in selected[index, stage].flatten().tolist()
+                        if int(value) >= 0)
             stage_groups.setdefault(group, []).append(route)
             stage_union.setdefault(group, set()).update(route)
 
