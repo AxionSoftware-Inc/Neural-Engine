@@ -8,23 +8,31 @@ from typing import Any
 
 import torch
 
+from data.composition import CompositionalProgramGenerator
 from data.generator import SyntheticTaskGenerator
 from train import load_config, make_model, seed_everything
 
 
 @torch.no_grad()
 def rank_parent_circuits(checkpoint: str, config: dict[str, Any], device: torch.device,
-                         batches: int, batch_size: int) -> tuple[torch.Tensor, torch.Tensor]:
+                         batches: int, batch_size: int,
+                         census_mode: str) -> tuple[torch.Tensor, torch.Tensor]:
     payload = torch.load(Path(checkpoint), map_location="cpu", weights_only=True)
     parent_config = dict(payload["config"])
     model = make_model(parent_config).to(device).eval()
     model.load_state_dict(payload["model_state"])
-    generator = SyntheticTaskGenerator(
-        parent_config["seq_len"], seed=int(parent_config["seed"]) + 171,
-        value_min=int(parent_config.get("train_value_min", 0)),
-        value_max=int(parent_config.get("train_value_max", 63)),
-        split=str(parent_config.get("train_split", "all")),
-    )
+    if census_mode == "composition":
+        heldout_pairs = tuple(tuple(pair) for pair in parent_config.get("heldout_pairs", []))
+        generator = CompositionalProgramGenerator(
+            seq_len=int(parent_config["seq_len"]), seed=int(parent_config["seed"]) + 171,
+            split="all", heldout_pairs=heldout_pairs)
+    else:
+        generator = SyntheticTaskGenerator(
+            parent_config["seq_len"], seed=int(parent_config["seed"]) + 171,
+            value_min=int(parent_config.get("train_value_min", 0)),
+            value_max=int(parent_config.get("train_value_max", 63)),
+            split=str(parent_config.get("train_split", "all")),
+        )
     counts = torch.zeros(parent_config["num_circuits"], dtype=torch.long, device=device)
     for _ in range(batches):
         batch = generator.task_balanced_batch(batch_size, device)
@@ -56,7 +64,8 @@ def grow(args: argparse.Namespace) -> dict[str, Any]:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     ranked, counts = rank_parent_circuits(
-        args.parent_checkpoint, target_config, device, args.count_batches, args.count_batch_size
+        args.parent_checkpoint, target_config, device, args.count_batches, args.count_batch_size,
+        args.census_mode,
     )
     parent_payload = torch.load(Path(args.parent_checkpoint), map_location="cpu", weights_only=True)
     parent_state = parent_payload["model_state"]
@@ -113,6 +122,7 @@ def grow(args: argparse.Namespace) -> dict[str, Any]:
         "extra_circuits": extra,
         "census_batches": args.count_batches,
         "census_batch_size": args.count_batch_size,
+        "census_mode": args.census_mode,
         "parent_circuits_seen": int((counts > 0).sum()),
         "clone_noise": args.clone_noise,
         "routing_warmup_capacity": target_config.get("routing_capacity"),
@@ -132,6 +142,7 @@ def main() -> None:
     parser.add_argument("--device", default="auto")
     parser.add_argument("--count-batches", type=int, default=64)
     parser.add_argument("--count-batch-size", type=int, default=128)
+    parser.add_argument("--census-mode", choices=("synthetic", "composition"), default="synthetic")
     parser.add_argument("--clone-noise", type=float, default=0.05)
     args = parser.parse_args()
     grow(args)

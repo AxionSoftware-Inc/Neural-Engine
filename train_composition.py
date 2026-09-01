@@ -63,14 +63,24 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         seq_len=int(config["seq_len"]), seed=int(config["seed"]) + 2,
         split=evaluation_split, heldout_pairs=heldout_pairs)
     model = make_model(config).to(device)
+    if args.init_checkpoint:
+        initialization = torch.load(Path(args.init_checkpoint), map_location="cpu", weights_only=True)
+        model.load_state_dict(initialization.get("model_state", initialization))
     optimizer = make_optimizer(model, config)
     steps = args.steps if args.steps is not None else 1000
     coverage_weight = float(config.get("routing_coverage_weight", 0.0))
     coverage_enabled = coverage_weight > 0.0
+    routing_warmup_steps = int(config.get("routing_warmup_steps", 0))
     losses = []
     start = time.perf_counter()
     model.train()
     for step in range(1, steps + 1):
+        if (hasattr(model, "router") and routing_warmup_steps
+                and step == routing_warmup_steps + 1):
+            model.router.set_routing_state(
+                capacity=model.router.num_circuits,
+                depth=model.router.depth,
+            )
         batch = train_generator.task_balanced_batch(int(config["batch_size"]), device)
         optimizer.zero_grad(set_to_none=True)
         if hasattr(model, "adaptive_inference"):
@@ -135,6 +145,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "total_params": count_parameters(model),
         "stage_loss_weight": stage_loss_weight,
         "routing_coverage_weight": coverage_weight,
+        "routing_warmup_steps": routing_warmup_steps,
         "optimizer": str(config.get("optimizer", "adamw")),
         "heldout_pairs": [list(pair) for pair in heldout_pairs],
         "evaluation_split": evaluation_split,
@@ -145,6 +156,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     }
     if hasattr(model, "parameter_report"):
         report.update(model.parameter_report())
+        report.update({"routing_capacity": model.router.routing_capacity,
+                       "routing_depth": model.router.active_depth})
     else:
         report.update({"active_params_estimate": count_parameters(model), "active_fraction": 1.0})
     if hasattr(optimizer, "report"):
@@ -156,7 +169,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         checkpoint_path = Path(args.checkpoint)
         checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
         report["checkpoint"] = str(checkpoint_path)
-        torch.save({"model_state": model.state_dict(), "config": config, "report": report}, checkpoint_path)
+        checkpoint_config = dict(config)
+        if hasattr(model, "router"):
+            checkpoint_config["routing_capacity"] = model.router.routing_capacity
+            checkpoint_config["routing_depth"] = model.router.active_depth
+        torch.save({"model_state": model.state_dict(), "config": checkpoint_config,
+                   "report": report}, checkpoint_path)
     output_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))
     return report
@@ -170,6 +188,8 @@ def main() -> None:
     parser.add_argument("--run-id", default="composition_smoke")
     parser.add_argument("--output", default="results/runs")
     parser.add_argument("--checkpoint", default=None)
+    parser.add_argument("--init-checkpoint", default=None,
+                        help="Initialize model weights from an existing checkpoint before training")
     parser.add_argument("--examples-per-task", type=int, default=64)
     parser.add_argument("--log-every", type=int, default=100)
     run(parser.parse_args())
