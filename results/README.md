@@ -118,3 +118,9 @@ on one 20M seed but 61.46% on the second and 68.65% at 100M. A compressed
 32-dimensional route context reaches 71.75% at 20M but 61.22% at 100M. These
 results reject partitioning as a reliable default and keep the larger-scale
 capacity claim open.
+
+The V0.30 active-budget audit is documented in
+`V0_30_ACTIVE_BUDGET_AUDIT.md`. Doubling active circuits from 8 to 16 at 20M
+does not improve all-pairs accuracy (57.67% → 57.06%) or hidden-pair accuracy
+(65.56% → 63.35%), and costs about 1.5× more local training time. The next
+target is credit assignment and dataflow supervision, not wider active paths.

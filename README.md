@@ -1168,6 +1168,13 @@ context improves the 20M hidden grid to 71.75%, but the 100M version reaches
 NO-GO for treating partitioning or dormant capacity as a reliable scaling
 law; details are in `results/V0_29_ROUTING_SPECIALIZATION_AUDIT.md`.
 
+V0.30 tests a mild active-budget increase from 8 to 16 circuits per stage at
+20M. All-pairs grid accuracy changes from 57.67% to 57.06%, while hidden-pair
+accuracy changes from 65.56% to 63.35%; the run is also about 1.5× slower.
+More active width is therefore not the current rescue. The next target is
+composition credit assignment and intermediate-register supervision; see
+`results/V0_30_ACTIVE_BUDGET_AUDIT.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.
