@@ -11,11 +11,23 @@ from data.composition import OPERATION_TOKENS, VALUE_TOKEN_OFFSET, apply_operati
 from train import make_model
 
 
-def grid_rows(config: dict, grid_size: int) -> tuple[torch.Tensor, torch.Tensor, list[str]]:
+def parse_pair(label: str) -> tuple[str, str]:
+    parts = tuple(label.split("_then_"))
+    if len(parts) != 2 or any(part not in OPERATION_TOKENS for part in parts):
+        valid = ", ".join(f"{first}_then_{second}"
+                           for first in OPERATION_TOKENS
+                           for second in OPERATION_TOKENS)
+        raise ValueError(f"invalid pair {label!r}; expected one of: {valid}")
+    return parts
+
+
+def grid_rows(config: dict, grid_size: int,
+              pairs_override: tuple[tuple[str, str], ...] | None = None
+              ) -> tuple[torch.Tensor, torch.Tensor, list[str]]:
     if not 1 <= grid_size <= 64:
         raise ValueError("grid_size must be between 1 and 64")
     heldout_pairs = tuple(tuple(pair) for pair in config.get("heldout_pairs", []))
-    pairs = heldout_pairs or tuple(
+    pairs = pairs_override or heldout_pairs or tuple(
         (first, second) for first in OPERATION_TOKENS for second in OPERATION_TOKENS
     )
     seq_len = int(config["seq_len"])
@@ -39,13 +51,23 @@ def grid_rows(config: dict, grid_size: int) -> tuple[torch.Tensor, torch.Tensor,
 
 @torch.no_grad()
 def evaluate(checkpoint: str, grid_size: int, batch_size: int,
-             device_name: str) -> dict:
+             device_name: str,
+             pairs_override: tuple[tuple[str, str], ...] | None = None) -> dict:
     payload = torch.load(Path(checkpoint), map_location="cpu", weights_only=True)
     config = dict(payload["config"])
     device = torch.device(device_name)
     model = make_model(config).to(device).eval()
-    model.load_state_dict(payload["model_state"])
-    inputs, targets, labels = grid_rows(config, grid_size)
+    load_result = model.load_state_dict(payload["model_state"], strict=False)
+    optional_route_keys = {name for name in model.state_dict()
+                           if name == "route_context_scale"
+                           or name.startswith("route_value_encoder.")}
+    unexpected = set(load_result.unexpected_keys)
+    missing = set(load_result.missing_keys) - optional_route_keys
+    if unexpected or missing:
+        raise RuntimeError(
+            f"checkpoint/model mismatch: missing={sorted(missing)}, "
+            f"unexpected={sorted(unexpected)}")
+    inputs, targets, labels = grid_rows(config, grid_size, pairs_override)
     correct_parts = []
     for start in range(0, len(targets), batch_size):
         logits, _ = model(inputs[start:start + batch_size].to(device),
@@ -60,6 +82,7 @@ def evaluate(checkpoint: str, grid_size: int, batch_size: int,
         "checkpoint": checkpoint,
         "total_params": sum(parameter.numel() for parameter in model.parameters()),
         "grid_size": grid_size,
+        "pairs": list(dict.fromkeys(labels)),
         "examples_per_pair": grid_size ** 3,
         "accuracy": float(correct.float().mean()),
         "per_pair_accuracy": per_pair,
@@ -74,8 +97,12 @@ def main() -> None:
     parser.add_argument("--grid-size", type=int, default=16)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--device", default="cuda")
+    parser.add_argument("--pair", dest="pairs", action="append",
+                        help="explicit pair label, e.g. add_then_multiply; repeat for multiple pairs")
     args = parser.parse_args()
-    evaluate(args.checkpoint, args.grid_size, args.batch_size, args.device)
+    pairs = (tuple(parse_pair(label) for label in args.pairs)
+             if args.pairs else None)
+    evaluate(args.checkpoint, args.grid_size, args.batch_size, args.device, pairs)
 
 
 if __name__ == "__main__":

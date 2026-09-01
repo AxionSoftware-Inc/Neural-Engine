@@ -1175,6 +1175,16 @@ More active width is therefore not the current rescue. The next target is
 composition credit assignment and intermediate-register supervision; see
 `results/V0_30_ACTIVE_BUDGET_AUDIT.md`.
 
+V0.31 performs an inference-only full-domain question audit. All checkpoints
+are tested on the same complete `64^3` operand grid, and the evaluator accepts
+explicit repeated `--pair` arguments. The 100M hidden-stage checkpoint reaches
+89.16% and the 300M checkpoint 85.42%; the corresponding all-pairs controls
+are 59.23% and 58.60%. The full-domain audit confirms that the question path is
+deterministic, but also records that the former hidden protocol exposed all
+nine operator pairs before its hidden-stage adaptation. Strict zero-shot and
+credit-assignment tests are therefore required before any 700M/1B scaling.
+See `results/V0_31_FULL_DOMAIN_QUESTION_AUDIT.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.

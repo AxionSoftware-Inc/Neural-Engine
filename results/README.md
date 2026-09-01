@@ -124,3 +124,10 @@ The V0.30 active-budget audit is documented in
 does not improve all-pairs accuracy (57.67% → 57.06%) or hidden-pair accuracy
 (65.56% → 63.35%), and costs about 1.5× more local training time. The next
 target is credit assignment and dataflow supervision, not wider active paths.
+
+The V0.31 full-domain question audit is documented in
+`V0_31_FULL_DOMAIN_QUESTION_AUDIT.md`. It evaluates identical `64^3` operand
+questions without training, adds explicit `--pair` selection to the evaluator,
+and shows that 100M remains the current quality winner while 300M does not
+scale monotonically. It also records that the former hidden score was
+post-exposure adaptation rather than strict zero-shot generalization.
