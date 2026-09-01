@@ -97,3 +97,9 @@ The V0.26 training-only route exploration test is documented in
 raises 300M held-out accuracy from 7.03% to 11.72% and 500M growth from 9.38%
 to 10.94% in one seed. This is a useful but still weak signal; 700M/1B remains
 blocked pending multi-seed confirmation.
+
+The V0.27 audited curriculum scaling study is documented in
+`V0_27_CURRICULUM_SCALE_AUDIT.md`. With deterministic 4,096-example-per-pair
+grids, 300M curriculum averages 13.79% ± 0.96 across two seeds, while 500M
+curriculum growth averages 12.77% ± 0.24. Curriculum is a weak positive, but
+500M still does not beat 300M, so 700M/1B quality scaling remains blocked.

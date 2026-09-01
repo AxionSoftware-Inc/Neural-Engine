@@ -1143,6 +1143,13 @@ parent-growth to 10.94%, but remains below the prior 20M reference at 12.50%
 in one seed. This is a weak signal requiring multi-seed confirmation, not a
 reason to jump to 700M/1B. See `results/V0_26_ROUTE_EXPLORATION.md`.
 
+V0.27 audits the composition metric with deterministic 4,096-example-per-pair
+grids and adds a longer curriculum. Two 300M curriculum runs average 13.79%
+± 0.96 held-out accuracy, while two 500M curriculum-growth runs average
+12.77% ± 0.24. Curriculum helps, but 500M still does not beat 300M; the next
+step is circuit-composition/working-memory research, not 700M/1B scaling. See
+`results/V0_27_CURRICULUM_SCALE_AUDIT.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.
