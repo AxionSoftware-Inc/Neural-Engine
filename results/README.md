@@ -52,3 +52,8 @@ The new arithmetic composition benchmark and its all-pairs learnability
 control are documented in `V0_18_COMPOSITION_BENCHMARK.md`. Both models remain
 underfit at 5,000 steps, so the result is a diagnostic and not a final
 generalization claim.
+
+The fair numeric Transformer re-test is documented in
+`V0_19_FAIR_NUMERIC_BASELINE.md`. It shows that the old plain-embedding
+Transformer control understated dense quality; NE's strongest remaining claim
+is active-compute/throughput efficiency, not unconditional accuracy.

@@ -1087,6 +1087,14 @@ not yet a definitive held-out generalization win. Details and the staged path
 to a 300–500M feasibility test are in
 `results/V0_18_COMPOSITION_BENCHMARK.md`.
 
+V0.19 applies the same structured numeric/Fourier value frontend to the dense
+Transformer baseline. On the existing held-out operand-combination protocol,
+the fair Transformer reaches 72.37% train-split and 65.91% held-out accuracy,
+versus NE-V0.12's 71.41% and 55.68%. The old 51.02% Transformer result used a
+plain embedding and is no longer a fair quality control. NE retains the
+active-compute and throughput advantage; the complete correction is recorded
+in `results/V0_19_FAIR_NUMERIC_BASELINE.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.

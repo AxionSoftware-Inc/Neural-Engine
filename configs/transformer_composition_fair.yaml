@@ -1,0 +1,18 @@
+model: baseline
+vocab_size: 128
+num_classes: 64
+seq_len: 8
+d_model: 384
+nhead: 8
+num_layers: 8
+ff_dim: 2560
+dropout: 0.0
+numeric_value_encoding: true
+batch_size: 128
+learning_rate: 0.0003
+weight_decay: 0.01
+grad_clip: 1.0
+seed: 17
+heldout_pairs:
+  - [add, multiply]
+  - [multiply, add]

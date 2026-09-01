@@ -1,19 +1,14 @@
 from __future__ import annotations
 
-import math
-
 import torch
 from torch import nn
 
 from .circuits import MicroCircuitBank
+from .encoding import (VALUE_HARMONICS, VALUE_MODULUS, VALUE_TOKEN_OFFSET,
+                       encode_tokens)
 from .instrumentation import count_parameters
 from .router import HierarchicalRouter
 from .state import PersistentState
-
-
-VALUE_TOKEN_OFFSET = 32
-VALUE_MODULUS = 64
-VALUE_HARMONICS = (1, 2, 4, 8, 16, 32)
 
 
 class NeuralEngineV0(nn.Module):
@@ -81,18 +76,7 @@ class NeuralEngineV0(nn.Module):
         self._last_route: dict[str, torch.Tensor] = {}
 
     def encode(self, inputs: torch.Tensor) -> torch.Tensor:
-        embedding_inputs = inputs.clamp_max(self.token_embedding.num_embeddings - 1)
-        tokens = self.token_embedding(embedding_inputs)
-        if self.value_encoder is not None:
-            values = (inputs.float() - VALUE_TOKEN_OFFSET).clamp(0, VALUE_MODULUS - 1)
-            angles = values.unsqueeze(-1) * (2.0 * math.pi / VALUE_MODULUS)
-            features = [values.unsqueeze(-1) / (VALUE_MODULUS - 1)]
-            for harmonic in VALUE_HARMONICS:
-                features.append(torch.sin(angles * harmonic))
-                features.append(torch.cos(angles * harmonic))
-            numeric_tokens = self.value_encoder(torch.cat(features, dim=-1))
-            value_mask = inputs.ge(VALUE_TOKEN_OFFSET) & inputs.lt(VALUE_TOKEN_OFFSET + VALUE_MODULUS)
-            tokens = torch.where(value_mask.unsqueeze(-1), numeric_tokens, tokens)
+        tokens = encode_tokens(inputs, self.token_embedding, self.value_encoder)
         positions = self.position_embedding[: inputs.shape[1]]
         scale = self.position_scale[: inputs.shape[1]]
         bias = self.position_bias[: inputs.shape[1]]

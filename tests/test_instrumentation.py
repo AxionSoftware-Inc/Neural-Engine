@@ -1,3 +1,5 @@
+import torch
+
 from baseline.transformer import DenseTransformerBaseline
 from neural_engine.instrumentation import (
     count_parameters,
@@ -29,3 +31,15 @@ def test_transformer_parameter_estimate_matches_reference_model():
     estimate = estimate_transformer_macs(config)
     assert estimate["estimated_dense_parameter_bytes"] == count_parameters(model) * 4
     assert estimate["estimated_dense_macs_per_sample"] > 0
+
+
+def test_transformer_numeric_encoder_reuses_value_representation():
+    model = DenseTransformerBaseline(vocab_size=128, num_classes=16, seq_len=8,
+                                     d_model=32, nhead=4, num_layers=2, ff_dim=64,
+                                     numeric_value_encoding=True)
+    inputs = torch.tensor([[1, 2, 32, 63, 0, 0, 0, 0]])
+    logits, stats = model(inputs)
+    assert logits.shape == (1, 16)
+    assert stats == {}
+    assert model.token_embedding.num_embeddings == 16
+    assert model.value_encoder is not None

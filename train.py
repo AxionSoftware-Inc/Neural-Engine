@@ -39,7 +39,9 @@ def seed_everything(seed: int) -> None:
 def make_model(config: dict[str, Any]) -> nn.Module:
     if config["model"] == "baseline":
         fields = ("vocab_size", "num_classes", "seq_len", "d_model", "nhead", "num_layers", "ff_dim", "dropout")
-        return DenseTransformerBaseline(**{key: config[key] for key in fields})
+        model_kwargs = {key: config[key] for key in fields}
+        model_kwargs["numeric_value_encoding"] = config.get("numeric_value_encoding", False)
+        return DenseTransformerBaseline(**model_kwargs)
     fields = ("vocab_size", "num_classes", "seq_len", "d_model", "state_dim", "num_circuits", "circuit_rank",
               "router_branch", "router_depth", "candidate_pool", "active_circuits", "internal_steps")
     model_kwargs = {key: config[key] for key in fields}
