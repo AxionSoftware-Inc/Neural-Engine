@@ -19,6 +19,17 @@ def test_neural_engine_forward_and_gradients():
     assert stats["step_logits"].shape == (8, 2, 64)
 
 
+def test_input_reinjection_scale_is_configurable():
+    model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
+                           num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,
+                           candidate_pool=4, active_circuits=2, internal_steps=2,
+                           input_reinjection=0.5)
+    batch = SyntheticTaskGenerator(seed=5).batch(3)
+    logits, _ = model(batch.inputs)
+    assert logits.shape == (3, 64)
+    assert model.input_reinjection == 0.5
+
+
 def test_position_conditioning_preserves_operand_order():
     model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
                            num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,

@@ -1067,6 +1067,12 @@ points full and 0.52 points held-out while the active path remains constant.
 The result is promising but still needs more seeds and composition tasks;
 details are in `results/V0_15_NUMERIC_CAPACITY_SCALING.md`.
 
+V0.16 tested reducing the encoded-input signal injected into later recurrent
+steps. Half reinjection changes full accuracy from 71.98% to 71.67% and
+held-out accuracy from 72.71% to 72.29%, so the default remains full
+reinjection. The negative ablation is recorded in
+`results/V0_16_INPUT_REINJECTION.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.

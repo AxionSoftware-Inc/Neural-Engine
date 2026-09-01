@@ -39,3 +39,7 @@ and held-out quality, so it remains an optional composition-focused recipe.
 The current numeric NE-20/NE-50/NE-100 fixed-active scaling test is documented
 in `V0_15_NUMERIC_CAPACITY_SCALING.md`; it keeps the active path near 2.04M
 parameters while growing stored capacity to 100M.
+
+The recurrent input-reinjection ablation is documented in
+`V0_16_INPUT_REINJECTION.md`; reducing reinjection slightly helps depth-3 but
+does not improve overall or held-out quality.

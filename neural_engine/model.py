@@ -26,7 +26,8 @@ class NeuralEngineV0(nn.Module):
                  router_addresses: int = 1, slot_count: int = 0, task_context: bool = False,
                  task_context_update: bool = True, circuit_mode: str = "parallel",
                  numeric_value_encoding: bool = False, adaptive_halting: bool = False,
-                 halt_threshold: float = 0.5, routing_coverage_temperature: float = 0.25):
+                 halt_threshold: float = 0.5, routing_coverage_temperature: float = 0.25,
+                 input_reinjection: float = 1.0):
         super().__init__()
         if circuit_mode not in {"parallel", "serial"}:
             raise ValueError("circuit_mode must be 'parallel' or 'serial'")
@@ -44,6 +45,7 @@ class NeuralEngineV0(nn.Module):
         self.adaptive_inference = adaptive_halting
         self.halt_threshold = halt_threshold
         self.routing_coverage_temperature = routing_coverage_temperature
+        self.input_reinjection = input_reinjection
         embedding_vocab = 16 if numeric_value_encoding else vocab_size
         self.token_embedding = nn.Embedding(embedding_vocab, d_model, padding_idx=0)
         self.value_encoder = nn.Linear(1 + 2 * len(VALUE_HARMONICS), d_model) if numeric_value_encoding else None
@@ -184,7 +186,8 @@ class NeuralEngineV0(nn.Module):
             else:
                 circuit_delta = self.circuits(step_query, selected, weights)
             delta = circuit_delta * route_gain.unsqueeze(-1)
-            update = delta + encoded[active_indices] + self.step_embedding[step]
+            update = (delta + self.input_reinjection * encoded[active_indices]
+                      + self.step_embedding[step])
             if task_context is not None and self.task_context_update:
                 update = update + task_context[active_indices]
             updated_state = self.state.step(active_state, update)
