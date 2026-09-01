@@ -131,3 +131,8 @@ questions without training, adds explicit `--pair` selection to the evaluator,
 and shows that 100M remains the current quality winner while 300M does not
 scale monotonically. It also records that the former hidden score was
 post-exposure adaptation rather than strict zero-shot generalization.
+
+The proposal history is indexed in the repository root: `taklif.md` is the
+original scale/systems proposal, `taklif1.md` records completed experiments
+and rejected variants, and `taklif2.md` records the next untested
+scale-invariant routing architecture.
