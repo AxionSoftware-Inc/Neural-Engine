@@ -27,3 +27,7 @@ The active-circuit k=4/8/16 quality and latency sweep is documented in
 
 Scratch training and second-seed validation for k=4 versus k=8 is documented
 in `V0_12_MULTI_SEED_BUDGET.md`.
+
+The optional coverage-aware low-k router regularizer is documented in
+`V0_13_COVERAGE_REGULARIZER.md`; it improves k=4 bank utilization but does not
+yet justify changing the k=8 default.

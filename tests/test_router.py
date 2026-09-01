@@ -21,3 +21,13 @@ def test_multi_address_router_keeps_total_candidate_budget_structured():
     assert weights.shape == (7, 4)
     assert stats["candidate_ids"].shape == (7, 16)
     assert int(stats["router_decisions"]) == 6
+
+
+def test_soft_coverage_regularizer_is_differentiable():
+    router = HierarchicalRouter(32, num_circuits=64, branch=4, depth=2,
+                                candidate_pool=8, active_circuits=4)
+    _, _, stats = router(torch.randn(7, 32), coverage=True)
+    assert stats["routing_coverage_loss"].ndim == 0
+    assert torch.isfinite(stats["routing_coverage_loss"])
+    stats["routing_coverage_loss"].backward()
+    assert router.level_projections.grad is not None

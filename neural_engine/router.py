@@ -30,23 +30,58 @@ class HierarchicalRouter(nn.Module):
         nn.init.normal_(self.level_projections, std=0.02)
         nn.init.normal_(self.keys, std=0.02)
 
-    def forward(self, state: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
+    def _soft_coverage_distribution(self, level_probs: list[torch.Tensor]) -> torch.Tensor:
+        """Estimate circuit usage through the soft tree paths.
+
+        Execution still follows the hard argmax path below.  This auxiliary
+        distribution is only used during training, so the router can receive
+        a differentiable signal before a leaf becomes the hard winner.
+        """
+        path_probs = level_probs[0]
+        for probs in level_probs[1:]:
+            path_probs = (path_probs.unsqueeze(-1) * probs.unsqueeze(1)).reshape(path_probs.shape[0], -1)
+
+        # Each leaf exposes the same local candidate window used by the hard
+        # route.  Spread its soft mass uniformly across that window to obtain
+        # a differentiable approximation of bank-level traffic.
+        leaf_mass = path_probs.mean(dim=0)
+        leaf_ids = torch.arange(path_probs.shape[-1], device=path_probs.device)
+        offsets = torch.arange(self.candidates_per_address, device=path_probs.device).view(1, -1)
+        candidate_ids = (leaf_ids.unsqueeze(-1) + offsets).remainder(self.num_circuits)
+        candidate_weights = leaf_mass.unsqueeze(-1).expand(-1, self.candidates_per_address)
+        distribution = torch.zeros(self.num_circuits, device=path_probs.device, dtype=path_probs.dtype)
+        distribution.scatter_add_(0, candidate_ids.reshape(-1),
+                                  (candidate_weights / self.candidates_per_address).reshape(-1))
+        return distribution / distribution.sum().clamp_min(1e-8)
+
+    def forward(self, state: torch.Tensor, coverage: bool = False,
+                coverage_temperature: float = 0.25) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
+        if coverage_temperature <= 0:
+            raise ValueError("coverage_temperature must be positive")
         batch = state.shape[0]
         leaf = torch.zeros(batch, self.num_addresses, dtype=torch.long, device=state.device)
         entropies = []
         path_scores = []
+        coverage_distributions = []
         for address in range(self.num_addresses):
             address_leaf = leaf[:, address]
             address_score = torch.zeros(batch, device=state.device)
+            level_probs = []
+            coverage_level_probs = []
             for level in range(self.depth):
                 logits = state @ self.level_projections[address, level] + self.level_bias[address, level]
                 probs = F.softmax(logits, dim=-1)
+                level_probs.append(probs)
+                if coverage:
+                    coverage_level_probs.append(F.softmax(logits / coverage_temperature, dim=-1))
                 entropies.append(-(probs * probs.clamp_min(1e-8).log()).sum(dim=-1))
                 child = logits.argmax(dim=-1)
                 address_score = address_score + logits.gather(1, child.unsqueeze(1)).squeeze(1)
                 address_leaf = address_leaf * self.branch + child
             leaf[:, address] = address_leaf
             path_scores.append(address_score)
+            if coverage:
+                coverage_distributions.append(self._soft_coverage_distribution(coverage_level_probs))
 
         base = leaf.remainder(self.num_circuits)
         offsets = torch.arange(self.candidates_per_address, device=state.device).view(1, 1, -1)
@@ -68,4 +103,9 @@ class HierarchicalRouter(nn.Module):
             "candidate_ids": candidate_ids,
             "selected_ids": selected_ids,
         }
+        if coverage:
+            distribution = torch.stack(coverage_distributions, dim=0).mean(dim=0)
+            stats["routing_coverage_loss"] = (
+                distribution * (distribution.clamp_min(1e-8).log() + math.log(self.num_circuits))
+            ).sum()
         return selected_ids, weights, stats

@@ -51,6 +51,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["numeric_value_encoding"] = config.get("numeric_value_encoding", False)
     model_kwargs["adaptive_halting"] = config.get("adaptive_halting", False)
     model_kwargs["halt_threshold"] = config.get("halt_threshold", 0.5)
+    model_kwargs["routing_coverage_temperature"] = config.get("routing_coverage_temperature", 0.25)
     return NeuralEngineV0(**model_kwargs)
 
 
@@ -160,11 +161,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     start = time.perf_counter()
     losses: list[float] = []
     peak_vram = 0
+    coverage_weight = float(config.get("routing_coverage_weight", 0.0))
+    coverage_enabled = isinstance(model, NeuralEngineV0) and coverage_weight > 0.0
     for step in range(1, steps + 1):
         batch = train_source.batch()
         optimizer.zero_grad(set_to_none=True)
         if isinstance(model, NeuralEngineV0):
-            logits, route_stats = model(batch.inputs, adaptive=False)
+            logits, route_stats = model(batch.inputs, adaptive=False, coverage=coverage_enabled)
         else:
             logits, route_stats = model(batch.inputs)
         loss = nn.functional.cross_entropy(logits, batch.targets)
@@ -194,6 +197,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 loss = loss + exit_loss_weight * nn.functional.cross_entropy(exit_logits, batch.targets)
         if "router_entropy" in route_stats:
             loss = loss - 0.0001 * route_stats["router_entropy"]
+        if coverage_enabled and "routing_coverage_loss" in route_stats:
+            loss = loss + coverage_weight * route_stats["routing_coverage_loss"]
         loss.backward()
         nn.utils.clip_grad_norm_(model.parameters(), config["grad_clip"])
         optimizer.step()
@@ -224,6 +229,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "stage_loss_weight": float(config.get("stage_loss_weight", 0.0)),
         "halt_loss_weight": float(config.get("halt_loss_weight", 0.0)),
         "exit_loss_weight": float(config.get("exit_loss_weight", 0.0)),
+        "routing_coverage_weight": coverage_weight,
+        "routing_coverage_temperature": float(config.get("routing_coverage_temperature", 0.25)),
         "train_value_range": [train_value_min, train_value_max],
         "eval_value_range": [eval_value_min, eval_value_max],
         "train_split": train_split, "eval_split": eval_split,

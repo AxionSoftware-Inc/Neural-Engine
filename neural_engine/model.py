@@ -26,7 +26,7 @@ class NeuralEngineV0(nn.Module):
                  router_addresses: int = 1, slot_count: int = 0, task_context: bool = False,
                  task_context_update: bool = True, circuit_mode: str = "parallel",
                  numeric_value_encoding: bool = False, adaptive_halting: bool = False,
-                 halt_threshold: float = 0.5):
+                 halt_threshold: float = 0.5, routing_coverage_temperature: float = 0.25):
         super().__init__()
         if circuit_mode not in {"parallel", "serial"}:
             raise ValueError("circuit_mode must be 'parallel' or 'serial'")
@@ -43,6 +43,7 @@ class NeuralEngineV0(nn.Module):
         self.adaptive_halting = adaptive_halting
         self.adaptive_inference = adaptive_halting
         self.halt_threshold = halt_threshold
+        self.routing_coverage_temperature = routing_coverage_temperature
         embedding_vocab = 16 if numeric_value_encoding else vocab_size
         self.token_embedding = nn.Embedding(embedding_vocab, d_model, padding_idx=0)
         self.value_encoder = nn.Linear(1 + 2 * len(VALUE_HARMONICS), d_model) if numeric_value_encoding else None
@@ -97,7 +98,8 @@ class NeuralEngineV0(nn.Module):
     def forward(self, inputs: torch.Tensor, adaptive: bool | None = None,
                 forced_selected_ids: torch.Tensor | None = None,
                 forced_selected_weights: torch.Tensor | None = None,
-                forced_route_gains: torch.Tensor | None = None) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+                forced_route_gains: torch.Tensor | None = None,
+                coverage: bool = False) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """Run the model, optionally replaying a previously recorded route.
 
         The forced-route arguments are an analysis hook for causal route
@@ -118,6 +120,7 @@ class NeuralEngineV0(nn.Module):
         batch_size = inputs.shape[0]
         num_classes = self.output[-1].out_features
         selected_steps = []
+        coverage_losses = []
         selected_weights = torch.zeros(batch_size, self.internal_steps, self.active_circuits,
                                        device=inputs.device)
         route_gains = torch.ones(batch_size, self.internal_steps, device=inputs.device)
@@ -156,8 +159,12 @@ class NeuralEngineV0(nn.Module):
             step_query = active_state + self.step_embedding[step]
             if task_context is not None:
                 step_query = step_query + task_context[active_indices]
-            selected, weights, route_stats = self.router(step_query)
+            selected, weights, route_stats = self.router(
+                step_query, coverage=coverage,
+                coverage_temperature=self.routing_coverage_temperature)
             route_gain = route_stats["route_gain"]
+            if "routing_coverage_loss" in route_stats:
+                coverage_losses.append(route_stats["routing_coverage_loss"])
             if forced_selected_ids is not None:
                 selected = forced_selected_ids[active_indices, step].to(device=inputs.device)
                 if forced_selected_weights is None:
@@ -220,6 +227,8 @@ class NeuralEngineV0(nn.Module):
             "executed_steps": executed_mask.sum(dim=1),
             "executed_mask": executed_mask,
         }
+        if coverage_losses:
+            stats["routing_coverage_loss"] = torch.stack(coverage_losses).mean()
         self._last_route = stats
         return last_logits, stats
 

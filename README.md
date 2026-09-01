@@ -1045,6 +1045,13 @@ The follow-up two-seed scratch validation is recorded in
 routers leave only 1.85–2.63% dead circuits, versus 17.6–21.2% for k=4. k=4
 remains an optional low-compute mode.
 
+V0.13 adds an optional low-temperature, coverage-aware router regularizer for
+k=4. Across two seeds it reduces dead circuits to 13.1–14.8% and raises mean
+validation accuracy by 0.65 points, but mean fresh full accuracy is 0.21
+points lower and held-out accuracy is effectively unchanged. The result is
+recorded in `results/V0_13_COVERAGE_REGULARIZER.md`; k=8 remains the default
+and the new loss is disabled unless explicitly configured.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.
