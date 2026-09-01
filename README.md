@@ -1098,8 +1098,9 @@ in `results/V0_19_FAIR_NUMERIC_BASELINE.md`.
 V0.20 adds a batched route-indexed `LazyAdamW` prototype. At 20M it stays
 within 0.32 held-out points of dense AdamW and is about 4.7% slower, while
 avoiding a full-bank optimizer update on each step. It is still experimental:
-RAM offload, GPU circuit caching, and H2D measurements remain open. See
-`results/V0_20_LAZY_ADAMW.md`.
+RAM offload, GPU circuit caching, and H2D measurements remain open. It also
+passes a 300M early screen with nearly identical 200-step quality and lower
+peak VRAM. See `results/V0_20_LAZY_ADAMW.md`.
 
 Do not assume any result beyond the recorded measurements.
 

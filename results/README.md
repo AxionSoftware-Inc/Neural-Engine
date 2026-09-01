@@ -61,4 +61,5 @@ is active-compute/throughput efficiency, not unconditional accuracy.
 The first route-indexed batched `LazyAdamW` prototype is documented in
 `V0_20_LAZY_ADAMW.md`. It stays within 0.32 held-out points of dense AdamW and
 is only about 4.7% slower at 20M, but does not yet implement RAM offload or
-cache/prefetch.
+cache/prefetch. The same optimizer remains within 0.47 points of the 100M
+dense reference in a single seed and passes a 300M early feasibility screen.
