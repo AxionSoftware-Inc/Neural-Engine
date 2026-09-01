@@ -95,8 +95,9 @@ until circuit credit assignment or composition is improved.
 The V0.26 training-only route exploration test is documented in
 `V0_26_ROUTE_EXPLORATION.md`. A 5% random tree-branch exploration probability
 raises 300M held-out accuracy from 7.03% to 11.72% and 500M growth from 9.38%
-to 10.94% in one seed. This is a useful but still weak signal; 700M/1B remains
-blocked pending multi-seed confirmation.
+to 10.94% in one seed under the original small random-batch evaluation. The
+later deterministic-grid audit is the primary quality reference; 700M/1B
+remains blocked pending stronger composition results.
 
 The V0.27 audited curriculum scaling study is documented in
 `V0_27_CURRICULUM_SCALE_AUDIT.md`. With deterministic 4,096-example-per-pair

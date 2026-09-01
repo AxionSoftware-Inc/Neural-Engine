@@ -1140,8 +1140,10 @@ assignment. See `results/V0_25_COMPOSITION_GROWTH.md`.
 V0.26 adds training-only 5% hard-routing exploration. On the same hidden-pair
 composition task it raises 300M held-out accuracy to 11.72% and 500M
 parent-growth to 10.94%, but remains below the prior 20M reference at 12.50%
-in one seed. This is a weak signal requiring multi-seed confirmation, not a
-reason to jump to 700M/1B. See `results/V0_26_ROUTE_EXPLORATION.md`.
+in one seed under the original small random-batch evaluation. V0.27 replaces
+that as the primary quality reference with a deterministic grid; this remains
+a weak signal, not a reason to jump to 700M/1B. See
+`results/V0_26_ROUTE_EXPLORATION.md`.
 
 V0.27 audits the composition metric with deterministic 4,096-example-per-pair
 grids and adds a longer curriculum. Two 300M curriculum runs average 13.79%
