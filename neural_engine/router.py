@@ -82,9 +82,12 @@ class HierarchicalRouter(nn.Module):
         return distribution / distribution.sum().clamp_min(1e-8)
 
     def forward(self, state: torch.Tensor, coverage: bool = False,
-                coverage_temperature: float = 0.25) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
+                coverage_temperature: float = 0.25,
+                exploration_prob: float = 0.0) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
         if coverage_temperature <= 0:
             raise ValueError("coverage_temperature must be positive")
+        if not 0.0 <= exploration_prob <= 1.0:
+            raise ValueError("exploration_prob must be between 0 and 1")
         batch = state.shape[0]
         leaf = torch.zeros(batch, self.num_addresses, dtype=torch.long, device=state.device)
         entropies = []
@@ -103,6 +106,10 @@ class HierarchicalRouter(nn.Module):
                     coverage_level_probs.append(F.softmax(logits / coverage_temperature, dim=-1))
                 entropies.append(-(probs * probs.clamp_min(1e-8).log()).sum(dim=-1))
                 child = logits.argmax(dim=-1)
+                if exploration_prob and self.training:
+                    explore = torch.rand(batch, device=state.device) < exploration_prob
+                    random_child = torch.randint(self.branch, (batch,), device=state.device)
+                    child = torch.where(explore, random_child, child)
                 address_score = address_score + logits.gather(1, child.unsqueeze(1)).squeeze(1)
                 address_leaf = address_leaf * self.branch + child
             leaf[:, address] = address_leaf

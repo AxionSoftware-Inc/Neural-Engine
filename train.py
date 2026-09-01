@@ -57,6 +57,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["routing_coverage_temperature"] = config.get("routing_coverage_temperature", 0.25)
     model_kwargs["input_reinjection"] = config.get("input_reinjection", 1.0)
     model_kwargs["memory_write_mode"] = config.get("memory_write_mode", "none")
+    model_kwargs["route_exploration_prob"] = config.get("route_exploration_prob", 0.0)
     model_kwargs["routing_capacity"] = config.get("routing_capacity")
     model_kwargs["routing_depth"] = config.get("routing_depth")
     return NeuralEngineV0(**model_kwargs)

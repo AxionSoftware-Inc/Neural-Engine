@@ -23,6 +23,7 @@ class NeuralEngineV0(nn.Module):
                  numeric_value_encoding: bool = False, adaptive_halting: bool = False,
                  halt_threshold: float = 0.5, routing_coverage_temperature: float = 0.25,
                  input_reinjection: float = 1.0, memory_write_mode: str = "none",
+                 route_exploration_prob: float = 0.0,
                  routing_capacity: int | None = None, routing_depth: int | None = None):
         super().__init__()
         if circuit_mode not in {"parallel", "serial"}:
@@ -43,6 +44,9 @@ class NeuralEngineV0(nn.Module):
         self.adaptive_inference = adaptive_halting
         self.halt_threshold = halt_threshold
         self.routing_coverage_temperature = routing_coverage_temperature
+        if not 0.0 <= route_exploration_prob <= 1.0:
+            raise ValueError("route_exploration_prob must be between 0 and 1")
+        self.route_exploration_prob = route_exploration_prob
         self.input_reinjection = input_reinjection
         self.memory_write_mode = memory_write_mode
         embedding_vocab = 16 if numeric_value_encoding else vocab_size
@@ -160,7 +164,8 @@ class NeuralEngineV0(nn.Module):
                 step_query = step_query + task_context[active_indices]
             selected, weights, route_stats = self.router(
                 step_query, coverage=coverage,
-                coverage_temperature=self.routing_coverage_temperature)
+                coverage_temperature=self.routing_coverage_temperature,
+                exploration_prob=(self.route_exploration_prob if self.training else 0.0))
             route_gain = route_stats["route_gain"]
             if "routing_coverage_loss" in route_stats:
                 coverage_losses.append(route_stats["routing_coverage_loss"])
@@ -261,4 +266,5 @@ class NeuralEngineV0(nn.Module):
             "active_params_estimate": active,
             "active_fraction": active / total,
             "active_circuit_params": one_circuit * self.active_circuits,
+            "route_exploration_prob": self.route_exploration_prob,
         }
