@@ -74,3 +74,9 @@ The 300M/500M sparse scaling and route-coverage study is documented in
 500M fits on a 12 GiB RTX 3060 but reaches only 44.32% without coverage and
 44.11% with coverage, so the larger bank is feasible but not yet a useful
 quality scaling step.
+
+The parent-based capacity-growth experiment is documented in
+`V0_23_CAPACITY_GROWTH.md`. Cloning new 500M circuit rows from a trained 300M
+parent and warming up on the parent routing geometry raises mean held-out
+accuracy to 52.34% versus 45.63% for scratch 500M, across two seeds. This is
+a positive warm-start signal, not yet a scratch-training comparison.

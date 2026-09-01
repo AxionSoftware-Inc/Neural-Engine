@@ -57,6 +57,8 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["routing_coverage_temperature"] = config.get("routing_coverage_temperature", 0.25)
     model_kwargs["input_reinjection"] = config.get("input_reinjection", 1.0)
     model_kwargs["memory_write_mode"] = config.get("memory_write_mode", "none")
+    model_kwargs["routing_capacity"] = config.get("routing_capacity")
+    model_kwargs["routing_depth"] = config.get("routing_depth")
     return NeuralEngineV0(**model_kwargs)
 
 
@@ -157,6 +159,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     if args.device == "auto":
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = make_model(config).to(device)
+    if args.init_checkpoint:
+        initialization = torch.load(Path(args.init_checkpoint), map_location="cpu", weights_only=True)
+        model.load_state_dict(initialization.get("model_state", initialization))
     optimizer = make_optimizer(model, config)
     composition_strength = (args.composition_strength
                             if args.composition_strength > 0
@@ -184,7 +189,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     peak_vram = 0
     coverage_weight = float(config.get("routing_coverage_weight", 0.0))
     coverage_enabled = isinstance(model, NeuralEngineV0) and coverage_weight > 0.0
+    routing_warmup_steps = int(config.get("routing_warmup_steps", 0))
     for step in range(1, steps + 1):
+        if (isinstance(model, NeuralEngineV0) and routing_warmup_steps
+                and step == routing_warmup_steps + 1):
+            model.router.set_routing_state(
+                capacity=model.router.num_circuits,
+                depth=model.router.depth,
+            )
         batch = train_source.batch()
         optimizer.zero_grad(set_to_none=True)
         if isinstance(model, NeuralEngineV0):
@@ -262,6 +274,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "exit_loss_weight": float(config.get("exit_loss_weight", 0.0)),
         "routing_coverage_weight": coverage_weight,
         "routing_coverage_temperature": float(config.get("routing_coverage_temperature", 0.25)),
+        "routing_warmup_steps": routing_warmup_steps,
         "input_reinjection": float(config.get("input_reinjection", 1.0)),
         "memory_write_mode": str(config.get("memory_write_mode", "none")),
         "optimizer": str(config.get("optimizer", "adamw")),
@@ -277,6 +290,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                        "circuit_mode": model.circuit_mode, "task_context": model.use_task_context,
                        "adaptive_halting": model.adaptive_halting,
                        "router_type": f"hierarchical-tree-{model.router.num_addresses}-address-local-pool",
+                       "routing_capacity": model.router.routing_capacity,
+                       "routing_depth": model.router.active_depth,
                        "router_entropy": float(model._last_route["router_entropy"].detach().cpu())})
         if model.adaptive_halting and "avg_executed_steps" in report:
             shared_params = report["active_params_estimate"] - report["active_circuit_params"]
@@ -295,7 +310,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         checkpoint_path = Path(args.checkpoint)
         checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
         report["checkpoint"] = str(checkpoint_path)
-        torch.save({"model_state": model.state_dict(), "config": config, "report": report}, checkpoint_path)
+        checkpoint_config = dict(config)
+        if isinstance(model, NeuralEngineV0):
+            checkpoint_config["routing_capacity"] = model.router.routing_capacity
+            checkpoint_config["routing_depth"] = model.router.active_depth
+        torch.save({"model_state": model.state_dict(), "config": checkpoint_config,
+                   "report": report}, checkpoint_path)
     output_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))
     return report
@@ -311,6 +331,8 @@ def main() -> None:
     parser.add_argument("--output", default="results/runs")
     parser.add_argument("--checkpoint", default=None,
                         help="Save model weights plus effective config/report to this path")
+    parser.add_argument("--init-checkpoint", default=None,
+                        help="Initialize model weights from an existing checkpoint before training")
     parser.add_argument("--log-every", type=int, default=10)
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--balanced-train", action="store_true",

@@ -31,3 +31,18 @@ def test_soft_coverage_regularizer_is_differentiable():
     assert torch.isfinite(stats["routing_coverage_loss"])
     stats["routing_coverage_loss"].backward()
     assert router.level_projections.grad is not None
+
+
+def test_router_capacity_warmup_limits_reachable_bank_and_can_expand():
+    router = HierarchicalRouter(32, num_circuits=128, branch=4, depth=3,
+                                candidate_pool=16, active_circuits=4,
+                                routing_capacity=64, routing_depth=2)
+    state = torch.randn(7, 32)
+    _, _, warmup = router(state)
+    assert int(warmup["router_decisions"]) == 2
+    assert int(warmup["candidate_ids"].max()) < 64
+
+    router.set_routing_state(capacity=128, depth=3)
+    _, _, expanded = router(state)
+    assert int(expanded["router_decisions"]) == 3
+    assert int(expanded["candidate_ids"].max()) < 128

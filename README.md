@@ -1116,6 +1116,14 @@ plain routing and 44.11% with a coverage regularizer; the larger circuit bank
 is therefore hardware-feasible but not yet a useful quality scaling step. See
 `results/V0_22_SCALE_300M_500M.md`.
 
+V0.23 tests parent-based capacity growth. New 500M circuit rows are cloned
+from heavily used rows in the trained 300M parent, and the expanded routing
+geometry is enabled after a warm-up. Across two seeds, mean held-out accuracy
+reaches 52.34% versus 45.63% for scratch 500M, while mean full accuracy is
+51.20%. This is a positive capacity-conversion result, but the 300M parent at
+56.80% remains stronger and the growth run is not a scratch A/B. See
+`results/V0_23_CAPACITY_GROWTH.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.

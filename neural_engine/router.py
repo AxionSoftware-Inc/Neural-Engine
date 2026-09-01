@@ -11,7 +11,8 @@ class HierarchicalRouter(nn.Module):
     """Route through a small branching tree, then score a local candidate pool."""
 
     def __init__(self, state_dim: int, num_circuits: int, branch: int = 8, depth: int = 4,
-                 candidate_pool: int = 32, active_circuits: int = 8, num_addresses: int = 1):
+                 candidate_pool: int = 32, active_circuits: int = 8, num_addresses: int = 1,
+                 routing_capacity: int | None = None, routing_depth: int | None = None):
         super().__init__()
         if active_circuits > candidate_pool:
             raise ValueError("active_circuits cannot exceed candidate_pool")
@@ -24,11 +25,37 @@ class HierarchicalRouter(nn.Module):
         self.active_circuits = active_circuits
         self.num_addresses = num_addresses
         self.candidates_per_address = candidate_pool // num_addresses
+        self.routing_capacity = num_circuits if routing_capacity is None else int(routing_capacity)
+        self.active_depth = depth if routing_depth is None else int(routing_depth)
+        if not 0 < self.routing_capacity <= num_circuits:
+            raise ValueError("routing_capacity must be between 1 and num_circuits")
+        if self.routing_capacity < candidate_pool:
+            raise ValueError("routing_capacity must be at least candidate_pool")
+        if not 0 < self.active_depth <= depth:
+            raise ValueError("routing_depth must be between 1 and depth")
         self.level_projections = nn.Parameter(torch.empty(num_addresses, depth, state_dim, branch))
         self.level_bias = nn.Parameter(torch.zeros(num_addresses, depth, branch))
         self.keys = nn.Parameter(torch.empty(num_circuits, state_dim))
         nn.init.normal_(self.level_projections, std=0.02)
         nn.init.normal_(self.keys, std=0.02)
+
+    def set_routing_state(self, *, capacity: int | None = None,
+                          depth: int | None = None) -> None:
+        """Change the reachable bank prefix/tree depth for capacity growth.
+
+        Growth experiments can start with a smaller parent routing geometry,
+        then expose the newly initialized rows and tree level after warmup.
+        """
+        next_capacity = self.routing_capacity if capacity is None else int(capacity)
+        next_depth = self.active_depth if depth is None else int(depth)
+        if not 0 < next_capacity <= self.num_circuits:
+            raise ValueError("routing capacity must be between 1 and num_circuits")
+        if next_capacity < self.candidate_pool:
+            raise ValueError("routing capacity must be at least candidate_pool")
+        if not 0 < next_depth <= self.depth:
+            raise ValueError("routing depth must be between 1 and depth")
+        self.routing_capacity = next_capacity
+        self.active_depth = next_depth
 
     def _soft_coverage_distribution(self, level_probs: list[torch.Tensor]) -> torch.Tensor:
         """Estimate circuit usage through the soft tree paths.
@@ -47,7 +74,7 @@ class HierarchicalRouter(nn.Module):
         leaf_mass = path_probs.mean(dim=0)
         leaf_ids = torch.arange(path_probs.shape[-1], device=path_probs.device)
         offsets = torch.arange(self.candidates_per_address, device=path_probs.device).view(1, -1)
-        candidate_ids = (leaf_ids.unsqueeze(-1) + offsets).remainder(self.num_circuits)
+        candidate_ids = (leaf_ids.unsqueeze(-1) + offsets).remainder(self.routing_capacity)
         candidate_weights = leaf_mass.unsqueeze(-1).expand(-1, self.candidates_per_address)
         distribution = torch.zeros(self.num_circuits, device=path_probs.device, dtype=path_probs.dtype)
         distribution.scatter_add_(0, candidate_ids.reshape(-1),
@@ -68,7 +95,7 @@ class HierarchicalRouter(nn.Module):
             address_score = torch.zeros(batch, device=state.device)
             level_probs = []
             coverage_level_probs = []
-            for level in range(self.depth):
+            for level in range(self.active_depth):
                 logits = state @ self.level_projections[address, level] + self.level_bias[address, level]
                 probs = F.softmax(logits, dim=-1)
                 level_probs.append(probs)
@@ -83,9 +110,9 @@ class HierarchicalRouter(nn.Module):
             if coverage:
                 coverage_distributions.append(self._soft_coverage_distribution(coverage_level_probs))
 
-        base = leaf.remainder(self.num_circuits)
+        base = leaf.remainder(self.routing_capacity)
         offsets = torch.arange(self.candidates_per_address, device=state.device).view(1, 1, -1)
-        candidate_ids = (base.unsqueeze(-1) + offsets).remainder(self.num_circuits)
+        candidate_ids = (base.unsqueeze(-1) + offsets).remainder(self.routing_capacity)
         candidate_ids = candidate_ids.reshape(batch, self.candidate_pool)
         candidate_keys = self.keys[candidate_ids]
         candidate_logits = torch.einsum("bd,bkd->bk", state, candidate_keys) / math.sqrt(state.shape[-1])
@@ -98,7 +125,7 @@ class HierarchicalRouter(nn.Module):
         weights = F.softmax(top_values, dim=-1)
         stats = {
             "router_entropy": torch.stack(entropies, dim=-1).mean(),
-            "router_decisions": torch.tensor(self.depth * self.num_addresses, device=state.device),
+            "router_decisions": torch.tensor(self.active_depth * self.num_addresses, device=state.device),
             "route_gain": route_gain,
             "candidate_ids": candidate_ids,
             "selected_ids": selected_ids,

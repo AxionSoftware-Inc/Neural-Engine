@@ -91,6 +91,12 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
         config["active_circuits"] = active_circuits
         model = make_model(config).to(device).eval()
         model.load_state_dict(payload.get("model_state", payload))
+        checkpoint_report = payload.get("report", {})
+        if "routing_capacity" in checkpoint_report or "routing_depth" in checkpoint_report:
+            model.router.set_routing_state(
+                capacity=int(checkpoint_report.get("routing_capacity", model.router.routing_capacity)),
+                depth=int(checkpoint_report.get("routing_depth", model.router.active_depth)),
+            )
         full_generator = SyntheticTaskGenerator(
             config["seq_len"], seed=args.seed,
             value_min=int(config.get("eval_value_min", 0)),

@@ -22,7 +22,8 @@ class NeuralEngineV0(nn.Module):
                  task_context_update: bool = True, circuit_mode: str = "parallel",
                  numeric_value_encoding: bool = False, adaptive_halting: bool = False,
                  halt_threshold: float = 0.5, routing_coverage_temperature: float = 0.25,
-                 input_reinjection: float = 1.0, memory_write_mode: str = "none"):
+                 input_reinjection: float = 1.0, memory_write_mode: str = "none",
+                 routing_capacity: int | None = None, routing_depth: int | None = None):
         super().__init__()
         if circuit_mode not in {"parallel", "serial"}:
             raise ValueError("circuit_mode must be 'parallel' or 'serial'")
@@ -61,7 +62,9 @@ class NeuralEngineV0(nn.Module):
         self.task_context_embedding = nn.Embedding(16, state_dim) if task_context else None
         self.halt_head = nn.Linear(state_dim, 1) if adaptive_halting else None
         self.router = HierarchicalRouter(state_dim, num_circuits, router_branch, router_depth,
-                                         candidate_pool, active_circuits, router_addresses)
+                                         candidate_pool, active_circuits, router_addresses,
+                                         routing_capacity=routing_capacity,
+                                         routing_depth=routing_depth)
         self.circuits = MicroCircuitBank(num_circuits, state_dim, circuit_rank)
         self.output = nn.Sequential(nn.LayerNorm(state_dim), nn.Linear(state_dim, num_classes))
         nn.init.normal_(self.position_embedding, std=0.02)
