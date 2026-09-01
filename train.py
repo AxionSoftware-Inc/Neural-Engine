@@ -16,6 +16,7 @@ from baseline.transformer import DenseTransformerBaseline
 from data.generator import Batch, SyntheticTaskGenerator, accuracy_by_depth, accuracy_by_task
 from neural_engine.instrumentation import count_parameters
 from neural_engine.model import NeuralEngineV0
+from neural_engine.optim import LazyAdamW
 
 
 def load_config(path: str, smoke: bool) -> dict[str, Any]:
@@ -57,6 +58,22 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["input_reinjection"] = config.get("input_reinjection", 1.0)
     model_kwargs["memory_write_mode"] = config.get("memory_write_mode", "none")
     return NeuralEngineV0(**model_kwargs)
+
+
+def make_optimizer(model: nn.Module, config: dict[str, Any]) -> torch.optim.Optimizer:
+    optimizer_name = str(config.get("optimizer", "adamw")).lower()
+    if optimizer_name == "adamw":
+        return torch.optim.AdamW(model.parameters(), lr=config["learning_rate"],
+                                 weight_decay=config["weight_decay"])
+    if optimizer_name == "lazy_adamw":
+        lazy_parameters = [parameter for name, parameter in model.named_parameters()
+                           if name.startswith("circuits.") or name == "router.keys"]
+        if not lazy_parameters:
+            raise ValueError("lazy_adamw requires a Neural Engine circuit/key parameter set")
+        return LazyAdamW(model.parameters(), lr=config["learning_rate"],
+                         weight_decay=config["weight_decay"],
+                         lazy_parameters=lazy_parameters)
+    raise ValueError(f"unknown optimizer: {optimizer_name}")
 
 
 class BatchSource:
@@ -140,7 +157,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     if args.device == "auto":
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = make_model(config).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=config["learning_rate"], weight_decay=config["weight_decay"])
+    optimizer = make_optimizer(model, config)
     composition_strength = (args.composition_strength
                             if args.composition_strength > 0
                             else 1.0 if args.composition_train else 0.0)
@@ -174,6 +191,16 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             logits, route_stats = model(batch.inputs, adaptive=False, coverage=coverage_enabled)
         else:
             logits, route_stats = model(batch.inputs)
+        if hasattr(optimizer, "set_active_rows") and isinstance(model, NeuralEngineV0):
+            selected = route_stats.get("selected_ids")
+            if selected is not None:
+                selected = selected.detach().reshape(-1).unique()
+                optimizer.set_active_rows({
+                    model.circuits.down: selected,
+                    model.circuits.up: selected,
+                    model.circuits.bias: selected,
+                    model.router.keys: selected,
+                })
         loss = nn.functional.cross_entropy(logits, batch.targets)
         stage_loss_weight = float(config.get("stage_loss_weight", 0.0))
         if stage_loss_weight and batch.stage_targets is not None and batch.stage_mask is not None:
@@ -237,6 +264,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "routing_coverage_temperature": float(config.get("routing_coverage_temperature", 0.25)),
         "input_reinjection": float(config.get("input_reinjection", 1.0)),
         "memory_write_mode": str(config.get("memory_write_mode", "none")),
+        "optimizer": str(config.get("optimizer", "adamw")),
         "train_value_range": [train_value_min, train_value_max],
         "eval_value_range": [eval_value_min, eval_value_max],
         "train_split": train_split, "eval_split": eval_split,
@@ -259,6 +287,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             })
     else:
         report.update({"active_params_estimate": count_parameters(model), "active_fraction": 1.0, "router_type": "dense"})
+    if hasattr(optimizer, "report"):
+        report.update(optimizer.report())
     output_path = Path(args.output) / f"{args.run_id}.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if args.checkpoint:

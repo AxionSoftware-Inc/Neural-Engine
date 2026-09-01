@@ -1095,6 +1095,12 @@ plain embedding and is no longer a fair quality control. NE retains the
 active-compute and throughput advantage; the complete correction is recorded
 in `results/V0_19_FAIR_NUMERIC_BASELINE.md`.
 
+V0.20 adds a batched route-indexed `LazyAdamW` prototype. At 20M it stays
+within 0.32 held-out points of dense AdamW and is about 4.7% slower, while
+avoiding a full-bank optimizer update on each step. It is still experimental:
+RAM offload, GPU circuit caching, and H2D measurements remain open. See
+`results/V0_20_LAZY_ADAMW.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.

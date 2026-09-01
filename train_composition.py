@@ -13,7 +13,7 @@ from torch import nn
 
 from data.composition import COMPOSITION_SPECS, CompositionalProgramGenerator
 from neural_engine.instrumentation import count_parameters
-from train import make_model, seed_everything
+from train import make_model, make_optimizer, seed_everything
 
 
 def evaluate(model: nn.Module, generator: CompositionalProgramGenerator,
@@ -63,8 +63,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         seq_len=int(config["seq_len"]), seed=int(config["seed"]) + 2,
         split=evaluation_split, heldout_pairs=heldout_pairs)
     model = make_model(config).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=config["learning_rate"],
-                                  weight_decay=config["weight_decay"])
+    optimizer = make_optimizer(model, config)
     steps = args.steps if args.steps is not None else 1000
     coverage_weight = float(config.get("routing_coverage_weight", 0.0))
     coverage_enabled = coverage_weight > 0.0
@@ -78,6 +77,16 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             logits, route_stats = model(batch.inputs, adaptive=False, coverage=coverage_enabled)
         else:
             logits, route_stats = model(batch.inputs)
+        if hasattr(optimizer, "set_active_rows") and hasattr(model, "circuits"):
+            selected = route_stats.get("selected_ids")
+            if selected is not None:
+                selected = selected.detach().reshape(-1).unique()
+                optimizer.set_active_rows({
+                    model.circuits.down: selected,
+                    model.circuits.up: selected,
+                    model.circuits.bias: selected,
+                    model.router.keys: selected,
+                })
         loss = nn.functional.cross_entropy(logits, batch.targets)
         stage_loss_weight = float(config.get("stage_loss_weight", 0.0))
         if stage_loss_weight and "step_logits" in route_stats:
@@ -126,6 +135,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "total_params": count_parameters(model),
         "stage_loss_weight": stage_loss_weight,
         "routing_coverage_weight": coverage_weight,
+        "optimizer": str(config.get("optimizer", "adamw")),
         "heldout_pairs": [list(pair) for pair in heldout_pairs],
         "evaluation_split": evaluation_split,
         "train": train_eval,
@@ -137,6 +147,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         report.update(model.parameter_report())
     else:
         report.update({"active_params_estimate": count_parameters(model), "active_fraction": 1.0})
+    if hasattr(optimizer, "report"):
+        report.update(optimizer.report())
     output_path = Path(args.output) / f"{args.run_id}.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     report["output"] = str(output_path)

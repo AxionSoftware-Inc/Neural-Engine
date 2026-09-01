@@ -57,3 +57,8 @@ The fair numeric Transformer re-test is documented in
 `V0_19_FAIR_NUMERIC_BASELINE.md`. It shows that the old plain-embedding
 Transformer control understated dense quality; NE's strongest remaining claim
 is active-compute/throughput efficiency, not unconditional accuracy.
+
+The first route-indexed batched `LazyAdamW` prototype is documented in
+`V0_20_LAZY_ADAMW.md`. It stays within 0.32 held-out points of dense AdamW and
+is only about 4.7% slower at 20M, but does not yet implement RAM offload or
+cache/prefetch.
