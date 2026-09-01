@@ -85,7 +85,8 @@ class HierarchicalRouter(nn.Module):
                 coverage_temperature: float = 0.25,
                 exploration_prob: float = 0.0,
                 routing_offset: int | torch.Tensor = 0,
-                routing_capacity: int | None = None) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
+                routing_capacity: int | None = None,
+                routing_windows: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
         if coverage_temperature <= 0:
             raise ValueError("coverage_temperature must be positive")
         if not 0.0 <= exploration_prob <= 1.0:
@@ -94,7 +95,22 @@ class HierarchicalRouter(nn.Module):
         local_capacity = self.routing_capacity if routing_capacity is None else int(routing_capacity)
         if not 0 < local_capacity <= self.routing_capacity:
             raise ValueError("routing_capacity must be between 1 and the configured routing capacity")
-        if isinstance(routing_offset, int):
+        if routing_windows is not None:
+            if not isinstance(routing_offset, int) or routing_offset != 0:
+                raise ValueError("routing_windows cannot be combined with a non-zero routing_offset")
+            if routing_windows.ndim != 2 or routing_windows.shape[0] != batch:
+                raise ValueError("routing_windows must have shape [batch, windows]")
+            window_count = routing_windows.shape[1]
+            if window_count < 1 or self.candidate_pool % window_count != 0:
+                raise ValueError("candidate_pool must be divisible by the number of routing windows")
+            window_pool = self.candidate_pool // window_count
+            if window_pool % self.num_addresses != 0:
+                raise ValueError("each routing window must divide across router addresses")
+            routing_windows = routing_windows.to(device=state.device, dtype=torch.long)
+            if (routing_windows < 0).any() or (
+                    routing_windows + local_capacity > self.num_circuits).any():
+                raise ValueError("routing_windows must identify valid bank windows")
+        elif isinstance(routing_offset, int):
             if not 0 <= routing_offset <= self.num_circuits - local_capacity:
                 raise ValueError("routing_offset must identify a valid bank window")
         else:
@@ -131,12 +147,19 @@ class HierarchicalRouter(nn.Module):
                 coverage_distributions.append(self._soft_coverage_distribution(coverage_level_probs))
 
         base = leaf.remainder(local_capacity)
-        offsets = torch.arange(self.candidates_per_address, device=state.device).view(1, 1, -1)
-        candidate_ids = (base.unsqueeze(-1) + offsets).remainder(local_capacity)
-        if isinstance(routing_offset, int):
-            candidate_ids = candidate_ids + routing_offset
+        if routing_windows is None:
+            offsets = torch.arange(self.candidates_per_address, device=state.device).view(1, 1, -1)
+            candidate_ids = (base.unsqueeze(-1) + offsets).remainder(local_capacity)
+            if isinstance(routing_offset, int):
+                candidate_ids = candidate_ids + routing_offset
+            else:
+                candidate_ids = candidate_ids + routing_offset.to(state.device).view(batch, 1, 1)
         else:
-            candidate_ids = candidate_ids + routing_offset.to(state.device).view(batch, 1, 1)
+            window_pool = self.candidate_pool // routing_windows.shape[1]
+            window_candidates_per_address = window_pool // self.num_addresses
+            offsets = torch.arange(window_candidates_per_address, device=state.device).view(1, 1, 1, -1)
+            candidate_ids = (base.unsqueeze(-1).unsqueeze(-1) + offsets).remainder(local_capacity)
+            candidate_ids = candidate_ids + routing_windows.view(batch, 1, -1, 1)
         candidate_ids = candidate_ids.reshape(batch, self.candidate_pool)
         candidate_keys = self.keys[candidate_ids]
         candidate_logits = torch.einsum("bd,bkd->bk", state, candidate_keys) / math.sqrt(state.shape[-1])

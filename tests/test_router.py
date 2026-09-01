@@ -57,3 +57,22 @@ def test_router_supports_per_example_bank_windows():
     assert (selected >= offsets.unsqueeze(-1)).all()
     assert (selected < (offsets + 32).unsqueeze(-1)).all()
     assert (stats["candidate_ids"] >= offsets.unsqueeze(-1)).all()
+
+
+def test_router_supports_multiple_per_example_candidate_windows():
+    router = HierarchicalRouter(32, num_circuits=128, branch=4, depth=3,
+                                candidate_pool=16, active_circuits=4)
+    windows = torch.tensor([
+        [0, 64], [8, 72], [16, 80], [24, 88], [32, 96], [40, 96], [48, 96]
+    ], dtype=torch.long)
+    selected, _, stats = router(torch.randn(7, 32), routing_capacity=32,
+                                routing_windows=windows)
+    candidates = stats["candidate_ids"].view(7, 2, 8)
+    for index in range(7):
+        in_first = (selected[index].unsqueeze(-1) >= windows[index, 0]) & (
+            selected[index].unsqueeze(-1) < windows[index, 0] + 32)
+        in_second = (selected[index].unsqueeze(-1) >= windows[index, 1]) & (
+            selected[index].unsqueeze(-1) < windows[index, 1] + 32)
+        assert (in_first | in_second).all()
+        assert torch.equal(torch.sort(candidates[index].reshape(-1)).values,
+                           torch.sort(stats["candidate_ids"][index]).values)

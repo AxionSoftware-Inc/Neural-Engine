@@ -107,3 +107,59 @@ def test_typed_register_partitions_routes_by_operator_and_role():
     assert (second < (op_ids[:, 1] + 1).unsqueeze(-1) * partition_size).all()
     assert (third >= 3 * partition_size).all()
     assert (third < 4 * partition_size).all()
+
+
+def test_typed_register_shared_private_routes_allow_shared_or_private_bank():
+    model = TypedRegisterNeuralEngine(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,
+        candidate_pool=4, active_circuits=2, internal_steps=3, slot_count=6,
+        numeric_value_encoding=True, typed_route_partitions=True,
+        typed_route_shared=True, operator_partition_count=4,
+    )
+    generator = CompositionalProgramGenerator(seed=7, split="heldout")
+    batch = generator.task_balanced_batch(8)
+    _, stats = model(batch.inputs)
+    partition_size = 8
+    op_ids = batch.inputs[:, 1:3] - 2
+    first = stats["selected_ids"][:, 0]
+    second = stats["selected_ids"][:, 1]
+    third = stats["selected_ids"][:, 2]
+    for selected, op in ((first, op_ids[:, 0]), (second, op_ids[:, 1])):
+        private_start = (op + 1).unsqueeze(-1) * partition_size
+        private_end = private_start + partition_size
+        shared = selected < partition_size
+        private = (selected >= private_start) & (selected < private_end)
+        assert (shared | private).all()
+    assert (third < partition_size).all()
+
+
+def test_typed_register_typed_route_query_reuses_route_for_same_operator():
+    model = TypedRegisterNeuralEngine(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,
+        candidate_pool=4, active_circuits=2, internal_steps=3, slot_count=6,
+        numeric_value_encoding=True, route_query_mode="typed",
+    )
+    model.eval()
+    first = torch.tensor([[1, 2, 4, 32, 33, 34, 0, 0],
+                         [1, 2, 4, 35, 36, 37, 0, 0]])
+    _, first_stats = model(first)
+    _, second_stats = model(first.flip(0))
+    assert torch.equal(first_stats["selected_ids"], second_stats["selected_ids"].flip(0))
+
+
+def test_typed_register_compressed_route_query_keeps_value_context_path():
+    model = TypedRegisterNeuralEngine(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,
+        candidate_pool=4, active_circuits=2, internal_steps=3, slot_count=6,
+        numeric_value_encoding=True, route_query_mode="compressed",
+        route_context_dim=4,
+    )
+    generator = CompositionalProgramGenerator(seed=8, split="heldout")
+    batch = generator.task_balanced_batch(4)
+    logits, stats = model(batch.inputs)
+    assert logits.shape == (4, 64)
+    assert torch.isfinite(stats["router_entropy"])
+    assert model.route_value_encoder[1].out_features == 4

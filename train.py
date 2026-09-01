@@ -67,7 +67,10 @@ def make_model(config: dict[str, Any]) -> nn.Module:
                     "input_reinjection", "memory_write_mode"):
             model_kwargs.pop(key, None)
         model_kwargs["readout_mode"] = config.get("readout_mode", "routed")
+        model_kwargs["route_query_mode"] = config.get("route_query_mode", "value_and_type")
+        model_kwargs["route_context_dim"] = config.get("route_context_dim", 32)
         model_kwargs["typed_route_partitions"] = config.get("typed_route_partitions", False)
+        model_kwargs["typed_route_shared"] = config.get("typed_route_shared", False)
         model_kwargs["operator_partition_count"] = config.get("operator_partition_count", 4)
         return TypedRegisterNeuralEngine(**model_kwargs)
     return NeuralEngineV0(**model_kwargs)

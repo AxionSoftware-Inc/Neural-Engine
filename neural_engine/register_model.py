@@ -37,7 +37,10 @@ class TypedRegisterNeuralEngine(nn.Module):
                  routing_depth: int | None = None,
                  circuit_mode: str = "serial",
                  readout_mode: str = "routed",
+                 route_query_mode: str = "value_and_type",
+                 route_context_dim: int = 32,
                  typed_route_partitions: bool = False,
+                 typed_route_shared: bool = False,
                  operator_partition_count: int = 4):
         super().__init__()
         if slot_count < 6:
@@ -48,6 +51,10 @@ class TypedRegisterNeuralEngine(nn.Module):
             raise ValueError("circuit_mode must be 'parallel' or 'serial'")
         if readout_mode not in {"routed", "direct"}:
             raise ValueError("readout_mode must be 'routed' or 'direct'")
+        if route_query_mode not in {"value_and_type", "typed", "compressed"}:
+            raise ValueError("route_query_mode must be 'value_and_type', 'typed', or 'compressed'")
+        if route_context_dim < 1 or route_context_dim > state_dim:
+            raise ValueError("route_context_dim must be between 1 and state_dim")
         if typed_route_partitions and (
                 operator_partition_count < 4 or num_circuits % operator_partition_count != 0):
             raise ValueError("typed route partitions require at least four equal bank partitions")
@@ -59,7 +66,10 @@ class TypedRegisterNeuralEngine(nn.Module):
         self.slot_count = slot_count
         self.circuit_mode = circuit_mode
         self.readout_mode = readout_mode
+        self.route_query_mode = route_query_mode
+        self.route_context_dim = route_context_dim
         self.typed_route_partitions = typed_route_partitions
+        self.typed_route_shared = typed_route_shared
         self.operator_partition_count = operator_partition_count
         self.operator_partition_size = num_circuits // operator_partition_count
         self.numeric_value_encoding = numeric_value_encoding
@@ -91,6 +101,13 @@ class TypedRegisterNeuralEngine(nn.Module):
         )
         self.operation_embedding = nn.Embedding(3, state_dim)
         self.stage_embedding = nn.Parameter(torch.zeros(3, state_dim))
+        self.route_value_encoder = nn.Sequential(
+            nn.LayerNorm(state_dim),
+            nn.Linear(state_dim, route_context_dim),
+            nn.GELU(),
+            nn.Linear(route_context_dim, state_dim),
+        )
+        self.route_context_scale = nn.Parameter(torch.tensor(0.25))
         self.partial_writer = nn.Sequential(
             nn.LayerNorm(2 * state_dim),
             nn.Linear(2 * state_dim, state_dim),
@@ -149,19 +166,52 @@ class TypedRegisterNeuralEngine(nn.Module):
         # Operator and stage are part of the router query, so equal primitive
         # operations can reuse a circuit family across different compositions.
         routed_query = query + self.stage_embedding[stage]
+        if self.route_query_mode == "typed":
+            # Keep numeric/value information in the circuit input, but make
+            # routing decisions depend only on the role and primitive op.
+            # This prevents the large bank from fragmenting into a different
+            # route for every operand tuple.
+            router_query = self.operation_embedding(operator_ids) + self.stage_embedding[stage]
+        elif self.route_query_mode == "compressed":
+            # Preserve a small value-dependent routing context without giving
+            # the router the full high-dimensional numeric state.  The bank
+            # circuit still receives the complete query below.
+            compressed_value = self.route_value_encoder(query)
+            router_query = (self.operation_embedding(operator_ids)
+                            + self.stage_embedding[stage]
+                            + self.route_context_scale * compressed_value)
+        else:
+            router_query = routed_query
         if self.typed_route_partitions:
-            partition_ids = (operator_ids if stage < 2 else
-                             torch.full_like(operator_ids, self.operator_partition_count - 1))
-            routing_offset: int | torch.Tensor = partition_ids * self.operator_partition_size
+            if self.typed_route_shared:
+                if stage < 2:
+                    # Partition 0 is shared; partitions 1..3 are private
+                    # add/subtract/multiply banks.  Readout uses shared only.
+                    private_ids = operator_ids + 1
+                    private_offsets = private_ids * self.operator_partition_size
+                    routing_windows = torch.stack([
+                        torch.zeros_like(private_offsets), private_offsets
+                    ], dim=1)
+                else:
+                    routing_windows = torch.zeros(
+                        query.shape[0], 1, dtype=torch.long, device=query.device)
+                routing_offset: int | torch.Tensor = 0
+            else:
+                partition_ids = (operator_ids if stage < 2 else
+                                 torch.full_like(operator_ids, self.operator_partition_count - 1))
+                routing_offset = partition_ids * self.operator_partition_size
+                routing_windows = None
             local_capacity: int | None = self.operator_partition_size
         else:
             routing_offset = 0
+            routing_windows = None
             local_capacity = None
         selected, weights, route_stats = self.router(
-            routed_query,
+            router_query,
             exploration_prob=(self.route_exploration_prob if self.training else 0.0),
             routing_offset=routing_offset,
             routing_capacity=local_capacity,
+            routing_windows=routing_windows,
         )
         delta = self._apply_circuits(routed_query, selected, weights)
         selected_steps.append(selected)
@@ -255,6 +305,8 @@ class TypedRegisterNeuralEngine(nn.Module):
             + count_parameters(self.pair_encoder)
             + count_parameters(self.operation_embedding)
             + self.stage_embedding.numel()
+            + count_parameters(self.route_value_encoder)
+            + self.route_context_scale.numel()
             + count_parameters(self.partial_writer)
             + count_parameters(self.final_writer)
             + count_parameters(self.readout_writer)
@@ -277,5 +329,8 @@ class TypedRegisterNeuralEngine(nn.Module):
             "route_exploration_prob": self.route_exploration_prob,
             "register_graph": "operands->partial->final->readout",
             "readout_mode": self.readout_mode,
+            "route_query_mode": self.route_query_mode,
+            "route_context_dim": self.route_context_dim,
             "typed_route_partitions": self.typed_route_partitions,
+            "typed_route_shared": self.typed_route_shared,
         }
