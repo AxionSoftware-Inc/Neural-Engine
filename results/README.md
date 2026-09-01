@@ -80,3 +80,8 @@ The parent-based capacity-growth experiment is documented in
 parent and warming up on the parent routing geometry raises mean held-out
 accuracy to 52.34% versus 45.63% for scratch 500M, across two seeds. This is
 a positive warm-start signal, not yet a scratch-training comparison.
+
+The third-seed validation is documented in `V0_24_GROWTH_THIRD_SEED.md`.
+Across three seeds, parent-based growth reaches 51.91% ± 0.83 held-out
+accuracy versus 45.63% for scratch 500M, confirming the direction of the
+improvement while preserving the warm-start caveat.

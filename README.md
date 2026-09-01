@@ -1124,6 +1124,12 @@ reaches 52.34% versus 45.63% for scratch 500M, while mean full accuracy is
 56.80% remains stronger and the growth run is not a scratch A/B. See
 `results/V0_23_CAPACITY_GROWTH.md`.
 
+V0.24 adds a third growth seed. The three-seed mean is 51.91% ± 0.83 held-out
+accuracy and 51.14% ± 0.54 full accuracy, versus 45.63% and 44.32% for the
+scratch 500M reference. The result confirms the direction of the growth
+benefit, but remains a warm-start experiment; composition/generalization is
+the next falsification. See `results/V0_24_GROWTH_THIRD_SEED.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.
