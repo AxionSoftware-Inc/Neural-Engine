@@ -1,0 +1,32 @@
+model: ne_300m_composition_explore_seed19
+vocab_size: 128
+num_classes: 64
+seq_len: 8
+d_model: 384
+state_dim: 384
+num_circuits: 22800
+circuit_rank: 16
+router_branch: 8
+router_depth: 5
+candidate_pool: 32
+active_circuits: 8
+router_addresses: 1
+internal_steps: 3
+slot_count: 6
+numeric_value_encoding: true
+adaptive_halting: true
+halt_threshold: 0.5
+halt_loss_weight: 0.1
+exit_loss_weight: 0.3
+stage_loss_weight: 0.0
+routing_coverage_weight: 0.0
+route_exploration_prob: 0.05
+batch_size: 16
+learning_rate: 0.0003
+weight_decay: 0.01
+grad_clip: 1.0
+optimizer: lazy_adamw
+seed: 19
+heldout_pairs:
+  - [add, multiply]
+  - [multiply, add]
