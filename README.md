@@ -1078,6 +1078,15 @@ raises held-out accuracy to 73.23% but lowers full accuracy to 70.73%, raises
 the active fraction to 11.36%, and lowers throughput to 12,590 samples/s. It
 is therefore not enabled by default; see `results/V0_17_GATED_MEMORY_WRITE.md`.
 
+V0.18 adds a dedicated two-operation arithmetic composition benchmark. At
+5,000 steps, both NE and the dense control are still underfit even when all
+nine operation pairs are visible; NE nevertheless reaches 20.83% versus the
+Transformer's 11.81% on the all-pairs control while using an estimated 10.30%
+active parameter fraction. This is a useful efficiency/learnability signal,
+not yet a definitive held-out generalization win. Details and the staged path
+to a 300–500M feasibility test are in
+`results/V0_18_COMPOSITION_BENCHMARK.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.

@@ -47,3 +47,8 @@ does not improve overall or held-out quality.
 The optional explicit gated memory/write ablation is documented in
 `V0_17_GATED_MEMORY_WRITE.md`; it helps one held-out measurement but increases
 active cost and lowers full-benchmark quality.
+
+The new arithmetic composition benchmark and its all-pairs learnability
+control are documented in `V0_18_COMPOSITION_BENCHMARK.md`. Both models remain
+underfit at 5,000 steps, so the result is a diagnostic and not a final
+generalization claim.
