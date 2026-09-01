@@ -1,0 +1,32 @@
+model: ne_typed_register_20m_compressed4
+architecture: typed_register
+vocab_size: 128
+num_classes: 64
+seq_len: 8
+d_model: 384
+state_dim: 384
+num_circuits: 1408
+circuit_rank: 16
+router_branch: 8
+router_depth: 4
+candidate_pool: 32
+active_circuits: 8
+router_addresses: 1
+internal_steps: 3
+slot_count: 6
+numeric_value_encoding: true
+circuit_mode: serial
+readout_mode: routed
+route_query_mode: compressed
+route_context_dim: 4
+route_exploration_prob: 0.05
+stage_loss_weight: 0.5
+batch_size: 128
+learning_rate: 0.0003
+weight_decay: 0.01
+grad_clip: 1.0
+optimizer: lazy_adamw
+seed: 17
+heldout_pairs:
+  - [add, multiply]
+  - [multiply, add]

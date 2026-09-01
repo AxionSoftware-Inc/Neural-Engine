@@ -1160,6 +1160,14 @@ serial circuit execution without attention. Under the same deterministic
 the 300M model remains a useful feasibility point but does not improve over
 100M. See `results/V0_28_TYPED_REGISTER_SCALE.md`.
 
+V0.29 audits route specialization and seed variance. Operator-partitioned
+routing reaches 87.01% hidden-grid accuracy at 20M in seed 17 but only 61.46%
+in seed 18; its 100M run reaches 68.65%. A 32-dimensional compressed routing
+context improves the 20M hidden grid to 71.75%, but the 100M version reaches
+61.22%. Typed-only and shared/private routing are weaker. The result is a
+NO-GO for treating partitioning or dormant capacity as a reliable scaling
+law; details are in `results/V0_29_ROUTING_SPECIALIZATION_AUDIT.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.

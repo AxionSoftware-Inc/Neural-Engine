@@ -111,3 +111,10 @@ registers and typed serial circuit execution raise hidden-pair grid accuracy
 to 65.56% at 20M and 89.87% at 100M; 300M reaches 89.20% and is not better
 than 100M. The result is a strong architecture positive, but not a reason to
 scale to 700M/1B before route sharing and a second-seed validation.
+
+The V0.29 routing specialization and seed audit is documented in
+`V0_29_ROUTING_SPECIALIZATION_AUDIT.md`. Partitioned routing reaches 87.01%
+on one 20M seed but 61.46% on the second and 68.65% at 100M. A compressed
+32-dimensional route context reaches 71.75% at 20M but 61.22% at 100M. These
+results reject partitioning as a reliable default and keep the larger-scale
+capacity claim open.
