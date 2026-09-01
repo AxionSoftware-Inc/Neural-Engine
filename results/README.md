@@ -31,3 +31,7 @@ in `V0_12_MULTI_SEED_BUDGET.md`.
 The optional coverage-aware low-k router regularizer is documented in
 `V0_13_COVERAGE_REGULARIZER.md`; it improves k=4 bank utilization but does not
 yet justify changing the k=8 default.
+
+The V0.12 stage-supervision re-test is documented in
+`V0_14_STAGE_SUPERVISION.md`; it improves depth-3 accuracy but lowers overall
+and held-out quality, so it remains an optional composition-focused recipe.

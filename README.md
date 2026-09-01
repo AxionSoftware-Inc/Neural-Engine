@@ -1052,6 +1052,12 @@ points lower and held-out accuracy is effectively unchanged. The result is
 recorded in `results/V0_13_COVERAGE_REGULARIZER.md`; k=8 remains the default
 and the new loss is disabled unless explicitly configured.
 
+V0.14 re-tests intermediate stage supervision on V0.12. It raises mean
+depth-3 accuracy from 33.33% to 36.46%, but lowers mean full accuracy from
+72.19% to 71.35% and mean held-out accuracy from 72.24% to 71.46%. It remains
+an optional composition-focused recipe, documented in
+`results/V0_14_STAGE_SUPERVISION.md`, not the default training loss.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.
