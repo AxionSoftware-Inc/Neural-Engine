@@ -27,10 +27,12 @@ class NeuralEngineV0(nn.Module):
                  task_context_update: bool = True, circuit_mode: str = "parallel",
                  numeric_value_encoding: bool = False, adaptive_halting: bool = False,
                  halt_threshold: float = 0.5, routing_coverage_temperature: float = 0.25,
-                 input_reinjection: float = 1.0):
+                 input_reinjection: float = 1.0, memory_write_mode: str = "none"):
         super().__init__()
         if circuit_mode not in {"parallel", "serial"}:
             raise ValueError("circuit_mode must be 'parallel' or 'serial'")
+        if memory_write_mode not in {"none", "gated"}:
+            raise ValueError("memory_write_mode must be 'none' or 'gated'")
         if not 0.0 < halt_threshold < 1.0:
             raise ValueError("halt_threshold must be between 0 and 1")
         self.state_dim = state_dim
@@ -46,6 +48,7 @@ class NeuralEngineV0(nn.Module):
         self.halt_threshold = halt_threshold
         self.routing_coverage_temperature = routing_coverage_temperature
         self.input_reinjection = input_reinjection
+        self.memory_write_mode = memory_write_mode
         embedding_vocab = 16 if numeric_value_encoding else vocab_size
         self.token_embedding = nn.Embedding(embedding_vocab, d_model, padding_idx=0)
         self.value_encoder = nn.Linear(1 + 2 * len(VALUE_HARMONICS), d_model) if numeric_value_encoding else None
@@ -57,6 +60,8 @@ class NeuralEngineV0(nn.Module):
         encoder_input = d_model * slot_count if slot_count else d_model
         self.encoder = nn.Sequential(nn.LayerNorm(encoder_input), nn.Linear(encoder_input, state_dim), nn.GELU())
         self.state = PersistentState(state_dim, state_dim)
+        self.memory_write = (nn.Linear(2 * state_dim, state_dim)
+                             if memory_write_mode == "gated" else None)
         self.step_embedding = nn.Parameter(torch.zeros(internal_steps, state_dim))
         self.task_context_embedding = nn.Embedding(16, state_dim) if task_context else None
         self.halt_head = nn.Linear(state_dim, 1) if adaptive_halting else None
@@ -68,6 +73,11 @@ class NeuralEngineV0(nn.Module):
         nn.init.normal_(self.position_scale, std=0.01)
         nn.init.normal_(self.position_bias, std=0.01)
         nn.init.normal_(self.step_embedding, std=0.02)
+        if self.memory_write is not None:
+            # Start close to the existing GRU path; training can learn to
+            # preserve the old state when a write would overwrite useful work.
+            nn.init.zeros_(self.memory_write.weight)
+            nn.init.constant_(self.memory_write.bias, 5.0)
         self._last_route: dict[str, torch.Tensor] = {}
 
     def encode(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -190,7 +200,13 @@ class NeuralEngineV0(nn.Module):
                       + self.step_embedding[step])
             if task_context is not None and self.task_context_update:
                 update = update + task_context[active_indices]
-            updated_state = self.state.step(active_state, update)
+            proposal_state = self.state.step(active_state, update)
+            if self.memory_write is not None:
+                write_input = torch.cat([active_state, update], dim=-1)
+                write_gate = torch.sigmoid(self.memory_write(write_input))
+                updated_state = active_state + write_gate * (proposal_state - active_state)
+            else:
+                updated_state = proposal_state
             if active_indices.numel() == batch_size:
                 state = updated_state
             else:
@@ -248,6 +264,8 @@ class NeuralEngineV0(nn.Module):
             shared += count_parameters(self.task_context_embedding)
         if self.halt_head is not None:
             shared += count_parameters(self.halt_head)
+        if self.memory_write is not None:
+            shared += count_parameters(self.memory_write)
         one_circuit = self.circuits.down[0].numel() + self.circuits.up[0].numel() + self.circuits.bias[0].numel()
         candidate_key_params = self.router.keys[0].numel() * self.router.candidate_pool
         active = shared + candidate_key_params + one_circuit * self.active_circuits

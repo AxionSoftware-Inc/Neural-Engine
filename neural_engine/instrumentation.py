@@ -60,8 +60,10 @@ def estimate_neural_engine_macs(model: nn.Module, executed_steps: float,
                    + router.candidate_pool * state_dim)
     circuit_macs = router.active_circuits * 2 * state_dim * circuit_rank
     gru_macs = 6 * state_dim * state_dim
+    memory_write_macs = (2 * state_dim * state_dim
+                         if getattr(model, "memory_write", None) is not None else 0)
     output_macs = state_dim * num_classes
-    per_step_macs = router_macs + circuit_macs + gru_macs + output_macs
+    per_step_macs = router_macs + circuit_macs + gru_macs + memory_write_macs + output_macs
     full_macs = fixed_macs + int(model.internal_steps) * per_step_macs
     active_macs = fixed_macs + float(executed_steps) * per_step_macs
 
@@ -79,6 +81,8 @@ def estimate_neural_engine_macs(model: nn.Module, executed_steps: float,
     step_shared_params = (router_step_params + 6 * state_dim * state_dim
                           + num_classes * state_dim + 2 * num_classes
                           + state_dim)
+    if getattr(model, "memory_write", None) is not None:
+        step_shared_params += 2 * state_dim * state_dim + state_dim
     path_read_params = fixed_path_params + float(executed_steps) * (
         step_shared_params + int(parameter_report["active_circuit_params"]))
     return {

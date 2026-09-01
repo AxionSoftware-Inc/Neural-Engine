@@ -30,6 +30,18 @@ def test_input_reinjection_scale_is_configurable():
     assert model.input_reinjection == 0.5
 
 
+def test_gated_memory_write_preserves_forward_and_gradients():
+    model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
+                           num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,
+                           candidate_pool=4, active_circuits=2, internal_steps=2,
+                           memory_write_mode="gated")
+    batch = SyntheticTaskGenerator(seed=6).batch(3)
+    logits, _ = model(batch.inputs)
+    torch.nn.functional.cross_entropy(logits, batch.targets).backward()
+    assert logits.shape == (3, 64)
+    assert model.memory_write.weight.grad is not None
+
+
 def test_position_conditioning_preserves_operand_order():
     model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
                            num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,

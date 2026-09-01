@@ -43,3 +43,7 @@ parameters while growing stored capacity to 100M.
 The recurrent input-reinjection ablation is documented in
 `V0_16_INPUT_REINJECTION.md`; reducing reinjection slightly helps depth-3 but
 does not improve overall or held-out quality.
+
+The optional explicit gated memory/write ablation is documented in
+`V0_17_GATED_MEMORY_WRITE.md`; it helps one held-out measurement but increases
+active cost and lowers full-benchmark quality.

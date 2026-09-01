@@ -53,6 +53,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["halt_threshold"] = config.get("halt_threshold", 0.5)
     model_kwargs["routing_coverage_temperature"] = config.get("routing_coverage_temperature", 0.25)
     model_kwargs["input_reinjection"] = config.get("input_reinjection", 1.0)
+    model_kwargs["memory_write_mode"] = config.get("memory_write_mode", "none")
     return NeuralEngineV0(**model_kwargs)
 
 
@@ -233,6 +234,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "routing_coverage_weight": coverage_weight,
         "routing_coverage_temperature": float(config.get("routing_coverage_temperature", 0.25)),
         "input_reinjection": float(config.get("input_reinjection", 1.0)),
+        "memory_write_mode": str(config.get("memory_write_mode", "none")),
         "train_value_range": [train_value_min, train_value_max],
         "eval_value_range": [eval_value_min, eval_value_max],
         "train_split": train_split, "eval_split": eval_split,

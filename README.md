@@ -1073,6 +1073,11 @@ held-out accuracy from 72.71% to 72.29%, so the default remains full
 reinjection. The negative ablation is recorded in
 `results/V0_16_INPUT_REINJECTION.md`.
 
+V0.17 tested an explicit learned memory/write gate around the GRU proposal. It
+raises held-out accuracy to 73.23% but lowers full accuracy to 70.73%, raises
+the active fraction to 11.36%, and lowers throughput to 12,590 samples/s. It
+is therefore not enabled by default; see `results/V0_17_GATED_MEMORY_WRITE.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.
