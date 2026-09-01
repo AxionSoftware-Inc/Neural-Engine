@@ -46,3 +46,14 @@ def test_router_capacity_warmup_limits_reachable_bank_and_can_expand():
     _, _, expanded = router(state)
     assert int(expanded["router_decisions"]) == 3
     assert int(expanded["candidate_ids"].max()) < 128
+
+
+def test_router_supports_per_example_bank_windows():
+    router = HierarchicalRouter(32, num_circuits=128, branch=4, depth=3,
+                                candidate_pool=16, active_circuits=4)
+    offsets = torch.tensor([0, 32, 64, 96, 0, 32, 64], dtype=torch.long)
+    selected, _, stats = router(torch.randn(7, 32), routing_offset=offsets,
+                                routing_capacity=32)
+    assert (selected >= offsets.unsqueeze(-1)).all()
+    assert (selected < (offsets + 32).unsqueeze(-1)).all()
+    assert (stats["candidate_ids"] >= offsets.unsqueeze(-1)).all()

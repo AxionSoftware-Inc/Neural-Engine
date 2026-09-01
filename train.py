@@ -66,6 +66,9 @@ def make_model(config: dict[str, Any]) -> nn.Module:
                     "halt_threshold", "routing_coverage_temperature",
                     "input_reinjection", "memory_write_mode"):
             model_kwargs.pop(key, None)
+        model_kwargs["readout_mode"] = config.get("readout_mode", "routed")
+        model_kwargs["typed_route_partitions"] = config.get("typed_route_partitions", False)
+        model_kwargs["operator_partition_count"] = config.get("operator_partition_count", 4)
         return TypedRegisterNeuralEngine(**model_kwargs)
     return NeuralEngineV0(**model_kwargs)
 

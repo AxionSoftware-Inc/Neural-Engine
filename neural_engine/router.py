@@ -83,12 +83,25 @@ class HierarchicalRouter(nn.Module):
 
     def forward(self, state: torch.Tensor, coverage: bool = False,
                 coverage_temperature: float = 0.25,
-                exploration_prob: float = 0.0) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
+                exploration_prob: float = 0.0,
+                routing_offset: int | torch.Tensor = 0,
+                routing_capacity: int | None = None) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
         if coverage_temperature <= 0:
             raise ValueError("coverage_temperature must be positive")
         if not 0.0 <= exploration_prob <= 1.0:
             raise ValueError("exploration_prob must be between 0 and 1")
         batch = state.shape[0]
+        local_capacity = self.routing_capacity if routing_capacity is None else int(routing_capacity)
+        if not 0 < local_capacity <= self.routing_capacity:
+            raise ValueError("routing_capacity must be between 1 and the configured routing capacity")
+        if isinstance(routing_offset, int):
+            if not 0 <= routing_offset <= self.num_circuits - local_capacity:
+                raise ValueError("routing_offset must identify a valid bank window")
+        else:
+            if routing_offset.ndim != 1 or routing_offset.shape[0] != batch:
+                raise ValueError("tensor routing_offset must have one value per batch item")
+            if (routing_offset < 0).any() or (routing_offset + local_capacity > self.num_circuits).any():
+                raise ValueError("tensor routing_offset must identify valid bank windows")
         leaf = torch.zeros(batch, self.num_addresses, dtype=torch.long, device=state.device)
         entropies = []
         path_scores = []
@@ -117,9 +130,13 @@ class HierarchicalRouter(nn.Module):
             if coverage:
                 coverage_distributions.append(self._soft_coverage_distribution(coverage_level_probs))
 
-        base = leaf.remainder(self.routing_capacity)
+        base = leaf.remainder(local_capacity)
         offsets = torch.arange(self.candidates_per_address, device=state.device).view(1, 1, -1)
-        candidate_ids = (base.unsqueeze(-1) + offsets).remainder(self.routing_capacity)
+        candidate_ids = (base.unsqueeze(-1) + offsets).remainder(local_capacity)
+        if isinstance(routing_offset, int):
+            candidate_ids = candidate_ids + routing_offset
+        else:
+            candidate_ids = candidate_ids + routing_offset.to(state.device).view(batch, 1, 1)
         candidate_ids = candidate_ids.reshape(batch, self.candidate_pool)
         candidate_keys = self.keys[candidate_ids]
         candidate_logits = torch.einsum("bd,bkd->bk", state, candidate_keys) / math.sqrt(state.shape[-1])

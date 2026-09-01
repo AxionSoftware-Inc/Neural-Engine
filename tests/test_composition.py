@@ -83,3 +83,27 @@ def test_typed_register_direct_readout_skips_third_bank_lookup():
     assert logits.shape == (4, 64)
     assert stats["selected_ids"][:, 2].eq(-1).all()
     assert stats["executed_steps"].eq(3).all()
+
+
+def test_typed_register_partitions_routes_by_operator_and_role():
+    model = TypedRegisterNeuralEngine(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,
+        candidate_pool=4, active_circuits=2, internal_steps=3, slot_count=6,
+        numeric_value_encoding=True, typed_route_partitions=True,
+        operator_partition_count=4,
+    )
+    generator = CompositionalProgramGenerator(seed=6, split="heldout")
+    batch = generator.task_balanced_batch(8)
+    _, stats = model(batch.inputs)
+    partition_size = 8
+    op_ids = (batch.inputs[:, 1:3] - 2)
+    first = stats["selected_ids"][:, 0]
+    second = stats["selected_ids"][:, 1]
+    third = stats["selected_ids"][:, 2]
+    assert (first >= op_ids[:, 0].unsqueeze(-1) * partition_size).all()
+    assert (first < (op_ids[:, 0] + 1).unsqueeze(-1) * partition_size).all()
+    assert (second >= op_ids[:, 1].unsqueeze(-1) * partition_size).all()
+    assert (second < (op_ids[:, 1] + 1).unsqueeze(-1) * partition_size).all()
+    assert (third >= 3 * partition_size).all()
+    assert (third < 4 * partition_size).all()

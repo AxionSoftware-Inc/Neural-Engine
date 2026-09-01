@@ -36,7 +36,9 @@ class TypedRegisterNeuralEngine(nn.Module):
                  routing_capacity: int | None = None,
                  routing_depth: int | None = None,
                  circuit_mode: str = "serial",
-                 readout_mode: str = "routed"):
+                 readout_mode: str = "routed",
+                 typed_route_partitions: bool = False,
+                 operator_partition_count: int = 4):
         super().__init__()
         if slot_count < 6:
             raise ValueError("TypedRegisterNeuralEngine requires six input slots")
@@ -46,6 +48,9 @@ class TypedRegisterNeuralEngine(nn.Module):
             raise ValueError("circuit_mode must be 'parallel' or 'serial'")
         if readout_mode not in {"routed", "direct"}:
             raise ValueError("readout_mode must be 'routed' or 'direct'")
+        if typed_route_partitions and (
+                operator_partition_count < 4 or num_circuits % operator_partition_count != 0):
+            raise ValueError("typed route partitions require at least four equal bank partitions")
         if not 0.0 <= route_exploration_prob <= 1.0:
             raise ValueError("route_exploration_prob must be between 0 and 1")
 
@@ -54,6 +59,9 @@ class TypedRegisterNeuralEngine(nn.Module):
         self.slot_count = slot_count
         self.circuit_mode = circuit_mode
         self.readout_mode = readout_mode
+        self.typed_route_partitions = typed_route_partitions
+        self.operator_partition_count = operator_partition_count
+        self.operator_partition_size = num_circuits // operator_partition_count
         self.numeric_value_encoding = numeric_value_encoding
         self.route_exploration_prob = route_exploration_prob
         # The register graph is deliberately fixed-depth; adaptive halting
@@ -133,6 +141,7 @@ class TypedRegisterNeuralEngine(nn.Module):
         return self.circuits(query, selected, weights)
 
     def _route_stage(self, query: torch.Tensor, stage: int,
+                     operator_ids: torch.Tensor,
                      selected_steps: list[torch.Tensor],
                      selected_weights: torch.Tensor,
                      route_gains: torch.Tensor,
@@ -140,9 +149,19 @@ class TypedRegisterNeuralEngine(nn.Module):
         # Operator and stage are part of the router query, so equal primitive
         # operations can reuse a circuit family across different compositions.
         routed_query = query + self.stage_embedding[stage]
+        if self.typed_route_partitions:
+            partition_ids = (operator_ids if stage < 2 else
+                             torch.full_like(operator_ids, self.operator_partition_count - 1))
+            routing_offset: int | torch.Tensor = partition_ids * self.operator_partition_size
+            local_capacity: int | None = self.operator_partition_size
+        else:
+            routing_offset = 0
+            local_capacity = None
         selected, weights, route_stats = self.router(
             routed_query,
             exploration_prob=(self.route_exploration_prob if self.training else 0.0),
+            routing_offset=routing_offset,
+            routing_capacity=local_capacity,
         )
         delta = self._apply_circuits(routed_query, selected, weights)
         selected_steps.append(selected)
@@ -173,19 +192,22 @@ class TypedRegisterNeuralEngine(nn.Module):
         first_pair = self.pair_encoder(torch.cat([operands[:, 0], operands[:, 1]], dim=-1))
         first_query = first_pair + op1
         first_delta = self._route_stage(
-            first_query, 0, selected_steps, selected_weights, route_gains, step_entropies)
+            first_query, 0, op_ids[:, 0], selected_steps, selected_weights,
+            route_gains, step_entropies)
         partial = self.partial_writer(torch.cat([first_query, first_delta], dim=-1))
 
         second_pair = self.pair_encoder(torch.cat([partial, operands[:, 2]], dim=-1))
         second_query = second_pair + op2
         second_delta = self._route_stage(
-            second_query, 1, selected_steps, selected_weights, route_gains, step_entropies)
+            second_query, 1, op_ids[:, 1], selected_steps, selected_weights,
+            route_gains, step_entropies)
         final = self.final_writer(torch.cat([second_query, second_delta], dim=-1))
 
         readout_query = final
         if self.readout_mode == "routed":
             readout_delta = self._route_stage(
-                readout_query, 2, selected_steps, selected_weights, route_gains, step_entropies)
+                readout_query, 2, op_ids[:, 1], selected_steps, selected_weights,
+                route_gains, step_entropies)
             readout = self.readout_writer(torch.cat([readout_query, readout_delta], dim=-1))
         else:
             # The final register is already the typed result of op2.  A third
@@ -255,4 +277,5 @@ class TypedRegisterNeuralEngine(nn.Module):
             "route_exploration_prob": self.route_exploration_prob,
             "register_graph": "operands->partial->final->readout",
             "readout_mode": self.readout_mode,
+            "typed_route_partitions": self.typed_route_partitions,
         }

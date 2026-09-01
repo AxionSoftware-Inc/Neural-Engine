@@ -18,14 +18,28 @@ def jaccard(left: set[int], right: set[int]) -> float:
     return len(left & right) / len(union) if union else 1.0
 
 
-def summarize_group(route_sets: list[set[int]]) -> dict[str, float | int]:
-    pair_values = [jaccard(left, right) for left, right in combinations(route_sets, 2)]
+def summarize_group(route_sets: list[set[int]], max_pairs: int = 4096) -> dict[str, float | int]:
+    # An all-pairs comparison is quadratic in the grid size and made route
+    # analysis itself dominate the experiment.  Use a deterministic spread of
+    # pairings once a group is large; the union and circuit counts remain exact.
+    pair_values: list[float] = []
+    pair_count = len(route_sets) * (len(route_sets) - 1) // 2
+    if pair_count <= max_pairs:
+        pair_values = [jaccard(left, right) for left, right in combinations(route_sets, 2)]
+    elif route_sets:
+        sample_count = min(max_pairs, len(route_sets))
+        for index in range(sample_count):
+            partner = (index * 7919 + 104729) % len(route_sets)
+            if partner == index:
+                partner = (partner + 1) % len(route_sets)
+            pair_values.append(jaccard(route_sets[index], route_sets[partner]))
     union = set().union(*route_sets) if route_sets else set()
     return {
         "examples": len(route_sets),
         "mean_active_circuits": sum(map(len, route_sets)) / max(len(route_sets), 1),
         "union_circuits": len(union),
         "within_route_jaccard": sum(pair_values) / max(len(pair_values), 1),
+        "within_route_jaccard_pairs": len(pair_values),
     }
 
 
