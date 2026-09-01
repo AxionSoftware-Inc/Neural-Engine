@@ -161,3 +161,7 @@ arxitekturaviy hal qilishga qaratilgan.
 - `results/V0_29_ROUTING_SPECIALIZATION_AUDIT.md`;
 - `results/V0_30_ACTIVE_BUDGET_AUDIT.md`;
 - `results/V0_31_FULL_DOMAIN_QUESTION_AUDIT.md`.
+
+V0.32dagi family-local router ham sinab ko‘rildi va rad qilindi. 20Mda
+all-pairs 57.76%, hidden full-domain 61.37% berdi; reference mos ravishda
+58.10% va 64.89% edi. Bu variant 100M/300Mga ko‘tarilmadi.

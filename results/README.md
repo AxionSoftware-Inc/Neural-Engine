@@ -132,7 +132,14 @@ and shows that 100M remains the current quality winner while 300M does not
 scale monotonically. It also records that the former hidden score was
 post-exposure adaptation rather than strict zero-shot generalization.
 
+V0.32 family-local routing is documented in `V0_32_FAMILY_LOCAL_ROUTING.md`.
+The hard operator/stage family split was rejected at 20M because it fell below
+the reference on both all-pairs and hidden full-domain quality; it was not
+scaled to larger banks.
+
 The proposal history is indexed in the repository root: `taklif.md` is the
 original scale/systems proposal, `taklif1.md` records completed experiments
 and rejected variants, and `taklif2.md` records the next untested
-scale-invariant routing architecture.
+and rejected variants, `taklif2.md` records the tested-and-rejected family-local
+architecture, and `taklif3.md` records the next untested role-anchor routing
+architecture.

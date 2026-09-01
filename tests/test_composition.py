@@ -163,3 +163,31 @@ def test_typed_register_compressed_route_query_keeps_value_context_path():
     assert logits.shape == (4, 64)
     assert torch.isfinite(stats["router_entropy"])
     assert model.route_value_encoder[1].out_features == 4
+
+
+def test_typed_register_family_local_router_keeps_shared_fallback_and_family_locality():
+    model = TypedRegisterNeuralEngine(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=64, circuit_rank=4, router_branch=2, router_depth=3,
+        candidate_pool=4, active_circuits=2, internal_steps=3, slot_count=6,
+        numeric_value_encoding=True, routing_mode="family_local",
+        family_count=9, shared_fraction=0.125,
+    )
+    generator = CompositionalProgramGenerator(seed=9, split="heldout")
+    batch = generator.task_balanced_batch(8)
+    logits, stats = model(batch.inputs)
+    assert logits.shape == (8, 64)
+    assert stats["selected_ids"].shape == (8, 3, 2)
+    assert stats["family_ids"].shape == (8, 3)
+    assert model.router.shared_count == 8
+    assert 0.0 <= float(stats["shared_selected_fraction"]) <= 1.0
+
+
+def test_typed_register_family_local_router_rejects_legacy_partition_flags():
+    with pytest.raises(ValueError):
+        TypedRegisterNeuralEngine(
+            vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+            num_circuits=64, circuit_rank=4, router_branch=2, router_depth=3,
+            candidate_pool=4, active_circuits=2, internal_steps=3, slot_count=6,
+            routing_mode="family_local", typed_route_partitions=True,
+        )

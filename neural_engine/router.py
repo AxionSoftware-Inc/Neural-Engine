@@ -183,3 +183,176 @@ class HierarchicalRouter(nn.Module):
                 distribution * (distribution.clamp_min(1e-8).log() + math.log(self.num_circuits))
             ).sum()
         return selected_ids, weights, stats
+
+
+class StableFamilyRouter(nn.Module):
+    """Route within a stable operator/stage family plus a shared fallback.
+
+    The global hierarchical router makes every bank row compete for the same
+    candidate window.  That is useful for a compact bank, but it lets a larger
+    bank fragment route reuse.  This router fixes the first routing decision
+    to a semantic family supplied by the register graph, then performs
+    value-dependent routing only inside that family's block.  A second window
+    always comes from a small shared block so a local family route can fall
+    back to reusable computation.
+
+    The physical layout is stable across model sizes:
+
+        [shared fallback][family 0][family 1]...[family N-1]
+
+    Family blocks are contiguous and balanced.  Growing a bank can therefore
+    preserve family identity instead of changing the meaning of every global
+    circuit index.
+    """
+
+    def __init__(self, state_dim: int, num_circuits: int, branch: int = 8,
+                 depth: int = 4, candidate_pool: int = 32,
+                 active_circuits: int = 8, num_addresses: int = 1,
+                 routing_capacity: int | None = None,
+                 routing_depth: int | None = None, family_count: int = 9,
+                 shared_fraction: float = 0.125):
+        super().__init__()
+        if active_circuits > candidate_pool:
+            raise ValueError("active_circuits cannot exceed candidate_pool")
+        if num_addresses != 1:
+            raise ValueError("StableFamilyRouter currently supports one address")
+        if candidate_pool % 2:
+            raise ValueError("candidate_pool must be even for local and shared windows")
+        if family_count < 1:
+            raise ValueError("family_count must be positive")
+        if not 0.05 <= shared_fraction < 0.5:
+            raise ValueError("shared_fraction must be between 0.05 and 0.5")
+        if family_count >= num_circuits:
+            raise ValueError("family_count must be smaller than num_circuits")
+
+        self.num_circuits = num_circuits
+        self.branch = branch
+        self.depth = depth
+        self.candidate_pool = candidate_pool
+        self.active_circuits = active_circuits
+        self.num_addresses = num_addresses
+        self.family_count = family_count
+        self.shared_fraction = shared_fraction
+        self.shared_candidate_pool = candidate_pool // 2
+        self.local_candidate_pool = candidate_pool - self.shared_candidate_pool
+        requested_shared = round(num_circuits * shared_fraction)
+        self.shared_count = max(self.shared_candidate_pool,
+                                min(num_circuits - family_count,
+                                    requested_shared))
+        family_total = num_circuits - self.shared_count
+        if family_total < family_count * self.local_candidate_pool:
+            raise ValueError("each family must fit the local candidate pool")
+        base_size, remainder = divmod(family_total, family_count)
+        self.family_sizes = tuple(
+            base_size + (1 if index < remainder else 0)
+            for index in range(family_count))
+        offsets = [self.shared_count]
+        for size in self.family_sizes[:-1]:
+            offsets.append(offsets[-1] + size)
+        self.family_offsets = tuple(offsets)
+
+        self.routing_capacity = (num_circuits if routing_capacity is None
+                                 else int(routing_capacity))
+        self.active_depth = depth if routing_depth is None else int(routing_depth)
+        if not 0 < self.routing_capacity <= num_circuits:
+            raise ValueError("routing_capacity must be between 1 and num_circuits")
+        if self.routing_capacity != num_circuits:
+            raise ValueError("StableFamilyRouter requires the full stable bank")
+        if not 0 < self.active_depth <= depth:
+            raise ValueError("routing_depth must be between 1 and depth")
+        max_family_size = max(self.family_sizes)
+        local_depth = max(1, math.ceil(math.log(max_family_size, branch)))
+        self.local_depth = min(self.active_depth, local_depth)
+
+        self.level_projections = nn.Parameter(
+            torch.empty(num_addresses, depth, state_dim, branch))
+        self.level_bias = nn.Parameter(torch.zeros(num_addresses, depth, branch))
+        self.keys = nn.Parameter(torch.empty(num_circuits, state_dim))
+        self.family_embeddings = nn.Parameter(torch.empty(family_count, state_dim))
+        nn.init.normal_(self.level_projections, std=0.02)
+        nn.init.normal_(self.keys, std=0.02)
+        nn.init.normal_(self.family_embeddings, std=0.02)
+
+    def set_routing_state(self, *, capacity: int | None = None,
+                          depth: int | None = None) -> None:
+        next_capacity = self.routing_capacity if capacity is None else int(capacity)
+        next_depth = self.active_depth if depth is None else int(depth)
+        if next_capacity != self.num_circuits:
+            raise ValueError("StableFamilyRouter requires the full stable bank")
+        if not 0 < next_depth <= self.depth:
+            raise ValueError("routing_depth must be between 1 and depth")
+        self.routing_capacity = next_capacity
+        self.active_depth = next_depth
+        max_family_size = max(self.family_sizes)
+        self.local_depth = min(
+            self.active_depth, max(1, math.ceil(math.log(max_family_size, self.branch))))
+
+    def forward(self, state: torch.Tensor, family_ids: torch.Tensor,
+                coverage: bool = False, coverage_temperature: float = 0.25,
+                exploration_prob: float = 0.0) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
+        if coverage:
+            raise NotImplementedError("StableFamilyRouter coverage is not implemented")
+        if coverage_temperature <= 0:
+            raise ValueError("coverage_temperature must be positive")
+        if not 0.0 <= exploration_prob <= 1.0:
+            raise ValueError("exploration_prob must be between 0 and 1")
+        if family_ids.ndim != 1 or family_ids.shape[0] != state.shape[0]:
+            raise ValueError("family_ids must have one value per batch item")
+        family_ids = family_ids.to(device=state.device, dtype=torch.long)
+        if (family_ids < 0).any() or (family_ids >= self.family_count).any():
+            raise ValueError("family_ids must identify valid families")
+
+        batch = state.shape[0]
+        family_sizes = torch.tensor(self.family_sizes, device=state.device,
+                                    dtype=torch.long)
+        family_offsets = torch.tensor(self.family_offsets, device=state.device,
+                                      dtype=torch.long)
+        selected_sizes = family_sizes[family_ids]
+        selected_offsets = family_offsets[family_ids]
+        routed_state = state + self.family_embeddings[family_ids]
+
+        leaf = torch.zeros(batch, dtype=torch.long, device=state.device)
+        entropies = []
+        path_score = torch.zeros(batch, device=state.device)
+        for level in range(self.local_depth):
+            logits = (routed_state @ self.level_projections[0, level]
+                      + self.level_bias[0, level])
+            probs = F.softmax(logits, dim=-1)
+            entropies.append(-(probs * probs.clamp_min(1e-8).log()).sum(dim=-1))
+            child = logits.argmax(dim=-1)
+            if exploration_prob and self.training:
+                explore = torch.rand(batch, device=state.device) < exploration_prob
+                random_child = torch.randint(self.branch, (batch,), device=state.device)
+                child = torch.where(explore, random_child, child)
+            path_score = path_score + logits.gather(1, child.unsqueeze(1)).squeeze(1)
+            leaf = leaf * self.branch + child
+
+        local_base = leaf.remainder(selected_sizes)
+        local_offsets = torch.arange(self.local_candidate_pool,
+                                     device=state.device).view(1, -1)
+        local_ids = (local_base.unsqueeze(-1) + local_offsets).remainder(
+            selected_sizes.unsqueeze(-1)) + selected_offsets.unsqueeze(-1)
+        shared_base = leaf.remainder(self.shared_count)
+        shared_offsets = torch.arange(self.shared_candidate_pool,
+                                      device=state.device).view(1, -1)
+        shared_ids = (shared_base.unsqueeze(-1) + shared_offsets).remainder(
+            self.shared_count)
+        candidate_ids = torch.cat([local_ids, shared_ids], dim=-1)
+        candidate_keys = self.keys[candidate_ids]
+        candidate_logits = torch.einsum(
+            "bd,bkd->bk", state, candidate_keys) / math.sqrt(state.shape[-1])
+        top_values, top_positions = candidate_logits.topk(self.active_circuits, dim=-1)
+        selected_ids = candidate_ids.gather(1, top_positions)
+        weights = F.softmax(top_values, dim=-1)
+        route_gain = 1.0 + 0.05 * torch.tanh(path_score)
+        stats = {
+            "router_entropy": torch.stack(entropies, dim=-1).mean(),
+            "router_decisions": torch.tensor(self.local_depth, device=state.device),
+            "route_gain": route_gain,
+            "candidate_ids": candidate_ids,
+            "selected_ids": selected_ids,
+            "family_ids": family_ids,
+            "family_sizes": selected_sizes,
+            "shared_selected_fraction": selected_ids.lt(self.shared_count).float().mean(),
+        }
+        return selected_ids, weights, stats

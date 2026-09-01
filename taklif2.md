@@ -1,6 +1,6 @@
 # Taklif 2 — scale-invariant routing arxitekturasi
 
-Status: **keyingi tajriba; hali implementatsiya qilinmagan**
+Status: **V0.32da sinab ko‘rildi va rad qilindi**
 
 ## Maqsad
 
@@ -149,6 +149,18 @@ barqaror ravishda yomon chiqsa, muammo faqat global routerda emas. Unda
 micro-circuit composition, 384-d working state yoki sparse trajectory credit
 assignmentni qayta ko‘rib, typed-register core’ning o‘zini yangilash kerak
 bo‘ladi.
+
+## V0.32 natijasi
+
+Taklif 20Mda tekshirildi. Family-local variant all-pairs full-domain gridda
+57.76%, hidden full-domain gridda 61.37% berdi. Reference 20M esa 58.10% va
+64.89% edi. Shuning uchun bu hard family decomposition 100M/300Mga
+ko‘tarilmadi va alohida taklif sifatida yopildi.
+
+Asosiy taxminiy sabab: fixed operator/stage family bankni haddan tashqari
+toraytirdi, fallback esa 32-candidate poolning yarmini egalladi. Keyingi
+variant qattiq family partition emas, learned role-anchor va global bankdagi
+value-dependent local scoring bo‘ladi.
 
 ## Bog‘liqlik va tarix
 
