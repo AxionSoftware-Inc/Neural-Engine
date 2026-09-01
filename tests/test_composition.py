@@ -1,5 +1,6 @@
 import pytest
 import torch
+from torch import nn
 
 from data.composition import (
     COMPOSITION_PAIRS,
@@ -7,6 +8,7 @@ from data.composition import (
     apply_operation,
 )
 from neural_engine.model import NeuralEngineV0
+from neural_engine.register_model import TypedRegisterNeuralEngine
 from train_composition import evaluate
 
 
@@ -46,3 +48,23 @@ def test_composition_evaluate_chunks_and_returns_cpu_metrics():
     result = evaluate(model, generator, examples_per_task=65, device=torch.device("cpu"))
     assert 0.0 <= result["accuracy"] <= 1.0
     assert result["avg_executed_steps"] >= 1.0
+
+
+def test_typed_register_model_exposes_serial_register_graph_and_gradients():
+    model = TypedRegisterNeuralEngine(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,
+        candidate_pool=4, active_circuits=2, internal_steps=3, slot_count=6,
+        numeric_value_encoding=True, route_exploration_prob=0.1,
+    )
+    generator = CompositionalProgramGenerator(seed=4, split="heldout")
+    batch = generator.task_balanced_batch(8)
+    logits, stats = model(batch.inputs)
+    assert logits.shape == (8, 64)
+    assert stats["selected_ids"].shape == (8, 3, 2)
+    assert stats["step_logits"].shape == (8, 3, 64)
+    assert stats["register_norms"].shape == (8, 3)
+    loss = nn.functional.cross_entropy(logits, batch.targets)
+    loss.backward()
+    assert model.circuits.down.grad is not None
+    assert model.operation_embedding.weight.grad is not None

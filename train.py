@@ -17,6 +17,7 @@ from data.generator import Batch, SyntheticTaskGenerator, accuracy_by_depth, acc
 from neural_engine.instrumentation import count_parameters
 from neural_engine.model import NeuralEngineV0
 from neural_engine.optim import LazyAdamW
+from neural_engine.register_model import TypedRegisterNeuralEngine
 
 
 def load_config(path: str, smoke: bool) -> dict[str, Any]:
@@ -60,6 +61,12 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["route_exploration_prob"] = config.get("route_exploration_prob", 0.0)
     model_kwargs["routing_capacity"] = config.get("routing_capacity")
     model_kwargs["routing_depth"] = config.get("routing_depth")
+    if config.get("architecture") == "typed_register":
+        for key in ("task_context", "task_context_update", "adaptive_halting",
+                    "halt_threshold", "routing_coverage_temperature",
+                    "input_reinjection", "memory_write_mode"):
+            model_kwargs.pop(key, None)
+        return TypedRegisterNeuralEngine(**model_kwargs)
     return NeuralEngineV0(**model_kwargs)
 
 
