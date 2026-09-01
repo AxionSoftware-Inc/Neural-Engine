@@ -1061,9 +1061,11 @@ an optional composition-focused recipe, documented in
 V0.15 scales the numeric/adaptive model from NE-20 to NE-100 with eight active
 circuits. Total capacity grows 4.96x while the average active path stays near
 2.04M parameters (10.07% → 2.03% active fraction); NE-100 reaches 72.92% on
-the fresh held-out split. Full-benchmark quality does not yet scale above
-NE-20, so this is a fixed-active capacity signal rather than a final quality
-win. Details are in `results/V0_15_NUMERIC_CAPACITY_SCALING.md`.
+the fresh held-out split on seed 17, and 73.54% full accuracy / 72.60%
+held-out on the second seed. The two-seed NE-20/NE-100 mean improves by 0.26
+points full and 0.52 points held-out while the active path remains constant.
+The result is promising but still needs more seeds and composition tasks;
+details are in `results/V0_15_NUMERIC_CAPACITY_SCALING.md`.
 
 Do not assume any result beyond the recorded measurements.
 
