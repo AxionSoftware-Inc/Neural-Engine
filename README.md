@@ -1130,6 +1130,13 @@ scratch 500M reference. The result confirms the direction of the growth
 benefit, but remains a warm-start experiment; composition/generalization is
 the next falsification. See `results/V0_24_GROWTH_THIRD_SEED.md`.
 
+V0.25 runs that falsification on the hidden operation-order composition task.
+The 300M parent reaches 7.03% held-out accuracy, 500M scratch reaches 10.16%,
+and 500M parent-growth reaches 9.38%; active16 and stage-supervision variants
+do not provide a reliable rescue. The richer benchmark therefore gives a
+NO-GO for jumping to 700M/1B before improving circuit composition and credit
+assignment. See `results/V0_25_COMPOSITION_GROWTH.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.

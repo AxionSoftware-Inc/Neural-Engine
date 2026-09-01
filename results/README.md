@@ -85,3 +85,9 @@ The third-seed validation is documented in `V0_24_GROWTH_THIRD_SEED.md`.
 Across three seeds, parent-based growth reaches 51.91% ± 0.83 held-out
 accuracy versus 45.63% for scratch 500M, confirming the direction of the
 improvement while preserving the warm-start caveat.
+
+The V0.25 composition scaling falsification is documented in
+`V0_25_COMPOSITION_GROWTH.md`. On the hidden operation-order benchmark,
+300M and 500M remain underfit; 500M scratch reaches 10.16% held-out accuracy,
+while parent-growth reaches 9.38%. This is a NO-GO for a 700M/1B quality jump
+until circuit credit assignment or composition is improved.
