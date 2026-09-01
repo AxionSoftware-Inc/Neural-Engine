@@ -20,28 +20,41 @@ def evaluate(model: nn.Module, generator: CompositionalProgramGenerator,
              examples_per_task: int, device: torch.device) -> dict[str, Any]:
     model.eval()
     batch = generator.balanced_batch(examples_per_task, device)
+    logit_parts = []
+    prediction_parts = []
+    executed_parts = []
+    eval_batch_size = 64
     with torch.no_grad():
-        if hasattr(model, "adaptive_inference"):
-            logits, stats = model(batch.inputs, adaptive=model.adaptive_inference)
-        else:
-            logits, stats = model(batch.inputs)
-    predictions = logits.argmax(dim=-1)
-    correct = predictions.eq(batch.targets)
+        for start in range(0, batch.inputs.shape[0], eval_batch_size):
+            inputs = batch.inputs[start:start + eval_batch_size]
+            if hasattr(model, "adaptive_inference"):
+                logits, stats = model(inputs, adaptive=model.adaptive_inference)
+            else:
+                logits, stats = model(inputs)
+            logit_parts.append(logits.cpu())
+            prediction_parts.append(logits.argmax(dim=-1).cpu())
+            if "executed_steps" in stats:
+                executed_parts.append(stats["executed_steps"].float().cpu())
+    logits = torch.cat(logit_parts)
+    predictions = torch.cat(prediction_parts)
+    targets = batch.targets.cpu()
+    task_ids = batch.task_ids.cpu()
+    correct = predictions.eq(targets)
     per_pair = {}
     for spec in generator.allowed_specs:
-        mask = batch.task_ids.eq(spec.task_id)
+        mask = task_ids.eq(spec.task_id)
         per_pair[spec.name] = float(correct[mask].float().mean().cpu())
     result = {
         "accuracy": float(correct.float().mean().cpu()),
-        "loss": float(nn.functional.cross_entropy(logits, batch.targets).cpu()),
+        "loss": float(nn.functional.cross_entropy(logits, targets).cpu()),
         "depth_accuracy": {"3": float(correct.float().mean().cpu())},
         "per_pair_accuracy": per_pair,
     }
-    if "executed_steps" in stats:
-        executed = stats["executed_steps"].float()
+    if executed_parts:
+        executed = torch.cat(executed_parts)
         result.update({
             "avg_executed_steps": float(executed.mean().cpu()),
-            "active_step_fraction": float((executed / stats["internal_steps"].float()).mean().cpu()),
+            "active_step_fraction": float((executed / float(model.internal_steps)).mean().cpu()),
         })
     return result
 
