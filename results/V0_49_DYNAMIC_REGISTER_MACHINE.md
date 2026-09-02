@@ -81,6 +81,37 @@ seed-17 control at 72.85%. The gain is encouraging because the model never
 saw depth 5 or 6 during training. The 300M seed spread is 4.49 percentage
 points, so the result is a direction signal, not yet a precise scaling law.
 
+The first second-seed controls are now complete. The 20M tier scores 75.49%
+with seed 18 (two-seed mean **74.17%**), while 100M scores 72.17% (two-seed
+mean **73.00%**). Thus the 300M mean remains above both smaller tiers, but the
+20M/100M ordering is not monotonic and should not be over-interpreted.
+
+The deeper holdout keeps the same training budget but evaluates unseen depths
+5–8 after training only on depths 1–4:
+
+| Virtual tier | Physical params | Held-out 5–8 | Depth 5 | Depth 6 | Depth 7 | Depth 8 |
+|---|---:|---:|---:|---:|---:|---:|
+| 20M, seed 17 | 1.75M | 72.12% | 78.13% | 70.51% | 71.29% | 68.55% |
+| 300M, seed 17 | 3.31M | **75.68%** | 81.64% | 73.44% | 74.41% | 73.24% |
+
+This is a smaller but consistent +3.56 percentage-point capacity signal on
+the harder 7–8 depth extension. It is still a single seed and a synthetic
+task, so it is evidence for continuation rather than a final scaling claim.
+
+A disjoint value-range control exposes the current weakness. Training uses
+only values 0–31 and evaluation uses only 32–63, while depths remain 1–4 to
+5–6:
+
+| Virtual tier | Train accuracy | Unseen-value accuracy |
+|---|---:|---:|
+| 20M, seed 17 | 99.22% | 34.77% |
+| 300M, seed 17 | 99.76% | 34.38% |
+
+Increasing virtual capacity does not improve this result. The model is above
+the 1.56% random baseline, but it is not yet learning a value-independent
+algebraic circuit. This points to the value representation/register-write
+path as the next bottleneck, not to insufficient circuit-bank capacity.
+
 As an all-depth sanity control, the 20M tier trained on depths 1–6 for 5,000
 steps reaches 89.45% balanced accuracy. Its average execution is 3.5 of the
 6 possible recurrent steps (58.33% active-step fraction). In the primary
@@ -96,7 +127,8 @@ The result supports three claims:
 2. unseen longer programs are substantially above chance and improve with
    virtual circuit capacity in this control; and
 3. the maximum active circuit count stays fixed at 8 per executed step while
-   virtual addresses increase.
+   virtual addresses increase; and
+4. the positive capacity signal survives the first 7–8 depth extension.
 
 It does **not** yet prove:
 
@@ -106,7 +138,8 @@ It does **not** yet prove:
 - actual GPU speedup—the current serial PyTorch implementation still has
   dispatch overhead;
 - reliable 4x total-model active-parameter reduction;
-- zero-shot generalization to unseen numeric values or operation families.
+- zero-shot generalization to unseen numeric values or operation families;
+- a monotonic scaling law across all virtual tiers and random seeds.
 
 ## Decision
 
@@ -119,13 +152,16 @@ Do not yet claim the dynamic model is production-ready. The current gate is
 
 ## Next controls
 
-1. repeat 20M and 100M with seed 18 and use a larger held-out evaluation set;
-2. add depth 7–8 and a separate unseen-value-range split;
-3. run route-reuse, dead-circuit, and per-depth active-parameter audits;
-4. compare factorized and true physical-capacity banks at matched training
+1. run route-reuse, dead-circuit, and per-depth active-parameter audits;
+2. compare factorized and true physical-capacity banks at matched training
    budgets; and
-5. replace serial per-sample dispatch with a grouped circuit kernel before
+3. replace serial per-sample dispatch with a grouped circuit kernel before
    making any latency claim.
+
+The unseen-value failure must be addressed before treating 500M/700M as a
+quality solution. Parent-growth may still be useful for the longer-program
+capacity curve, but it is not expected by itself to repair value
+representation generalization.
 
 The key acceptance curve is now:
 
@@ -148,4 +184,7 @@ Reproduction entry points:
 python train_dynamic_composition.py --config configs/ne_dynamic_20m.yaml --steps 3000 --batch-size 512 --device cuda --heldout-depths
 python train_dynamic_composition.py --config configs/ne_dynamic_100m.yaml --steps 3000 --batch-size 512 --device cuda --heldout-depths
 python train_dynamic_composition.py --config configs/ne_dynamic_300m.yaml --steps 3000 --batch-size 512 --device cuda --heldout-depths --seed 18
+python train_dynamic_composition.py --config configs/ne_dynamic_20m_depth8.yaml --steps 3000 --batch-size 512 --device cuda --heldout-depths
+python train_dynamic_composition.py --config configs/ne_dynamic_300m_depth8.yaml --steps 3000 --batch-size 512 --device cuda --heldout-depths
+python train_dynamic_composition.py --config configs/ne_dynamic_300m.yaml --steps 3000 --batch-size 512 --device cuda --heldout-depths --train-value-max 31 --eval-value-min 32 --eval-value-max 63
 ```

@@ -237,7 +237,9 @@ independent attention-free architecture. A recurrent accumulator scans
 variable-length operation programs and routes eight factorized circuits per
 executed step. Training only on depths 1–4 and evaluating unseen depths 5–6
 reaches 72.85% at the 20M virtual tier, 73.83% at 100M, and 80.86% at 300M in
-seed 17; a second 300M seed reaches 76.37%. This is a promising
-capacity-to-capability signal, but it remains a synthetic control until
-second-seed 20M/100M checks, deeper/OOD programs, and grouped-kernel systems
-measurements are complete. See `V0_49_DYNAMIC_REGISTER_MACHINE.md`.
+seed 17; second-seed checks reach 75.49%, 72.17%, and 76.37% respectively.
+The 300M tier also leads the 20M control on unseen depths 5–8 (75.68% vs
+72.12%). However, a disjoint value-range test remains low at 34.77% for 20M
+and 34.38% for 300M, so the next bottleneck is value-independent circuit
+generalization rather than raw virtual capacity. See
+`V0_49_DYNAMIC_REGISTER_MACHINE.md`.
