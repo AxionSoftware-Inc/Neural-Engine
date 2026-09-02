@@ -327,3 +327,140 @@ def top_contribution_circuits(
         raise ValueError("active_circuits must be within the circuit-bank size")
     scores = bank.chunk_outputs(hidden_states).norm(dim=-1)
     return scores.topk(active_circuits, dim=-1).indices
+
+
+class LowRankResidual(nn.Module):
+    """Small always-active residual used by teacher-distilled sparse pilots.
+
+    The down projection is zero-initialized, so adding the residual cannot
+    perturb an exact bank at initialization.  This gives a sparse route a
+    cheap way to learn the aggregate effect of omitted circuits without
+    reinstating the full FFN.
+    """
+
+    def __init__(self, hidden_size: int, rank: int) -> None:
+        super().__init__()
+        if hidden_size < 1 or rank < 1:
+            raise ValueError("hidden_size and rank must be positive")
+        self.up = nn.Linear(hidden_size, rank, bias=False)
+        self.down = nn.Linear(rank, hidden_size, bias=False)
+        nn.init.normal_(self.up.weight, std=0.02)
+        nn.init.zeros_(self.down.weight)
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        parameter_dtype = self.up.weight.dtype
+        values = self.up(hidden_states.to(parameter_dtype))
+        result = self.down(F.silu(values))
+        return result.to(hidden_states.dtype)
+
+
+class TeacherDistilledSparseSwiGLU(nn.Module):
+    """Soft-to-hard, teacher-distilled sparse execution for one FFN bank.
+
+    During training, every frozen circuit is evaluated with a differentiable
+    probability mass whose total is equal to the number of circuits.  This
+    provides a global teacher-logit training signal without pretending that a
+    hard top-k route is differentiable.  Evaluation switches to hard top-k
+    and keeps the same mass-preserving normalization.  The router's final
+    layer starts at zero, so the initial soft path is exactly the full bank.
+
+    This is a research module, not a claim that dense scoring is a deployable
+    router.  The training path is intentionally dense; deployment must replace
+    it with a structured/cheap router after the quality gate passes.
+    """
+
+    def __init__(
+        self,
+        bank: SwiGLUCircuitBank,
+        active_circuits: int,
+        *,
+        router_hidden: int = 128,
+        residual_rank: int = 0,
+        temperature: float = 1.0,
+    ) -> None:
+        super().__init__()
+        if not 1 <= active_circuits <= bank.num_circuits:
+            raise ValueError("active_circuits must be within the bank size")
+        if router_hidden < 1:
+            raise ValueError("router_hidden must be positive")
+        if temperature <= 0:
+            raise ValueError("temperature must be positive")
+        self.bank = bank
+        self.active_circuits = int(active_circuits)
+        self.temperature = float(temperature)
+        self.execution_mode = "soft"
+        self.use_residual = True
+        self.router = nn.Sequential(
+            nn.Linear(bank.hidden_size, router_hidden),
+            nn.SiLU(),
+            nn.Linear(router_hidden, bank.num_circuits),
+        )
+        nn.init.zeros_(self.router[-1].weight)
+        nn.init.zeros_(self.router[-1].bias)
+        self.residual = (
+            LowRankResidual(bank.hidden_size, residual_rank)
+            if residual_rank > 0 else None
+        )
+
+        # The copied teacher weights are not part of the pilot optimizer.
+        for parameter in self.bank.parameters():
+            parameter.requires_grad_(False)
+
+    def set_execution_mode(self, mode: str) -> None:
+        if mode not in {"soft", "straight_through", "hard"}:
+            raise ValueError("execution mode must be soft, straight_through, or hard")
+        self.execution_mode = mode
+
+    def route_distribution(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        """Return the differentiable full-bank route distribution."""
+        router_dtype = self.router[0].weight.dtype
+        scores = self.router(hidden_states.to(router_dtype))
+        return F.softmax(scores / self.temperature, dim=-1)
+
+    def _add_residual(
+        self,
+        hidden_states: torch.Tensor,
+        result: torch.Tensor,
+        use_residual: bool = True,
+    ) -> torch.Tensor:
+        if use_residual and self.use_residual and self.residual is not None:
+            # The base Qwen stack is frozen; do not backpropagate through its
+            # hidden-state producer just to train the small residual.
+            result = result + self.residual(hidden_states.detach())
+        return result
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        if self.execution_mode in {"soft", "straight_through"}:
+            router_dtype = self.router[0].weight.dtype
+            scores = self.router(hidden_states.to(router_dtype))
+            distribution = F.softmax(scores / self.temperature, dim=-1)
+            # Sum of weights is N, making a uniform initial route identical
+            # to the full bank output.
+            weights = distribution * self.bank.num_circuits
+            if self.execution_mode == "straight_through":
+                _, top_ids = scores.topk(self.active_circuits, dim=-1)
+                hard_distribution = torch.zeros_like(distribution)
+                hard_distribution.scatter_(-1, top_ids, 1.0 / self.active_circuits)
+                hard_weights = hard_distribution * self.bank.num_circuits
+                # Forward uses exactly k circuits; backward follows the soft
+                # distribution so the router can still receive global loss.
+                weights = hard_weights + weights - weights.detach()
+            outputs = self.bank.chunk_outputs(hidden_states.detach())
+            result = (
+                outputs * weights.unsqueeze(-1)
+            ).sum(dim=-2) + self.bank.down_bias
+            result = result.to(hidden_states.dtype)
+            return self._add_residual(hidden_states, result)
+
+        if self.active_circuits >= self.bank.num_circuits:
+            return self._add_residual(hidden_states, self.bank(hidden_states.detach()))
+        router_dtype = self.router[0].weight.dtype
+        scores = self.router(hidden_states.to(router_dtype))
+        top_values, top_ids = scores.topk(self.active_circuits, dim=-1)
+        # Preserve the full-bank mass without allowing one selected circuit
+        # to receive an unstable, score-dependent amplification.
+        weights = torch.full_like(
+            top_values, self.bank.num_circuits / self.active_circuits
+        )
+        result = self.bank.forward_selected(hidden_states.detach(), top_ids, weights)
+        return self._add_residual(hidden_states, result)

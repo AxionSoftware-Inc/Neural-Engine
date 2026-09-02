@@ -1,7 +1,11 @@
 import torch
 from torch import nn
 
-from neural_engine.pretrained_transfer import SwiGLUCircuitBank, top_contribution_circuits
+from neural_engine.pretrained_transfer import (
+    SwiGLUCircuitBank,
+    TeacherDistilledSparseSwiGLU,
+    top_contribution_circuits,
+)
 
 
 class TinyQwenMlp(nn.Module):
@@ -62,3 +66,44 @@ def test_selected_circuits_are_a_controlled_sparse_approximation():
     assert torch.isfinite(sparse).all()
     assert not torch.allclose(sparse, exact)
 
+
+def test_distilled_sparse_module_starts_with_exact_soft_path():
+    torch.manual_seed(44)
+    source = TinyQwenMlp(hidden_size=12, intermediate_size=48, bias=False)
+    bank = SwiGLUCircuitBank.from_qwen_mlp(source, chunk_size=8)
+    module = TeacherDistilledSparseSwiGLU(
+        bank, active_circuits=3, router_hidden=16, residual_rank=4
+    )
+    inputs = torch.randn(5, 7, 12)
+    module.set_execution_mode("soft")
+    assert torch.allclose(module(inputs), bank(inputs), atol=2e-5, rtol=2e-5)
+
+
+def test_distilled_sparse_module_hard_route_is_finite_and_sparse():
+    torch.manual_seed(45)
+    source = TinyQwenMlp(hidden_size=12, intermediate_size=48, bias=False)
+    bank = SwiGLUCircuitBank.from_qwen_mlp(source, chunk_size=8)
+    module = TeacherDistilledSparseSwiGLU(
+        bank, active_circuits=2, router_hidden=16, residual_rank=4
+    )
+    inputs = torch.randn(5, 12)
+    module.set_execution_mode("hard")
+    output = module(inputs)
+    assert output.shape == inputs.shape
+    assert torch.isfinite(output).all()
+
+
+def test_distilled_sparse_module_straight_through_uses_hard_forward():
+    torch.manual_seed(46)
+    source = TinyQwenMlp(hidden_size=12, intermediate_size=48, bias=False)
+    bank = SwiGLUCircuitBank.from_qwen_mlp(source, chunk_size=8)
+    module = TeacherDistilledSparseSwiGLU(
+        bank, active_circuits=2, router_hidden=16, residual_rank=0
+    )
+    inputs = torch.randn(5, 12)
+    module.set_execution_mode("straight_through")
+    output = module(inputs)
+    assert output.shape == inputs.shape
+    assert torch.isfinite(output).all()
+    output.square().mean().backward()
+    assert module.router[-1].weight.grad is not None

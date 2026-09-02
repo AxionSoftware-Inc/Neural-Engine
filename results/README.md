@@ -207,3 +207,10 @@ The V0.45 real Qwen3-0.6B sparse FFN and minimal hybrid audit is documented in
 proposal 10/11 routing fails the quality gate even with a local contribution
 oracle, while proposal 12 has a limited middle/late-layer positive; proposal
 13 scaling and deeper proposal 14 stages remain behind the canonical stop gate.
+
+The V0.46 teacher-distilled routing and structural compression audit is
+documented in `V0_46_TEACHER_DISTILLED_COMPRESSION.md`. Global-logit
+distillation plus a low-rank residual helps late-layer pilots but does not
+rescue full-stack 4x routing. An adaptive oracle shows that contiguous Qwen
+chunks require nearly all circuits for teacher-level fidelity, while compact
+nonlinear late-layer FFNs remain a conditional, not yet accepted, direction.
