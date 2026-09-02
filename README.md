@@ -1231,7 +1231,9 @@ holdout control improves from 72.85% at the 20M virtual tier to 80.86% at
 300M in seed 17, with 76.37% in a second 300M seed; the deeper 5–8 holdout
 is 72.12% at 20M versus 75.68% at 300M. A disjoint value-range control is
 still low and does not improve with capacity, so the next work targets
-value-independent register/circuit generalization. These are promising
+value-independent register/circuit generalization. Route audit shows reuse
+across many observed virtual addresses, rather than collapse to one route.
+These are promising
 synthetic-program results, not language-model claims. Details are in
 `results/V0_49_DYNAMIC_REGISTER_MACHINE.md`.
 

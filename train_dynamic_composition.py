@@ -55,6 +55,60 @@ def make_optimizer(model: DynamicRegisterNeuralEngine, config: dict[str, Any]):
 
 
 @torch.no_grad()
+def route_audit(
+    model: DynamicRegisterNeuralEngine,
+    selected_ids: torch.Tensor,
+    depths: torch.Tensor,
+) -> dict[str, Any]:
+    """Summarize hard route traffic without changing the forward path."""
+    num_circuits = int(model.router.num_circuits)
+
+    def summarize(ids: torch.Tensor) -> dict[str, Any]:
+        valid = ids.ge(0)
+        flat = ids[valid].to(dtype=torch.long)
+        if not flat.numel():
+            return {
+                "selected_count": 0,
+                "unique_virtual_circuits": 0,
+                "virtual_bank_utilization": 0.0,
+                "dead_virtual_circuits": num_circuits,
+            }
+        counts = torch.bincount(flat, minlength=num_circuits).float()
+        active_counts = counts[counts.gt(0)]
+        probabilities = active_counts / active_counts.sum()
+        result: dict[str, Any] = {
+            "selected_count": int(flat.numel()),
+            "unique_virtual_circuits": int(active_counts.numel()),
+            "virtual_bank_utilization": float(active_counts.numel() / num_circuits),
+            "dead_virtual_circuits": int(num_circuits - active_counts.numel()),
+            "top_route_fraction": float(active_counts.max() / active_counts.sum()),
+            "route_entropy": float((-(probabilities * probabilities.log()).sum()).cpu()),
+        }
+        if model.circuit_bank_mode == "factorized":
+            first, second = model.router._factor_ids(flat)
+            factors = torch.cat([first, second])
+            factor_count = int(model.router.factor_count)
+            factor_usage = torch.bincount(factors, minlength=factor_count).gt(0)
+            result.update({
+                "unique_factor_rows": int(factor_usage.sum()),
+                "factor_bank_utilization": float(factor_usage.float().mean()),
+                "dead_factor_rows": int(factor_count - factor_usage.sum()),
+            })
+        return result
+
+    audit = summarize(selected_ids)
+    audit["by_program_depth"] = {
+        str(depth): summarize(selected_ids[depths.eq(depth)])
+        for depth in sorted(int(value) for value in torch.unique(depths).cpu().tolist())
+    }
+    audit["by_execution_step"] = {
+        str(step): summarize(selected_ids[:, step])
+        for step in range(selected_ids.shape[1])
+    }
+    return audit
+
+
+@torch.no_grad()
 def evaluate(
     model: DynamicRegisterNeuralEngine,
     generator: DynamicCompositionGenerator,
@@ -77,6 +131,7 @@ def evaluate(
         "avg_executed_steps": float(executed.mean().cpu()),
         "active_step_fraction": float((executed / model.max_ops).mean().cpu()),
         "router_entropy": float(stats["router_entropy"].cpu()),
+        "route_audit": route_audit(model, stats["selected_ids"], batch.depths),
     }
 
 

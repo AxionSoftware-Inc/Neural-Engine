@@ -112,6 +112,26 @@ the 1.56% random baseline, but it is not yet learning a value-independent
 algebraic circuit. This points to the value representation/register-write
 path as the next bottleneck, not to insufficient circuit-bank capacity.
 
+## Route audit
+
+The 300M depth-8 run was repeated with route instrumentation and reproduced
+the same **75.68%** held-out accuracy. On the 2,048-example evaluation batch,
+the model made 106,496 active virtual-circuit selections. These selections
+covered 1,777 of 23,600 virtual addresses (**7.53%**), or about 60 selections
+per observed virtual address on average. The most frequent address accounted
+for only 3.74% of traffic, so the result is route reuse rather than collapse
+to one circuit.
+
+Because the bank is factorized, the virtual-address coverage is not the whole
+story: 137 of 154 factor rows (**88.96%**) were touched by the same batch.
+The remaining 22,000+ virtual addresses were not selected in this finite
+audit batch; they should be called *unobserved in the batch*, not permanently
+dead, until traffic is measured over a much larger and more varied corpus.
+Per-depth virtual-address coverage was 1,173 / 1,226 / 1,297 / 1,334 for
+depths 5 / 6 / 7 / 8. This confirms meaningful route reuse and depth-specific
+traffic, but does not yet establish that every capacity tier is receiving
+useful training gradients.
+
 As an all-depth sanity control, the 20M tier trained on depths 1–6 for 5,000
 steps reaches 89.45% balanced accuracy. Its average execution is 3.5 of the
 6 possible recurrent steps (58.33% active-step fraction). In the primary
@@ -152,7 +172,8 @@ Do not yet claim the dynamic model is production-ready. The current gate is
 
 ## Next controls
 
-1. run route-reuse, dead-circuit, and per-depth active-parameter audits;
+1. repeat the route audit over a larger corpus and report observed versus
+   permanently unused traffic separately;
 2. compare factorized and true physical-capacity banks at matched training
    budgets; and
 3. replace serial per-sample dispatch with a grouped circuit kernel before

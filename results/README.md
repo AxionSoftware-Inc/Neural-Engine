@@ -242,4 +242,5 @@ The 300M tier also leads the 20M control on unseen depths 5–8 (75.68% vs
 72.12%). However, a disjoint value-range test remains low at 34.77% for 20M
 and 34.38% for 300M, so the next bottleneck is value-independent circuit
 generalization rather than raw virtual capacity. See
-`V0_49_DYNAMIC_REGISTER_MACHINE.md`.
+`V0_49_DYNAMIC_REGISTER_MACHINE.md`; route instrumentation also shows strong
+reuse of observed virtual routes rather than single-route collapse.
