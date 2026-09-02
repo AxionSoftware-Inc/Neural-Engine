@@ -196,3 +196,8 @@ and rejected variants, `taklif2.md` records family-local routing history,
 `taklif3.md` records role-anchor and fixed role-cell routing, `taklif4.md`
 records the tested-and-rejected shared-residual bank, and `taklif5.md` records
 the next factorized-capacity and scale-invariant-address experiment.
+
+The V0.44 Qwen-style exact FFN circuit-graft pilot is documented in
+`V0_44_QWEN_FFN_EXACT_GRAFT.md`. The gated FFN conversion is exact on a
+Qwen-shaped control, while the first sparse-router pilot is only a weak signal
+and still needs a real Qwen checkpoint before proposals 11–14 are attempted.
