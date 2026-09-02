@@ -166,6 +166,20 @@ It reaches 94.81% at 500M, only 0.09 points above the depth-6 control, so the
 500M regression is not explained by tree depth alone. `taklif6.md` records the
 next second-seed, longer hidden curriculum, and parent-growth validation plan.
 
+V0.41 records the second-seed and hidden exploration audit in
+`V0_41_SEED_AND_HIDDEN_EXPLORATION.md`. The 20M all-pairs mean is 96.48% across
+seeds 17 and 18; hidden adaptation improves from 96.38% to 97.16% when route
+exploration is disabled for the adaptation stage. The second-seed 100M and
+300M controls expose larger-bank variance, with means 95.03% and 95.89%.
+
+V0.42 records the parent-growth conversion of a trained 300M factorized bank
+into 500M in `V0_42_PARENT_GROWTH_FACTORIZED.md`. Scratch 500M reaches 94.72%,
+but the grown 500M model reaches 99.66% on the same full `64^3` all-pairs grid,
+with an unchanged estimated active path of 1.79M parameters. Five-thousand
+step hidden adaptation reaches 99.32% on the two held-out pairs and 99.77% on
+all nine pairs after adaptation. This is a strong warm-start result, not yet a
+multi-seed scaling law; second-seed growth and OOD composition remain next.
+
 The proposal history is indexed in the repository root: `taklif.md` is the
 original scale/systems proposal, `taklif1.md` records completed experiments
 and rejected variants, `taklif2.md` records family-local routing history,

@@ -1198,6 +1198,18 @@ to 94.72%, and V0.38–V0.40 route ablations reach at most 95.55%, so 300M is
 the current best scale point. See
 `results/V0_37_FACTORIZED_VIRTUAL_CAPACITY.md` and `taklif6.md`.
 
+V0.41 completes the second-seed and hidden-routing audit: the 20M mean across
+seeds 17/18 is 96.48%, while 100M and 300M means are 95.03% and 95.89%.
+Disabling exploration during hidden adaptation improves the seed-18 hidden
+score from 96.38% to 97.16%. V0.42 then expands a trained 300M parent into
+500M: scratch 500M is 94.72%, but parent-growth reaches 99.66% on the same
+full all-pairs grid, with the estimated active path still about 1.79M. Hidden
+adaptation reaches 99.32%, and all nine pairs reach 99.77% after adaptation.
+This validates parent-growth as the current 500M recipe, while second-seed and
+OOD composition tests remain before a 700M/1B scaling claim. See
+`results/V0_41_SEED_AND_HIDDEN_EXPLORATION.md` and
+`results/V0_42_PARENT_GROWTH_FACTORIZED.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.
