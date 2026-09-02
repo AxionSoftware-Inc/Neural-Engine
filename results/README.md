@@ -231,3 +231,13 @@ stronger compute pressure breaks fidelity, and gating all layers fails the
 teacher top-1 gate. Keep this as a conditional research direction until a
 larger multi-seed corpus and structured conditional kernel demonstrate real
 savings.
+
+The V0.49 dynamic Neural Register Machine returns the main research line to an
+independent attention-free architecture. A recurrent accumulator scans
+variable-length operation programs and routes eight factorized circuits per
+executed step. Training only on depths 1–4 and evaluating unseen depths 5–6
+reaches 72.85% at the 20M virtual tier, 73.83% at 100M, and 80.86% at 300M in
+seed 17; a second 300M seed reaches 76.37%. This is a promising
+capacity-to-capability signal, but it remains a synthetic control until
+second-seed 20M/100M checks, deeper/OOD programs, and grouped-kernel systems
+measurements are complete. See `V0_49_DYNAMIC_REGISTER_MACHINE.md`.

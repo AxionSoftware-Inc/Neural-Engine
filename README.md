@@ -1223,4 +1223,14 @@ before claiming generalization or moving directly to 1B. See
 
 Do not assume any result beyond the recorded measurements.
 
+The current main research direction is V0.49's dynamic Neural Register
+Machine, an independent attention-free recurrent architecture. It scans
+variable-length programs with a persistent accumulator, hierarchical
+factorized routing, and a fixed small active circuit count. The first depth
+holdout control improves from 72.85% at the 20M virtual tier to 80.86% at
+300M in seed 17, with 76.37% in a second 300M seed. These are promising
+synthetic-program results, not language-model claims; second-seed scale,
+deeper/OOD programs, and grouped-kernel speed measurements remain required.
+Details are in `results/V0_49_DYNAMIC_REGISTER_MACHINE.md`.
+
 This repository should preserve negative results as carefully as positive ones.
