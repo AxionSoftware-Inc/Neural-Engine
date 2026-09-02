@@ -223,3 +223,11 @@ variant fails on an independent variant. The next accepted test is a global
 end-to-end layer gate with larger independent data, multi-seed validation, and
 an actual grouped-kernel latency measurement; do not scale Qwen transfer to
 1B/1.7B before that gate passes.
+
+The V0.48 global token-adaptive layer-gate audit is documented in
+`V0_48_GLOBAL_LAYER_GATE.md`. Late-layer gating preserves teacher fidelity in
+the strongest short control, but only with about 1.2% overall FFN reduction;
+stronger compute pressure breaks fidelity, and gating all layers fails the
+teacher top-1 gate. Keep this as a conditional research direction until a
+larger multi-seed corpus and structured conditional kernel demonstrate real
+savings.
