@@ -1235,6 +1235,30 @@ value-independent register/circuit generalization. Route audit shows reuse
 across many observed virtual addresses, rather than collapse to one route.
 These are promising
 synthetic-program results, not language-model claims. Details are in
-`results/V0_49_DYNAMIC_REGISTER_MACHINE.md`.
+`results/V0_49_DYNAMIC_REGISTER_MACHINE.md`. V0.50 further isolates the
+current bottleneck: long-depth composition transfers strongly inside the
+observed value range, while unseen-value add/subtract extrapolation remains
+weak even at 300M. See `results/V0_50_DYNAMIC_GENERALIZATION_DIAGNOSTIC.md`.
+The first proposal screen found no reliable large improvement; results are in
+`results/V0_51_DYNAMIC_PROPOSALS_09_15.md`.
+The shared factor-mix follow-up improves the 300M depth holdout to an
+83.16% two-seed mean, but 500M/700M scaling does not improve it and the
+unseen-value gate remains negative. The next bottleneck is modular
+register/circuit composition; details are in
+`results/V0_52_DYNAMIC_CAPACITY_AND_ROUTING.md`.
+
+The modular-prior pilot then reached 100% on the strict synthetic OOD gate,
+but it is explicitly a structural control because the fixed transition wiring
+contains the mod-64 algebra. The next step is a trainable equivariant template
+bank, tracked in `results/V0_53_MODULAR_PRIOR_PILOT.md` and `taklif7.md`.
+The follow-up trainable template screen reaches 100% on two seeds with 4,169
+parameters and no dense transition table; it is conditional on the current
+modular wiring pending a second modulus and sparse-residual integration. See
+`results/V0_54_TRAINABLE_MODULAR_TEMPLATES.md`.
+
+The modular-prior pilot then reached 100% on the strict synthetic OOD gate,
+but it is explicitly a structural control because the fixed transition wiring
+contains the mod-64 algebra. The next step is a trainable equivariant template
+bank, tracked in `results/V0_53_MODULAR_PRIOR_PILOT.md` and `taklif7.md`.
 
 This repository should preserve negative results as carefully as positive ones.

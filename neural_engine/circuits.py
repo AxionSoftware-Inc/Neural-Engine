@@ -119,7 +119,8 @@ class FactorizedMicroCircuitBank(nn.Module):
     """
 
     def __init__(self, num_circuits: int, state_dim: int, rank: int,
-                 factor_count: int | None = None):
+                 factor_count: int | None = None,
+                 factor_mix_mode: str = "per_address"):
         super().__init__()
         if num_circuits < 1:
             raise ValueError("num_circuits must be positive")
@@ -127,16 +128,20 @@ class FactorizedMicroCircuitBank(nn.Module):
             factor_count = max(1, math.ceil(math.sqrt(num_circuits)))
         if factor_count < 1 or factor_count * factor_count < num_circuits:
             raise ValueError("factor_count must provide every virtual circuit ID")
+        if factor_mix_mode not in {"per_address", "shared"}:
+            raise ValueError("factor_mix_mode must be per_address or shared")
         self.num_circuits = num_circuits
         self.state_dim = state_dim
         self.rank = rank
         self.factor_count = factor_count
+        self.factor_mix_mode = factor_mix_mode
         self.down_factors = nn.Parameter(torch.empty(factor_count, state_dim, rank))
         self.up_factors = nn.Parameter(torch.empty(factor_count, rank, state_dim))
         self.bias_factors = nn.Parameter(torch.zeros(factor_count, state_dim))
         # A tiny per-address code preserves distinctions between combinations
         # without restoring a full independent matrix for every virtual row.
-        self.factor_mix = nn.Parameter(torch.full((num_circuits, 2), 0.5))
+        mix_shape = (num_circuits, 2) if factor_mix_mode == "per_address" else (2,)
+        self.factor_mix = nn.Parameter(torch.full(mix_shape, 0.5))
         nn.init.normal_(self.down_factors, std=0.02)
         nn.init.normal_(self.up_factors, std=0.02)
         self.cache = None
@@ -154,13 +159,20 @@ class FactorizedMicroCircuitBank(nn.Module):
 
     def _gather(self, circuit_ids: torch.Tensor):
         first, second = self._factor_ids(circuit_ids)
-        mix = self.factor_mix[circuit_ids]
-        down = (self.down_factors[first] * mix[..., 0, None, None]
-                + self.down_factors[second] * mix[..., 1, None, None])
-        up = (self.up_factors[first] * mix[..., 0, None, None]
-              + self.up_factors[second] * mix[..., 1, None, None])
-        bias = (self.bias_factors[first] * mix[..., 0, None]
-                + self.bias_factors[second] * mix[..., 1, None])
+        if self.factor_mix_mode == "per_address":
+            mix = self.factor_mix[circuit_ids]
+            first_mix = mix[..., 0, None, None]
+            second_mix = mix[..., 1, None, None]
+            first_bias_mix = mix[..., 0, None]
+            second_bias_mix = mix[..., 1, None]
+        else:
+            first_mix = self.factor_mix[0]
+            second_mix = self.factor_mix[1]
+            first_bias_mix = self.factor_mix[0]
+            second_bias_mix = self.factor_mix[1]
+        down = self.down_factors[first] * first_mix + self.down_factors[second] * second_mix
+        up = self.up_factors[first] * first_mix + self.up_factors[second] * second_mix
+        bias = self.bias_factors[first] * first_bias_mix + self.bias_factors[second] * second_bias_mix
         return down, up, bias
 
     def forward(self, state: torch.Tensor, circuit_ids: torch.Tensor,

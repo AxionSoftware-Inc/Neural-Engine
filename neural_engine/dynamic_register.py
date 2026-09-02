@@ -4,8 +4,16 @@ import torch
 from torch import nn
 
 from .circuits import FactorizedMicroCircuitBank, MicroCircuitBank
-from .encoding import VALUE_HARMONICS, encode_tokens
+from .encoding import (
+    FixedFourierValueEncoder,
+    HybridFourierValueEncoder,
+    VALUE_HARMONICS,
+    VALUE_MODULUS,
+    VALUE_TOKEN_OFFSET,
+    encode_tokens,
+)
 from .instrumentation import count_parameters
+from .modular_templates import TrainableModularTemplateRegister
 from .router import FactorizedRouter, HierarchicalRouter
 
 
@@ -38,6 +46,13 @@ class DynamicRegisterNeuralEngine(nn.Module):
         factor_candidate_pool: int | None = None,
         circuit_mode: str = "serial",
         route_exploration_prob: float = 0.05,
+        input_reinjection_scale: float = 0.0,
+        write_gate: bool = False,
+        value_encoder_mode: str = "learned",
+        factor_mix_mode: str = "per_address",
+        route_context_mode: str = "full",
+        modular_prior: bool = False,
+        modular_prior_mode: str = "fixed",
     ) -> None:
         super().__init__()
         if max_ops < 1:
@@ -53,6 +68,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("circuit_bank_mode must be independent or factorized")
         if not 0.0 <= route_exploration_prob <= 1.0:
             raise ValueError("route_exploration_prob must be between zero and one")
+        if value_encoder_mode not in {"learned", "fixed_fourier", "hybrid_fourier"}:
+            raise ValueError(
+                "value_encoder_mode must be learned, fixed_fourier, or hybrid_fourier"
+            )
+        if route_context_mode not in {"full", "operation_step"}:
+            raise ValueError("route_context_mode must be full or operation_step")
+        if modular_prior_mode not in {"fixed", "templates"}:
+            raise ValueError("modular_prior_mode must be fixed or templates")
 
         self.max_ops = max_ops
         self.seq_len = seq_len
@@ -61,13 +84,25 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.circuit_mode = circuit_mode
         self.circuit_bank_mode = circuit_bank_mode
         self.route_exploration_prob = route_exploration_prob
+        self.input_reinjection_scale = float(input_reinjection_scale)
+        self.write_gate_enabled = bool(write_gate)
+        self.value_encoder_mode = value_encoder_mode
+        self.factor_mix_mode = factor_mix_mode
+        self.route_context_mode = route_context_mode
+        self.modular_prior_enabled = bool(modular_prior)
+        self.modular_prior_mode = modular_prior_mode
         self.adaptive_halting = False
         self.adaptive_inference = False
         self.value_start = 1 + max_ops
 
         embedding_vocab = 16
         self.token_embedding = nn.Embedding(embedding_vocab, d_model, padding_idx=0)
-        self.value_encoder = nn.Linear(1 + 2 * len(VALUE_HARMONICS), d_model)
+        if value_encoder_mode == "fixed_fourier":
+            self.value_encoder = FixedFourierValueEncoder(d_model)
+        elif value_encoder_mode == "hybrid_fourier":
+            self.value_encoder = HybridFourierValueEncoder(d_model)
+        else:
+            self.value_encoder = nn.Linear(1 + 2 * len(VALUE_HARMONICS), d_model)
         self.position_embedding = nn.Parameter(torch.zeros(seq_len, d_model))
         self.position_scale = nn.Parameter(torch.zeros(seq_len, d_model))
         self.position_bias = nn.Parameter(torch.zeros(seq_len, d_model))
@@ -93,6 +128,29 @@ class DynamicRegisterNeuralEngine(nn.Module):
             nn.Linear(2 * state_dim, state_dim),
             nn.Tanh(),
         )
+        if self.modular_prior_enabled:
+            if self.modular_prior_mode == "fixed":
+                left = torch.arange(VALUE_MODULUS).view(-1, 1)
+                right = torch.arange(VALUE_MODULUS).view(1, -1)
+                transition = torch.stack((
+                    (left + right).remainder(VALUE_MODULUS),
+                    (left - right).remainder(VALUE_MODULUS),
+                    (left * right).remainder(VALUE_MODULUS),
+                ))
+                self.register_buffer("modular_transition", transition, persistent=False)
+            else:
+                self.modular_template_logits = nn.Parameter(4.0 * torch.eye(3))
+            self.modular_projection = nn.Sequential(
+                nn.LayerNorm(VALUE_MODULUS),
+                nn.Linear(VALUE_MODULUS, state_dim),
+                nn.Tanh(),
+            )
+        if self.write_gate_enabled:
+            self.write_gate = nn.Sequential(
+                nn.LayerNorm(2 * state_dim),
+                nn.Linear(2 * state_dim, state_dim),
+                nn.Sigmoid(),
+            )
         self.route_context = nn.Sequential(
             nn.LayerNorm(state_dim), nn.Linear(state_dim, state_dim), nn.Tanh()
         )
@@ -105,7 +163,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 factor_candidate_pool=factor_candidate_pool,
             )
             self.circuits = FactorizedMicroCircuitBank(
-                num_circuits, state_dim, circuit_rank, factor_count
+                num_circuits, state_dim, circuit_rank, factor_count, factor_mix_mode
             )
         else:
             self.router = HierarchicalRouter(
@@ -155,7 +213,22 @@ class DynamicRegisterNeuralEngine(nn.Module):
         operation_mask = operation_tokens.ge(2)
         operands = encoded[:, self.value_start:self.value_start + self.max_ops + 1]
         operand_states = self.operand_encoder(operands)
+        operand_mask = inputs[:, self.value_start:self.value_start + self.max_ops + 1].ne(0)
+        input_context = (
+            (operand_states * operand_mask.unsqueeze(-1)).sum(dim=1)
+            / operand_mask.sum(dim=1, keepdim=True).clamp_min(1).to(operand_states.dtype)
+        )
         accumulator = self.initial_writer(operand_states[:, 0])
+        if self.modular_prior_enabled:
+            initial_values = (
+                inputs[:, self.value_start] - VALUE_TOKEN_OFFSET
+            ).clamp(0, VALUE_MODULUS - 1)
+            if self.modular_prior_mode == "fixed":
+                modular_accumulator = initial_values
+            else:
+                modular_state = nn.functional.one_hot(
+                    initial_values, VALUE_MODULUS
+                ).to(accumulator.dtype)
 
         selected_steps = []
         selected_weights = torch.zeros(
@@ -183,24 +256,90 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     + self.operation_embedding(operation_ids[active_indices, step])
                     + self.step_embedding[step]
                 )
+                if self.input_reinjection_scale:
+                    query = query + self.input_reinjection_scale * input_context[active_indices]
+                if self.modular_prior_enabled:
+                    if self.modular_prior_mode == "fixed":
+                        modular_features = nn.functional.one_hot(
+                            modular_accumulator[active_indices], VALUE_MODULUS
+                        ).to(query.dtype)
+                    else:
+                        modular_features = modular_state[active_indices].to(query.dtype)
+                    query = query + self.modular_projection(modular_features)
                 query = query + 0.25 * self.route_context(query)
+                route_query = query
+                if self.route_context_mode == "operation_step":
+                    route_query = (
+                        self.operation_embedding(operation_ids[active_indices, step])
+                        + self.step_embedding[step]
+                    )
+                    route_query = route_query + 0.25 * self.route_context(route_query)
                 selected, weights, route_stats = self.router(
-                    query,
+                    route_query,
                     exploration_prob=(self.route_exploration_prob if self.training else 0.0),
                 )
                 delta = self._apply_circuits(query, selected, weights)
-                updated = self.register_writer(
+                candidate = self.register_writer(
                     torch.cat([active_accumulator, query + delta], dim=-1)
                 )
+                if self.write_gate_enabled:
+                    gate_input = torch.cat([active_accumulator, query + delta], dim=-1)
+                    gate = self.write_gate(gate_input)
+                    updated = gate * candidate + (1.0 - gate) * active_accumulator
+                else:
+                    updated = candidate
                 next_accumulator = accumulator.clone()
                 next_accumulator[active_indices] = updated
                 accumulator = next_accumulator
+                if self.modular_prior_enabled:
+                    operand_values = (
+                        inputs[active_indices, self.value_start + step + 1]
+                        - VALUE_TOKEN_OFFSET
+                    ).clamp(0, VALUE_MODULUS - 1)
+                    if self.modular_prior_mode == "fixed":
+                        modular_updated = self.modular_transition[
+                            operation_ids[active_indices, step],
+                            modular_accumulator[active_indices],
+                            operand_values,
+                        ]
+                        next_modular_accumulator = modular_accumulator.clone()
+                        next_modular_accumulator[active_indices] = modular_updated
+                        modular_accumulator = next_modular_accumulator
+                    else:
+                        modular_primitives = torch.stack((
+                            TrainableModularTemplateRegister._add_state(
+                                modular_state[active_indices], operand_values),
+                            TrainableModularTemplateRegister._subtract_state(
+                                modular_state[active_indices], operand_values),
+                            TrainableModularTemplateRegister._multiply_state(
+                                modular_state[active_indices], operand_values),
+                        ), dim=1)
+                        template_weights = nn.functional.softmax(
+                            self.modular_template_logits[
+                                operation_ids[active_indices, step]
+                            ], dim=-1
+                        )
+                        modular_updated = torch.einsum(
+                            "bt,btv->bv", template_weights, modular_primitives
+                        )
+                        next_modular_state = modular_state.clone()
+                        next_modular_state[active_indices] = modular_updated
+                        modular_state = next_modular_state
                 selected_step[active_indices] = selected
                 selected_weights[active_indices, step] = weights
                 step_entropies[active_indices, step] = route_stats["router_entropy"]
                 executed_mask[active_indices, step] = True
             selected_steps.append(selected_step)
-            step_logits.append(self.output(accumulator))
+            step_state = accumulator
+            if self.modular_prior_enabled:
+                if self.modular_prior_mode == "fixed":
+                    step_features = nn.functional.one_hot(
+                        modular_accumulator, VALUE_MODULUS
+                    ).to(accumulator.dtype)
+                else:
+                    step_features = modular_state
+                step_state = step_state + self.modular_projection(step_features)
+            step_logits.append(self.output(step_state))
 
         stats = {
             "active_circuits": torch.tensor(self.router.active_circuits, device=device),
@@ -233,6 +372,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
             + count_parameters(self.route_context)
             + count_parameters(self.output)
         )
+        if self.write_gate_enabled:
+            shared += count_parameters(self.write_gate)
+        if self.modular_prior_enabled:
+            shared += count_parameters(self.modular_projection)
+            if self.modular_prior_mode == "templates":
+                shared += self.modular_template_logits.numel()
         if self.circuit_bank_mode == "factorized":
             factor_row = (
                 self.circuits.down_factors[0].numel()
@@ -258,4 +403,11 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "max_ops": self.max_ops,
             "circuit_bank_mode": self.circuit_bank_mode,
             "routing_mode": "factorized" if self.circuit_bank_mode == "factorized" else "hierarchical",
+            "input_reinjection_scale": self.input_reinjection_scale,
+            "write_gate": self.write_gate_enabled,
+            "value_encoder_mode": self.value_encoder_mode,
+            "factor_mix_mode": self.factor_mix_mode,
+            "route_context_mode": self.route_context_mode,
+            "modular_prior": self.modular_prior_enabled,
+            "modular_prior_mode": self.modular_prior_mode,
         }

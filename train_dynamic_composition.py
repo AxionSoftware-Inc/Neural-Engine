@@ -32,6 +32,9 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "num_circuits", "circuit_rank", "router_branch", "router_depth",
         "candidate_pool", "active_circuits", "circuit_bank_mode", "factor_count",
         "factor_candidate_pool", "circuit_mode", "route_exploration_prob",
+        "input_reinjection_scale", "write_gate", "value_encoder_mode",
+        "factor_mix_mode", "route_context_mode", "modular_prior",
+        "modular_prior_mode",
     )
     return DynamicRegisterNeuralEngine(**{
         key: config[key] for key in fields if key in config

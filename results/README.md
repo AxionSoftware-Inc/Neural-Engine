@@ -244,3 +244,42 @@ and 34.38% for 300M, so the next bottleneck is value-independent circuit
 generalization rather than raw virtual capacity. See
 `V0_49_DYNAMIC_REGISTER_MACHINE.md`; route instrumentation also shows strong
 reuse of observed virtual routes rather than single-route collapse.
+
+V0.50 isolates the next bottleneck: a 300M model trained on values 0–31
+generalizes to unseen depths 5–6 at 98.44% within that range, but falls to
+33.84% on values 32–63. The operation breakdown shows multiplication transfers
+well while addition/subtraction do not. This is now the acceptance gate for
+the proposal ablations. See `V0_50_DYNAMIC_GENERALIZATION_DIAGNOSTIC.md`.
+
+V0.51 screens proposals 9–15 on the same OOD gate. None produces a reliable
+large jump; state width, gated write, rank, and exploration are rejected.
+Parallel mix is faster but not more accurate, while input reinjection gives
+only a small unconfirmed gain. See `V0_51_DYNAMIC_PROPOSALS_09_15.md`.
+
+V0.52 screens the scalable shared factor mix and then tests 300M, 500M, and
+700M capacity. Shared factor mix raises the 300M depth-holdout mean from
+78.62% to 83.16% across two seeds, but 500M is 83.01% and 700M regresses to
+80.76%; raw capacity is not the bottleneck. The strict unseen-value gate
+remains about 35%. A value-independent operation/step router also falls to
+31.25%, so the remaining problem is register/circuit modular composition, not
+router drift alone. See `V0_52_DYNAMIC_CAPACITY_AND_ROUTING.md`.
+
+V0.53 tests that hypothesis with an exact fixed modular transition control and
+a hybrid structural prior. Both reach 100% on the unseen-value/depth gate,
+which is a strong localization signal but not a learned-generalization claim:
+the control is given the mod-64 algebra. The next accepted experiment is a
+trainable equivariant template bank without a dense transition table. See
+`V0_53_MODULAR_PRIOR_PILOT.md` and the proposal `taklif7.md`.
+
+V0.54 runs that trainable template screen on two seeds. It reaches 100% on the
+same strict OOD gate with 4,169 parameters and no dense transition table.
+This is the strongest current synthetic signal, but it remains conditional on
+the mod-64 structural wiring until a second modulus and sparse-residual
+integration pass. See `V0_54_TRAINABLE_MODULAR_TEMPLATES.md`.
+
+V0.53 tests that hypothesis with an exact fixed modular transition control and
+a hybrid structural prior. Both reach 100% on the unseen-value/depth gate,
+which is a strong localization signal but not a learned-generalization claim:
+the control is given the mod-64 algebra. The next accepted experiment is a
+trainable equivariant template bank without a dense transition table. See
+`V0_53_MODULAR_PRIOR_PILOT.md` and the proposal `taklif7.md`.
