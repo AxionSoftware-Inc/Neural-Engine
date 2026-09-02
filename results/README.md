@@ -214,3 +214,12 @@ distillation plus a low-rank residual helps late-layer pilots but does not
 rescue full-stack 4x routing. An adaptive oracle shows that contiguous Qwen
 chunks require nearly all circuits for teacher-level fidelity, while compact
 nonlinear late-layer FFNs remain a conditional, not yet accepted, direction.
+
+The V0.47 learned-basis and layer-adaptive routing audit is documented in
+`V0_47_LEARNED_BASIS_LAYER_ADAPTIVE.md`. A trainable redundant circuit basis
+does not preserve full-model quality under random 25% or quick 50% execution.
+Per-layer sensitivity is measurable, but a fixed schedule selected on one text
+variant fails on an independent variant. The next accepted test is a global
+end-to-end layer gate with larger independent data, multi-seed validation, and
+an actual grouped-kernel latency measurement; do not scale Qwen transfer to
+1B/1.7B before that gate passes.
