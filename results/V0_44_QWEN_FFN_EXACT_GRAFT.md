@@ -71,6 +71,14 @@ result. In float16, chunk-wise reduction changes rounding across 28 layers
 (max logit difference `0.00842`), so float32 is the strict conversion gate and
 fp16 must use a dtype-appropriate tolerance/perplexity control.
 
+The actual Qwen3-0.6B weight blob was subsequently downloaded and validated as
+`safetensors` (1,503,300,328 bytes, 311 tensors). With those pretrained
+weights, all 28 MLPs were converted and the source model was run before and
+after replacement. After preserving the source Linear GEMM order in the
+all-active path, the observed layer error and full-logit error were both
+exactly `0.0` in float32. Proposal 9 therefore passes on a real pretrained
+checkpoint, not only on the synthetic control.
+
 ## Sparse upper bound and router pilot
 
 The offline oracle selects chunks by computing every chunk contribution first.
@@ -109,9 +117,10 @@ otherwise the router can become the dense bottleneck.
    a 1B model before that gate passes would spend compute without resolving
    the representation mismatch.
 
-The real pretrained checkpoint gate is still pending: the online Qwen weight
-download stalled at a 0-byte incomplete cache file in this environment. No
-claim about Qwen language quality or perplexity is made here.
+The initial checkpoint download stalled once at a 0-byte incomplete cache file,
+but a resumed range download completed it and the real pretrained exact gate
+now passes. The next sparse/hybrid results are recorded separately in
+`V0_45_QWEN_SPARSE_AND_HYBRID.md`.
 
 ## Next experiment
 

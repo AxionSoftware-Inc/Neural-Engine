@@ -199,5 +199,11 @@ the next factorized-capacity and scale-invariant-address experiment.
 
 The V0.44 Qwen-style exact FFN circuit-graft pilot is documented in
 `V0_44_QWEN_FFN_EXACT_GRAFT.md`. The gated FFN conversion is exact on a
-Qwen-shaped control, while the first sparse-router pilot is only a weak signal
-and still needs a real Qwen checkpoint before proposals 11–14 are attempted.
+Qwen-shaped control and was subsequently confirmed on a real Qwen3-0.6B
+checkpoint; the first sparse-router pilot remains only a weak signal.
+
+The V0.45 real Qwen3-0.6B sparse FFN and minimal hybrid audit is documented in
+`V0_45_QWEN_SPARSE_AND_HYBRID.md`. Exact proposal 9 passes; 25% active
+proposal 10/11 routing fails the quality gate even with a local contribution
+oracle, while proposal 12 has a limited middle/late-layer positive; proposal
+13 scaling and deeper proposal 14 stages remain behind the canonical stop gate.

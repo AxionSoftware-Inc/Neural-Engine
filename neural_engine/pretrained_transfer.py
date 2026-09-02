@@ -54,6 +54,9 @@ class SwiGLUCircuitBank(nn.Module):
         self.intermediate_size = int(intermediate_size)
         self.chunk_size = int(chunk_size)
         self.num_circuits = math.ceil(self.intermediate_size / self.chunk_size)
+        self.has_gate_bias = bool(gate_bias)
+        self.has_up_bias = bool(up_bias)
+        self.has_down_bias = bool(down_bias)
 
         self.gate_weight = nn.Parameter(
             torch.empty(self.num_circuits, self.chunk_size, self.hidden_size)
@@ -189,10 +192,63 @@ class SwiGLUCircuitBank(nn.Module):
         outputs = torch.einsum("nck,chk->nch", hidden, self.down_weight)
         return outputs.reshape(*leading_shape, self.num_circuits, self.hidden_size)
 
+    def _source_weights(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Reassemble source Linear orientations for the exact all-active path."""
+        if self.intermediate_size == self.num_circuits * self.chunk_size:
+            gate_weight = self.gate_weight.reshape(self.intermediate_size, self.hidden_size)
+            up_weight = self.up_weight.reshape(self.intermediate_size, self.hidden_size)
+            down_weight = self.down_weight.permute(0, 2, 1).reshape(
+                self.intermediate_size, self.hidden_size
+            ).transpose(0, 1)
+        else:
+            widths = self.chunk_sizes.tolist()
+            gate_weight = torch.cat([
+                self.gate_weight[index, :width]
+                for index, width in enumerate(widths)
+            ], dim=0)
+            up_weight = torch.cat([
+                self.up_weight[index, :width]
+                for index, width in enumerate(widths)
+            ], dim=0)
+            down_weight = torch.cat([
+                self.down_weight[index, :, :width]
+                for index, width in enumerate(widths)
+            ], dim=1)
+        return gate_weight, up_weight, down_weight
+
+    def _source_biases(self) -> tuple[torch.Tensor | None, torch.Tensor | None, torch.Tensor | None]:
+        """Reassemble source bias vectors, preserving absent-bias semantics."""
+        gate_bias = None
+        up_bias = None
+        if self.has_gate_bias:
+            gate_bias = torch.cat([
+                self.gate_bias[index, :width]
+                for index, width in enumerate(self.chunk_sizes.tolist())
+            ], dim=0)
+        if self.has_up_bias:
+            up_bias = torch.cat([
+                self.up_bias[index, :width]
+                for index, width in enumerate(self.chunk_sizes.tolist())
+            ], dim=0)
+        down_bias = self.down_bias if self.has_down_bias else None
+        return gate_bias, up_bias, down_bias
+
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        """Evaluate every copied circuit; equal to the source gated FFN."""
-        outputs = self.chunk_outputs(hidden_states)
-        return outputs.sum(dim=-2) + self.down_bias
+        """Evaluate every copied circuit; equal to the source gated FFN.
+
+        The all-active path reassembles the three source Linear matrices before
+        calling ``F.linear``. This preserves the source GEMM reduction order
+        for strict pretrained-logit equivalence. Sparse execution uses
+        ``forward_selected`` and intentionally avoids this reassembly.
+        """
+        flat, leading_shape = self._validate_hidden(hidden_states)
+        gate_weight, up_weight, down_weight = self._source_weights()
+        gate_bias, up_bias, down_bias = self._source_biases()
+        gate = F.linear(flat, gate_weight, gate_bias)
+        up = F.linear(flat, up_weight, up_bias)
+        hidden = F.silu(gate) * up
+        result = F.linear(hidden, down_weight, down_bias)
+        return result.reshape(*leading_shape, self.hidden_size)
 
     def forward_selected(
         self,
