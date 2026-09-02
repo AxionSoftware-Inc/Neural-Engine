@@ -3,10 +3,13 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-from .circuits import MicroCircuitBank
+from .circuits import (FactorizedMicroCircuitBank, MicroCircuitBank,
+                       SharedResidualMicroCircuitBank)
 from .encoding import VALUE_HARMONICS, encode_tokens
 from .instrumentation import count_parameters
-from .router import HierarchicalRouter, StableFamilyRouter
+from .router import (FixedRoleCellRouter, HierarchicalRouter,
+                      FactorizedRouter, RoleAnchoredRouter,
+                      StableFamilyRouter)
 
 
 class TypedRegisterNeuralEngine(nn.Module):
@@ -39,9 +42,17 @@ class TypedRegisterNeuralEngine(nn.Module):
                  readout_mode: str = "routed",
                  route_query_mode: str = "value_and_type",
                  route_context_dim: int = 32,
+                 pair_mode: str = "concat",
                  routing_mode: str = "global",
                  family_count: int = 9,
                  shared_fraction: float = 0.125,
+                 anchor_branch: int = 4,
+                 anchor_depth: int = 2,
+                 role_count: int = 9,
+                 circuit_bank_mode: str = "independent",
+                 shared_rank: int = 8,
+                 factor_count: int | None = None,
+                 factor_candidate_pool: int | None = None,
                  typed_route_partitions: bool = False,
                  typed_route_shared: bool = False,
                  operator_partition_count: int = 4):
@@ -52,14 +63,22 @@ class TypedRegisterNeuralEngine(nn.Module):
             raise ValueError("TypedRegisterNeuralEngine currently requires internal_steps=3")
         if circuit_mode not in {"parallel", "serial"}:
             raise ValueError("circuit_mode must be 'parallel' or 'serial'")
+        if circuit_bank_mode not in {"independent", "shared_residual", "factorized"}:
+            raise ValueError("circuit_bank_mode must be 'independent', 'shared_residual', or 'factorized'")
         if readout_mode not in {"routed", "direct"}:
             raise ValueError("readout_mode must be 'routed' or 'direct'")
         if route_query_mode not in {"value_and_type", "typed", "compressed"}:
             raise ValueError("route_query_mode must be 'value_and_type', 'typed', or 'compressed'")
-        if routing_mode not in {"global", "family_local"}:
-            raise ValueError("routing_mode must be 'global' or 'family_local'")
+        if pair_mode not in {"concat", "multiplicative"}:
+            raise ValueError("pair_mode must be 'concat' or 'multiplicative'")
+        if routing_mode not in {"global", "family_local", "role_anchored", "role_cell", "factorized"}:
+            raise ValueError("routing_mode must be 'global', 'family_local', 'role_anchored', 'role_cell', or 'factorized'")
         if routing_mode == "family_local" and (typed_route_partitions or typed_route_shared):
             raise ValueError("family_local routing cannot combine with typed route partitions")
+        if routing_mode == "role_anchored" and (typed_route_partitions or typed_route_shared):
+            raise ValueError("role_anchored routing cannot combine with typed route partitions")
+        if routing_mode == "role_cell" and (typed_route_partitions or typed_route_shared):
+            raise ValueError("role_cell routing cannot combine with typed route partitions")
         if route_context_dim < 1 or route_context_dim > state_dim:
             raise ValueError("route_context_dim must be between 1 and state_dim")
         if typed_route_partitions and (
@@ -75,9 +94,16 @@ class TypedRegisterNeuralEngine(nn.Module):
         self.readout_mode = readout_mode
         self.route_query_mode = route_query_mode
         self.route_context_dim = route_context_dim
+        self.pair_mode = pair_mode
         self.routing_mode = routing_mode
         self.family_count = family_count
         self.shared_fraction = shared_fraction
+        self.anchor_branch = anchor_branch
+        self.anchor_depth = anchor_depth
+        self.role_count = role_count
+        self.circuit_bank_mode = circuit_bank_mode
+        self.shared_rank = shared_rank
+        self.factor_count = factor_count
         self.typed_route_partitions = typed_route_partitions
         self.typed_route_shared = typed_route_shared
         self.operator_partition_count = operator_partition_count
@@ -109,6 +135,12 @@ class TypedRegisterNeuralEngine(nn.Module):
             nn.Linear(2 * state_dim, state_dim),
             nn.GELU(),
         )
+        self.pair_product_encoder = (
+            nn.Sequential(
+                nn.LayerNorm(state_dim),
+                nn.Linear(state_dim, state_dim),
+                nn.GELU(),
+            ) if pair_mode == "multiplicative" else None)
         self.operation_embedding = nn.Embedding(3, state_dim)
         self.stage_embedding = nn.Parameter(torch.zeros(3, state_dim))
         self.route_value_encoder = nn.Sequential(
@@ -141,13 +173,42 @@ class TypedRegisterNeuralEngine(nn.Module):
                 routing_capacity=routing_capacity, routing_depth=routing_depth,
                 family_count=family_count, shared_fraction=shared_fraction,
             )
+        elif routing_mode == "role_anchored":
+            self.router = RoleAnchoredRouter(
+                state_dim, num_circuits, router_branch, router_depth,
+                candidate_pool, active_circuits, router_addresses,
+                routing_capacity=routing_capacity, routing_depth=routing_depth,
+                anchor_branch=anchor_branch, anchor_depth=anchor_depth,
+            )
+        elif routing_mode == "role_cell":
+            self.router = FixedRoleCellRouter(
+                state_dim, num_circuits, router_branch, router_depth,
+                candidate_pool, active_circuits, router_addresses,
+                routing_capacity=routing_capacity, routing_depth=routing_depth,
+                role_count=role_count,
+            )
+        elif routing_mode == "factorized":
+            self.router = FactorizedRouter(
+                state_dim, num_circuits, router_branch, router_depth,
+                candidate_pool, active_circuits, router_addresses,
+                routing_capacity=routing_capacity, routing_depth=routing_depth,
+                factor_count=factor_count,
+                factor_candidate_pool=factor_candidate_pool,
+            )
         else:
             self.router = HierarchicalRouter(
                 state_dim, num_circuits, router_branch, router_depth,
                 candidate_pool, active_circuits, router_addresses,
                 routing_capacity=routing_capacity, routing_depth=routing_depth,
             )
-        self.circuits = MicroCircuitBank(num_circuits, state_dim, circuit_rank)
+        if circuit_bank_mode == "shared_residual":
+            self.circuits = SharedResidualMicroCircuitBank(
+                num_circuits, state_dim, circuit_rank, shared_rank)
+        elif circuit_bank_mode == "factorized":
+            self.circuits = FactorizedMicroCircuitBank(
+                num_circuits, state_dim, circuit_rank, factor_count)
+        else:
+            self.circuits = MicroCircuitBank(num_circuits, state_dim, circuit_rank)
         self.output = nn.Sequential(nn.LayerNorm(state_dim), nn.Linear(state_dim, num_classes))
 
         nn.init.normal_(self.position_embedding, std=0.02)
@@ -175,6 +236,12 @@ class TypedRegisterNeuralEngine(nn.Module):
             return self.circuits.forward_serial(query, selected, weights)
         return self.circuits(query, selected, weights)
 
+    def _compose_pair(self, left: torch.Tensor, right: torch.Tensor) -> torch.Tensor:
+        pair = self.pair_encoder(torch.cat([left, right], dim=-1))
+        if self.pair_product_encoder is not None:
+            pair = pair + self.pair_product_encoder(left * right)
+        return pair
+
     def _route_stage(self, query: torch.Tensor, stage: int,
                      operator_ids: torch.Tensor,
                      selected_steps: list[torch.Tensor],
@@ -182,7 +249,8 @@ class TypedRegisterNeuralEngine(nn.Module):
                      route_gains: torch.Tensor,
                      step_entropies: torch.Tensor,
                      family_steps: list[torch.Tensor],
-                     shared_fallback_fractions: list[torch.Tensor]) -> torch.Tensor:
+                     shared_fallback_fractions: list[torch.Tensor],
+                     anchor_steps: list[torch.Tensor]) -> torch.Tensor:
         # Operator and stage are part of the router query, so equal primitive
         # operations can reuse a circuit family across different compositions.
         routed_query = query + self.stage_embedding[stage]
@@ -236,6 +304,18 @@ class TypedRegisterNeuralEngine(nn.Module):
                 router_query, family_ids,
                 exploration_prob=exploration_prob,
             )
+        elif self.routing_mode == "role_anchored":
+            role_query = self.operation_embedding(operator_ids) + self.stage_embedding[stage]
+            selected, weights, route_stats = self.router(
+                router_query, role_query,
+                exploration_prob=exploration_prob,
+            )
+        elif self.routing_mode == "role_cell":
+            role_ids = operator_ids + (3 * stage)
+            selected, weights, route_stats = self.router(
+                router_query, role_ids,
+                exploration_prob=exploration_prob,
+            )
         else:
             selected, weights, route_stats = self.router(
                 router_query,
@@ -252,6 +332,10 @@ class TypedRegisterNeuralEngine(nn.Module):
         if self.routing_mode == "family_local":
             family_steps.append(route_stats["family_ids"])
             shared_fallback_fractions.append(route_stats["shared_selected_fraction"])
+        elif self.routing_mode == "role_anchored":
+            anchor_steps.append(route_stats["anchor_ids"])
+        elif self.routing_mode == "role_cell":
+            anchor_steps.append(route_stats["role_ids"])
         return delta * route_stats["route_gain"].unsqueeze(-1)
 
     def forward(self, inputs: torch.Tensor, adaptive: bool | None = None,
@@ -270,30 +354,34 @@ class TypedRegisterNeuralEngine(nn.Module):
         selected_steps: list[torch.Tensor] = []
         family_steps: list[torch.Tensor] = []
         shared_fallback_fractions: list[torch.Tensor] = []
+        anchor_steps: list[torch.Tensor] = []
         selected_weights = torch.zeros(
             batch_size, self.internal_steps, self.router.active_circuits, device=device)
         route_gains = torch.ones(batch_size, self.internal_steps, device=device)
         step_entropies = torch.zeros(batch_size, self.internal_steps, device=device)
 
-        first_pair = self.pair_encoder(torch.cat([operands[:, 0], operands[:, 1]], dim=-1))
+        first_pair = self._compose_pair(operands[:, 0], operands[:, 1])
         first_query = first_pair + op1
         first_delta = self._route_stage(
             first_query, 0, op_ids[:, 0], selected_steps, selected_weights,
-            route_gains, step_entropies, family_steps, shared_fallback_fractions)
+            route_gains, step_entropies, family_steps, shared_fallback_fractions,
+            anchor_steps)
         partial = self.partial_writer(torch.cat([first_query, first_delta], dim=-1))
 
-        second_pair = self.pair_encoder(torch.cat([partial, operands[:, 2]], dim=-1))
+        second_pair = self._compose_pair(partial, operands[:, 2])
         second_query = second_pair + op2
         second_delta = self._route_stage(
             second_query, 1, op_ids[:, 1], selected_steps, selected_weights,
-            route_gains, step_entropies, family_steps, shared_fallback_fractions)
+            route_gains, step_entropies, family_steps, shared_fallback_fractions,
+            anchor_steps)
         final = self.final_writer(torch.cat([second_query, second_delta], dim=-1))
 
         readout_query = final
         if self.readout_mode == "routed":
             readout_delta = self._route_stage(
                 readout_query, 2, op_ids[:, 1], selected_steps, selected_weights,
-                route_gains, step_entropies, family_steps, shared_fallback_fractions)
+                route_gains, step_entropies, family_steps, shared_fallback_fractions,
+                anchor_steps)
             readout = self.readout_writer(torch.cat([readout_query, readout_delta], dim=-1))
         else:
             # The final register is already the typed result of op2.  A third
@@ -332,11 +420,29 @@ class TypedRegisterNeuralEngine(nn.Module):
                 "shared_selected_fraction": torch.stack(
                     shared_fallback_fractions).mean(),
             })
+        elif self.routing_mode == "role_anchored":
+            stats.update({"anchor_ids": torch.stack(anchor_steps, dim=1)})
+        elif self.routing_mode == "role_cell":
+            stats.update({"role_cell_ids": torch.stack(anchor_steps, dim=1)})
         self._last_route = stats
         return step_logits[:, -1], stats
 
     def parameter_report(self) -> dict[str, int | float]:
         total = count_parameters(self)
+        router_level_projections = getattr(self.router, "level_projections", None)
+        router_level_bias = getattr(self.router, "level_bias", None)
+        if router_level_projections is None:
+            router_level_projections = getattr(
+                self.router, "local_projections", torch.empty(0))
+        if router_level_bias is None:
+            router_level_bias = getattr(self.router, "local_bias", torch.empty(0))
+        router_extra = (
+            getattr(self.router, "family_embeddings", torch.empty(0)).numel()
+            + getattr(self.router, "anchor_projections", torch.empty(0)).numel()
+            + getattr(self.router, "anchor_bias", torch.empty(0)).numel()
+            + getattr(self.router, "anchor_embeddings", torch.empty(0)).numel()
+            + getattr(self.router, "role_embeddings", torch.empty(0)).numel()
+        )
         shared = (
             count_parameters(self.token_embedding)
             + self.position_embedding.numel()
@@ -345,6 +451,8 @@ class TypedRegisterNeuralEngine(nn.Module):
             + (count_parameters(self.value_encoder) if self.value_encoder is not None else 0)
             + count_parameters(self.operand_encoder)
             + count_parameters(self.pair_encoder)
+            + (count_parameters(self.pair_product_encoder)
+               if self.pair_product_encoder is not None else 0)
             + count_parameters(self.operation_embedding)
             + self.stage_embedding.numel()
             + count_parameters(self.route_value_encoder)
@@ -352,30 +460,59 @@ class TypedRegisterNeuralEngine(nn.Module):
             + count_parameters(self.partial_writer)
             + count_parameters(self.final_writer)
             + count_parameters(self.readout_writer)
-            + self.router.level_projections.numel()
-            + self.router.level_bias.numel()
+            + router_level_projections.numel()
+            + router_level_bias.numel()
+            + router_extra
             + count_parameters(self.output)
         )
-        one_circuit = (
-            self.circuits.down[0].numel()
-            + self.circuits.up[0].numel()
-            + self.circuits.bias[0].numel()
-        )
-        candidate_key_params = self.router.keys[0].numel() * self.router.candidate_pool
-        active = shared + candidate_key_params + one_circuit * self.router.active_circuits
+        if hasattr(self.router, "factor_candidate_pool"):
+            candidate_key_params = (
+                self.router.keys[0].numel() * self.router.factor_candidate_pool * 2)
+        else:
+            candidate_key_params = self.router.keys[0].numel() * self.router.candidate_pool
+        if self.circuit_bank_mode == "factorized":
+            factor_row_params = (
+                self.circuits.down_factors[0].numel()
+                + self.circuits.up_factors[0].numel()
+                + self.circuits.bias_factors[0].numel()
+                + self.circuits.factor_mix[0].numel()
+            )
+            active_circuit_params = factor_row_params * self.router.active_circuits * 2
+            active = shared + candidate_key_params + active_circuit_params
+        else:
+            one_circuit = (
+                self.circuits.down[0].numel()
+                + self.circuits.up[0].numel()
+                + self.circuits.bias[0].numel()
+            )
+            shared_bank_params = sum(parameter.numel() for name, parameter
+                                      in self.circuits.named_parameters()
+                                      if name.startswith("shared_"))
+            active_circuit_params = one_circuit * self.router.active_circuits
+            active = (shared + shared_bank_params + candidate_key_params
+                      + active_circuit_params)
         return {
             "total_params": total,
             "active_params_estimate": active,
             "active_fraction": active / total,
-            "active_circuit_params": one_circuit * self.router.active_circuits,
+            "active_circuit_params": active_circuit_params,
             "route_exploration_prob": self.route_exploration_prob,
             "register_graph": "operands->partial->final->readout",
             "readout_mode": self.readout_mode,
             "route_query_mode": self.route_query_mode,
             "route_context_dim": self.route_context_dim,
+            "pair_mode": self.pair_mode,
             "routing_mode": self.routing_mode,
             "family_count": self.family_count,
             "shared_fraction": self.shared_fraction,
+            "anchor_branch": self.anchor_branch,
+            "anchor_depth": self.anchor_depth,
+            "role_count": self.role_count,
+            "circuit_bank_mode": self.circuit_bank_mode,
+            "shared_rank": self.shared_rank,
+            "factor_count": (self.circuits.factor_count
+                              if self.circuit_bank_mode == "factorized" else 0),
+            "factor_candidate_pool": getattr(self.router, "factor_candidate_pool", 0),
             "typed_route_partitions": self.typed_route_partitions,
             "typed_route_shared": self.typed_route_shared,
         }

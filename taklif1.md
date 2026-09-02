@@ -165,3 +165,26 @@ arxitekturaviy hal qilishga qaratilgan.
 V0.32dagi family-local router ham sinab ko‘rildi va rad qilindi. 20Mda
 all-pairs 57.76%, hidden full-domain 61.37% berdi; reference mos ravishda
 58.10% va 64.89% edi. Bu variant 100M/300Mga ko‘tarilmadi.
+
+V0.33dagi role-anchored router 20M hidden full-domain accuracy’ni 71.13%ga
+oshirdi, ammo 100Mda 78.32% bo‘lib, eski 100M reference 89.16%dan past qoldi.
+V0.34 fixed role-cell routing 20Mda 78.28% hidden berdi, lekin all-pairs
+57.93% va 100M all-pairs 57.08% bo‘ldi; ikkalasi ham scaling uchun rad qilindi.
+
+V0.35 shared-residual circuit bank ham rad qilindi: 20M all-pairs 57.61%,
+hidden 60.49%.
+
+V0.36 multiplicative register interaction esa yangi kuchli quality reference
+bo‘ldi. 20M all-pairs full 64³ grid 94.95%, hidden full grid 97.27% chiqdi.
+100M ayni arxitektura 94.13% berdi, ya’ni interaction muammosi hal bo‘lgan,
+ammo capacity scaling hali monoton emas. Tafsilotlar
+`results/V0_36_MULTIPLICATIVE_REGISTER_WRITE.md`da; keyingi taklif
+`taklif5.md`dagi factorized/reusable basis bank.
+
+V0.37 factorized/reusable basis bank bu muammoni all-pairs nazoratida tuzatdi:
+20M/100M/300M virtual scale full grid mos ravishda 96.22%/96.25%/96.40%.
+Fizik parametrlar 2.60M/5.71M/12.64M, active estimate esa taxminan 1.79M
+bo‘lib qoldi. Hidden-stage 20M/100M/300M 98.66%/97.15%/96.39% bo‘ldi; shu
+sabab all-pairs scaling ijobiy qabul qilindi, hidden scaling esa ikkinchi seed
+va curriculum bilan yana tekshirilishi kerak. Tafsilot
+`results/V0_37_FACTORIZED_VIRTUAL_CAPACITY.md`da.

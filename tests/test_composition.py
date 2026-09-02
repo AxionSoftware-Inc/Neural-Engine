@@ -191,3 +191,105 @@ def test_typed_register_family_local_router_rejects_legacy_partition_flags():
             candidate_pool=4, active_circuits=2, internal_steps=3, slot_count=6,
             routing_mode="family_local", typed_route_partitions=True,
         )
+
+
+def test_typed_register_role_anchored_router_separates_role_and_value_queries():
+    model = TypedRegisterNeuralEngine(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=64, circuit_rank=4, router_branch=2, router_depth=3,
+        candidate_pool=4, active_circuits=2, internal_steps=3, slot_count=6,
+        numeric_value_encoding=True, routing_mode="role_anchored",
+        anchor_branch=2, anchor_depth=2,
+    )
+    generator = CompositionalProgramGenerator(seed=10, split="heldout")
+    batch = generator.task_balanced_batch(8)
+    logits, stats = model(batch.inputs)
+    assert logits.shape == (8, 64)
+    assert stats["selected_ids"].shape == (8, 3, 2)
+    assert stats["anchor_ids"].shape == (8, 3)
+    assert model.router.anchor_count == 4
+    assert model.parameter_report()["routing_mode"] == "role_anchored"
+
+
+def test_typed_register_fixed_role_cell_router_keeps_full_local_candidate_pool():
+    model = TypedRegisterNeuralEngine(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=64, circuit_rank=4, router_branch=2, router_depth=3,
+        candidate_pool=4, active_circuits=2, internal_steps=3, slot_count=6,
+        numeric_value_encoding=True, routing_mode="role_cell", role_count=9,
+    )
+    generator = CompositionalProgramGenerator(seed=11, split="heldout")
+    batch = generator.task_balanced_batch(8)
+    logits, stats = model(batch.inputs)
+    assert logits.shape == (8, 64)
+    assert stats["selected_ids"].shape == (8, 3, 2)
+    assert stats["role_cell_ids"].shape == (8, 3)
+    assert model.router.candidate_pool == 4
+    assert model.parameter_report()["routing_mode"] == "role_cell"
+
+
+def test_typed_register_shared_residual_bank_preserves_sparse_route_shape():
+    model = TypedRegisterNeuralEngine(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=64, circuit_rank=4, router_branch=2, router_depth=3,
+        candidate_pool=4, active_circuits=2, internal_steps=3, slot_count=6,
+        numeric_value_encoding=True, circuit_bank_mode="shared_residual",
+        shared_rank=2,
+    )
+    generator = CompositionalProgramGenerator(seed=12, split="heldout")
+    batch = generator.task_balanced_batch(8)
+    logits, stats = model(batch.inputs)
+    assert logits.shape == (8, 64)
+    assert stats["selected_ids"].shape == (8, 3, 2)
+    assert model.circuits.shared_down.shape == (32, 2)
+    assert model.parameter_report()["circuit_bank_mode"] == "shared_residual"
+
+
+def test_typed_register_multiplicative_pair_mode_adds_structured_interaction():
+    model = TypedRegisterNeuralEngine(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=64, circuit_rank=4, router_branch=2, router_depth=3,
+        candidate_pool=4, active_circuits=2, internal_steps=3, slot_count=6,
+        numeric_value_encoding=True, pair_mode="multiplicative",
+    )
+    generator = CompositionalProgramGenerator(seed=13, split="heldout")
+    batch = generator.task_balanced_batch(8)
+    logits, _ = model(batch.inputs)
+    assert logits.shape == (8, 64)
+    assert model.pair_product_encoder is not None
+    assert model.parameter_report()["pair_mode"] == "multiplicative"
+
+
+def test_typed_register_factorized_bank_preserves_virtual_capacity_and_route_shape():
+    model = TypedRegisterNeuralEngine(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=64, circuit_rank=4, router_branch=2, router_depth=3,
+        candidate_pool=4, active_circuits=2, internal_steps=3, slot_count=6,
+        numeric_value_encoding=True, pair_mode="multiplicative",
+        circuit_bank_mode="factorized", factor_count=8,
+    )
+    generator = CompositionalProgramGenerator(seed=14, split="heldout")
+    batch = generator.task_balanced_batch(8)
+    logits, stats = model(batch.inputs)
+    assert logits.shape == (8, 64)
+    assert stats["selected_ids"].shape == (8, 3, 2)
+    assert model.circuits.factor_count == 8
+    assert model.parameter_report()["circuit_bank_mode"] == "factorized"
+
+
+def test_typed_register_factorized_router_addresses_factor_pairs():
+    model = TypedRegisterNeuralEngine(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=64, circuit_rank=4, router_branch=2, router_depth=3,
+        candidate_pool=4, active_circuits=2, internal_steps=3, slot_count=6,
+        numeric_value_encoding=True, pair_mode="multiplicative",
+        routing_mode="factorized", circuit_bank_mode="factorized",
+        factor_count=8,
+    )
+    generator = CompositionalProgramGenerator(seed=15, split="heldout")
+    batch = generator.task_balanced_batch(8)
+    logits, stats = model(batch.inputs)
+    assert logits.shape == (8, 64)
+    assert stats["selected_ids"].shape == (8, 3, 2)
+    assert model.router.factor_candidate_pool == 2
+    assert model.parameter_report()["routing_mode"] == "factorized"

@@ -1,6 +1,6 @@
 # Taklif 3 — role-anchor global bank routing
 
-Status: **keyingi tajriba; hali implementatsiya qilinmagan**
+Status: **V0.33 va V0.34da sinab ko‘rildi; scale uchun rad qilindi**
 
 ## Nega taklif 2 emas
 
@@ -105,3 +105,17 @@ Agar role/value query separation ham 20Mda baseline’ni tiklamasa, routing
 muammosi emas, micro-circuit yoki fixed 384-d working state fundamental
 bottleneck bo‘lishi mumkin. Unda keyingi yo‘l route tuning emas, structured
 multi-slot memory yoki shared-basis circuit arxitekturasi bo‘ladi.
+
+## Natija
+
+V0.33 role-anchor 20Mda 71.13% hidden full-domain berdi, ammo 100Mda 78.32%
+bo‘lib, 100M reference 89.16%ni tiklay olmadi. Route audit coarse tree faqat
+3/16 va 4/16 anchor cellga qulaganini ko‘rsatdi.
+
+V0.34 fixed role-cell 20Mda 78.28% hidden berdi, ammo all-pairs 57.93% va
+100M all-pairs 57.08% bo‘ldi. Bu qattiq cell’lar learned collapse’ni yo‘qotgan
+bo‘lsa ham, katta bankdagi local routing underfitini hal qilmadi.
+
+Shuning uchun V0.33/V0.34 100M/300Mga ko‘tarilmadi. Keyingi taklif routing
+topologiyasini emas, mustaqil circuit rows orasidagi credit-assignmentni
+shared computation orqali tekshiradi.

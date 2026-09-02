@@ -106,12 +106,27 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 selected = selected.detach().reshape(-1)
                 selected = selected[selected.ge(0)].unique()
                 if selected.numel():
-                    optimizer.set_active_rows({
-                        model.circuits.down: selected,
-                        model.circuits.up: selected,
-                        model.circuits.bias: selected,
-                        model.router.keys: selected,
-                    })
+                    router_rows = selected
+                    if hasattr(model.router, "factor_candidate_pool"):
+                        first, second = model.router._factor_ids(selected)
+                        router_rows = torch.cat([first, second]).unique()
+                    active_rows = {model.router.keys: router_rows}
+                    if hasattr(model.circuits, "down"):
+                        active_rows.update({
+                            model.circuits.down: selected,
+                            model.circuits.up: selected,
+                            model.circuits.bias: selected,
+                        })
+                    elif hasattr(model.circuits, "down_factors"):
+                        first, second = model.circuits._factor_ids(selected)
+                        factor_rows = torch.cat([first, second]).unique()
+                        active_rows.update({
+                            model.circuits.down_factors: factor_rows,
+                            model.circuits.up_factors: factor_rows,
+                            model.circuits.bias_factors: factor_rows,
+                            model.circuits.factor_mix: selected,
+                        })
+                    optimizer.set_active_rows(active_rows)
         loss = nn.functional.cross_entropy(logits, batch.targets)
         stage_loss_weight = float(config.get("stage_loss_weight", 0.0))
         if stage_loss_weight and "step_logits" in route_stats:

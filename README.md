@@ -1185,6 +1185,19 @@ nine operator pairs before its hidden-stage adaptation. Strict zero-shot and
 credit-assignment tests are therefore required before any 700M/1B scaling.
 See `results/V0_31_FULL_DOMAIN_QUESTION_AUDIT.md`.
 
+V0.32–V0.35 test family-local, role-cell, and shared-residual routing; each is
+rejected because it does not scale from 20M to the larger bank. V0.36 adds an
+explicit multiplicative operand interaction and raises the 20M full-domain
+all-pairs score to 94.95%, but its independent 100M version falls to 94.13%.
+See `results/V0_36_MULTIPLICATIVE_REGISTER_WRITE.md`.
+
+V0.37 replaces independent circuit rows with a factorized virtual bank. Full
+64³ all-pairs accuracy is 96.22% at 20M, 96.25% at 100M, and 96.40% at 300M,
+while the active estimate remains about 1.79M. The 500M global control falls
+to 94.72%, and V0.38–V0.40 route ablations reach at most 95.55%, so 300M is
+the current best scale point. See
+`results/V0_37_FACTORIZED_VIRTUAL_CAPACITY.md` and `taklif6.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.

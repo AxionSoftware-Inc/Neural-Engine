@@ -137,9 +137,38 @@ The hard operator/stage family split was rejected at 20M because it fell below
 the reference on both all-pairs and hidden full-domain quality; it was not
 scaled to larger banks.
 
+V0.33 role-anchor routing is documented in `V0_33_ROLE_ANCHORED_ROUTING.md`.
+It improves 20M hidden quality but collapses onto too few coarse cells and does
+not scale to 100M. V0.34 fixed role-cell routing is documented in
+`V0_34_FIXED_ROLE_CELL_ROUTING.md`; it prevents anchor collapse but still loses
+100M all-pairs quality.
+
+V0.35 shared-residual routing is documented in
+`V0_35_SHARED_RESIDUAL_BANK.md`; it is rejected because the common path did not
+recover the 20M reference. V0.36 multiplicative register interaction is
+documented in `V0_36_MULTIPLICATIVE_REGISTER_WRITE.md`; it is the current
+quality reference, reaching 94.95% at 20M but 94.13% at 100M.
+
+V0.37 factorized virtual capacity is documented in
+`V0_37_FACTORIZED_VIRTUAL_CAPACITY.md`. It reaches 96.22%, 96.25%, and 96.40%
+at 20M, 100M, and 300M virtual scale respectively, with roughly 1.79M active
+parameters throughout. Its hidden-stage score is still non-monotonic, so
+hidden composition scaling remains an open validation task.
+
+V0.38 factor-address routing and V0.39 factor-pair bilinear routing are
+documented in `V0_38_FACTOR_ADDRESS_ROUTER.md` and
+`V0_39_FACTOR_PAIR_BILINEAR_ROUTER.md`. They improve the 500M global-factor
+baseline only to 95.55% and 95.43%, respectively, so neither replaces the
+V0.37 global factorized default.
+
+V0.40 depth-capped routing is documented in `V0_40_DEPTH_CAPPED_ROUTING.md`.
+It reaches 94.81% at 500M, only 0.09 points above the depth-6 control, so the
+500M regression is not explained by tree depth alone. `taklif6.md` records the
+next second-seed, longer hidden curriculum, and parent-growth validation plan.
+
 The proposal history is indexed in the repository root: `taklif.md` is the
 original scale/systems proposal, `taklif1.md` records completed experiments
-and rejected variants, and `taklif2.md` records the next untested
-and rejected variants, `taklif2.md` records the tested-and-rejected family-local
-architecture, and `taklif3.md` records the next untested role-anchor routing
-architecture.
+and rejected variants, `taklif2.md` records family-local routing history,
+`taklif3.md` records role-anchor and fixed role-cell routing, `taklif4.md`
+records the tested-and-rejected shared-residual bank, and `taklif5.md` records
+the next factorized-capacity and scale-invariant-address experiment.
