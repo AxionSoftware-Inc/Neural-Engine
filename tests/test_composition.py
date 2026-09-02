@@ -33,6 +33,25 @@ def test_composition_batch_contains_partial_targets_and_expected_tokens():
     assert batch.depths.eq(3).all()
 
 
+def test_composition_generator_can_use_a_disjoint_value_range():
+    generator = CompositionalProgramGenerator(
+        seed=2, split="all", value_min=32, value_max=63)
+    batch = generator.balanced_batch(examples_per_task=2)
+    assert batch.inputs[:, 3:6].ge(64).all()
+    assert batch.inputs[:, 3:6].le(95).all()
+
+
+def test_composition_generator_can_hold_out_operand_combinations():
+    train = CompositionalProgramGenerator(
+        seed=2, split="all", combination_split="train")
+    heldout = CompositionalProgramGenerator(
+        seed=2, split="all", combination_split="heldout")
+    train_batch = train.balanced_batch(examples_per_task=64)
+    heldout_batch = heldout.balanced_batch(examples_per_task=64)
+    assert train_batch.inputs.shape[0] == 9 * 64
+    assert heldout_batch.inputs.shape[0] == 9 * 64
+
+
 def test_apply_operation_rejects_unknown_programs():
     with pytest.raises(ValueError):
         apply_operation("divide", 4, 2)

@@ -68,13 +68,23 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     else:
         device = torch.device(args.device)
     heldout_pairs = tuple(tuple(pair) for pair in config.get("heldout_pairs", []))
+    train_value_min = int(config.get("train_value_min", 0))
+    train_value_max = int(config.get("train_value_max", 63))
+    eval_value_min = int(config.get("eval_value_min", 0))
+    eval_value_max = int(config.get("eval_value_max", 63))
+    train_combination_split = str(config.get("train_combination_split", "all"))
+    eval_combination_split = str(config.get("eval_combination_split", "all"))
     train_generator = CompositionalProgramGenerator(
         seq_len=int(config["seq_len"]), seed=int(config["seed"]) + 1,
-        split="train", heldout_pairs=heldout_pairs)
+        value_min=train_value_min, value_max=train_value_max,
+        split="train", heldout_pairs=heldout_pairs,
+        combination_split=train_combination_split)
     evaluation_split = "heldout" if heldout_pairs else "all"
     heldout_generator = CompositionalProgramGenerator(
         seq_len=int(config["seq_len"]), seed=int(config["seed"]) + 2,
-        split=evaluation_split, heldout_pairs=heldout_pairs)
+        value_min=eval_value_min, value_max=eval_value_max,
+        split=evaluation_split, heldout_pairs=heldout_pairs,
+        combination_split=eval_combination_split)
     model = make_model(config).to(device)
     if args.init_checkpoint:
         initialization = torch.load(Path(args.init_checkpoint), map_location="cpu", weights_only=True)
@@ -179,6 +189,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "optimizer": str(config.get("optimizer", "adamw")),
         "heldout_pairs": [list(pair) for pair in heldout_pairs],
         "evaluation_split": evaluation_split,
+        "train_value_range": [train_value_min, train_value_max],
+        "eval_value_range": [eval_value_min, eval_value_max],
+        "train_combination_split": train_combination_split,
+        "eval_combination_split": eval_combination_split,
         "train": train_eval,
         "heldout": heldout_eval,
         "train_loss_first": losses[0],

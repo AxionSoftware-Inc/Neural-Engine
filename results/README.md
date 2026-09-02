@@ -180,6 +180,16 @@ step hidden adaptation reaches 99.32% on the two held-out pairs and 99.77% on
 all nine pairs after adaptation. This is a strong warm-start result, not yet a
 multi-seed scaling law; second-seed growth and OOD composition remain next.
 
+V0.43 completes the second-seed, OOD, and 700M feasibility follow-up in
+`V0_43_OOD_AND_700M_GROWTH.md`. Seed-18 500M parent-growth reaches 99.67%
+full-grid accuracy, and 500M reaches 99.68% on a true 25%-triple combination
+holdout. A 700M parent-growth screen reaches 99.82% after 3k steps and 99.66%
+after a clean 10k run with the same 1.79M active estimate. The unseen value
+range remains difficult: training on 0–31 and evaluating on 32–63 gives only
+27.35% at 300M and 28.57% at 500M. Capacity scaling is accepted for supported
+and structured composition, while representation/teacher transfer is the next
+generalization target.
+
 The proposal history is indexed in the repository root: `taklif.md` is the
 original scale/systems proposal, `taklif1.md` records completed experiments
 and rejected variants, `taklif2.md` records family-local routing history,

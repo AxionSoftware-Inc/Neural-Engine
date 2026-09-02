@@ -1210,6 +1210,17 @@ OOD composition tests remain before a 700M/1B scaling claim. See
 `results/V0_41_SEED_AND_HIDDEN_EXPLORATION.md` and
 `results/V0_42_PARENT_GROWTH_FACTORIZED.md`.
 
+V0.43 completes the second-seed, OOD, and 700M follow-up. Seed-18 500M growth
+reaches 99.67%, while a 500M growth model trained with 25% of operand triples
+held out reaches 99.68% on the deterministic held-out subset. A 700M parent-
+growth model reaches 99.66% after 10k steps with the same estimated 1.79M
+active path. A stricter unseen-range test—train only on values 0–31, evaluate
+on 32–63—remains low at 27.35% for 300M and 28.57% for 500M; typed-only
+routing does not fix it. Therefore parent-growth is accepted for supported and
+structured composition, but representation/teacher transfer is required
+before claiming generalization or moving directly to 1B. See
+`results/V0_43_OOD_AND_700M_GROWTH.md`.
+
 Do not assume any result beyond the recorded measurements.
 
 This repository should preserve negative results as carefully as positive ones.

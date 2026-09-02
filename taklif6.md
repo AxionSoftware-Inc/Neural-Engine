@@ -1,6 +1,6 @@
 # Taklif 6 — validation of hidden scaling and capacity growth
 
-Status: **parent-growth validation ijobiy yakunlandi; keyingi qadam second-seed va OOD tekshiruv**
+Status: **500M/700M parent-growth ijobiy; unseen-range generalization keyingi asosiy muammo**
 
 ## Hozirgi xulosa
 
@@ -32,22 +32,36 @@ ko‘r-ko‘rona kattalashtirish to‘xtatildi.
    adaptation 99.32%, barcha 9 juftlik post-adaptation 99.77% bo‘ldi.
    Tafsilot `results/V0_42_PARENT_GROWTH_FACTORIZED.md`da.
 
+## Yakuniy yangi natijalar
+
+1. 500M parent-growth seed18 full-grid: **99.6675%**; seed17/18 mean
+   **99.6622%**.
+2. Combination-holdout protokoli (har pairdagi 25% operand uchligi held-out)
+   300Mda 91.49%, 500M parent-growthda **99.68%** berdi.
+3. 0–31da train, 32–63da OOD evaluation 300Mda 27.35%, 500Mda 28.57%
+   bo‘ldi. Typed-only router 28.14% berdi, ya’ni routingni value’dan ajratish
+   yetarli bo‘lmadi.
+4. 500Mdan 700Mga parent-growth 3k screen’da 99.816%, clean 10k run’da
+   **99.663%** berdi; active estimate 1.792M bo‘lib qoldi.
+
 ## Keyingi yo‘l
 
-1. Parent-growth 500Mni kamida yana bir seed bilan qayta tekshirish.
-2. OOD composition savollarini qo‘shish; faqat shu `64^3` gridga tayanmaslik.
-3. Shu ikki tekshiruv ijobiy bo‘lsa, xuddi shu parent-growth usulida 700M
-   feasibility screen; scratch 700Mni asosiy yo‘l sifatida ishlatmaslik.
-4. OOD yoki second-seed natijasi salbiy bo‘lsa, yangi arxitektura variantiga
-   o‘tishdan oldin route/credit assignment loglarini tekshirish.
+1. 700M checkpointni quality control sifatida muzlatish.
+2. Unseen-range muammosi uchun representation yoki teacher-distillation
+   variantini sinash; raw Qwen3 Transformer neuronlarini to‘g‘ridan-to‘g‘ri
+   ko‘chirmaslik.
+3. Qwen3-style teacher → Neural Engine logit/activation adapter pilotini
+   kichik modelda o‘lchash.
+4. Teacher/generalization natijasi ijobiy bo‘lsa, keyin 1B feasibility; salbiy
+   bo‘lsa, typed-register register/circuit objective’ini qayta ko‘rib chiqish.
 
 ## Qabul mezonlari
 
 - Ikkinchi seed 300M all-pairs natijani 95%dan pastga tushirmasligi;
 - hidden full-grid variance 20M/100M/300M orasida tushuntiriladigan bo‘lishi;
 - 10k hidden adaptation 5kdan yaxshiroq yoki kamida teng bo‘lishi;
-- parent-growth 500M 300M reference’ni tiklashi bajarildi; 700M/1Bga o‘tishdan
-  oldin second-seed va OOD natijalari ham ijobiy bo‘lishi kerak.
+- parent-growth 500M va 700M supported/structured compositionda ijobiy chiqdi;
+  unseen value-range muammosi sabab 1Bga shoshilmaslik kerak.
 
 ## Metodik chegara
 
@@ -63,3 +77,4 @@ avval seed variance va out-of-distribution composition tasdiqlanadi.
 - `results/V0_40_DEPTH_CAPPED_ROUTING.md`.
 - `results/V0_41_SEED_AND_HIDDEN_EXPLORATION.md`;
 - `results/V0_42_PARENT_GROWTH_FACTORIZED.md`.
+- `results/V0_43_OOD_AND_700M_GROWTH.md`.
