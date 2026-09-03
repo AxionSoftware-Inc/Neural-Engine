@@ -25,6 +25,13 @@ reference while using about 1.53M active parameters. The interface improves
 optimization and remains stable, but the saturated task does not yet prove a
 capacity gain. See `V0_68_TYPED_WRITE_LONG_DEPTH.md`.
 
+V0.69 expands the non-modular operand domain from 0--3 to 0--7 and raises the
+output head to 512 classes. The typed-write model reaches only 73.34% mean at
+9,000 steps; a hybrid Fourier screen reaches 68.92%. Both are below the
+89.27% narrow-domain reference, localizing the remaining bottleneck to numeric
+state representation and composition transfer rather than raw capacity. See
+`V0_69_BROAD_VALUE_INTERFACE.md`.
+
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.
