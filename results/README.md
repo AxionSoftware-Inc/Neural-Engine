@@ -19,6 +19,12 @@ adapter reference at unchanged sparse routing capacity. This is the current
 learned reference, pending longer-composition and broader-value validation.
 See `V0_67_TYPED_WRITE_ADAPTER.md`.
 
+V0.68 validates the same typed-write interface on unseen recurrent depths
+5--8. Two 9,000-step seeds reach 99.41% mean, matching the earlier long-depth
+reference while using about 1.53M active parameters. The interface improves
+optimization and remains stable, but the saturated task does not yet prove a
+capacity gain. See `V0_68_TYPED_WRITE_LONG_DEPTH.md`.
+
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.
