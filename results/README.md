@@ -271,6 +271,13 @@ the control is given the mod-64 algebra. The next accepted experiment is a
 trainable equivariant template bank without a dense transition table. See
 `V0_53_MODULAR_PRIOR_PILOT.md` and the proposal `taklif7.md`.
 
+V0.56 adds a reusable Macro-Cell bank with sparse top-1 hierarchical routing.
+The 256-cell screen reaches 78.56% and 75.29% across two seeds versus the
+earlier 20M reference mean of 74.17%, while the active macro estimate stays
+near 34K. The signal is positive but non-monotonic, so staged parent-grown
+macro expansion is required before any 300M+ or billion-parameter claim. See
+`V0_56_MACRO_CELL_SCALING.md`.
+
 V0.54 runs that trainable template screen on two seeds. It reaches 100% on the
 same strict OOD gate with 4,169 parameters and no dense transition table.
 This is the strongest current synthetic signal, but it remains conditional on

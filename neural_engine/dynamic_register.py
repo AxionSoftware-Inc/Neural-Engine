@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import torch
 from torch import nn
 
@@ -13,6 +15,7 @@ from .encoding import (
     encode_tokens,
 )
 from .instrumentation import count_parameters
+from .macro_cells import MacroCellBank
 from .modular_templates import (
     modular_add_state,
     modular_multiply_state,
@@ -59,6 +62,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
         modular_prior_mode: str = "fixed",
         modular_template_init: str = "identity",
         circuit_residual_scale: float = 1.0,
+        macro_cell_count: int = 0,
+        macro_cell_rank: int = 8,
+        macro_cell_depth: int = 4,
+        macro_router_branch: int = 4,
+        macro_router_depth: int | None = None,
+        macro_candidate_pool: int = 4,
+        active_macro_cells: int = 1,
+        macro_cell_scale: float = 1.0,
     ) -> None:
         super().__init__()
         if max_ops < 1:
@@ -86,6 +97,19 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("modular_template_init must be identity or random")
         if circuit_residual_scale < 0.0:
             raise ValueError("circuit_residual_scale must be non-negative")
+        if macro_cell_count < 0:
+            raise ValueError("macro_cell_count must be non-negative")
+        if macro_cell_count:
+            if macro_router_branch < 2:
+                raise ValueError("macro_router_branch must be at least two")
+            if macro_candidate_pool < 1 or macro_candidate_pool > macro_cell_count:
+                raise ValueError("macro_candidate_pool must fit the macro bank")
+            if active_macro_cells < 1 or active_macro_cells > macro_candidate_pool:
+                raise ValueError(
+                    "active_macro_cells must fit the macro candidate pool"
+                )
+        if macro_cell_scale < 0.0:
+            raise ValueError("macro_cell_scale must be non-negative")
 
         self.max_ops = max_ops
         self.seq_len = seq_len
@@ -103,6 +127,13 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.modular_prior_mode = modular_prior_mode
         self.modular_template_init = modular_template_init
         self.circuit_residual_scale = float(circuit_residual_scale)
+        self.macro_cell_count = int(macro_cell_count)
+        self.macro_cell_rank = int(macro_cell_rank)
+        self.macro_cell_depth = int(macro_cell_depth)
+        self.macro_router_branch = int(macro_router_branch)
+        self.macro_candidate_pool = int(macro_candidate_pool)
+        self.active_macro_cells = int(active_macro_cells)
+        self.macro_cell_scale = float(macro_cell_scale)
         self.adaptive_halting = False
         self.adaptive_inference = False
         self.value_start = 1 + max_ops
@@ -188,6 +219,34 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 candidate_pool, active_circuits, 1
             )
             self.circuits = MicroCircuitBank(num_circuits, state_dim, circuit_rank)
+        if self.macro_cell_count:
+            if macro_router_depth is None:
+                depth = 1
+                leaves = macro_router_branch
+                while leaves < self.macro_cell_count:
+                    depth += 1
+                    leaves *= macro_router_branch
+                macro_router_depth = depth
+            if macro_router_depth < 1:
+                raise ValueError("macro_router_depth must be positive")
+            self.macro_router_depth = int(macro_router_depth)
+            self.macro_router = HierarchicalRouter(
+                state_dim,
+                self.macro_cell_count,
+                macro_router_branch,
+                self.macro_router_depth,
+                macro_candidate_pool,
+                active_macro_cells,
+                1,
+            )
+            self.macro_cell_bank = MacroCellBank(
+                self.macro_cell_count,
+                state_dim,
+                macro_cell_rank,
+                macro_cell_depth,
+            )
+        else:
+            self.macro_router_depth = 0
         self.output = nn.Sequential(nn.LayerNorm(state_dim), nn.Linear(state_dim, num_classes))
 
         nn.init.normal_(self.position_embedding, std=0.02)
@@ -248,10 +307,18 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 ).to(accumulator.dtype)
 
         selected_steps = []
+        macro_selected_steps = []
         selected_weights = torch.zeros(
             batch_size, self.max_ops, self.router.active_circuits, device=device
         )
+        macro_selected_weights = torch.zeros(
+            batch_size,
+            self.max_ops,
+            self.active_macro_cells if self.macro_cell_count else 0,
+            device=device,
+        )
         step_entropies = torch.zeros(batch_size, self.max_ops, device=device)
+        macro_step_entropies = torch.zeros(batch_size, self.max_ops, device=device)
         executed_mask = torch.zeros(
             batch_size, self.max_ops, dtype=torch.bool, device=device
         )
@@ -262,6 +329,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
             selected_step = torch.full(
                 (batch_size, self.router.active_circuits), -1,
                 dtype=torch.long, device=device
+            )
+            macro_selected_step = torch.full(
+                (batch_size, self.active_macro_cells if self.macro_cell_count else 0),
+                -1,
+                dtype=torch.long,
+                device=device,
             )
             if active_indices.numel():
                 active_accumulator = accumulator[active_indices]
@@ -291,6 +364,22 @@ class DynamicRegisterNeuralEngine(nn.Module):
                         + self.step_embedding[step]
                     )
                     route_query = route_query + 0.25 * self.route_context(route_query)
+                if self.macro_cell_count:
+                    macro_selected, macro_weights, macro_route_stats = self.macro_router(
+                        route_query,
+                        exploration_prob=(
+                            self.route_exploration_prob if self.training else 0.0
+                        ),
+                    )
+                    macro_delta = self.macro_cell_bank(
+                        query, macro_selected, macro_weights
+                    )
+                    query = query + self.macro_cell_scale * macro_delta
+                    macro_selected_step[active_indices] = macro_selected
+                    macro_selected_weights[active_indices, step] = macro_weights
+                    macro_step_entropies[active_indices, step] = macro_route_stats[
+                        "router_entropy"
+                    ]
                 selected, weights, route_stats = self.router(
                     route_query,
                     exploration_prob=(self.route_exploration_prob if self.training else 0.0),
@@ -355,6 +444,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 step_entropies[active_indices, step] = route_stats["router_entropy"]
                 executed_mask[active_indices, step] = True
             selected_steps.append(selected_step)
+            macro_selected_steps.append(macro_selected_step)
             step_state = accumulator
             if self.modular_prior_enabled:
                 if self.modular_prior_mode == "fixed":
@@ -372,9 +462,13 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "router_entropy": step_entropies.sum() / executed_mask.sum().clamp_min(1),
             "selected_ids": torch.stack(selected_steps, dim=1),
             "selected_weights": selected_weights,
+            "macro_selected_ids": torch.stack(macro_selected_steps, dim=1),
+            "macro_selected_weights": macro_selected_weights,
             "step_logits": torch.stack(step_logits, dim=1),
             "executed_steps": executed_mask.sum(dim=1),
             "executed_mask": executed_mask,
+            "macro_router_entropy": macro_step_entropies.sum()
+            / executed_mask.sum().clamp_min(1),
         }
         self._last_route = stats
         return stats["step_logits"][:, -1], stats
@@ -420,6 +514,24 @@ class DynamicRegisterNeuralEngine(nn.Module):
             )
             active_circuit_params = one_circuit * self.router.active_circuits
             candidate_params = self.router.keys[0].numel() * self.router.candidate_pool
+        macro_total = 0
+        macro_active = 0
+        if self.macro_cell_count:
+            macro_total = count_parameters(self.macro_router) + count_parameters(
+                self.macro_cell_bank
+            )
+            macro_router_shared = (
+                self.macro_router.level_projections.numel()
+                + self.macro_router.level_bias.numel()
+            )
+            macro_router_candidates = (
+                self.macro_router.keys.shape[1] * self.macro_candidate_pool
+            )
+            macro_active = (
+                macro_router_shared
+                + macro_router_candidates
+                + self.macro_cell_bank.parameters_per_cell * self.active_macro_cells
+            )
         return {
             "total_params": total,
             "active_params_estimate": shared + candidate_params + active_circuit_params,
@@ -437,4 +549,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "modular_prior_mode": self.modular_prior_mode,
             "modular_template_init": self.modular_template_init,
             "circuit_residual_scale": self.circuit_residual_scale,
+            "macro_cell_count": self.macro_cell_count,
+            "macro_cell_rank": self.macro_cell_rank,
+            "macro_cell_depth": self.macro_cell_depth,
+            "macro_router_branch": self.macro_router_branch,
+            "macro_router_depth": self.macro_router_depth,
+            "macro_candidate_pool": self.macro_candidate_pool,
+            "active_macro_cells": self.active_macro_cells if self.macro_cell_count else 0,
+            "macro_cell_scale": self.macro_cell_scale,
+            "macro_total_params": macro_total,
+            "macro_active_params_estimate": macro_active,
         }

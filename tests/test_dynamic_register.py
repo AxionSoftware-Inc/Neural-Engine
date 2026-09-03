@@ -221,3 +221,33 @@ def test_dynamic_register_can_disable_circuit_residual_path():
     logits, _ = model(batch)
     assert logits.shape == (1, 64)
     assert model.parameter_report()["circuit_residual_scale"] == 0.0
+
+
+def test_dynamic_register_macro_cells_add_sparse_multi_step_path():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        macro_cell_count=16,
+        macro_cell_rank=4,
+        macro_cell_depth=2,
+        macro_candidate_pool=4,
+        active_macro_cells=1,
+    )
+    generator = DynamicCompositionGenerator(max_ops=2, train_max_ops=2, seed=11)
+    batch = generator.task_balanced_batch(6)
+    logits, stats = model(batch.inputs)
+    assert logits.shape == (6, 64)
+    assert tuple(stats["macro_selected_ids"].shape) == (6, 2, 1)
+    assert tuple(stats["macro_selected_weights"].shape) == (6, 2, 1)
+    report = model.parameter_report()
+    assert report["macro_cell_count"] == 16
+    assert report["active_macro_cells"] == 1
+    assert report["macro_total_params"] > report["macro_active_params_estimate"]

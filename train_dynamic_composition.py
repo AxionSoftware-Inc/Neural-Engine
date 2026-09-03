@@ -37,6 +37,9 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "modular_prior_mode",
         "modular_template_init",
         "circuit_residual_scale",
+        "macro_cell_count", "macro_cell_rank", "macro_cell_depth",
+        "macro_router_branch", "macro_router_depth", "macro_candidate_pool",
+        "active_macro_cells", "macro_cell_scale",
     )
     return DynamicRegisterNeuralEngine(**{
         key: config[key] for key in fields if key in config
@@ -114,6 +117,51 @@ def route_audit(
 
 
 @torch.no_grad()
+def macro_route_audit(
+    model: DynamicRegisterNeuralEngine,
+    selected_ids: torch.Tensor,
+    depths: torch.Tensor,
+) -> dict[str, Any]:
+    """Summarize macro-cell traffic independently from the micro bank."""
+    num_cells = int(model.macro_cell_count)
+
+    def summarize(ids: torch.Tensor) -> dict[str, Any]:
+        valid = ids.ge(0)
+        flat = ids[valid].to(dtype=torch.long)
+        if not flat.numel():
+            return {
+                "selected_count": 0,
+                "unique_macro_cells": 0,
+                "macro_bank_utilization": 0.0,
+                "dead_macro_cells": num_cells,
+            }
+        counts = torch.bincount(flat, minlength=num_cells).float()
+        active_counts = counts[counts.gt(0)]
+        probabilities = active_counts / active_counts.sum()
+        return {
+            "selected_count": int(flat.numel()),
+            "unique_macro_cells": int(active_counts.numel()),
+            "macro_bank_utilization": float(active_counts.numel() / num_cells),
+            "dead_macro_cells": int(num_cells - active_counts.numel()),
+            "top_macro_fraction": float(active_counts.max() / active_counts.sum()),
+            "macro_route_entropy": float(
+                (-(probabilities * probabilities.log()).sum()).cpu()
+            ),
+        }
+
+    audit = summarize(selected_ids)
+    audit["by_program_depth"] = {
+        str(depth): summarize(selected_ids[depths.eq(depth)])
+        for depth in sorted(int(value) for value in torch.unique(depths).cpu().tolist())
+    }
+    audit["by_execution_step"] = {
+        str(step): summarize(selected_ids[:, step])
+        for step in range(selected_ids.shape[1])
+    }
+    return audit
+
+
+@torch.no_grad()
 def evaluate(
     model: DynamicRegisterNeuralEngine,
     generator: DynamicCompositionGenerator,
@@ -137,6 +185,11 @@ def evaluate(
         "active_step_fraction": float((executed / model.max_ops).mean().cpu()),
         "router_entropy": float(stats["router_entropy"].cpu()),
         "route_audit": route_audit(model, stats["selected_ids"], batch.depths),
+        "macro_route_audit": (
+            macro_route_audit(model, stats["macro_selected_ids"], batch.depths)
+            if model.macro_cell_count
+            else None
+        ),
     }
 
 
