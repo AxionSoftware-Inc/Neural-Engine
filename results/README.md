@@ -304,6 +304,13 @@ the mod-64 strict gate but regresses the mod-32 mean from 95.53% to 94.01%.
 It is accepted for the prior-free continuous lane and kept optional for the
 modular-template lane. See `V0_63_OPERATION_ADAPTER.md`.
 
+V0.64 tests a zero-initialized learnable gate around that adapter. The gate
+reduces the mod-32 regression from 94.01% to 94.85% mean, but still remains
+below the 95.53% adapter-free modular reference; on prior-free composition it
+reaches 81.27%, below the fixed adapter's 84.18%. The gate is therefore
+rejected as the quality default and retained only as a safety ablation. See
+`V0_64_GATED_OPERATION_ADAPTER.md`.
+
 V0.61 tests the core register/circuit path on held-out operation
 compositions with `modular_prior: false` and no Macro-Cells. Two seeds reach
 98.71% mean accuracy on the unseen `add--multiply` and `multiply--add`

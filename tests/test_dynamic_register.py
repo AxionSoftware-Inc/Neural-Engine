@@ -273,6 +273,26 @@ def test_dynamic_register_operation_adapter_is_shared_by_step():
     assert model.parameter_report()["operation_adapter_rank"] == 4
 
 
+def test_dynamic_register_operation_adapter_gate_starts_closed():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        factor_mix_mode="shared",
+        operation_adapter_rank=4,
+        operation_adapter_gate=True,
+    )
+    assert model.operation_adapter_gate.item() == 0.0
+    assert model.parameter_report()["operation_adapter_gate"] is True
+
+
 def test_dynamic_register_macro_cells_add_sparse_multi_step_path():
     model = DynamicRegisterNeuralEngine(
         max_ops=2,

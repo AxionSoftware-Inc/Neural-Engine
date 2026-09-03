@@ -35,6 +35,7 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "input_reinjection_scale", "write_gate", "value_encoder_mode",
         "factor_mix_mode", "route_context_mode", "modular_prior",
         "operation_adapter_rank", "operation_adapter_scale",
+        "operation_adapter_gate",
         "modular_prior_mode",
         "modular_template_init",
         "circuit_residual_scale",

@@ -61,6 +61,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         route_context_mode: str = "full",
         operation_adapter_rank: int = 0,
         operation_adapter_scale: float = 1.0,
+        operation_adapter_gate: bool = False,
         modular_prior: bool = False,
         modular_prior_mode: str = "fixed",
         modular_template_init: str = "identity",
@@ -137,6 +138,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.route_context_mode = route_context_mode
         self.operation_adapter_rank = int(operation_adapter_rank)
         self.operation_adapter_scale = float(operation_adapter_scale)
+        self.operation_adapter_gate_enabled = bool(operation_adapter_gate)
         self.modular_prior_enabled = bool(modular_prior)
         self.modular_prior_mode = modular_prior_mode
         self.modular_template_init = modular_template_init
@@ -195,6 +197,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             self.operation_adapter_bias = nn.Parameter(torch.zeros(3, state_dim))
             nn.init.normal_(self.operation_adapter_down, std=0.02)
             nn.init.normal_(self.operation_adapter_up, std=0.02)
+            if self.operation_adapter_gate_enabled:
+                self.operation_adapter_gate = nn.Parameter(torch.zeros(()))
         if self.modular_prior_enabled:
             if self.modular_prior_mode == "fixed":
                 left = torch.arange(self.modulus).view(-1, 1)
@@ -385,7 +389,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     + self.step_embedding[step]
                 )
                 if self.operation_adapter_rank:
-                    query = query + self.operation_adapter_scale * self._operation_adapter(
+                    adapter_scale = self.operation_adapter_scale
+                    if self.operation_adapter_gate_enabled:
+                        adapter_scale = adapter_scale * torch.tanh(
+                            self.operation_adapter_gate
+                        )
+                    query = query + adapter_scale * self._operation_adapter(
                         pair, operation_ids[active_indices, step]
                     )
                 if self.input_reinjection_scale:
@@ -539,6 +548,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 + self.operation_adapter_up.numel()
                 + self.operation_adapter_bias.numel()
             )
+            if self.operation_adapter_gate_enabled:
+                shared += self.operation_adapter_gate.numel()
         if self.write_gate_enabled:
             shared += count_parameters(self.write_gate)
         if self.modular_prior_enabled:
@@ -596,6 +607,11 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "route_context_mode": self.route_context_mode,
             "operation_adapter_rank": self.operation_adapter_rank,
             "operation_adapter_scale": self.operation_adapter_scale,
+            "operation_adapter_gate": self.operation_adapter_gate_enabled,
+            "operation_adapter_gate_value": (
+                float(torch.tanh(self.operation_adapter_gate).detach().cpu())
+                if self.operation_adapter_gate_enabled else None
+            ),
             "modular_prior": self.modular_prior_enabled,
             "modular_prior_mode": self.modular_prior_mode,
             "modular_template_init": self.modular_template_init,
