@@ -56,6 +56,11 @@ to 37.48% and training remains underfit, so this output geometry is rejected.
 The learned class head remains the default. See
 `V0_73_SCALAR_GAUSSIAN_OUTPUT.md`.
 
+V0.74 forces routing to depend only on operation and execution step, removing
+accumulator/value context from route selection. The two-seed broad-value mean
+falls to 67.43%, below the 69.17% full-route baseline, so operation-only
+routing is rejected as the default. See `V0_74_OPERATION_STEP_ROUTING.md`.
+
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.
