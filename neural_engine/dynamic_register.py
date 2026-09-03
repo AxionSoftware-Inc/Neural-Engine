@@ -88,6 +88,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         operation_adapter_gate: bool = False,
         operation_write_adapter_rank: int = 0,
         operation_write_adapter_scale: float = 1.0,
+        operation_circuit_bank: bool = False,
         operation_transition_rank: int = 0,
         operation_transition_scale: float = 1.0,
         numeric_state_dim: int = 0,
@@ -190,6 +191,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.operation_adapter_gate_enabled = bool(operation_adapter_gate)
         self.operation_write_adapter_rank = int(operation_write_adapter_rank)
         self.operation_write_adapter_scale = float(operation_write_adapter_scale)
+        self.operation_circuit_bank = bool(operation_circuit_bank)
         self.operation_transition_rank = int(operation_transition_rank)
         self.operation_transition_scale = float(operation_transition_scale)
         self.numeric_state_dim = int(numeric_state_dim)
@@ -334,15 +336,24 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 factor_count=factor_count,
                 factor_candidate_pool=factor_candidate_pool,
             )
-            self.circuits = FactorizedMicroCircuitBank(
-                num_circuits, state_dim, circuit_rank, factor_count, factor_mix_mode
-            )
+
+            def make_circuit_bank() -> nn.Module:
+                return FactorizedMicroCircuitBank(
+                    num_circuits, state_dim, circuit_rank, factor_count, factor_mix_mode
+                )
         else:
             self.router = HierarchicalRouter(
                 state_dim, num_circuits, router_branch, router_depth,
                 candidate_pool, active_circuits, 1
             )
-            self.circuits = MicroCircuitBank(num_circuits, state_dim, circuit_rank)
+
+            def make_circuit_bank() -> nn.Module:
+                return MicroCircuitBank(num_circuits, state_dim, circuit_rank)
+
+        self.circuits = (
+            nn.ModuleList([make_circuit_bank() for _ in range(3)])
+            if self.operation_circuit_bank else make_circuit_bank()
+        )
         if self.macro_cell_count:
             if macro_router_depth is None:
                 depth = 1
@@ -407,7 +418,22 @@ class DynamicRegisterNeuralEngine(nn.Module):
         query: torch.Tensor,
         selected: torch.Tensor,
         weights: torch.Tensor,
+        operation_ids: torch.Tensor | None = None,
     ) -> torch.Tensor:
+        if self.operation_circuit_bank:
+            if operation_ids is None:
+                raise ValueError("operation_ids are required for operation circuit banks")
+            result = torch.zeros_like(query)
+            for operation_id, bank in enumerate(self.circuits):
+                mask = operation_ids.eq(operation_id)
+                if mask.any():
+                    if self.circuit_mode == "serial":
+                        result[mask] = bank.forward_serial(
+                            query[mask], selected[mask], weights[mask]
+                        )
+                    else:
+                        result[mask] = bank(query[mask], selected[mask], weights[mask])
+            return result
         if self.circuit_mode == "serial":
             return self.circuits.forward_serial(query, selected, weights)
         return self.circuits(query, selected, weights)
@@ -593,7 +619,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 )
                 if self.circuit_residual_scale:
                     delta = self.circuit_residual_scale * self._apply_circuits(
-                        query, selected, weights
+                        query, selected, weights,
+                        operation_ids[active_indices, step],
                     )
                 else:
                     delta = torch.zeros_like(query)
@@ -752,22 +779,25 @@ class DynamicRegisterNeuralEngine(nn.Module):
             shared += count_parameters(self.modular_projection)
             if self.modular_prior_mode == "templates":
                 shared += self.modular_template_logits.numel()
+        circuit_bank = self.circuits[0] if self.operation_circuit_bank else self.circuits
         if self.circuit_bank_mode == "factorized":
             factor_row = (
-                self.circuits.down_factors[0].numel()
-                + self.circuits.up_factors[0].numel()
-                + self.circuits.bias_factors[0].numel()
-                + self.circuits.factor_mix[0].numel()
+                circuit_bank.down_factors[0].numel()
+                + circuit_bank.up_factors[0].numel()
+                + circuit_bank.bias_factors[0].numel()
+                + circuit_bank.factor_mix[0].numel()
             )
-            active_circuit_params = factor_row * self.router.active_circuits * 2
+            bank_count = min(self.max_ops, 3) if self.operation_circuit_bank else 1
+            active_circuit_params = factor_row * self.router.active_circuits * 2 * bank_count
             candidate_params = self.router.keys[0].numel() * self.router.factor_candidate_pool * 2
         else:
             one_circuit = (
-                self.circuits.down[0].numel()
-                + self.circuits.up[0].numel()
-                + self.circuits.bias[0].numel()
+                circuit_bank.down[0].numel()
+                + circuit_bank.up[0].numel()
+                + circuit_bank.bias[0].numel()
             )
-            active_circuit_params = one_circuit * self.router.active_circuits
+            bank_count = min(self.max_ops, 3) if self.operation_circuit_bank else 1
+            active_circuit_params = one_circuit * self.router.active_circuits * bank_count
             candidate_params = self.router.keys[0].numel() * self.router.candidate_pool
         macro_total = 0
         macro_active = 0
@@ -810,6 +840,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             ),
             "operation_write_adapter_rank": self.operation_write_adapter_rank,
             "operation_write_adapter_scale": self.operation_write_adapter_scale,
+            "operation_circuit_bank": self.operation_circuit_bank,
             "operation_transition_rank": self.operation_transition_rank,
             "operation_transition_scale": self.operation_transition_scale,
             "numeric_state_dim": self.numeric_state_dim,

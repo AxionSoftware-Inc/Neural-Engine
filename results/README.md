@@ -61,6 +61,13 @@ accumulator/value context from route selection. The two-seed broad-value mean
 falls to 67.43%, below the 69.17% full-route baseline, so operation-only
 routing is rejected as the default. See `V0_74_OPERATION_STEP_ROUTING.md`.
 
+V0.75 gives add, subtract, and multiply separate sparse factorized circuit
+banks while keeping the router and state interface shared. The two-seed
+broad-value mean rises to 78.20% at 3,000 steps, a +9.03-point gain over the
+shared-bank typed-write baseline. This is the strongest current architectural
+signal and is being advanced to longer-depth validation. See
+`V0_75_OPERATION_CIRCUIT_BANKS.md`.
+
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.

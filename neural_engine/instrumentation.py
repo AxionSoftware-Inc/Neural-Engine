@@ -48,7 +48,8 @@ def estimate_neural_engine_macs(model: nn.Module, executed_steps: float,
     output_layer = model.output[-1]
     num_classes = int(output_layer.out_features)
     router = model.router
-    circuit_rank = int(model.circuits.rank)
+    circuit_bank = model.circuits[0] if isinstance(model.circuits, nn.ModuleList) else model.circuits
+    circuit_rank = int(circuit_bank.rank)
 
     encoder_macs = encoder_input * state_dim
     initial_state_macs = state_dim * state_dim

@@ -379,6 +379,28 @@ def test_dynamic_register_scalar_gaussian_output_preserves_class_shape():
     assert model.parameter_report()["output_mode"] == "scalar_gaussian"
 
 
+def test_dynamic_register_operation_circuit_banks_select_by_operation():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        operation_circuit_bank=True,
+    )
+    generator = DynamicCompositionGenerator(max_ops=2, train_max_ops=2, seed=17)
+    logits, stats = model(generator.batch(4).inputs)
+    assert logits.shape == (4, 64)
+    assert len(model.circuits) == 3
+    assert stats["selected_ids"].shape == (4, 2, 4)
+    assert model.parameter_report()["operation_circuit_bank"] is True
+
+
 def test_dynamic_register_macro_cells_add_sparse_multi_step_path():
     model = DynamicRegisterNeuralEngine(
         max_ops=2,
