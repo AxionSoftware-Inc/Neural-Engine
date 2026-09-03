@@ -290,9 +290,10 @@ staged growth is a reliable curriculum but not a final-quality capacity gain
 V0.58 extends the Macro-Cell gate from unseen depths 5--6 to unseen depths
 5--8. At 3,000 steps the 256-cell model reaches 78.00% and 68.85% across two
 seeds (73.43% mean), while 252--256 of 256 macro cells remain reachable. The
-depth slope and low train accuracy at depths 3--4 indicate recurrent error
-accumulation and incomplete convergence, not a routing-collapse explanation.
-See `V0_58_LONG_DEPTH_MACRO_GATE.md`.
+depth slope and low train accuracy at depths 3--4 indicate incomplete
+convergence, not a routing-collapse explanation. Continuing the same runs to
+9,000 steps raises both seeds to 99.44% mean accuracy on depths 5--8. See
+`V0_58_LONG_DEPTH_MACRO_GATE.md`.
 
 V0.54 runs that trainable template screen on two seeds. It reaches 100% on the
 same strict OOD gate with 4,169 parameters and no dense transition table.
