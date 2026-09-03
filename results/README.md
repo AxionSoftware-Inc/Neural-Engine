@@ -271,6 +271,16 @@ the control is given the mod-64 algebra. The next accepted experiment is a
 trainable equivariant template bank without a dense transition table. See
 `V0_53_MODULAR_PRIOR_PILOT.md` and the proposal `taklif7.md`.
 
+V0.60 fixes the main strict-value bottleneck with a trainable modular
+value-state/template interface. On values 0--31 train and unseen values
+32--63 eval, the 300M Macro-enabled model reaches 96.36% mean across two
+seeds at unseen depths 5--8. Disabling Macro-Cells preserves the result at
+96.53% while reducing total parameters from about 10.07M to 3.29M. Learned
+value embeddings and fixed Fourier features remain at 36.90% and 24.98%, so
+the gain comes from the modular interface rather than generic capacity or
+encoding. This is the current reference, pending a second-modulus and
+non-modular-task validation. See `V0_60_MODULAR_VALUE_STATE.md`.
+
 V0.56 adds a reusable Macro-Cell bank with sparse top-1 hierarchical routing.
 The 256-cell screen reaches 78.56% and 75.29% across two seeds versus the
 earlier 20M reference mean of 74.17%, while the active macro estimate stays
@@ -294,6 +304,13 @@ depth slope and low train accuracy at depths 3--4 indicate incomplete
 convergence, not a routing-collapse explanation. Continuing the same runs to
 9,000 steps raises both seeds to 99.44% mean accuracy on depths 5--8. See
 `V0_58_LONG_DEPTH_MACRO_GATE.md`.
+
+V0.59 screens a 300M-class virtual bank with the same 256-cell Macro-Cell
+path. After 9,000 steps, two seeds reach 99.39% and 99.63% on unseen depths
+5--8 (99.51% mean), versus 99.44% for the 20M-class control. The +0.07-point
+change is negligible and active computation stays near 1.46M parameters, so
+larger 500M/700M/1B banks are not justified by this gate. See
+`V0_59_300M_MACRO_DEPTH8.md`.
 
 V0.54 runs that trainable template screen on two seeds. It reaches 100% on the
 same strict OOD gate with 4,169 parameters and no dense transition table.
