@@ -311,6 +311,13 @@ reaches 81.27%, below the fixed adapter's 84.18%. The gate is therefore
 rejected as the quality default and retained only as a safety ablation. See
 `V0_64_GATED_OPERATION_ADAPTER.md`.
 
+V0.65 disables only the sparse circuit residual while keeping the operation
+adapter and router. The no-residual two-seed mean is 79.20%, versus 84.18%
+with the full residual, so the circuit bank contributes useful computation
+and should not be removed. The current bottleneck is circuit/interface
+factorization, not raw virtual capacity. See
+`V0_65_NO_RESIDUAL_CIRCUIT_CONTROL.md`.
+
 V0.61 tests the core register/circuit path on held-out operation
 compositions with `modular_prior: false` and no Macro-Cells. Two seeds reach
 98.71% mean accuracy on the unseen `add--multiply` and `multiply--add`
