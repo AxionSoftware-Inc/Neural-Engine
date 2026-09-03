@@ -59,6 +59,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         value_encoder_mode: str = "learned",
         factor_mix_mode: str = "per_address",
         route_context_mode: str = "full",
+        operation_adapter_rank: int = 0,
+        operation_adapter_scale: float = 1.0,
         modular_prior: bool = False,
         modular_prior_mode: str = "fixed",
         modular_template_init: str = "identity",
@@ -96,6 +98,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
             )
         if route_context_mode not in {"full", "operation_step"}:
             raise ValueError("route_context_mode must be full or operation_step")
+        if operation_adapter_rank < 0:
+            raise ValueError("operation_adapter_rank must be non-negative")
+        if operation_adapter_scale < 0.0:
+            raise ValueError("operation_adapter_scale must be non-negative")
         if modular_prior_mode not in {"fixed", "templates"}:
             raise ValueError("modular_prior_mode must be fixed or templates")
         if modular_template_init not in {"identity", "random"}:
@@ -129,6 +135,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.value_encoder_mode = value_encoder_mode
         self.factor_mix_mode = factor_mix_mode
         self.route_context_mode = route_context_mode
+        self.operation_adapter_rank = int(operation_adapter_rank)
+        self.operation_adapter_scale = float(operation_adapter_scale)
         self.modular_prior_enabled = bool(modular_prior)
         self.modular_prior_mode = modular_prior_mode
         self.modular_template_init = modular_template_init
@@ -177,6 +185,16 @@ class DynamicRegisterNeuralEngine(nn.Module):
             nn.Linear(2 * state_dim, state_dim),
             nn.Tanh(),
         )
+        if self.operation_adapter_rank:
+            self.operation_adapter_down = nn.Parameter(torch.empty(
+                3, state_dim, self.operation_adapter_rank
+            ))
+            self.operation_adapter_up = nn.Parameter(torch.empty(
+                3, self.operation_adapter_rank, state_dim
+            ))
+            self.operation_adapter_bias = nn.Parameter(torch.zeros(3, state_dim))
+            nn.init.normal_(self.operation_adapter_down, std=0.02)
+            nn.init.normal_(self.operation_adapter_up, std=0.02)
         if self.modular_prior_enabled:
             if self.modular_prior_mode == "fixed":
                 left = torch.arange(self.modulus).view(-1, 1)
@@ -284,6 +302,17 @@ class DynamicRegisterNeuralEngine(nn.Module):
             return self.circuits.forward_serial(query, selected, weights)
         return self.circuits(query, selected, weights)
 
+    def _operation_adapter(
+        self, pair: torch.Tensor, operation_ids: torch.Tensor
+    ) -> torch.Tensor:
+        down = torch.einsum(
+            "bd,bdr->br", pair, self.operation_adapter_down[operation_ids]
+        )
+        adapted = torch.einsum(
+            "br,brd->bd", down, self.operation_adapter_up[operation_ids]
+        ) + self.operation_adapter_bias[operation_ids]
+        return nn.functional.gelu(adapted)
+
     def forward(
         self,
         inputs: torch.Tensor,
@@ -355,6 +384,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     + self.operation_embedding(operation_ids[active_indices, step])
                     + self.step_embedding[step]
                 )
+                if self.operation_adapter_rank:
+                    query = query + self.operation_adapter_scale * self._operation_adapter(
+                        pair, operation_ids[active_indices, step]
+                    )
                 if self.input_reinjection_scale:
                     query = query + self.input_reinjection_scale * input_context[active_indices]
                 if self.modular_prior_enabled:
@@ -500,6 +533,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
             + count_parameters(self.route_context)
             + count_parameters(self.output)
         )
+        if self.operation_adapter_rank:
+            shared += (
+                self.operation_adapter_down.numel()
+                + self.operation_adapter_up.numel()
+                + self.operation_adapter_bias.numel()
+            )
         if self.write_gate_enabled:
             shared += count_parameters(self.write_gate)
         if self.modular_prior_enabled:
@@ -555,6 +594,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "value_encoder_mode": self.value_encoder_mode,
             "factor_mix_mode": self.factor_mix_mode,
             "route_context_mode": self.route_context_mode,
+            "operation_adapter_rank": self.operation_adapter_rank,
+            "operation_adapter_scale": self.operation_adapter_scale,
             "modular_prior": self.modular_prior_enabled,
             "modular_prior_mode": self.modular_prior_mode,
             "modular_template_init": self.modular_template_init,

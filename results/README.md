@@ -296,6 +296,29 @@ rejects the current continuous-state interface as a validated general
 non-modular composition solution and confirms that V0.61's 98.71% relies on
 strong mod-64 algebraic regularity. See `V0_62_NONMODULAR_COMPOSITION.md`.
 
+V0.63 adds a small operation-conditioned low-rank adapter shared across
+recurrent steps. On the genuine non-modular composition gate it raises the
+two-seed held-out mean from 77.86% to 84.18% with about 38k extra
+parameters. It is not a universal default: the same adapter gives 96.90% on
+the mod-64 strict gate but regresses the mod-32 mean from 95.53% to 94.01%.
+It is accepted for the prior-free continuous lane and kept optional for the
+modular-template lane. See `V0_63_OPERATION_ADAPTER.md`.
+
+V0.61 tests the core register/circuit path on held-out operation
+compositions with `modular_prior: false` and no Macro-Cells. Two seeds reach
+98.71% mean accuracy on the unseen `add--multiply` and `multiply--add`
+orders, with 99.94% mean on the seven training pairs and about 1.45M active
+parameters. This validates prior-free compositional transfer inside the
+mod-64 arithmetic environment, but it is not yet a genuinely non-modular
+task. See `V0_61_COMPOSITION_HOLDOUT.md`.
+
+V0.62 removes modular reduction entirely from the composition generator.
+With the same prior-free DynamicRegister and two unseen operation orders, the
+two-seed held-out mean falls to 77.86% despite 100% training accuracy. This
+rejects the current continuous-state interface as a validated general
+non-modular composition solution and confirms that V0.61's 98.71% relies on
+strong mod-64 algebraic regularity. See `V0_62_NONMODULAR_COMPOSITION.md`.
+
 V0.56 adds a reusable Macro-Cell bank with sparse top-1 hierarchical routing.
 The 256-cell screen reaches 78.56% and 75.29% across two seeds versus the
 earlier 20M reference mean of 74.17%, while the active macro estimate stays
