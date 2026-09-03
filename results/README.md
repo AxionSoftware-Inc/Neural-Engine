@@ -45,6 +45,11 @@ numeric-state screen. The added transition is rejected as redundant or
 interfering; it does not address the fundamental numeric interface bottleneck.
 See `V0_71_OPERATION_TRANSITION.md`.
 
+V0.72 compresses the broad-value output head from 512 to 448 classes while
+still covering every target in the benchmark. The two-seed mean falls to
+68.60%, below the 69.17% typed-write baseline, so unused output classes are
+not the primary bottleneck. See `V0_72_COMPACT_OUTPUT_HEAD.md`.
+
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.
