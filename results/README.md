@@ -38,6 +38,13 @@ model. A 16D channel reaches 70.31% mean and a 64D channel 70.26% on the
 Widening the channel does not help, so this is not the default architecture.
 See `V0_70_STRUCTURED_NUMERIC_STATE.md`.
 
+V0.71 adds an operation-conditioned rank-16 nonlinear transition immediately
+before the shared register writer. On the same broad-value screen its two-seed
+mean is 66.99%, below the 69.17% typed-write baseline and the 70.31% 16D
+numeric-state screen. The added transition is rejected as redundant or
+interfering; it does not address the fundamental numeric interface bottleneck.
+See `V0_71_OPERATION_TRANSITION.md`.
+
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.

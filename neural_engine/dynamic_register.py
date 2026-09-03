@@ -64,6 +64,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         operation_adapter_gate: bool = False,
         operation_write_adapter_rank: int = 0,
         operation_write_adapter_scale: float = 1.0,
+        operation_transition_rank: int = 0,
+        operation_transition_scale: float = 1.0,
         numeric_state_dim: int = 0,
         numeric_state_scale: float = 1.0,
         modular_prior: bool = False,
@@ -111,6 +113,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("operation_write_adapter_rank must be non-negative")
         if operation_write_adapter_scale < 0.0:
             raise ValueError("operation_write_adapter_scale must be non-negative")
+        if operation_transition_rank < 0:
+            raise ValueError("operation_transition_rank must be non-negative")
+        if operation_transition_scale < 0.0:
+            raise ValueError("operation_transition_scale must be non-negative")
         if numeric_state_dim < 0:
             raise ValueError("numeric_state_dim must be non-negative")
         if numeric_state_scale < 0.0:
@@ -153,6 +159,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.operation_adapter_gate_enabled = bool(operation_adapter_gate)
         self.operation_write_adapter_rank = int(operation_write_adapter_rank)
         self.operation_write_adapter_scale = float(operation_write_adapter_scale)
+        self.operation_transition_rank = int(operation_transition_rank)
+        self.operation_transition_scale = float(operation_transition_scale)
         self.numeric_state_dim = int(numeric_state_dim)
         self.numeric_state_scale = float(numeric_state_scale)
         self.modular_prior_enabled = bool(modular_prior)
@@ -243,6 +251,16 @@ class DynamicRegisterNeuralEngine(nn.Module):
             self.operation_write_adapter_bias = nn.Parameter(torch.zeros(3, state_dim))
             nn.init.normal_(self.operation_write_adapter_down, std=0.02)
             nn.init.normal_(self.operation_write_adapter_up, std=0.02)
+        if self.operation_transition_rank:
+            self.operation_transition_down = nn.Parameter(torch.empty(
+                3, state_dim, self.operation_transition_rank
+            ))
+            self.operation_transition_up = nn.Parameter(torch.empty(
+                3, self.operation_transition_rank, state_dim
+            ))
+            self.operation_transition_bias = nn.Parameter(torch.zeros(3, state_dim))
+            nn.init.normal_(self.operation_transition_down, std=0.02)
+            nn.init.normal_(self.operation_transition_up, std=0.02)
         if self.modular_prior_enabled:
             if self.modular_prior_mode == "fixed":
                 left = torch.arange(self.modulus).view(-1, 1)
@@ -372,6 +390,19 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "br,brd->bd", down,
             self.operation_write_adapter_up[operation_ids]
         ) + self.operation_write_adapter_bias[operation_ids]
+        return nn.functional.gelu(adapted)
+
+    def _operation_transition(
+        self, state: torch.Tensor, operation_ids: torch.Tensor
+    ) -> torch.Tensor:
+        down = torch.einsum(
+            "bd,bdr->br", state,
+            self.operation_transition_down[operation_ids]
+        )
+        adapted = torch.einsum(
+            "br,brd->bd", down,
+            self.operation_transition_up[operation_ids]
+        ) + self.operation_transition_bias[operation_ids]
         return nn.functional.gelu(adapted)
 
     def forward(
@@ -522,8 +553,15 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     )
                 else:
                     delta = torch.zeros_like(query)
+                write_input = query + delta
+                if self.operation_transition_rank:
+                    write_input = write_input + self.operation_transition_scale * (
+                        self._operation_transition(
+                            write_input, operation_ids[active_indices, step]
+                        )
+                    )
                 candidate = self.register_writer(
-                    torch.cat([active_accumulator, query + delta], dim=-1)
+                    torch.cat([active_accumulator, write_input], dim=-1)
                 )
                 if self.operation_write_adapter_rank:
                     candidate = candidate + self.operation_write_adapter_scale * (
@@ -658,6 +696,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 + self.operation_write_adapter_up.numel()
                 + self.operation_write_adapter_bias.numel()
             )
+        if self.operation_transition_rank:
+            shared += (
+                self.operation_transition_down.numel()
+                + self.operation_transition_up.numel()
+                + self.operation_transition_bias.numel()
+            )
         if self.write_gate_enabled:
             shared += count_parameters(self.write_gate)
         if self.modular_prior_enabled:
@@ -722,6 +766,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             ),
             "operation_write_adapter_rank": self.operation_write_adapter_rank,
             "operation_write_adapter_scale": self.operation_write_adapter_scale,
+            "operation_transition_rank": self.operation_transition_rank,
+            "operation_transition_scale": self.operation_transition_scale,
             "numeric_state_dim": self.numeric_state_dim,
             "numeric_state_scale": self.numeric_state_scale,
             "modular_prior": self.modular_prior_enabled,
