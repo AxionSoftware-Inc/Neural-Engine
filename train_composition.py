@@ -82,17 +82,22 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     eval_value_max = int(config.get("eval_value_max", 63))
     train_combination_split = str(config.get("train_combination_split", "all"))
     eval_combination_split = str(config.get("eval_combination_split", "all"))
+    modulus_config = config.get("generator_modulus", config.get("modulus", 64))
+    generator_modulus = None if modulus_config is None else int(modulus_config)
+    target_offset = int(config.get("target_offset", 0))
     train_generator = CompositionalProgramGenerator(
         seq_len=int(config["seq_len"]), seed=run_seed + 1,
         value_min=train_value_min, value_max=train_value_max,
         split="train", heldout_pairs=heldout_pairs,
-        combination_split=train_combination_split)
+        combination_split=train_combination_split, modulus=generator_modulus,
+        target_offset=target_offset)
     evaluation_split = "heldout" if heldout_pairs else "all"
     heldout_generator = CompositionalProgramGenerator(
         seq_len=int(config["seq_len"]), seed=run_seed + 2,
         value_min=eval_value_min, value_max=eval_value_max,
         split=evaluation_split, heldout_pairs=heldout_pairs,
-        combination_split=eval_combination_split)
+        combination_split=eval_combination_split, modulus=generator_modulus,
+        target_offset=target_offset)
     if config.get("architecture") == "dynamic_register":
         model = make_dynamic_model(config).to(device)
         optimizer_factory = make_dynamic_optimizer
@@ -206,6 +211,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "evaluation_split": evaluation_split,
         "train_value_range": [train_value_min, train_value_max],
         "eval_value_range": [eval_value_min, eval_value_max],
+        "generator_modulus": generator_modulus,
+        "target_offset": target_offset,
         "train_combination_split": train_combination_split,
         "eval_combination_split": eval_combination_split,
         "train": train_eval,

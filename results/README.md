@@ -289,6 +289,13 @@ parameters. This validates prior-free compositional transfer inside the
 mod-64 arithmetic environment, but it is not yet a genuinely non-modular
 task. See `V0_61_COMPOSITION_HOLDOUT.md`.
 
+V0.62 removes modular reduction entirely from the composition generator.
+With the same prior-free DynamicRegister and two unseen operation orders, the
+two-seed held-out mean falls to 77.86% despite 100% training accuracy. This
+rejects the current continuous-state interface as a validated general
+non-modular composition solution and confirms that V0.61's 98.71% relies on
+strong mod-64 algebraic regularity. See `V0_62_NONMODULAR_COMPOSITION.md`.
+
 V0.56 adds a reusable Macro-Cell bank with sparse top-1 hierarchical routing.
 The 256-cell screen reaches 78.56% and 75.29% across two seeds versus the
 earlier 20M reference mean of 74.17%, while the active macro estimate stays

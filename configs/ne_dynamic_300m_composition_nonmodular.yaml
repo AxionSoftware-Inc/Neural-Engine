@@ -1,0 +1,39 @@
+model: ne_dynamic_300m_composition_nonmodular
+architecture: dynamic_register
+vocab_size: 128
+num_classes: 64
+modulus: 64
+generator_modulus: null
+target_offset: 16
+max_ops: 2
+seq_len: 8
+d_model: 384
+state_dim: 384
+num_circuits: 23600
+circuit_rank: 16
+router_branch: 8
+router_depth: 6
+candidate_pool: 32
+active_circuits: 8
+circuit_bank_mode: factorized
+factor_count: 154
+factor_candidate_pool: 8
+factor_mix_mode: shared
+circuit_mode: serial
+route_exploration_prob: 0.05
+value_encoder_mode: learned
+stage_loss_weight: 0.5
+modular_prior: false
+batch_size: 512
+learning_rate: 0.0003
+weight_decay: 0.01
+grad_clip: 1.0
+optimizer: adamw
+seed: 17
+train_value_min: 0
+train_value_max: 3
+eval_value_min: 0
+eval_value_max: 3
+heldout_pairs:
+  - [add, multiply]
+  - [multiply, add]

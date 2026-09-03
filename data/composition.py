@@ -16,13 +16,17 @@ COMPOSITION_PAIRS = tuple((first, second) for first in OPERATIONS for second in 
 DEFAULT_HELDOUT_PAIRS = (("add", "multiply"), ("multiply", "add"))
 
 
-def apply_operation(name: str, left: int, right: int, modulus: int = MODULUS) -> int:
+def apply_operation(name: str, left: int, right: int,
+                    modulus: int | None = MODULUS) -> int:
     if name == "add":
-        return (left + right) % modulus
+        result = left + right
+        return result if modulus is None else result % modulus
     if name == "subtract":
-        return (left - right) % modulus
+        result = left - right
+        return result if modulus is None else result % modulus
     if name == "multiply":
-        return (left * right) % modulus
+        result = left * right
+        return result if modulus is None else result % modulus
     raise ValueError(f"unknown operation: {name}")
 
 
@@ -62,11 +66,17 @@ class CompositionalProgramGenerator:
                  value_min: int = 0, value_max: int = MODULUS - 1,
                  split: str = "train",
                  heldout_pairs: tuple[tuple[str, str], ...] = DEFAULT_HELDOUT_PAIRS,
-                 combination_split: str = "all"):
+                 combination_split: str = "all",
+                 modulus: int | None = MODULUS,
+                 target_offset: int = 0):
         if seq_len < 6:
             raise ValueError("seq_len must leave room for program and operands")
-        if not 0 <= value_min <= value_max < MODULUS:
-            raise ValueError(f"value range must be within [0, {MODULUS - 1}]")
+        if not 0 <= value_min <= value_max:
+            raise ValueError("value range must be non-negative and ordered")
+        if modulus is not None and value_max >= modulus:
+            raise ValueError(f"value range must be within [0, {modulus - 1}]")
+        if modulus is not None and modulus < 2:
+            raise ValueError("modulus must be at least two")
         if split not in {"all", "train", "heldout"}:
             raise ValueError("split must be 'all', 'train', or 'heldout'")
         if combination_split not in {"all", "train", "heldout"}:
@@ -80,6 +90,8 @@ class CompositionalProgramGenerator:
         self.split = split
         self.combination_split = combination_split
         self.heldout_pairs = frozenset(heldout_pairs)
+        self.modulus = modulus
+        self.target_offset = int(target_offset)
         self.rng = np.random.default_rng(seed)
 
     @property
@@ -97,13 +109,19 @@ class CompositionalProgramGenerator:
                     or (self.combination_split == "train" and bucket < 3)
                     or (self.combination_split == "heldout" and bucket == 3)):
                 break
-        partial = apply_operation(spec.first_operation, values[0], values[1])
-        target = apply_operation(spec.second_operation, partial, values[2])
+        partial = apply_operation(
+            spec.first_operation, values[0], values[1], modulus=self.modulus
+        )
+        target = apply_operation(
+            spec.second_operation, partial, values[2], modulus=self.modulus
+        )
+        partial_label = partial + self.target_offset
+        target_label = target + self.target_offset
         tokens = [PROGRAM_TOKEN, OPERATION_TOKENS[spec.first_operation],
                   OPERATION_TOKENS[spec.second_operation]]
         tokens += [VALUE_TOKEN_OFFSET + value for value in values]
         tokens += [0] * (self.seq_len - len(tokens))
-        return tokens, target, [partial, target, target], [True, True, True]
+        return tokens, target_label, [partial_label, target_label, target_label], [True, True, True]
 
     @staticmethod
     def _make_batch(rows: list[tuple[list[int], int, int, int, list[int], list[bool]]],

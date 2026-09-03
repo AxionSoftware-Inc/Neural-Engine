@@ -58,6 +58,18 @@ def test_apply_operation_rejects_unknown_programs():
         apply_operation("divide", 4, 2)
 
 
+def test_composition_generator_supports_non_modular_integer_targets():
+    generator = CompositionalProgramGenerator(
+        seed=2, split="all", value_max=3, modulus=None, target_offset=16
+    )
+    batch = generator.balanced_batch(examples_per_task=8)
+    assert apply_operation("multiply", 3, 3, modulus=None) == 9
+    assert batch.targets.ge(0).all()
+    assert batch.targets.lt(64).all()
+    assert batch.stage_targets.ge(0).all()
+    assert batch.stage_targets.lt(64).all()
+
+
 def test_composition_evaluate_chunks_and_returns_cpu_metrics():
     model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=8, d_model=32,
                            state_dim=32, num_circuits=32, circuit_rank=4,
