@@ -32,6 +32,12 @@ output head to 512 classes. The typed-write model reaches only 73.34% mean at
 state representation and composition transfer rather than raw capacity. See
 `V0_69_BROAD_VALUE_INTERFACE.md`.
 
+V0.70 adds a learned structured numeric scratch state to the typed-write
+model. A 16D channel reaches 70.31% mean and a 64D channel 70.26% on the
+3,000-step broad-value screen, only a small gain over the 69.17% baseline.
+Widening the channel does not help, so this is not the default architecture.
+See `V0_70_STRUCTURED_NUMERIC_STATE.md`.
+
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.

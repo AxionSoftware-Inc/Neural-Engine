@@ -64,6 +64,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         operation_adapter_gate: bool = False,
         operation_write_adapter_rank: int = 0,
         operation_write_adapter_scale: float = 1.0,
+        numeric_state_dim: int = 0,
+        numeric_state_scale: float = 1.0,
         modular_prior: bool = False,
         modular_prior_mode: str = "fixed",
         modular_template_init: str = "identity",
@@ -109,6 +111,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("operation_write_adapter_rank must be non-negative")
         if operation_write_adapter_scale < 0.0:
             raise ValueError("operation_write_adapter_scale must be non-negative")
+        if numeric_state_dim < 0:
+            raise ValueError("numeric_state_dim must be non-negative")
+        if numeric_state_scale < 0.0:
+            raise ValueError("numeric_state_scale must be non-negative")
         if modular_prior_mode not in {"fixed", "templates"}:
             raise ValueError("modular_prior_mode must be fixed or templates")
         if modular_template_init not in {"identity", "random"}:
@@ -147,6 +153,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.operation_adapter_gate_enabled = bool(operation_adapter_gate)
         self.operation_write_adapter_rank = int(operation_write_adapter_rank)
         self.operation_write_adapter_scale = float(operation_write_adapter_scale)
+        self.numeric_state_dim = int(numeric_state_dim)
+        self.numeric_state_scale = float(numeric_state_scale)
         self.modular_prior_enabled = bool(modular_prior)
         self.modular_prior_mode = modular_prior_mode
         self.modular_template_init = modular_template_init
@@ -195,6 +203,24 @@ class DynamicRegisterNeuralEngine(nn.Module):
             nn.Linear(2 * state_dim, state_dim),
             nn.Tanh(),
         )
+        if self.numeric_state_dim:
+            self.numeric_value_encoder = nn.Sequential(
+                nn.Linear(1, self.numeric_state_dim), nn.Tanh()
+            )
+            self.numeric_operation_embedding = nn.Embedding(
+                3, self.numeric_state_dim
+            )
+            self.numeric_transition = nn.Sequential(
+                nn.Linear(3 * self.numeric_state_dim, 2 * self.numeric_state_dim),
+                nn.GELU(),
+                nn.Linear(2 * self.numeric_state_dim, self.numeric_state_dim),
+                nn.Tanh(),
+            )
+            self.numeric_state_projection = nn.Sequential(
+                nn.LayerNorm(self.numeric_state_dim),
+                nn.Linear(self.numeric_state_dim, state_dim),
+                nn.Tanh(),
+            )
         if self.operation_adapter_rank:
             self.operation_adapter_down = nn.Parameter(torch.empty(
                 3, state_dim, self.operation_adapter_rank
@@ -363,6 +389,15 @@ class DynamicRegisterNeuralEngine(nn.Module):
         operands = encoded[:, self.value_start:self.value_start + self.max_ops + 1]
         operand_states = self.operand_encoder(operands)
         operand_mask = inputs[:, self.value_start:self.value_start + self.max_ops + 1].ne(0)
+        if self.numeric_state_dim:
+            numeric_values = (
+                inputs[:, self.value_start:self.value_start + self.max_ops + 1]
+                - VALUE_TOKEN_OFFSET
+            ).clamp(0, self.modulus - 1).to(operand_states.dtype)
+            numeric_operands = self.numeric_value_encoder(
+                numeric_values.unsqueeze(-1) / float(max(self.modulus - 1, 1))
+            )
+            numeric_state = numeric_operands[:, 0]
         input_context = (
             (operand_states * operand_mask.unsqueeze(-1)).sum(dim=1)
             / operand_mask.sum(dim=1, keepdim=True).clamp_min(1).to(operand_states.dtype)
@@ -419,6 +454,21 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     + self.operation_embedding(operation_ids[active_indices, step])
                     + self.step_embedding[step]
                 )
+                if self.numeric_state_dim:
+                    numeric_operation = self.numeric_operation_embedding(
+                        operation_ids[active_indices, step]
+                    )
+                    numeric_input = torch.cat((
+                        numeric_state[active_indices],
+                        numeric_operands[active_indices, step + 1],
+                        numeric_operation,
+                    ), dim=-1)
+                    numeric_candidate = numeric_state[active_indices] + self.numeric_transition(
+                        numeric_input
+                    )
+                    query = query + self.numeric_state_scale * self.numeric_state_projection(
+                        numeric_candidate
+                    )
                 if self.operation_adapter_rank:
                     adapter_scale = self.operation_adapter_scale
                     if self.operation_adapter_gate_enabled:
@@ -490,6 +540,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 next_accumulator = accumulator.clone()
                 next_accumulator[active_indices] = updated
                 accumulator = next_accumulator
+                if self.numeric_state_dim:
+                    next_numeric_state = numeric_state.clone()
+                    next_numeric_state[active_indices] = numeric_candidate
+                    numeric_state = next_numeric_state
                 if self.modular_prior_enabled:
                     operand_values = (
                         inputs[active_indices, self.value_start + step + 1]
@@ -534,6 +588,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
             selected_steps.append(selected_step)
             macro_selected_steps.append(macro_selected_step)
             step_state = accumulator
+            if self.numeric_state_dim:
+                step_state = step_state + self.numeric_state_scale * self.numeric_state_projection(
+                    numeric_state
+                )
             if self.modular_prior_enabled:
                 if self.modular_prior_mode == "fixed":
                     step_features = nn.functional.one_hot(
@@ -579,6 +637,13 @@ class DynamicRegisterNeuralEngine(nn.Module):
             + count_parameters(self.route_context)
             + count_parameters(self.output)
         )
+        if self.numeric_state_dim:
+            shared += (
+                count_parameters(self.numeric_value_encoder)
+                + count_parameters(self.numeric_operation_embedding)
+                + count_parameters(self.numeric_transition)
+                + count_parameters(self.numeric_state_projection)
+            )
         if self.operation_adapter_rank:
             shared += (
                 self.operation_adapter_down.numel()
@@ -657,6 +722,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             ),
             "operation_write_adapter_rank": self.operation_write_adapter_rank,
             "operation_write_adapter_scale": self.operation_write_adapter_scale,
+            "numeric_state_dim": self.numeric_state_dim,
+            "numeric_state_scale": self.numeric_state_scale,
             "modular_prior": self.modular_prior_enabled,
             "modular_prior_mode": self.modular_prior_mode,
             "modular_template_init": self.modular_template_init,
