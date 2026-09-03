@@ -50,6 +50,12 @@ still covering every target in the benchmark. The two-seed mean falls to
 68.60%, below the 69.17% typed-write baseline, so unused output classes are
 not the primary bottleneck. See `V0_72_COMPACT_OUTPUT_HEAD.md`.
 
+V0.73 replaces the learned class head with a scalar Gaussian distance decoder
+to impose numeric ordering on outputs. The two-seed broad-value mean collapses
+to 37.48% and training remains underfit, so this output geometry is rejected.
+The learned class head remains the default. See
+`V0_73_SCALAR_GAUSSIAN_OUTPUT.md`.
+
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.

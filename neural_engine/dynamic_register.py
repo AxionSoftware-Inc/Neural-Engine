@@ -24,6 +24,30 @@ from .modular_templates import (
 from .router import FactorizedRouter, HierarchicalRouter
 
 
+class ScalarGaussianOutput(nn.Module):
+    """Decode a continuous class coordinate into ordered class logits."""
+
+    def __init__(
+        self, input_dim: int, num_classes: int, temperature: float,
+        initial_bias: float,
+    ) -> None:
+        super().__init__()
+        self.scalar = nn.Linear(input_dim, 1)
+        with torch.no_grad():
+            self.scalar.bias.fill_(initial_bias)
+        self.register_buffer(
+            "class_positions", torch.arange(num_classes, dtype=torch.float32),
+            persistent=False,
+        )
+        self.out_features = int(num_classes)
+        self.temperature = float(temperature)
+
+    def forward(self, states: torch.Tensor) -> torch.Tensor:
+        coordinate = self.scalar(states)
+        distances = coordinate - self.class_positions.to(states.dtype)
+        return -0.5 * distances.square() / (self.temperature ** 2)
+
+
 class DynamicRegisterNeuralEngine(nn.Module):
     """Attention-free recurrent register machine with sparse circuit routing.
 
@@ -72,6 +96,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
         modular_prior_mode: str = "fixed",
         modular_template_init: str = "identity",
         circuit_residual_scale: float = 1.0,
+        output_mode: str = "learned",
+        output_temperature: float = 16.0,
+        output_scalar_bias: float = 0.0,
         macro_cell_count: int = 0,
         macro_cell_rank: int = 8,
         macro_cell_depth: int = 4,
@@ -127,6 +154,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("modular_template_init must be identity or random")
         if circuit_residual_scale < 0.0:
             raise ValueError("circuit_residual_scale must be non-negative")
+        if output_mode not in {"learned", "scalar_gaussian"}:
+            raise ValueError("output_mode must be learned or scalar_gaussian")
+        if output_temperature <= 0.0:
+            raise ValueError("output_temperature must be positive")
         if macro_cell_count < 0:
             raise ValueError("macro_cell_count must be non-negative")
         if macro_cell_count:
@@ -167,6 +198,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.modular_prior_mode = modular_prior_mode
         self.modular_template_init = modular_template_init
         self.circuit_residual_scale = float(circuit_residual_scale)
+        self.output_mode = output_mode
+        self.output_temperature = float(output_temperature)
+        self.output_scalar_bias = float(output_scalar_bias)
         self.macro_cell_count = int(macro_cell_count)
         self.macro_cell_rank = int(macro_cell_rank)
         self.macro_cell_depth = int(macro_cell_depth)
@@ -337,7 +371,17 @@ class DynamicRegisterNeuralEngine(nn.Module):
             )
         else:
             self.macro_router_depth = 0
-        self.output = nn.Sequential(nn.LayerNorm(state_dim), nn.Linear(state_dim, num_classes))
+        if output_mode == "scalar_gaussian":
+            self.output = nn.Sequential(
+                nn.LayerNorm(state_dim),
+                ScalarGaussianOutput(
+                    state_dim, num_classes, output_temperature, output_scalar_bias
+                ),
+            )
+        else:
+            self.output = nn.Sequential(
+                nn.LayerNorm(state_dim), nn.Linear(state_dim, num_classes)
+            )
 
         nn.init.normal_(self.position_embedding, std=0.02)
         nn.init.normal_(self.position_scale, std=0.01)
@@ -774,6 +818,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "modular_prior_mode": self.modular_prior_mode,
             "modular_template_init": self.modular_template_init,
             "circuit_residual_scale": self.circuit_residual_scale,
+            "output_mode": self.output_mode,
+            "output_temperature": self.output_temperature,
+            "output_scalar_bias": self.output_scalar_bias,
             "macro_cell_count": self.macro_cell_count,
             "macro_cell_rank": self.macro_cell_rank,
             "macro_cell_depth": self.macro_cell_depth,

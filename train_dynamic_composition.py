@@ -42,6 +42,7 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "modular_prior_mode",
         "modular_template_init",
         "circuit_residual_scale",
+        "output_mode", "output_temperature", "output_scalar_bias",
         "macro_cell_count", "macro_cell_rank", "macro_cell_depth",
         "macro_router_branch", "macro_router_depth", "macro_candidate_pool",
         "active_macro_cells", "macro_cell_scale",

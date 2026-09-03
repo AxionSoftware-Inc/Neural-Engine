@@ -45,7 +45,8 @@ def estimate_neural_engine_macs(model: nn.Module, executed_steps: float,
     d_model = int(model.token_embedding.embedding_dim)
     slot_count = int(getattr(model, "slot_count", 0))
     encoder_input = d_model * slot_count if slot_count else d_model
-    num_classes = int(model.output[-1].out_features)
+    output_layer = model.output[-1]
+    num_classes = int(output_layer.out_features)
     router = model.router
     circuit_rank = int(model.circuits.rank)
 
@@ -62,7 +63,8 @@ def estimate_neural_engine_macs(model: nn.Module, executed_steps: float,
     gru_macs = 6 * state_dim * state_dim
     memory_write_macs = (2 * state_dim * state_dim
                          if getattr(model, "memory_write", None) is not None else 0)
-    output_macs = state_dim * num_classes
+    output_width = 1 if getattr(model, "output_mode", "learned") == "scalar_gaussian" else num_classes
+    output_macs = state_dim * output_width
     per_step_macs = router_macs + circuit_macs + gru_macs + memory_write_macs + output_macs
     full_macs = fixed_macs + int(model.internal_steps) * per_step_macs
     active_macs = fixed_macs + float(executed_steps) * per_step_macs
