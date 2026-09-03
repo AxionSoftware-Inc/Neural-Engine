@@ -2,6 +2,7 @@ import torch
 
 from data.dynamic_composition import DynamicCompositionGenerator
 from neural_engine.dynamic_register import DynamicRegisterNeuralEngine
+from neural_engine.macro_growth import expand_macro_model
 from neural_engine.modular_templates import TrainableModularTemplateRegister
 
 
@@ -251,3 +252,60 @@ def test_dynamic_register_macro_cells_add_sparse_multi_step_path():
     assert report["macro_cell_count"] == 16
     assert report["active_macro_cells"] == 1
     assert report["macro_total_params"] > report["macro_active_params_estimate"]
+
+
+def test_macro_growth_preserves_parent_rows_and_opens_new_router_levels():
+    parent = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=16,
+        state_dim=16,
+        num_circuits=16,
+        circuit_rank=2,
+        router_depth=2,
+        candidate_pool=4,
+        active_circuits=2,
+        factor_count=4,
+        macro_cell_count=16,
+        macro_cell_rank=2,
+        macro_cell_depth=2,
+        macro_router_branch=4,
+        macro_candidate_pool=4,
+        active_macro_cells=1,
+    )
+    grown = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=16,
+        state_dim=16,
+        num_circuits=16,
+        circuit_rank=2,
+        router_depth=2,
+        candidate_pool=4,
+        active_circuits=2,
+        factor_count=4,
+        macro_cell_count=256,
+        macro_cell_rank=2,
+        macro_cell_depth=2,
+        macro_router_branch=4,
+        macro_candidate_pool=4,
+        active_macro_cells=1,
+    )
+    with torch.no_grad():
+        parent.macro_cell_bank.down.fill_(3.0)
+        parent.macro_router.level_projections.fill_(5.0)
+        parent.macro_router.level_bias.fill_(6.0)
+    expand_macro_model(parent, grown)
+    assert torch.equal(grown.macro_cell_bank.down[:16], parent.macro_cell_bank.down)
+    assert torch.equal(
+        grown.macro_router.level_projections[:, :2],
+        parent.macro_router.level_projections,
+    )
+    assert torch.equal(
+        grown.macro_router.level_projections[:, 2:],
+        torch.zeros_like(grown.macro_router.level_projections[:, 2:]),
+    )
+    assert torch.equal(
+        grown.macro_router.level_bias[:, 2:],
+        torch.zeros_like(grown.macro_router.level_bias[:, 2:]),
+    )

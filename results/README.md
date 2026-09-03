@@ -278,6 +278,15 @@ near 34K. The signal is positive but non-monotonic, so staged parent-grown
 macro expansion is required before any 300M+ or billion-parameter claim. See
 `V0_56_MACRO_CELL_SCALING.md`.
 
+V0.57 validates staged parent-grown Macro-Cell expansion. A trained 16-cell
+parent is expanded through 64 cells and then 256 cells, with new router levels
+opened gradually. Across seeds 17 and 18, the final 256-cell models reach
+99.51% and 99.71% on unseen depths 5--6, with 255/256 and 254/256 macro cells
+reachable. This is a strong optimization and routing signal, but it uses
+9,000 staged steps versus 3,000 for the scratch comparison, so an equal-compute
+control is still required before claiming pure capacity scaling. See
+`V0_57_MACRO_PARENT_GROWN.md`.
+
 V0.54 runs that trainable template screen on two seeds. It reaches 100% on the
 same strict OOD gate with 4,169 parameters and no dense transition table.
 This is the strongest current synthetic signal, but it remains conditional on
