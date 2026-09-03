@@ -188,3 +188,36 @@ def test_trainable_modular_templates_keep_no_dense_transition_table():
     assert stats["step_logits"].shape == (1, 2, 64)
     assert model.parameter_report()["dense_transition_table"] is False
     assert model.parameter_report()["total_params"] < 10_000
+
+
+def test_trainable_modular_templates_support_another_modulus_and_random_init():
+    model = TrainableModularTemplateRegister(
+        max_ops=2, num_classes=32, modulus=32, template_init="random"
+    )
+    batch = torch.tensor([[1, 2, 3, 32, 33, 0, 0, 0]])
+    logits, _ = model(batch)
+    assert logits.shape == (1, 32)
+    assert model.parameter_report()["modulus"] == 32
+    assert model.parameter_report()["template_init"] == "random"
+
+
+def test_dynamic_register_can_disable_circuit_residual_path():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        modular_prior=True,
+        modular_prior_mode="templates",
+        circuit_residual_scale=0.0,
+    )
+    batch = torch.tensor([[1, 2, 3, 32, 33, 0, 0, 0]])
+    logits, _ = model(batch)
+    assert logits.shape == (1, 64)
+    assert model.parameter_report()["circuit_residual_scale"] == 0.0

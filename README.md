@@ -1255,6 +1255,12 @@ The follow-up trainable template screen reaches 100% on two seeds with 4,169
 parameters and no dense transition table; it is conditional on the current
 modular wiring pending a second modulus and sparse-residual integration. See
 `results/V0_54_TRAINABLE_MODULAR_TEMPLATES.md`.
+V0.55 removes the identity-init ambiguity: random-init templates reach 100% on
+two seeds at mod-64 and mod-32 after 10k steps. The sparse Dynamic Register
+residual is optional on this task (99.71% no residual versus 99.51% with it at
+the same budget). The next work is non-arithmetic transfer and configurable
+primitive interfaces; see `results/V0_55_TEMPLATE_RANDOM_INIT_AND_RESIDUAL_AB.md`
+and `taklif8.md`.
 
 The modular-prior pilot then reached 100% on the strict synthetic OOD gate,
 but it is explicitly a structural control because the fixed transition wiring

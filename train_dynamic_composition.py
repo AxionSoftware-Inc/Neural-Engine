@@ -35,6 +35,8 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "input_reinjection_scale", "write_gate", "value_encoder_mode",
         "factor_mix_mode", "route_context_mode", "modular_prior",
         "modular_prior_mode",
+        "modular_template_init",
+        "circuit_residual_scale",
     )
     return DynamicRegisterNeuralEngine(**{
         key: config[key] for key in fields if key in config

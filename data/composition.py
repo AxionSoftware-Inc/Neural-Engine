@@ -16,13 +16,13 @@ COMPOSITION_PAIRS = tuple((first, second) for first in OPERATIONS for second in 
 DEFAULT_HELDOUT_PAIRS = (("add", "multiply"), ("multiply", "add"))
 
 
-def apply_operation(name: str, left: int, right: int) -> int:
+def apply_operation(name: str, left: int, right: int, modulus: int = MODULUS) -> int:
     if name == "add":
-        return (left + right) % MODULUS
+        return (left + right) % modulus
     if name == "subtract":
-        return (left - right) % MODULUS
+        return (left - right) % modulus
     if name == "multiply":
-        return (left * right) % MODULUS
+        return (left * right) % modulus
     raise ValueError(f"unknown operation: {name}")
 
 

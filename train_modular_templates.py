@@ -43,6 +43,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Train the modular template control")
     parser.add_argument("--max-ops", type=int, default=6)
     parser.add_argument("--train-max-ops", type=int, default=4)
+    parser.add_argument("--modulus", type=int, default=64)
+    parser.add_argument("--value-token-offset", type=int, default=32)
+    parser.add_argument("--template-init", choices=("identity", "random"), default="identity")
     parser.add_argument("--steps", type=int, default=3000)
     parser.add_argument("--seed", type=int, default=17)
     parser.add_argument("--batch-size", type=int, default=512)
@@ -61,14 +64,22 @@ def main() -> None:
         ("cuda" if torch.cuda.is_available() else "cpu")
         if args.device == "auto" else args.device
     )
-    model = TrainableModularTemplateRegister(max_ops=args.max_ops).to(device)
+    model = TrainableModularTemplateRegister(
+        max_ops=args.max_ops,
+        num_classes=args.modulus,
+        modulus=args.modulus,
+        value_token_offset=args.value_token_offset,
+        template_init=args.template_init,
+    ).to(device)
     train_generator = DynamicCompositionGenerator(
         max_ops=args.max_ops, train_max_ops=args.train_max_ops, seed=args.seed + 1,
         value_min=args.train_value_min, value_max=args.train_value_max, split="train",
+        modulus=args.modulus,
     )
     eval_generator = DynamicCompositionGenerator(
         max_ops=args.max_ops, train_max_ops=args.train_max_ops, seed=args.seed + 2,
         value_min=args.eval_value_min, value_max=args.eval_value_max, split="heldout",
+        modulus=args.modulus,
     )
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     losses = []

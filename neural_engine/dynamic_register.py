@@ -13,7 +13,11 @@ from .encoding import (
     encode_tokens,
 )
 from .instrumentation import count_parameters
-from .modular_templates import TrainableModularTemplateRegister
+from .modular_templates import (
+    modular_add_state,
+    modular_multiply_state,
+    modular_subtract_state,
+)
 from .router import FactorizedRouter, HierarchicalRouter
 
 
@@ -53,6 +57,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         route_context_mode: str = "full",
         modular_prior: bool = False,
         modular_prior_mode: str = "fixed",
+        modular_template_init: str = "identity",
+        circuit_residual_scale: float = 1.0,
     ) -> None:
         super().__init__()
         if max_ops < 1:
@@ -76,6 +82,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("route_context_mode must be full or operation_step")
         if modular_prior_mode not in {"fixed", "templates"}:
             raise ValueError("modular_prior_mode must be fixed or templates")
+        if modular_template_init not in {"identity", "random"}:
+            raise ValueError("modular_template_init must be identity or random")
+        if circuit_residual_scale < 0.0:
+            raise ValueError("circuit_residual_scale must be non-negative")
 
         self.max_ops = max_ops
         self.seq_len = seq_len
@@ -91,6 +101,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.route_context_mode = route_context_mode
         self.modular_prior_enabled = bool(modular_prior)
         self.modular_prior_mode = modular_prior_mode
+        self.modular_template_init = modular_template_init
+        self.circuit_residual_scale = float(circuit_residual_scale)
         self.adaptive_halting = False
         self.adaptive_inference = False
         self.value_start = 1 + max_ops
@@ -139,7 +151,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 ))
                 self.register_buffer("modular_transition", transition, persistent=False)
             else:
-                self.modular_template_logits = nn.Parameter(4.0 * torch.eye(3))
+                self.modular_template_logits = nn.Parameter(torch.empty(3, 3))
+                if modular_template_init == "identity":
+                    with torch.no_grad():
+                        self.modular_template_logits.copy_(4.0 * torch.eye(3))
+                else:
+                    nn.init.normal_(self.modular_template_logits, std=0.02)
             self.modular_projection = nn.Sequential(
                 nn.LayerNorm(VALUE_MODULUS),
                 nn.Linear(VALUE_MODULUS, state_dim),
@@ -278,7 +295,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     route_query,
                     exploration_prob=(self.route_exploration_prob if self.training else 0.0),
                 )
-                delta = self._apply_circuits(query, selected, weights)
+                if self.circuit_residual_scale:
+                    delta = self.circuit_residual_scale * self._apply_circuits(
+                        query, selected, weights
+                    )
+                else:
+                    delta = torch.zeros_like(query)
                 candidate = self.register_writer(
                     torch.cat([active_accumulator, query + delta], dim=-1)
                 )
@@ -307,12 +329,15 @@ class DynamicRegisterNeuralEngine(nn.Module):
                         modular_accumulator = next_modular_accumulator
                     else:
                         modular_primitives = torch.stack((
-                            TrainableModularTemplateRegister._add_state(
-                                modular_state[active_indices], operand_values),
-                            TrainableModularTemplateRegister._subtract_state(
-                                modular_state[active_indices], operand_values),
-                            TrainableModularTemplateRegister._multiply_state(
-                                modular_state[active_indices], operand_values),
+                            modular_add_state(
+                                modular_state[active_indices], operand_values,
+                                VALUE_MODULUS),
+                            modular_subtract_state(
+                                modular_state[active_indices], operand_values,
+                                VALUE_MODULUS),
+                            modular_multiply_state(
+                                modular_state[active_indices], operand_values,
+                                VALUE_MODULUS),
                         ), dim=1)
                         template_weights = nn.functional.softmax(
                             self.modular_template_logits[
@@ -410,4 +435,6 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "route_context_mode": self.route_context_mode,
             "modular_prior": self.modular_prior_enabled,
             "modular_prior_mode": self.modular_prior_mode,
+            "modular_template_init": self.modular_template_init,
+            "circuit_residual_scale": self.circuit_residual_scale,
         }

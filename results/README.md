@@ -277,6 +277,13 @@ This is the strongest current synthetic signal, but it remains conditional on
 the mod-64 structural wiring until a second modulus and sparse-residual
 integration pass. See `V0_54_TRAINABLE_MODULAR_TEMPLATES.md`.
 
+V0.55 closes that validation. Random-init templates reach 100% on two seeds at
+both mod-64 and mod-32 after 10k steps. At equal 10k budget, the Dynamic
+Register reaches 99.71% without circuit residual and 99.51% with residual, so
+the compact modular interface solves the arithmetic gate while the sparse bank
+is optional. See `V0_55_TEMPLATE_RANDOM_INIT_AND_RESIDUAL_AB.md` and the next
+proposal `taklif8.md`.
+
 V0.53 tests that hypothesis with an exact fixed modular transition control and
 a hybrid structural prior. Both reach 100% on the unseen-value/depth gate,
 which is a strong localization signal but not a learned-generalization claim:

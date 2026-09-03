@@ -33,6 +33,7 @@ class DynamicCompositionGenerator:
         value_min: int = 0,
         value_max: int = MODULUS - 1,
         split: str = "all",
+        modulus: int = MODULUS,
     ) -> None:
         if max_ops < 1:
             raise ValueError("max_ops must be positive")
@@ -40,8 +41,10 @@ class DynamicCompositionGenerator:
             train_max_ops = max_ops
         if not 1 <= train_max_ops <= max_ops:
             raise ValueError("train_max_ops must be within max_ops")
-        if not 0 <= value_min <= value_max < MODULUS:
-            raise ValueError(f"value range must be within [0, {MODULUS - 1}]")
+        if modulus < 2:
+            raise ValueError("modulus must be at least 2")
+        if not 0 <= value_min <= value_max < modulus:
+            raise ValueError(f"value range must be within [0, {modulus - 1}]")
         if split not in {"all", "train", "heldout"}:
             raise ValueError("split must be all, train, or heldout")
         self.max_ops = max_ops
@@ -49,6 +52,7 @@ class DynamicCompositionGenerator:
         self.seq_len = 1 + max_ops + (max_ops + 1)
         self.value_min = value_min
         self.value_max = value_max
+        self.modulus = modulus
         self.split = split
         self.rng = np.random.default_rng(seed)
         self.operation_names = tuple(OPERATION_TOKENS)
@@ -86,7 +90,9 @@ class DynamicCompositionGenerator:
         accumulator = int(values[0])
         stage_targets: list[int] = []
         for operation, value in zip(operations, values[1:]):
-            accumulator = apply_operation(operation, accumulator, int(value))
+            accumulator = apply_operation(
+                operation, accumulator, int(value), modulus=self.modulus
+            )
             stage_targets.append(int(accumulator))
         stage_targets.extend([int(accumulator)] * (self.max_ops - depth))
         stage_mask = [True] * depth + [False] * (self.max_ops - depth)
