@@ -5,6 +5,13 @@ reports should record the exact command, commit SHA, hardware, quality, active
 parameter estimate, routing statistics, and whether the result is a failure or
 positive signal.
 
+V0.66 tests halving the sparse circuit residual in the prior-free,
+non-modular composition setup. The two-seed mean is 83.11%, below the 84.18%
+full-residual operation-adapter reference but above the 79.20% no-residual
+control. The circuit remains useful, but residual-scale tuning is not the
+architecture fix; the full-residual configuration remains the reference. See
+`V0_66_HALF_RESIDUAL_ABLATION.md`.
+
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.
