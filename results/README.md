@@ -282,9 +282,9 @@ V0.57 validates staged parent-grown Macro-Cell expansion. A trained 16-cell
 parent is expanded through 64 cells and then 256 cells, with new router levels
 opened gradually. Across seeds 17 and 18, the final 256-cell models reach
 99.51% and 99.71% on unseen depths 5--6, with 255/256 and 254/256 macro cells
-reachable. This is a strong optimization and routing signal, but it uses
-9,000 staged steps versus 3,000 for the scratch comparison, so an equal-compute
-control is still required before claiming pure capacity scaling. See
+reachable. A fair 9,000-step scratch control reaches 99.56% and 99.80%, so
+staged growth is a reliable curriculum but not a final-quality capacity gain
+(means 99.61% staged vs 99.68% scratch). See
 `V0_57_MACRO_PARENT_GROWN.md`.
 
 V0.54 runs that trainable template screen on two seeds. It reaches 100% on the

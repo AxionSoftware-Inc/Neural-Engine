@@ -39,12 +39,20 @@ audit shows that the larger bank is actually reachable. This is a strong
 positive signal for staged growth and directly addresses the earlier capacity
 failure mode.
 
-For comparison, the 256-cell scratch runs scored 78.56% and 75.29% (76.93%
-mean). The staged result is not an equal-compute scaling claim: it receives a
-parent stage and an intermediate stage, for 9,000 total steps. It demonstrates
-that a learned small model can provide a useful optimization and routing prior
-for the larger model; it does not yet prove that raw parameter count alone
-causes the gain.
+The decisive equal-step control trains the 256-cell model from scratch for
+9,000 steps:
+
+| Seed | Training schedule | Unseen-depth accuracy |
+|---:|---|---:|
+| 17 | scratch, 9,000 steps | 99.56% |
+| 18 | scratch, 9,000 steps | 99.80% |
+
+The scratch mean is **99.68%**, effectively the same as the staged mean within
+this two-seed screen (staged minus scratch: **-0.07 percentage points**). The
+earlier 3,000-step scratch runs scored only 78.56% and 75.29% (76.93% mean),
+so the apparent capacity failure was largely an optimization-budget and
+initial-routing problem. Staged growth reaches high quality reliably, but it
+does not yet beat a sufficiently trained 256-cell model from scratch.
 
 ## Implementation
 
@@ -58,9 +66,8 @@ causes the gain.
 
 ## Decision
 
-Keep staged parent-grown expansion as the current Macro-Cell direction. Do not
-scale directly to 300M, 700M, or 1B yet. First run an equal-compute control
-(scratch 256 cells for 9,000 steps) and a longer-depth/generalization gate. If
-the staged advantage survives those controls, the same growth mechanism can be
-used for a 300M or larger bank without hand-tuning each model size.
-
+Keep staged parent-grown expansion as a useful curriculum and initialization
+option, but do not claim a capacity advantage from it. The next gate is a
+longer-depth and compositional-generalization test. Only if that gate passes
+should the same growth mechanism be taken to a 300M or larger bank; scaling to
+700M/1B is not justified by this arithmetic screen alone.
