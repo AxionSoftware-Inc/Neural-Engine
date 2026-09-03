@@ -12,8 +12,13 @@ import yaml
 from torch import nn
 
 from data.composition import COMPOSITION_SPECS, CompositionalProgramGenerator
+from neural_engine.dynamic_register import DynamicRegisterNeuralEngine
 from neural_engine.instrumentation import count_parameters
 from train import make_model, make_optimizer, seed_everything
+from train_dynamic_composition import (
+    make_model as make_dynamic_model,
+    make_optimizer as make_dynamic_optimizer,
+)
 
 
 def evaluate(model: nn.Module, generator: CompositionalProgramGenerator,
@@ -27,7 +32,9 @@ def evaluate(model: nn.Module, generator: CompositionalProgramGenerator,
     with torch.no_grad():
         for start in range(0, batch.inputs.shape[0], eval_batch_size):
             inputs = batch.inputs[start:start + eval_batch_size]
-            if hasattr(model, "adaptive_inference"):
+            if isinstance(model, DynamicRegisterNeuralEngine):
+                logits, stats = model(inputs)
+            elif hasattr(model, "adaptive_inference"):
                 logits, stats = model(inputs, adaptive=model.adaptive_inference)
             else:
                 logits, stats = model(inputs)
@@ -62,7 +69,8 @@ def evaluate(model: nn.Module, generator: CompositionalProgramGenerator,
 def run(args: argparse.Namespace) -> dict[str, Any]:
     with open(args.config, "r", encoding="utf-8") as handle:
         config = yaml.safe_load(handle)
-    seed_everything(int(config["seed"]))
+    run_seed = int(config["seed"]) if args.seed is None else int(args.seed)
+    seed_everything(run_seed)
     if args.device == "auto":
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     else:
@@ -75,21 +83,26 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     train_combination_split = str(config.get("train_combination_split", "all"))
     eval_combination_split = str(config.get("eval_combination_split", "all"))
     train_generator = CompositionalProgramGenerator(
-        seq_len=int(config["seq_len"]), seed=int(config["seed"]) + 1,
+        seq_len=int(config["seq_len"]), seed=run_seed + 1,
         value_min=train_value_min, value_max=train_value_max,
         split="train", heldout_pairs=heldout_pairs,
         combination_split=train_combination_split)
     evaluation_split = "heldout" if heldout_pairs else "all"
     heldout_generator = CompositionalProgramGenerator(
-        seq_len=int(config["seq_len"]), seed=int(config["seed"]) + 2,
+        seq_len=int(config["seq_len"]), seed=run_seed + 2,
         value_min=eval_value_min, value_max=eval_value_max,
         split=evaluation_split, heldout_pairs=heldout_pairs,
         combination_split=eval_combination_split)
-    model = make_model(config).to(device)
+    if config.get("architecture") == "dynamic_register":
+        model = make_dynamic_model(config).to(device)
+        optimizer_factory = make_dynamic_optimizer
+    else:
+        model = make_model(config).to(device)
+        optimizer_factory = make_optimizer
     if args.init_checkpoint:
         initialization = torch.load(Path(args.init_checkpoint), map_location="cpu", weights_only=True)
         model.load_state_dict(initialization.get("model_state", initialization))
-    optimizer = make_optimizer(model, config)
+    optimizer = optimizer_factory(model, config)
     steps = args.steps if args.steps is not None else 1000
     coverage_weight = float(config.get("routing_coverage_weight", 0.0))
     coverage_enabled = coverage_weight > 0.0
@@ -106,7 +119,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             )
         batch = train_generator.task_balanced_batch(int(config["batch_size"]), device)
         optimizer.zero_grad(set_to_none=True)
-        if hasattr(model, "adaptive_inference"):
+        if isinstance(model, DynamicRegisterNeuralEngine):
+            logits, route_stats = model(batch.inputs)
+        elif hasattr(model, "adaptive_inference"):
             logits, route_stats = model(batch.inputs, adaptive=False, coverage=coverage_enabled)
         else:
             logits, route_stats = model(batch.inputs)
@@ -175,7 +190,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     report: dict[str, Any] = {
         "run_id": args.run_id,
         "model_name": config["model"],
-        "seed": config["seed"],
+        "seed": run_seed,
         "device": str(device),
         "gpu": torch.cuda.get_device_name(device) if device.type == "cuda" else None,
         "steps": steps,
@@ -228,6 +243,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Train Neural Engine on held-out operation compositions")
     parser.add_argument("--config", default="configs/ne_composition_v0.yaml")
     parser.add_argument("--steps", type=int)
+    parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--run-id", default="composition_smoke")
     parser.add_argument("--output", default="results/runs")

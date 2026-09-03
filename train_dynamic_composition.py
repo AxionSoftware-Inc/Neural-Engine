@@ -28,7 +28,7 @@ def seed_everything(seed: int) -> None:
 
 def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
     fields = (
-        "vocab_size", "num_classes", "max_ops", "seq_len", "d_model", "state_dim",
+        "vocab_size", "num_classes", "modulus", "max_ops", "seq_len", "d_model", "state_dim",
         "num_circuits", "circuit_rank", "router_branch", "router_depth",
         "candidate_pool", "active_circuits", "circuit_bank_mode", "factor_count",
         "factor_candidate_pool", "circuit_mode", "route_exploration_prob",
@@ -237,6 +237,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         max_ops=int(config["max_ops"]),
         train_max_ops=int(config.get("train_max_ops", config["max_ops"])),
         seed=run_seed + 1,
+        modulus=int(config.get("modulus", 64)),
         value_min=args.train_value_min,
         value_max=args.train_value_max,
         split="train" if args.heldout_depths else "all",
@@ -245,6 +246,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         max_ops=int(config["max_ops"]),
         train_max_ops=int(config.get("train_max_ops", config["max_ops"])),
         seed=run_seed + 2,
+        modulus=int(config.get("modulus", 64)),
         value_min=args.eval_value_min,
         value_max=args.eval_value_max,
         split="heldout" if args.heldout_depths else "all",

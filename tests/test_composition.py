@@ -9,6 +9,7 @@ from data.composition import (
 )
 from neural_engine.model import NeuralEngineV0
 from neural_engine.register_model import TypedRegisterNeuralEngine
+from neural_engine.dynamic_register import DynamicRegisterNeuralEngine
 from train_composition import evaluate
 
 
@@ -87,6 +88,21 @@ def test_typed_register_model_exposes_serial_register_graph_and_gradients():
     loss.backward()
     assert model.circuits.down.grad is not None
     assert model.operation_embedding.weight.grad is not None
+
+
+def test_dynamic_register_composition_forward_uses_fixed_program_layout():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,
+        candidate_pool=4, active_circuits=2, factor_count=8,
+        factor_mix_mode="shared",
+    )
+    generator = CompositionalProgramGenerator(seed=8, split="heldout")
+    batch = generator.task_balanced_batch(6)
+    logits, stats = model(batch.inputs)
+    assert logits.shape == (6, 64)
+    assert stats["step_logits"].shape == (6, 2, 64)
+    assert stats["executed_steps"].eq(2).all()
 
 
 def test_typed_register_direct_readout_skips_third_bank_lookup():

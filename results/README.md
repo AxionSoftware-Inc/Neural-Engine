@@ -281,6 +281,14 @@ the gain comes from the modular interface rather than generic capacity or
 encoding. This is the current reference, pending a second-modulus and
 non-modular-task validation. See `V0_60_MODULAR_VALUE_STATE.md`.
 
+V0.61 tests the core register/circuit path on held-out operation
+compositions with `modular_prior: false` and no Macro-Cells. Two seeds reach
+98.71% mean accuracy on the unseen `add--multiply` and `multiply--add`
+orders, with 99.94% mean on the seven training pairs and about 1.45M active
+parameters. This validates prior-free compositional transfer inside the
+mod-64 arithmetic environment, but it is not yet a genuinely non-modular
+task. See `V0_61_COMPOSITION_HOLDOUT.md`.
+
 V0.56 adds a reusable Macro-Cell bank with sparse top-1 hierarchical routing.
 The 256-cell screen reaches 78.56% and 75.29% across two seeds versus the
 earlier 20M reference mean of 74.17%, while the active macro estimate stays

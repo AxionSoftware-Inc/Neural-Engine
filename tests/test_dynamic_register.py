@@ -202,6 +202,33 @@ def test_trainable_modular_templates_support_another_modulus_and_random_init():
     assert model.parameter_report()["template_init"] == "random"
 
 
+def test_dynamic_register_template_prior_supports_another_modulus():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        num_classes=32,
+        modulus=32,
+        seq_len=8,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        modular_prior=True,
+        modular_prior_mode="templates",
+        modular_template_init="random",
+    )
+    generator = DynamicCompositionGenerator(
+        max_ops=2, train_max_ops=2, modulus=32, value_max=31, seed=13
+    )
+    logits, _ = model(generator.batch(4).inputs)
+    assert logits.shape == (4, 32)
+    assert tuple(model.modular_template_logits.shape) == (3, 3)
+    assert model.parameter_report()["modulus"] == 32
+
+
 def test_dynamic_register_can_disable_circuit_residual_path():
     model = DynamicRegisterNeuralEngine(
         max_ops=2,

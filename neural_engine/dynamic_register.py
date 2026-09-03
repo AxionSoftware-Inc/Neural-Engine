@@ -38,6 +38,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self,
         vocab_size: int = 128,
         num_classes: int = 64,
+        modulus: int = VALUE_MODULUS,
         max_ops: int = 6,
         seq_len: int | None = None,
         d_model: int = 384,
@@ -74,6 +75,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
         super().__init__()
         if max_ops < 1:
             raise ValueError("max_ops must be positive")
+        if modulus < 2:
+            raise ValueError("modulus must be at least two")
+        if modular_prior and num_classes != modulus:
+            raise ValueError("num_classes must equal modulus when modular_prior is enabled")
         expected_seq_len = 1 + max_ops + (max_ops + 1)
         if seq_len is None:
             seq_len = expected_seq_len
@@ -112,6 +117,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("macro_cell_scale must be non-negative")
 
         self.max_ops = max_ops
+        self.modulus = int(modulus)
         self.seq_len = seq_len
         self.state_dim = state_dim
         self.internal_steps = max_ops
@@ -173,12 +179,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
         )
         if self.modular_prior_enabled:
             if self.modular_prior_mode == "fixed":
-                left = torch.arange(VALUE_MODULUS).view(-1, 1)
-                right = torch.arange(VALUE_MODULUS).view(1, -1)
+                left = torch.arange(self.modulus).view(-1, 1)
+                right = torch.arange(self.modulus).view(1, -1)
                 transition = torch.stack((
-                    (left + right).remainder(VALUE_MODULUS),
-                    (left - right).remainder(VALUE_MODULUS),
-                    (left * right).remainder(VALUE_MODULUS),
+                    (left + right).remainder(self.modulus),
+                    (left - right).remainder(self.modulus),
+                    (left * right).remainder(self.modulus),
                 ))
                 self.register_buffer("modular_transition", transition, persistent=False)
             else:
@@ -189,8 +195,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 else:
                     nn.init.normal_(self.modular_template_logits, std=0.02)
             self.modular_projection = nn.Sequential(
-                nn.LayerNorm(VALUE_MODULUS),
-                nn.Linear(VALUE_MODULUS, state_dim),
+                nn.LayerNorm(self.modulus),
+                nn.Linear(self.modulus, state_dim),
                 nn.Tanh(),
             )
         if self.write_gate_enabled:
@@ -258,7 +264,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
     def encode_program(self, inputs: torch.Tensor) -> torch.Tensor:
         if inputs.shape[1] < self.value_start + self.max_ops + 1:
             raise ValueError("inputs are shorter than the configured program layout")
-        tokens = encode_tokens(inputs, self.token_embedding, self.value_encoder)
+        tokens = encode_tokens(
+            inputs, self.token_embedding, self.value_encoder,
+            value_modulus=self.modulus,
+        )
         positions = self.position_embedding[: inputs.shape[1]]
         scale = self.position_scale[: inputs.shape[1]]
         bias = self.position_bias[: inputs.shape[1]]
@@ -298,12 +307,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
         if self.modular_prior_enabled:
             initial_values = (
                 inputs[:, self.value_start] - VALUE_TOKEN_OFFSET
-            ).clamp(0, VALUE_MODULUS - 1)
+            ).clamp(0, self.modulus - 1)
             if self.modular_prior_mode == "fixed":
                 modular_accumulator = initial_values
             else:
                 modular_state = nn.functional.one_hot(
-                    initial_values, VALUE_MODULUS
+                    initial_values, self.modulus
                 ).to(accumulator.dtype)
 
         selected_steps = []
@@ -351,7 +360,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 if self.modular_prior_enabled:
                     if self.modular_prior_mode == "fixed":
                         modular_features = nn.functional.one_hot(
-                            modular_accumulator[active_indices], VALUE_MODULUS
+                            modular_accumulator[active_indices], self.modulus
                         ).to(query.dtype)
                     else:
                         modular_features = modular_state[active_indices].to(query.dtype)
@@ -406,7 +415,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     operand_values = (
                         inputs[active_indices, self.value_start + step + 1]
                         - VALUE_TOKEN_OFFSET
-                    ).clamp(0, VALUE_MODULUS - 1)
+                    ).clamp(0, self.modulus - 1)
                     if self.modular_prior_mode == "fixed":
                         modular_updated = self.modular_transition[
                             operation_ids[active_indices, step],
@@ -420,13 +429,13 @@ class DynamicRegisterNeuralEngine(nn.Module):
                         modular_primitives = torch.stack((
                             modular_add_state(
                                 modular_state[active_indices], operand_values,
-                                VALUE_MODULUS),
+                                self.modulus),
                             modular_subtract_state(
                                 modular_state[active_indices], operand_values,
-                                VALUE_MODULUS),
+                                self.modulus),
                             modular_multiply_state(
                                 modular_state[active_indices], operand_values,
-                                VALUE_MODULUS),
+                                self.modulus),
                         ), dim=1)
                         template_weights = nn.functional.softmax(
                             self.modular_template_logits[
@@ -449,7 +458,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             if self.modular_prior_enabled:
                 if self.modular_prior_mode == "fixed":
                     step_features = nn.functional.one_hot(
-                        modular_accumulator, VALUE_MODULUS
+                        modular_accumulator, self.modulus
                     ).to(accumulator.dtype)
                 else:
                     step_features = modular_state
@@ -538,6 +547,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "active_fraction": (shared + candidate_params + active_circuit_params) / total,
             "active_circuit_params": active_circuit_params,
             "max_ops": self.max_ops,
+            "modulus": self.modulus,
             "circuit_bank_mode": self.circuit_bank_mode,
             "routing_mode": "factorized" if self.circuit_bank_mode == "factorized" else "hierarchical",
             "input_reinjection_scale": self.input_reinjection_scale,
