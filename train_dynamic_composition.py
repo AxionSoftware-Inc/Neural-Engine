@@ -36,6 +36,7 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "factor_mix_mode", "route_context_mode", "modular_prior",
         "operation_adapter_rank", "operation_adapter_scale",
         "operation_adapter_gate",
+        "operation_write_adapter_rank", "operation_write_adapter_scale",
         "modular_prior_mode",
         "modular_template_init",
         "circuit_residual_scale",

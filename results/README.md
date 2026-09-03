@@ -12,6 +12,13 @@ control. The circuit remains useful, but residual-scale tuning is not the
 architecture fix; the full-residual configuration remains the reference. See
 `V0_66_HALF_RESIDUAL_ABLATION.md`.
 
+V0.67 adds an operation-typed low-rank adapter after the shared register
+writer. Three seeds reach 89.27% mean on the same prior-free, non-modular
+held-out composition benchmark, a +5.09-point gain over the full operation
+adapter reference at unchanged sparse routing capacity. This is the current
+learned reference, pending longer-composition and broader-value validation.
+See `V0_67_TYPED_WRITE_ADAPTER.md`.
+
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.

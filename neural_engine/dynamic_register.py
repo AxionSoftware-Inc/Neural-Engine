@@ -62,6 +62,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         operation_adapter_rank: int = 0,
         operation_adapter_scale: float = 1.0,
         operation_adapter_gate: bool = False,
+        operation_write_adapter_rank: int = 0,
+        operation_write_adapter_scale: float = 1.0,
         modular_prior: bool = False,
         modular_prior_mode: str = "fixed",
         modular_template_init: str = "identity",
@@ -103,6 +105,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("operation_adapter_rank must be non-negative")
         if operation_adapter_scale < 0.0:
             raise ValueError("operation_adapter_scale must be non-negative")
+        if operation_write_adapter_rank < 0:
+            raise ValueError("operation_write_adapter_rank must be non-negative")
+        if operation_write_adapter_scale < 0.0:
+            raise ValueError("operation_write_adapter_scale must be non-negative")
         if modular_prior_mode not in {"fixed", "templates"}:
             raise ValueError("modular_prior_mode must be fixed or templates")
         if modular_template_init not in {"identity", "random"}:
@@ -139,6 +145,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.operation_adapter_rank = int(operation_adapter_rank)
         self.operation_adapter_scale = float(operation_adapter_scale)
         self.operation_adapter_gate_enabled = bool(operation_adapter_gate)
+        self.operation_write_adapter_rank = int(operation_write_adapter_rank)
+        self.operation_write_adapter_scale = float(operation_write_adapter_scale)
         self.modular_prior_enabled = bool(modular_prior)
         self.modular_prior_mode = modular_prior_mode
         self.modular_template_init = modular_template_init
@@ -199,6 +207,16 @@ class DynamicRegisterNeuralEngine(nn.Module):
             nn.init.normal_(self.operation_adapter_up, std=0.02)
             if self.operation_adapter_gate_enabled:
                 self.operation_adapter_gate = nn.Parameter(torch.zeros(()))
+        if self.operation_write_adapter_rank:
+            self.operation_write_adapter_down = nn.Parameter(torch.empty(
+                3, state_dim, self.operation_write_adapter_rank
+            ))
+            self.operation_write_adapter_up = nn.Parameter(torch.empty(
+                3, self.operation_write_adapter_rank, state_dim
+            ))
+            self.operation_write_adapter_bias = nn.Parameter(torch.zeros(3, state_dim))
+            nn.init.normal_(self.operation_write_adapter_down, std=0.02)
+            nn.init.normal_(self.operation_write_adapter_up, std=0.02)
         if self.modular_prior_enabled:
             if self.modular_prior_mode == "fixed":
                 left = torch.arange(self.modulus).view(-1, 1)
@@ -315,6 +333,19 @@ class DynamicRegisterNeuralEngine(nn.Module):
         adapted = torch.einsum(
             "br,brd->bd", down, self.operation_adapter_up[operation_ids]
         ) + self.operation_adapter_bias[operation_ids]
+        return nn.functional.gelu(adapted)
+
+    def _operation_write_adapter(
+        self, state: torch.Tensor, operation_ids: torch.Tensor
+    ) -> torch.Tensor:
+        down = torch.einsum(
+            "bd,bdr->br", state,
+            self.operation_write_adapter_down[operation_ids]
+        )
+        adapted = torch.einsum(
+            "br,brd->bd", down,
+            self.operation_write_adapter_up[operation_ids]
+        ) + self.operation_write_adapter_bias[operation_ids]
         return nn.functional.gelu(adapted)
 
     def forward(
@@ -444,6 +475,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 candidate = self.register_writer(
                     torch.cat([active_accumulator, query + delta], dim=-1)
                 )
+                if self.operation_write_adapter_rank:
+                    candidate = candidate + self.operation_write_adapter_scale * (
+                        self._operation_write_adapter(
+                            candidate, operation_ids[active_indices, step]
+                        )
+                    )
                 if self.write_gate_enabled:
                     gate_input = torch.cat([active_accumulator, query + delta], dim=-1)
                     gate = self.write_gate(gate_input)
@@ -550,6 +587,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
             )
             if self.operation_adapter_gate_enabled:
                 shared += self.operation_adapter_gate.numel()
+        if self.operation_write_adapter_rank:
+            shared += (
+                self.operation_write_adapter_down.numel()
+                + self.operation_write_adapter_up.numel()
+                + self.operation_write_adapter_bias.numel()
+            )
         if self.write_gate_enabled:
             shared += count_parameters(self.write_gate)
         if self.modular_prior_enabled:
@@ -612,6 +655,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 float(torch.tanh(self.operation_adapter_gate).detach().cpu())
                 if self.operation_adapter_gate_enabled else None
             ),
+            "operation_write_adapter_rank": self.operation_write_adapter_rank,
+            "operation_write_adapter_scale": self.operation_write_adapter_scale,
             "modular_prior": self.modular_prior_enabled,
             "modular_prior_mode": self.modular_prior_mode,
             "modular_template_init": self.modular_template_init,
