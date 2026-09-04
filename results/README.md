@@ -73,6 +73,11 @@ V0.76 extends V0.75 to 9,000 steps. The two-seed mean reaches 79.54%, still
 therefore stable beyond the short screen; `multiply -> add` remains the hard
 order at 67.53% mean. See `V0_76_OPERATION_CIRCUIT_BANKS_LONG.md`.
 
+V0.77 combines the accepted operation-specific banks with the earlier 16D
+numeric scratch state. The two-seed 3,000-step mean is 78.34%, only 0.15
+points above the bank-only 78.20% screen, so the scratch state is rejected as
+extra default capacity. See `V0_77_OPERATION_BANKS_NUMERIC_STATE.md`.
+
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.
