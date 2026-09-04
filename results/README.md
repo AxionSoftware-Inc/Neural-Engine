@@ -20,6 +20,18 @@ Ordered slots are rejected; route utilization and effective gradient coverage
 must be diagnosed before another capacity expansion. See
 `V0_93_ORDERED_FACTOR_SLOTS.md`.
 
+V0.94 adds query-conditioned coefficients to each selected factor row. The
+two-seed 300M mean is 78.47%, below the 79.08% shared-mix baseline, despite
+an active estimate of only 1.87M. This rejects the small query-factor gate as
+the default. See `V0_94_QUERY_CONDITIONED_FACTOR_MIX.md`.
+
+V0.95 audits the trained checkpoints rather than changing the architecture.
+The added 500M rows are used (10--40 of 45 rows in the held-out audit), but
+usage is not correlated monotonically with quality; held-out task route
+unions overlap strongly. The next screen therefore uses longer programs to
+stress capacity and state credit assignment before any 700M/1B run. See
+`V0_95_ROUTE_UTILIZATION_AUDIT.md` and `analyze_composition_routes.py`.
+
 V0.66 tests halving the sparse circuit residual in the prior-free,
 non-modular composition setup. The two-seed mean is 83.11%, below the 84.18%
 full-residual operation-adapter reference but above the 79.20% no-residual

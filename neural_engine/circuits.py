@@ -121,7 +121,8 @@ class FactorizedMicroCircuitBank(nn.Module):
     def __init__(self, num_circuits: int, state_dim: int, rank: int,
                  factor_count: int | None = None,
                  factor_mix_mode: str = "per_address",
-                 ordered_factor_slots: bool = False):
+                 ordered_factor_slots: bool = False,
+                 query_factor_mix_scale: float = 0.0):
         super().__init__()
         if num_circuits < 1:
             raise ValueError("num_circuits must be positive")
@@ -137,10 +138,18 @@ class FactorizedMicroCircuitBank(nn.Module):
         self.factor_count = factor_count
         self.factor_mix_mode = factor_mix_mode
         self.ordered_factor_slots = bool(ordered_factor_slots)
+        self.query_factor_mix_scale = float(query_factor_mix_scale)
+        if self.query_factor_mix_scale < 0.0:
+            raise ValueError("query_factor_mix_scale must be non-negative")
         factor_shape = (2, factor_count) if self.ordered_factor_slots else (factor_count,)
         self.down_factors = nn.Parameter(torch.empty(*factor_shape, state_dim, rank))
         self.up_factors = nn.Parameter(torch.empty(*factor_shape, rank, state_dim))
         self.bias_factors = nn.Parameter(torch.zeros(*factor_shape, state_dim))
+        if self.query_factor_mix_scale:
+            self.factor_gate_keys = nn.Parameter(
+                torch.empty(*factor_shape, state_dim)
+            )
+            nn.init.normal_(self.factor_gate_keys, std=0.02)
         # A tiny per-address code preserves distinctions between combinations
         # without restoring a full independent matrix for every virtual row.
         mix_shape = (num_circuits, 2) if factor_mix_mode == "per_address" else (2,)
@@ -160,7 +169,8 @@ class FactorizedMicroCircuitBank(nn.Module):
         second = circuit_ids.div(self.factor_count, rounding_mode="floor")
         return first, second
 
-    def _gather(self, circuit_ids: torch.Tensor):
+    def _gather(self, circuit_ids: torch.Tensor,
+                state: torch.Tensor | None = None):
         first, second = self._factor_ids(circuit_ids)
         if self.factor_mix_mode == "per_address":
             mix = self.factor_mix[circuit_ids]
@@ -173,6 +183,27 @@ class FactorizedMicroCircuitBank(nn.Module):
             second_mix = self.factor_mix[1]
             first_bias_mix = self.factor_mix[0]
             second_bias_mix = self.factor_mix[1]
+        if self.query_factor_mix_scale:
+            if state is None:
+                raise ValueError("state is required for query-conditioned factor mixing")
+            if self.ordered_factor_slots:
+                first_gate_keys = self.factor_gate_keys[0, first]
+                second_gate_keys = self.factor_gate_keys[1, second]
+            else:
+                first_gate_keys = self.factor_gate_keys[first]
+                second_gate_keys = self.factor_gate_keys[second]
+            if first_gate_keys.ndim == 2:
+                first_score = torch.einsum("bd,bd->b", state, first_gate_keys)
+                second_score = torch.einsum("bd,bd->b", state, second_gate_keys)
+            else:
+                first_score = torch.einsum("bd,bkd->bk", state, first_gate_keys)
+                second_score = torch.einsum("bd,bkd->bk", state, second_gate_keys)
+            first_gate = torch.tanh(first_score / math.sqrt(self.state_dim))
+            second_gate = torch.tanh(second_score / math.sqrt(self.state_dim))
+            first_mix = first_mix + self.query_factor_mix_scale * first_gate[..., None, None]
+            second_mix = second_mix + self.query_factor_mix_scale * second_gate[..., None, None]
+            first_bias_mix = first_bias_mix + self.query_factor_mix_scale * first_gate[..., None]
+            second_bias_mix = second_bias_mix + self.query_factor_mix_scale * second_gate[..., None]
         if self.ordered_factor_slots:
             first_down = self.down_factors[0, first]
             second_down = self.down_factors[1, second]
@@ -194,7 +225,7 @@ class FactorizedMicroCircuitBank(nn.Module):
 
     def forward(self, state: torch.Tensor, circuit_ids: torch.Tensor,
                 weights: torch.Tensor) -> torch.Tensor:
-        down, up, bias = self._gather(circuit_ids)
+        down, up, bias = self._gather(circuit_ids, state)
         hidden = torch.einsum("bd,bkdr->bkr", state, down)
         hidden = F.gelu(hidden)
         outputs = torch.einsum("bkr,bkrd->bkd", hidden, up) + bias
@@ -204,7 +235,7 @@ class FactorizedMicroCircuitBank(nn.Module):
                        weights: torch.Tensor) -> torch.Tensor:
         current = state
         for slot in range(circuit_ids.shape[1]):
-            down, up, bias = self._gather(circuit_ids[:, slot])
+            down, up, bias = self._gather(circuit_ids[:, slot], current)
             hidden = torch.einsum("bd,bdr->br", current, down)
             hidden = F.gelu(hidden)
             output = torch.einsum("br,brd->bd", hidden, up) + bias

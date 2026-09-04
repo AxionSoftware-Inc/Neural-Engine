@@ -2,134 +2,122 @@ from __future__ import annotations
 
 import argparse
 import json
-from itertools import combinations
 from pathlib import Path
 from typing import Any
 
 import torch
 
-from data.composition import OPERATIONS
-from evaluate_composition import grid_rows
-from train import make_model, seed_everything
-
-
-def jaccard(left: set[int], right: set[int]) -> float:
-    union = left | right
-    return len(left & right) / len(union) if union else 1.0
-
-
-def summarize_group(route_sets: list[set[int]], max_pairs: int = 4096) -> dict[str, float | int]:
-    # An all-pairs comparison is quadratic in the grid size and made route
-    # analysis itself dominate the experiment.  Use a deterministic spread of
-    # pairings once a group is large; the union and circuit counts remain exact.
-    pair_values: list[float] = []
-    pair_count = len(route_sets) * (len(route_sets) - 1) // 2
-    if pair_count <= max_pairs:
-        pair_values = [jaccard(left, right) for left, right in combinations(route_sets, 2)]
-    elif route_sets:
-        sample_count = min(max_pairs, len(route_sets))
-        for index in range(sample_count):
-            partner = (index * 7919 + 104729) % len(route_sets)
-            if partner == index:
-                partner = (partner + 1) % len(route_sets)
-            pair_values.append(jaccard(route_sets[index], route_sets[partner]))
-    union = set().union(*route_sets) if route_sets else set()
-    return {
-        "examples": len(route_sets),
-        "mean_active_circuits": sum(map(len, route_sets)) / max(len(route_sets), 1),
-        "union_circuits": len(union),
-        "within_route_jaccard": sum(pair_values) / max(len(pair_values), 1),
-        "within_route_jaccard_pairs": len(pair_values),
-    }
+from data.composition import CompositionalProgramGenerator
+from train_dynamic_composition import make_model
 
 
 @torch.no_grad()
-def analyze(checkpoint: str, grid_size: int, batch_size: int,
-            device_name: str) -> dict[str, Any]:
-    payload = torch.load(Path(checkpoint), map_location="cpu", weights_only=True)
+def analyze(checkpoint_path: str, examples_per_task: int, device_name: str) -> dict[str, Any]:
+    payload = torch.load(Path(checkpoint_path), map_location="cpu", weights_only=True)
     config = dict(payload["config"])
-    seed_everything(int(config["seed"]))
-    device = torch.device(device_name)
+    if device_name == "auto":
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    else:
+        device = torch.device(device_name)
     model = make_model(config).to(device).eval()
     model.load_state_dict(payload["model_state"])
-    inputs, _, labels = grid_rows(config, grid_size)
-    selected_parts: list[torch.Tensor] = []
-    for start in range(0, inputs.shape[0], batch_size):
-        _, stats = model(inputs[start:start + batch_size].to(device), adaptive=False)
-        selected_parts.append(stats["selected_ids"].cpu())
-    selected = torch.cat(selected_parts, dim=0)
+    heldout_pairs = tuple(tuple(pair) for pair in config.get("heldout_pairs", []))
+    modulus_config = config.get("generator_modulus", config.get("modulus", 64))
+    generator_modulus = None if modulus_config is None else int(modulus_config)
+    generator = CompositionalProgramGenerator(
+        seq_len=int(config["seq_len"]),
+        seed=int(payload.get("report", {}).get("seed", config.get("seed", 17))) + 2,
+        value_min=int(config.get("eval_value_min", 0)),
+        value_max=int(config.get("eval_value_max", 63)),
+        split="heldout" if heldout_pairs else "all",
+        heldout_pairs=heldout_pairs,
+        combination_split=str(config.get("eval_combination_split", "all")),
+        modulus=generator_modulus,
+        target_offset=int(config.get("target_offset", 0)),
+    )
+    batch = generator.balanced_batch(examples_per_task, device)
+    logits, stats = model(batch.inputs)
+    correct = logits.argmax(dim=-1).eq(batch.targets)
+    selected = stats["selected_ids"].detach().cpu()
+    flat_selected = selected[selected.ge(0)]
+    first, second = model.router._factor_ids(flat_selected.to(device))
+    factor_ids = torch.cat((first, second)).cpu()
+    factor_counts = torch.bincount(
+        factor_ids, minlength=int(model.router.factor_count)
+    ).float()
+    virtual_counts = torch.bincount(
+        flat_selected, minlength=int(model.router.num_circuits)
+    ).float()
 
-    # Stage 1 is typed by op1, stage 2 by op2, and stage 3 is the shared
-    # readout/refinement stage.  The label list preserves pair context for
-    # cross-context reuse measurements.
-    op_names = list(OPERATIONS)
-    stage_groups: dict[str, list[set[int]]] = {}
-    stage_union: dict[str, set[int]] = {}
-    for index in range(inputs.shape[0]):
-        op_ids = (inputs[index, 1:3] - 2).tolist()
-        for stage, op_id in enumerate((*op_ids, -1)):
-            group = f"stage_{stage + 1}:{op_names[op_id] if op_id >= 0 else 'readout'}"
-            route = set(int(value) for value in selected[index, stage].flatten().tolist()
-                        if int(value) >= 0)
-            stage_groups.setdefault(group, []).append(route)
-            stage_union.setdefault(group, set()).update(route)
-
-    per_stage: dict[str, Any] = {}
-    for stage in range(3):
-        stage_name = f"stage_{stage + 1}"
-        groups = {
-            group: summarize_group(routes)
-            for group, routes in stage_groups.items()
-            if group.startswith(stage_name + ":")
+    task_names = {spec.task_id: spec.name for spec in generator.allowed_specs}
+    per_task: dict[str, dict[str, Any]] = {}
+    task_factor_sets: dict[str, set[int]] = {}
+    for task_id, task_name in task_names.items():
+        mask = batch.task_ids.detach().cpu().eq(task_id)
+        task_selected = selected[mask]
+        task_flat = task_selected[task_selected.ge(0)]
+        task_first, task_second = model.router._factor_ids(task_flat.to(device))
+        task_factors = torch.cat((task_first, task_second)).cpu().unique()
+        task_virtual = task_flat.unique()
+        task_factor_sets[task_name] = set(int(value) for value in task_factors.tolist())
+        per_task[task_name] = {
+            "accuracy": float(correct[mask.to(device)].float().mean().cpu()),
+            "unique_virtual_circuits": int(task_virtual.numel()),
+            "unique_factor_rows": int(task_factors.numel()),
+            "new_factor_rows_after_154": int((task_factors >= 154).sum()),
         }
-        group_names = sorted(groups)
-        union_pairs = [
-            jaccard(stage_union[left], stage_union[right])
-            for left, right in combinations(group_names, 2)
-        ]
-        per_stage[stage_name] = {
-            "groups": groups,
-            "between_group_union_jaccard": sum(union_pairs) / max(len(union_pairs), 1),
-        }
 
-    flat_selected = selected.reshape(-1)
-    counts = torch.bincount(flat_selected, minlength=model.router.num_circuits).float()
-    probabilities = counts / counts.sum().clamp_min(1)
-    result: dict[str, Any] = {
-        "checkpoint": checkpoint,
+    task_factor_jaccard: dict[str, float] = {}
+    task_items = list(task_factor_sets.items())
+    for left_index in range(len(task_items)):
+        left_name, left_set = task_items[left_index]
+        for right_name, right_set in task_items[left_index + 1:]:
+            union = left_set | right_set
+            task_factor_jaccard[f"{left_name}__{right_name}"] = (
+                len(left_set & right_set) / len(union) if union else 1.0
+            )
+
+    factor_prob = factor_counts / factor_counts.sum().clamp_min(1.0)
+    nonzero = factor_prob[factor_prob > 0]
+    factor_entropy = float(-(nonzero * nonzero.log()).sum())
+    unique_virtual_per_example = [
+        int(values[values.ge(0)].unique().numel()) for values in selected
+    ]
+    result = {
+        "checkpoint": str(checkpoint_path),
         "model": config["model"],
         "device": str(device),
-        "grid_size": grid_size,
-        "examples": int(inputs.shape[0]),
-        "examples_per_pair": grid_size ** 3,
-        "active_circuits_per_stage": int(model.router.active_circuits),
-        "circuit_bank_size": model.router.num_circuits,
-        "circuits_used": int((counts > 0).sum()),
-        "dead_circuit_fraction": float((counts == 0).float().mean()),
-        "routing_entropy": float(-(probabilities[probabilities > 0]
-                                    * probabilities[probabilities > 0].log()).sum()),
-        "routing_max_load_fraction": float(probabilities.max()),
-        "per_stage": per_stage,
-        "interpretation": {
-            "same_operator_within_route_jaccard":
-                "higher means stronger reuse within a typed operator group",
-            "between_group_union_jaccard":
-                "lower means more separated circuit families between operators",
-        },
+        "examples_per_task": examples_per_task,
+        "heldout_accuracy": float(correct.float().mean().cpu()),
+        "factor_count": int(model.router.factor_count),
+        "virtual_circuit_capacity": int(model.router.num_circuits),
+        "virtual_circuits_used": int((virtual_counts > 0).sum()),
+        "factor_rows_used": int((factor_counts > 0).sum()),
+        "new_factor_rows_used_after_154": int((factor_counts[154:] > 0).sum())
+        if factor_counts.numel() > 154 else 0,
+        "factor_entropy": factor_entropy,
+        "factor_effective_rows": float(torch.exp(torch.tensor(factor_entropy))),
+        "factor_max_load_fraction": float(factor_prob.max()),
+        "mean_unique_virtual_per_example": (
+            sum(unique_virtual_per_example) / max(len(unique_virtual_per_example), 1)
+        ),
+        "between_task_factor_jaccard": task_factor_jaccard,
+        "per_task": per_task,
     }
+    del model
+    if device.type == "cuda":
+        torch.cuda.empty_cache()
     return result
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Measure typed operator route sharing on the composition grid")
-    parser.add_argument("--checkpoint", required=True)
-    parser.add_argument("--grid-size", type=int, default=16)
-    parser.add_argument("--batch-size", type=int, default=64)
-    parser.add_argument("--device", default="cuda")
+    parser = argparse.ArgumentParser(description="Audit factor and virtual-route utilization on composition checkpoints")
+    parser.add_argument("--checkpoint", action="append", required=True)
+    parser.add_argument("--examples-per-task", type=int, default=1024)
+    parser.add_argument("--device", default="auto")
     parser.add_argument("--output", default=None)
     args = parser.parse_args()
-    result = analyze(args.checkpoint, args.grid_size, args.batch_size, args.device)
+    result = [analyze(path, args.examples_per_task, args.device) for path in args.checkpoint]
     rendered = json.dumps(result, indent=2)
     if args.output:
         output_path = Path(args.output)

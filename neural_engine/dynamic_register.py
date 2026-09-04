@@ -78,6 +78,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         factor_candidate_pool: int | None = None,
         factor_capacity: int | None = None,
         ordered_factor_slots: bool = False,
+        query_factor_mix_scale: float = 0.0,
         circuit_mode: str = "serial",
         route_exploration_prob: float = 0.05,
         input_reinjection_scale: float = 0.0,
@@ -206,6 +207,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.value_encoder_mode = value_encoder_mode
         self.factor_mix_mode = factor_mix_mode
         self.ordered_factor_slots = bool(ordered_factor_slots)
+        self.query_factor_mix_scale = float(query_factor_mix_scale)
+        if self.query_factor_mix_scale < 0.0:
+            raise ValueError("query_factor_mix_scale must be non-negative")
         self.route_context_mode = route_context_mode
         self.state_layout = state_layout
         self.predecessor_operation_context = bool(predecessor_operation_context)
@@ -393,7 +397,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             def make_circuit_bank() -> nn.Module:
                 return FactorizedMicroCircuitBank(
                     num_circuits, state_dim, circuit_rank, factor_count, factor_mix_mode,
-                    ordered_factor_slots
+                    ordered_factor_slots, query_factor_mix_scale
                 )
         else:
             self.router = HierarchicalRouter(
@@ -926,6 +930,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 down_row.numel() + up_row.numel() + bias_row.numel()
                 + circuit_bank.factor_mix[0].numel()
             )
+            if self.query_factor_mix_scale:
+                gate_row = (
+                    circuit_bank.factor_gate_keys[0, 0]
+                    if self.ordered_factor_slots else circuit_bank.factor_gate_keys[0]
+                )
+                factor_row += gate_row.numel()
             bank_count = min(self.max_ops, 3) if self.operation_circuit_bank else 1
             active_circuit_params = factor_row * self.router.active_circuits * 2 * bank_count
             candidate_params = self.router.keys[0].numel() * self.router.factor_candidate_pool * 2
@@ -981,6 +991,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "value_encoder_mode": self.value_encoder_mode,
             "factor_mix_mode": self.factor_mix_mode,
             "ordered_factor_slots": self.ordered_factor_slots,
+            "query_factor_mix_scale": self.query_factor_mix_scale,
             "factor_count": self.router.factor_count if self.circuit_bank_mode == "factorized" else None,
             "factor_candidate_pool": (
                 self.router.factor_candidate_pool
