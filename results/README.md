@@ -144,6 +144,17 @@ two-seed 3,000-step mean falls to 76.49%, so forced slot separation is
 rejected. The flat state with operation-specific circuit banks remains the
 reference for the next capacity screen. See `V0_89_DUAL_SLOT_STATE.md`.
 
+V0.90 scales the accepted flat operation-bank model from 300M to 500M virtual
+circuits with scratch training. The two-seed mean falls to 78.61% from 79.08%
+at 300M, while the estimated active path stays at 1.86M. Scratch capacity is
+rejected as a quality fix. See `V0_90_OPERATION_BANKS_500M_SCRATCH.md`.
+
+V0.91 warm-starts 500M from the trained 300M parent using a factor census and
+cloned new factor rows. The mean recovers to 78.98%, 0.37 points above 500M
+scratch, but remains 0.10 points below 300M. This is only a weak optimization
+signal; 700M/1B scaling remains blocked. See
+`V0_91_OPERATION_BANKS_500M_GROWTH.md`.
+
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.
