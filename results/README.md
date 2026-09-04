@@ -12,6 +12,14 @@ growth (78.98%), and the V0.80 300M reference (79.59%). This rejects warm-up
 as the capacity fix and points to factor-bank expressivity/ordered semantics
 as the next bottleneck. See `V0_92_STABLE_FACTOR_WARMUP.md`.
 
+V0.93 gives the first and second factor slots separate reusable factor tables
+so ordered addresses are no longer assembled from one shared table. The
+two-seed 300M mean falls to 77.25% versus the 79.08% shared-slot baseline,
+while stored parameters rise to 13.2M and active estimate stays at 1.86M.
+Ordered slots are rejected; route utilization and effective gradient coverage
+must be diagnosed before another capacity expansion. See
+`V0_93_ORDERED_FACTOR_SLOTS.md`.
+
 V0.66 tests halving the sparse circuit residual in the prior-free,
 non-modular composition setup. The two-seed mean is 83.11%, below the 84.18%
 full-residual operation-adapter reference but above the 79.20% no-residual

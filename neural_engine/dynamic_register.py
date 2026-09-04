@@ -77,6 +77,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         factor_count: int | None = None,
         factor_candidate_pool: int | None = None,
         factor_capacity: int | None = None,
+        ordered_factor_slots: bool = False,
         circuit_mode: str = "serial",
         route_exploration_prob: float = 0.05,
         input_reinjection_scale: float = 0.0,
@@ -204,6 +205,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.write_gate_enabled = bool(write_gate)
         self.value_encoder_mode = value_encoder_mode
         self.factor_mix_mode = factor_mix_mode
+        self.ordered_factor_slots = bool(ordered_factor_slots)
         self.route_context_mode = route_context_mode
         self.state_layout = state_layout
         self.predecessor_operation_context = bool(predecessor_operation_context)
@@ -390,7 +392,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
 
             def make_circuit_bank() -> nn.Module:
                 return FactorizedMicroCircuitBank(
-                    num_circuits, state_dim, circuit_rank, factor_count, factor_mix_mode
+                    num_circuits, state_dim, circuit_rank, factor_count, factor_mix_mode,
+                    ordered_factor_slots
                 )
         else:
             self.router = HierarchicalRouter(
@@ -911,10 +914,16 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 shared += self.modular_template_logits.numel()
         circuit_bank = self.circuits[0] if self.operation_circuit_bank else self.circuits
         if self.circuit_bank_mode == "factorized":
+            if self.ordered_factor_slots:
+                down_row = circuit_bank.down_factors[0, 0]
+                up_row = circuit_bank.up_factors[0, 0]
+                bias_row = circuit_bank.bias_factors[0, 0]
+            else:
+                down_row = circuit_bank.down_factors[0]
+                up_row = circuit_bank.up_factors[0]
+                bias_row = circuit_bank.bias_factors[0]
             factor_row = (
-                circuit_bank.down_factors[0].numel()
-                + circuit_bank.up_factors[0].numel()
-                + circuit_bank.bias_factors[0].numel()
+                down_row.numel() + up_row.numel() + bias_row.numel()
                 + circuit_bank.factor_mix[0].numel()
             )
             bank_count = min(self.max_ops, 3) if self.operation_circuit_bank else 1
@@ -971,6 +980,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "write_gate": self.write_gate_enabled,
             "value_encoder_mode": self.value_encoder_mode,
             "factor_mix_mode": self.factor_mix_mode,
+            "ordered_factor_slots": self.ordered_factor_slots,
             "factor_count": self.router.factor_count if self.circuit_bank_mode == "factorized" else None,
             "factor_candidate_pool": (
                 self.router.factor_candidate_pool

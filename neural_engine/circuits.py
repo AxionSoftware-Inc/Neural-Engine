@@ -120,7 +120,8 @@ class FactorizedMicroCircuitBank(nn.Module):
 
     def __init__(self, num_circuits: int, state_dim: int, rank: int,
                  factor_count: int | None = None,
-                 factor_mix_mode: str = "per_address"):
+                 factor_mix_mode: str = "per_address",
+                 ordered_factor_slots: bool = False):
         super().__init__()
         if num_circuits < 1:
             raise ValueError("num_circuits must be positive")
@@ -135,9 +136,11 @@ class FactorizedMicroCircuitBank(nn.Module):
         self.rank = rank
         self.factor_count = factor_count
         self.factor_mix_mode = factor_mix_mode
-        self.down_factors = nn.Parameter(torch.empty(factor_count, state_dim, rank))
-        self.up_factors = nn.Parameter(torch.empty(factor_count, rank, state_dim))
-        self.bias_factors = nn.Parameter(torch.zeros(factor_count, state_dim))
+        self.ordered_factor_slots = bool(ordered_factor_slots)
+        factor_shape = (2, factor_count) if self.ordered_factor_slots else (factor_count,)
+        self.down_factors = nn.Parameter(torch.empty(*factor_shape, state_dim, rank))
+        self.up_factors = nn.Parameter(torch.empty(*factor_shape, rank, state_dim))
+        self.bias_factors = nn.Parameter(torch.zeros(*factor_shape, state_dim))
         # A tiny per-address code preserves distinctions between combinations
         # without restoring a full independent matrix for every virtual row.
         mix_shape = (num_circuits, 2) if factor_mix_mode == "per_address" else (2,)
@@ -170,9 +173,23 @@ class FactorizedMicroCircuitBank(nn.Module):
             second_mix = self.factor_mix[1]
             first_bias_mix = self.factor_mix[0]
             second_bias_mix = self.factor_mix[1]
-        down = self.down_factors[first] * first_mix + self.down_factors[second] * second_mix
-        up = self.up_factors[first] * first_mix + self.up_factors[second] * second_mix
-        bias = self.bias_factors[first] * first_bias_mix + self.bias_factors[second] * second_bias_mix
+        if self.ordered_factor_slots:
+            first_down = self.down_factors[0, first]
+            second_down = self.down_factors[1, second]
+            first_up = self.up_factors[0, first]
+            second_up = self.up_factors[1, second]
+            first_bias = self.bias_factors[0, first]
+            second_bias = self.bias_factors[1, second]
+        else:
+            first_down = self.down_factors[first]
+            second_down = self.down_factors[second]
+            first_up = self.up_factors[first]
+            second_up = self.up_factors[second]
+            first_bias = self.bias_factors[first]
+            second_bias = self.bias_factors[second]
+        down = first_down * first_mix + second_down * second_mix
+        up = first_up * first_mix + second_up * second_mix
+        bias = first_bias * first_bias_mix + second_bias * second_bias_mix
         return down, up, bias
 
     def forward(self, state: torch.Tensor, circuit_ids: torch.Tensor,
