@@ -1,5 +1,19 @@
 # Results
 
+V0.105 transfers the canonical operator-valued layer into one unchanged
+300M composition transform. It reaches only 68.36% held-out mean versus the
+V0.80 reference at 79.59%, while fitting train pairs at 100%; this placement
+is rejected. The isolated synthetic operator gates remain positive, but no
+main-model quality gain is claimed. See `V0_105_OPERATOR_VALUED_COMPOSITION.md`.
+
+V0.104 passes the matched operator-valued teacher task. A learned `g=16,q=8`
+operator basis reaches 1.42e-13 relative MSE with 6,656 trainable scalars,
+beating equal-DOF global low-rank (0.9105) and block-diagonal (0.9659)
+controls; full dense reaches 4.06e-13 with 147,456 scalars. This is a
+structured-target result, so the next gate is an isolated replacement inside
+the existing synthetic composition model. See
+`V0_104_OPERATOR_VALUED_MATCHED_TASK.md`.
+
 V0.103 passes the isolated operator-valued parameter implementation and
 representation gates. Canonical `g=16,q=8` recovers a known shared target to
 4.8e-6 relative error, beats a fixed-random basis, and correctly hits a 0.959

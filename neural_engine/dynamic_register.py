@@ -15,6 +15,7 @@ from .encoding import (
     encode_tokens,
 )
 from .instrumentation import count_parameters
+from .operator_valued import OperatorValuedLinear
 from .macro_cells import MacroCellBank
 from .modular_templates import (
     modular_add_state,
@@ -104,6 +105,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
         operation_transition_scale: float = 1.0,
         structured_scalar_state: bool = False,
         structured_scalar_scale: float = 1.0,
+        operator_valued_product_encoder: bool = False,
+        operator_valued_packet_width: int = 16,
+        operator_valued_basis_count: int = 8,
         numeric_state_dim: int = 0,
         numeric_state_scale: float = 1.0,
         modular_prior: bool = False,
@@ -180,6 +184,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("operation_transition_scale must be non-negative")
         if structured_scalar_scale < 0.0:
             raise ValueError("structured_scalar_scale must be non-negative")
+        if operator_valued_packet_width < 1:
+            raise ValueError("operator_valued_packet_width must be positive")
+        if operator_valued_basis_count < 1:
+            raise ValueError("operator_valued_basis_count must be positive")
+        if operator_valued_product_encoder and state_dim % operator_valued_packet_width:
+            raise ValueError(
+                "state_dim must be divisible by operator_valued_packet_width"
+            )
         if numeric_state_dim < 0:
             raise ValueError("numeric_state_dim must be non-negative")
         if numeric_state_scale < 0.0:
@@ -247,6 +259,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.operation_transition_scale = float(operation_transition_scale)
         self.structured_scalar_state = bool(structured_scalar_state)
         self.structured_scalar_scale = float(structured_scalar_scale)
+        self.operator_valued_product_encoder = bool(operator_valued_product_encoder)
+        self.operator_valued_packet_width = int(operator_valued_packet_width)
+        self.operator_valued_basis_count = int(operator_valued_basis_count)
         self.numeric_state_dim = int(numeric_state_dim)
         self.numeric_state_scale = float(numeric_state_scale)
         self.modular_prior_enabled = bool(modular_prior)
@@ -291,8 +306,17 @@ class DynamicRegisterNeuralEngine(nn.Module):
             nn.Linear(2 * state_dim, state_dim),
             nn.GELU(),
         )
+        product_transform: nn.Module = (
+            OperatorValuedLinear(
+                state_dim,
+                state_dim,
+                packet_width=self.operator_valued_packet_width,
+                basis_count=self.operator_valued_basis_count,
+            )
+            if self.operator_valued_product_encoder else nn.Linear(state_dim, state_dim)
+        )
         self.product_encoder = nn.Sequential(
-            nn.LayerNorm(state_dim), nn.Linear(state_dim, state_dim), nn.GELU()
+            nn.LayerNorm(state_dim), product_transform, nn.GELU()
         )
         self.operation_embedding = nn.Embedding(3, state_dim)
         if self.predecessor_operation_context:
@@ -1139,6 +1163,13 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "operation_transition_scale": self.operation_transition_scale,
             "structured_scalar_state": self.structured_scalar_state,
             "structured_scalar_scale": self.structured_scalar_scale,
+            "operator_valued_product_encoder": self.operator_valued_product_encoder,
+            "operator_valued_packet_width": self.operator_valued_packet_width,
+            "operator_valued_basis_count": self.operator_valued_basis_count,
+            "operator_valued_product_scalar_dof": (
+                count_parameters(self.product_encoder[1])
+                if self.operator_valued_product_encoder else 0
+            ),
             "numeric_state_dim": self.numeric_state_dim,
             "numeric_state_scale": self.numeric_state_scale,
             "modular_prior": self.modular_prior_enabled,
