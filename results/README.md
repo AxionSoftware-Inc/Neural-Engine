@@ -68,6 +68,11 @@ shared-bank typed-write baseline. This is the strongest current architectural
 signal and is being advanced to longer-depth validation. See
 `V0_75_OPERATION_CIRCUIT_BANKS.md`.
 
+V0.76 extends V0.75 to 9,000 steps. The two-seed mean reaches 79.54%, still
+6.20 points above the shared-bank 73.34% long-budget baseline. The gain is
+therefore stable beyond the short screen; `multiply -> add` remains the hard
+order at 67.53% mean. See `V0_76_OPERATION_CIRCUIT_BANKS_LONG.md`.
+
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.
