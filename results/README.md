@@ -89,6 +89,11 @@ V0.79 halves both operation adapter ranks from 16 to 8. The two-seed
 parameters. Rank 8 is the current efficiency candidate pending a 9,000-step
 confirmation. See `V0_79_OPERATION_BANKS_RANK8.md`.
 
+V0.80 confirms rank 8 at 9,000 steps: 79.59% mean versus 79.54% for rank 16,
+with 36,864 fewer active parameters. Rank 8 is therefore the current
+efficiency default; the remaining weakness is the `multiply -> add` order at
+68.60% mean. See `V0_80_OPERATION_BANKS_RANK8_LONG.md`.
+
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.
