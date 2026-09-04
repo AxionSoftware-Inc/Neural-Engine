@@ -5,6 +5,14 @@ reports should record the exact command, commit SHA, hardware, quality, active
 parameter estimate, routing statistics, and whether the result is a failure or
 positive signal.
 
+V0.97 adds a nonlinear learned basis for factor-pair interactions instead of
+only adding more factor addresses. It reaches 79.10% mean held-out accuracy
+across two seeds, below the V0.80 300M shared-factor reference at 79.59%.
+Although `multiply -> add` improves by 0.83 points, `add -> multiply` drops by
+1.81 points and the active estimate grows by about 203K. The pair-basis route
+is rejected; do not scale this exact design to 500M/700M/1B. See
+`V0_97_FACTOR_PAIR_BASIS.md`.
+
 V0.92 tests stable factor warm-up during 300M -> 500M parent growth: route
 only through the parent 154 factors for 1,000 steps, then open all 199. The
 two-seed mean is 78.56%, below V0.90 scratch 500M (78.61%), V0.91 simple
