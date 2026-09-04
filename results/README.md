@@ -1,5 +1,11 @@
 # Results
 
+V0.102 tests grouped sparse execution independently of model quality. Grouping
+is 1.7x faster with 32-route locality but slower for high-entropy routes; a
+materialized contiguous page is about 3.3x faster in this small bank at a large
+memory cost. The runtime should be locality-aware rather than always grouped.
+See `V0_102_GROUPED_SPARSE_EXECUTION.md`.
+
 V0.101 adds a matched 20M operation-bank point to the depth-5--8 capability
 frontier. The two-seed held-out mean is 90.04%, below 300M at 96.39%, while
 500M remains flat at 96.29%. Capacity helps from 20M to 300M but is saturated
