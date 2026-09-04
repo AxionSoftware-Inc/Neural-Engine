@@ -1,5 +1,12 @@
 # Results
 
+V0.103 passes the isolated operator-valued parameter implementation and
+representation gates. Canonical `g=16,q=8` recovers a known shared target to
+4.8e-6 relative error, beats a fixed-random basis, and correctly hits a 0.959
+error ceiling on random dense blocks. The direction is alive for a matched
+task test, but no Neural Engine quality or runtime gain is claimed yet. See
+`V0_103_OPERATOR_VALUED_PARAMETER_GATE.md`.
+
 V0.102 tests grouped sparse execution independently of model quality. Grouping
 is 1.7x faster with 32-route locality but slower for high-entropy routes; a
 materialized contiguous page is about 3.3x faster in this small bank at a large
