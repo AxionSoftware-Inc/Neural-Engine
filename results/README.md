@@ -139,6 +139,11 @@ baseline at 68.75%, so extra operation metadata is rejected. The next work
 should change the state representation itself. See
 `V0_88_PREDECESSOR_OPERATION_CONTEXT.md`.
 
+V0.89 splits the persistent state into two independently written slots. The
+two-seed 3,000-step mean falls to 76.49%, so forced slot separation is
+rejected. The flat state with operation-specific circuit banks remains the
+reference for the next capacity screen. See `V0_89_DUAL_SLOT_STATE.md`.
+
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.

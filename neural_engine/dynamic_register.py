@@ -83,6 +83,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         value_encoder_mode: str = "learned",
         factor_mix_mode: str = "per_address",
         route_context_mode: str = "full",
+        state_layout: str = "flat",
         predecessor_operation_context: bool = False,
         operation_adapter_rank: int = 0,
         operation_adapter_scale: float = 1.0,
@@ -142,6 +143,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError(
                 "route_context_mode must be full, operation_step, or hybrid"
             )
+        if state_layout not in {"flat", "dual_slot"}:
+            raise ValueError("state_layout must be flat or dual_slot")
+        if state_layout == "dual_slot" and state_dim % 2:
+            raise ValueError("state_dim must be even for dual_slot state layout")
         if operation_adapter_rank < 0:
             raise ValueError("operation_adapter_rank must be non-negative")
         if operation_adapter_scale < 0.0:
@@ -199,6 +204,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.value_encoder_mode = value_encoder_mode
         self.factor_mix_mode = factor_mix_mode
         self.route_context_mode = route_context_mode
+        self.state_layout = state_layout
         self.predecessor_operation_context = bool(predecessor_operation_context)
         self.operation_adapter_rank = int(operation_adapter_rank)
         self.operation_adapter_scale = float(operation_adapter_scale)
@@ -262,11 +268,23 @@ class DynamicRegisterNeuralEngine(nn.Module):
         if self.predecessor_operation_context:
             self.predecessor_operation_embedding = nn.Embedding(4, state_dim)
         self.step_embedding = nn.Parameter(torch.zeros(max_ops, state_dim))
-        self.register_writer = nn.Sequential(
-            nn.LayerNorm(2 * state_dim),
-            nn.Linear(2 * state_dim, state_dim),
-            nn.Tanh(),
-        )
+        if state_layout == "dual_slot":
+            self.slot_dim = state_dim // 2
+            self.slot_writers = nn.ModuleList([
+                nn.Sequential(
+                    nn.LayerNorm(2 * self.slot_dim),
+                    nn.Linear(2 * self.slot_dim, self.slot_dim),
+                    nn.Tanh(),
+                )
+                for _ in range(2)
+            ])
+        else:
+            self.slot_dim = state_dim
+            self.register_writer = nn.Sequential(
+                nn.LayerNorm(2 * state_dim),
+                nn.Linear(2 * state_dim, state_dim),
+                nn.Tanh(),
+            )
         if self.numeric_state_dim:
             self.numeric_value_encoder = nn.Sequential(
                 nn.Linear(1, self.numeric_state_dim), nn.Tanh()
@@ -524,6 +542,21 @@ class DynamicRegisterNeuralEngine(nn.Module):
         ) + self.operation_transition_bias[operation_ids]
         return nn.functional.gelu(adapted)
 
+    def _write_state(
+        self, accumulator: torch.Tensor, write_input: torch.Tensor
+    ) -> torch.Tensor:
+        if self.state_layout == "flat":
+            return self.register_writer(torch.cat([accumulator, write_input], dim=-1))
+        accumulator_slots = accumulator.chunk(2, dim=-1)
+        write_slots = write_input.chunk(2, dim=-1)
+        updated_slots = [
+            writer(torch.cat([accumulator_slot, write_slot], dim=-1))
+            for writer, accumulator_slot, write_slot in zip(
+                self.slot_writers, accumulator_slots, write_slots
+            )
+        ]
+        return torch.cat(updated_slots, dim=-1)
+
     def forward(
         self,
         inputs: torch.Tensor,
@@ -714,9 +747,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                             write_input, current_operation_ids
                         )
                     )
-                candidate = self.register_writer(
-                    torch.cat([active_accumulator, write_input], dim=-1)
-                )
+                candidate = self._write_state(active_accumulator, write_input)
                 if self.operation_write_adapter_rank:
                     candidate = candidate + self.operation_write_adapter_scale * (
                         self._operation_write_adapter(
@@ -825,7 +856,11 @@ class DynamicRegisterNeuralEngine(nn.Module):
             + count_parameters(self.product_encoder)
             + count_parameters(self.operation_embedding)
             + self.step_embedding.numel()
-            + count_parameters(self.register_writer)
+            + (
+                count_parameters(self.register_writer)
+                if self.state_layout == "flat"
+                else count_parameters(self.slot_writers)
+            )
             + count_parameters(self.route_context)
             + count_parameters(self.output)
         )
@@ -935,6 +970,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "value_encoder_mode": self.value_encoder_mode,
             "factor_mix_mode": self.factor_mix_mode,
             "route_context_mode": self.route_context_mode,
+            "state_layout": self.state_layout,
             "predecessor_operation_context": self.predecessor_operation_context,
             "operation_adapter_rank": self.operation_adapter_rank,
             "operation_adapter_scale": self.operation_adapter_scale,
