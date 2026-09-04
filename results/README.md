@@ -1,5 +1,12 @@
 # Results
 
+V0.107 passes a synthetic self-describing semantic-address audit. A coupled
+descriptor reaches 100% coarse/active routing accuracy, 100% full-scan top-k
+recall, and descriptor/body cosine 0.729 while evaluating 16 local dot
+products instead of 64; the free-descriptor control has cosine 0.011. This
+validates the routing mechanism only, not model quality. See
+`V0_107_SEMANTIC_ADDRESSING_AUDIT.md`.
+
 V0.106 rejects the canonical equal-active-budget mesoscopic MacroCell
 replacement. With 64 independent `d=384,h=480,b=128` cells and top-2 routing,
 train accuracy stayed at 7.13% mean after 3,000 steps and held-out logits
