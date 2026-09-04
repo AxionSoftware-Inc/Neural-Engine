@@ -99,6 +99,11 @@ The two-seed 3,000-step mean falls to 78.37% from the shared-mix 79.08% and
 adds 141,594 stored parameters. Per-address mixing is rejected; shared mixing
 remains the default. See `V0_81_OPERATION_BANKS_PER_ADDRESS_MIX.md`.
 
+V0.82 adds LayerNorm only on the sparse circuit input path. The two-seed
+3,000-step mean falls to 78.17%, below the 79.08% rank-8 shared baseline, so
+generic input normalization is rejected. See
+`V0_82_OPERATION_BANKS_INPUT_NORM.md`.
+
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.

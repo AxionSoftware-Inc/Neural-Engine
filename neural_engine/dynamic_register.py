@@ -97,6 +97,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         modular_prior_mode: str = "fixed",
         modular_template_init: str = "identity",
         circuit_residual_scale: float = 1.0,
+        circuit_input_norm: bool = False,
         output_mode: str = "learned",
         output_temperature: float = 16.0,
         output_scalar_bias: float = 0.0,
@@ -200,6 +201,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.modular_prior_mode = modular_prior_mode
         self.modular_template_init = modular_template_init
         self.circuit_residual_scale = float(circuit_residual_scale)
+        self.circuit_input_norm_enabled = bool(circuit_input_norm)
         self.output_mode = output_mode
         self.output_temperature = float(output_temperature)
         self.output_scalar_bias = float(output_scalar_bias)
@@ -353,6 +355,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.circuits = (
             nn.ModuleList([make_circuit_bank() for _ in range(3)])
             if self.operation_circuit_bank else make_circuit_bank()
+        )
+        self.circuit_input_norm = (
+            nn.LayerNorm(state_dim) if self.circuit_input_norm_enabled else None
         )
         if self.macro_cell_count:
             if macro_router_depth is None:
@@ -618,8 +623,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     exploration_prob=(self.route_exploration_prob if self.training else 0.0),
                 )
                 if self.circuit_residual_scale:
+                    circuit_query = (
+                        self.circuit_input_norm(query)
+                        if self.circuit_input_norm is not None else query
+                    )
                     delta = self.circuit_residual_scale * self._apply_circuits(
-                        query, selected, weights,
+                        circuit_query, selected, weights,
                         operation_ids[active_indices, step],
                     )
                 else:
@@ -775,6 +784,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             )
         if self.write_gate_enabled:
             shared += count_parameters(self.write_gate)
+        if self.circuit_input_norm is not None:
+            shared += count_parameters(self.circuit_input_norm)
         if self.modular_prior_enabled:
             shared += count_parameters(self.modular_projection)
             if self.modular_prior_mode == "templates":
@@ -849,6 +860,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "modular_prior_mode": self.modular_prior_mode,
             "modular_template_init": self.modular_template_init,
             "circuit_residual_scale": self.circuit_residual_scale,
+            "circuit_input_norm": self.circuit_input_norm_enabled,
             "output_mode": self.output_mode,
             "output_temperature": self.output_temperature,
             "output_scalar_bias": self.output_scalar_bias,
