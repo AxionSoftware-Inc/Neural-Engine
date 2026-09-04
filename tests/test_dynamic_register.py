@@ -137,6 +137,31 @@ def test_dynamic_register_operation_step_routing_is_value_independent():
     assert torch.equal(stats["selected_ids"][0], stats["selected_ids"][1])
 
 
+def test_dynamic_register_hybrid_routing_keeps_value_dependence():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        route_context_mode="hybrid",
+        route_exploration_prob=0.0,
+    )
+    batch = torch.tensor([
+        [1, 2, 3, 32, 33, 0, 0, 0],
+        [1, 2, 3, 62, 63, 0, 0, 0],
+    ])
+    model.eval()
+    _, stats = model(batch)
+    assert not torch.equal(stats["selected_ids"][0], stats["selected_ids"][1])
+    assert model.parameter_report()["route_context_mode"] == "hybrid"
+
+
 def test_dynamic_register_modular_prior_tracks_fixed_transition():
     model = DynamicRegisterNeuralEngine(
         max_ops=2,
@@ -399,6 +424,73 @@ def test_dynamic_register_operation_circuit_banks_select_by_operation():
     assert len(model.circuits) == 3
     assert stats["selected_ids"].shape == (4, 2, 4)
     assert model.parameter_report()["operation_circuit_bank"] is True
+
+
+def test_dynamic_register_operation_router_keys_start_from_shared_geometry():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        operation_router_keys=True,
+    )
+    assert tuple(model.router.operation_key_deltas.shape) == (3, 8, 32)
+    assert torch.count_nonzero(model.router.operation_key_deltas) == 0
+    generator = DynamicCompositionGenerator(max_ops=2, train_max_ops=2, seed=17)
+    logits, stats = model(generator.batch(4).inputs)
+    assert logits.shape == (4, 64)
+    assert stats["selected_ids"].shape == (4, 2, 4)
+    assert model.parameter_report()["operation_router_keys"] is True
+
+
+def test_dynamic_register_operation_read_adapter_is_optional_and_recurrent():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        operation_read_adapter_rank=4,
+    )
+    assert tuple(model.operation_read_adapter_down.shape) == (3, 32, 4)
+    generator = DynamicCompositionGenerator(max_ops=2, train_max_ops=2, seed=17)
+    logits, stats = model(generator.batch(4).inputs)
+    assert logits.shape == (4, 64)
+    assert stats["executed_mask"].any()
+    assert model.parameter_report()["operation_read_adapter_rank"] == 4
+
+
+def test_dynamic_register_predecessor_operation_context_has_start_token():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        predecessor_operation_context=True,
+    )
+    assert tuple(model.predecessor_operation_embedding.weight.shape) == (4, 32)
+    generator = DynamicCompositionGenerator(max_ops=2, train_max_ops=2, seed=17)
+    logits, stats = model(generator.batch(4).inputs)
+    assert logits.shape == (4, 64)
+    assert stats["executed_mask"].any()
+    assert model.parameter_report()["predecessor_operation_context"] is True
 
 
 def test_dynamic_register_circuit_input_norm_is_optional():

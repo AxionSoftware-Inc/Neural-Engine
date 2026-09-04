@@ -83,12 +83,16 @@ class DynamicRegisterNeuralEngine(nn.Module):
         value_encoder_mode: str = "learned",
         factor_mix_mode: str = "per_address",
         route_context_mode: str = "full",
+        predecessor_operation_context: bool = False,
         operation_adapter_rank: int = 0,
         operation_adapter_scale: float = 1.0,
         operation_adapter_gate: bool = False,
+        operation_read_adapter_rank: int = 0,
+        operation_read_adapter_scale: float = 1.0,
         operation_write_adapter_rank: int = 0,
         operation_write_adapter_scale: float = 1.0,
         operation_circuit_bank: bool = False,
+        operation_router_keys: bool = False,
         operation_transition_rank: int = 0,
         operation_transition_scale: float = 1.0,
         numeric_state_dim: int = 0,
@@ -126,18 +130,26 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("circuit_mode must be parallel or serial")
         if circuit_bank_mode not in {"independent", "factorized"}:
             raise ValueError("circuit_bank_mode must be independent or factorized")
+        if operation_router_keys and circuit_bank_mode != "factorized":
+            raise ValueError("operation_router_keys requires factorized routing")
         if not 0.0 <= route_exploration_prob <= 1.0:
             raise ValueError("route_exploration_prob must be between zero and one")
         if value_encoder_mode not in {"learned", "fixed_fourier", "hybrid_fourier"}:
             raise ValueError(
                 "value_encoder_mode must be learned, fixed_fourier, or hybrid_fourier"
             )
-        if route_context_mode not in {"full", "operation_step"}:
-            raise ValueError("route_context_mode must be full or operation_step")
+        if route_context_mode not in {"full", "operation_step", "hybrid"}:
+            raise ValueError(
+                "route_context_mode must be full, operation_step, or hybrid"
+            )
         if operation_adapter_rank < 0:
             raise ValueError("operation_adapter_rank must be non-negative")
         if operation_adapter_scale < 0.0:
             raise ValueError("operation_adapter_scale must be non-negative")
+        if operation_read_adapter_rank < 0:
+            raise ValueError("operation_read_adapter_rank must be non-negative")
+        if operation_read_adapter_scale < 0.0:
+            raise ValueError("operation_read_adapter_scale must be non-negative")
         if operation_write_adapter_rank < 0:
             raise ValueError("operation_write_adapter_rank must be non-negative")
         if operation_write_adapter_scale < 0.0:
@@ -187,12 +199,16 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.value_encoder_mode = value_encoder_mode
         self.factor_mix_mode = factor_mix_mode
         self.route_context_mode = route_context_mode
+        self.predecessor_operation_context = bool(predecessor_operation_context)
         self.operation_adapter_rank = int(operation_adapter_rank)
         self.operation_adapter_scale = float(operation_adapter_scale)
         self.operation_adapter_gate_enabled = bool(operation_adapter_gate)
+        self.operation_read_adapter_rank = int(operation_read_adapter_rank)
+        self.operation_read_adapter_scale = float(operation_read_adapter_scale)
         self.operation_write_adapter_rank = int(operation_write_adapter_rank)
         self.operation_write_adapter_scale = float(operation_write_adapter_scale)
         self.operation_circuit_bank = bool(operation_circuit_bank)
+        self.operation_router_keys = bool(operation_router_keys)
         self.operation_transition_rank = int(operation_transition_rank)
         self.operation_transition_scale = float(operation_transition_scale)
         self.numeric_state_dim = int(numeric_state_dim)
@@ -243,6 +259,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             nn.LayerNorm(state_dim), nn.Linear(state_dim, state_dim), nn.GELU()
         )
         self.operation_embedding = nn.Embedding(3, state_dim)
+        if self.predecessor_operation_context:
+            self.predecessor_operation_embedding = nn.Embedding(4, state_dim)
         self.step_embedding = nn.Parameter(torch.zeros(max_ops, state_dim))
         self.register_writer = nn.Sequential(
             nn.LayerNorm(2 * state_dim),
@@ -279,6 +297,16 @@ class DynamicRegisterNeuralEngine(nn.Module):
             nn.init.normal_(self.operation_adapter_up, std=0.02)
             if self.operation_adapter_gate_enabled:
                 self.operation_adapter_gate = nn.Parameter(torch.zeros(()))
+        if self.operation_read_adapter_rank:
+            self.operation_read_adapter_down = nn.Parameter(torch.empty(
+                3, state_dim, self.operation_read_adapter_rank
+            ))
+            self.operation_read_adapter_up = nn.Parameter(torch.empty(
+                3, self.operation_read_adapter_rank, state_dim
+            ))
+            self.operation_read_adapter_bias = nn.Parameter(torch.zeros(3, state_dim))
+            nn.init.normal_(self.operation_read_adapter_down, std=0.02)
+            nn.init.normal_(self.operation_read_adapter_up, std=0.02)
         if self.operation_write_adapter_rank:
             self.operation_write_adapter_down = nn.Parameter(torch.empty(
                 3, state_dim, self.operation_write_adapter_rank
@@ -337,6 +365,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 candidate_pool, active_circuits, 1,
                 factor_count=factor_count,
                 factor_candidate_pool=factor_candidate_pool,
+                operation_key_bank=operation_router_keys,
             )
 
             def make_circuit_bank() -> nn.Module:
@@ -404,6 +433,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         nn.init.normal_(self.position_bias, std=0.01)
         nn.init.normal_(self.step_embedding, std=0.02)
         nn.init.normal_(self.operation_embedding.weight, std=0.02)
+        if self.predecessor_operation_context:
+            nn.init.normal_(self.predecessor_operation_embedding.weight, std=0.02)
 
     def encode_program(self, inputs: torch.Tensor) -> torch.Tensor:
         if inputs.shape[1] < self.value_start + self.max_ops + 1:
@@ -452,6 +483,19 @@ class DynamicRegisterNeuralEngine(nn.Module):
         adapted = torch.einsum(
             "br,brd->bd", down, self.operation_adapter_up[operation_ids]
         ) + self.operation_adapter_bias[operation_ids]
+        return nn.functional.gelu(adapted)
+
+    def _operation_read_adapter(
+        self, state: torch.Tensor, operation_ids: torch.Tensor
+    ) -> torch.Tensor:
+        down = torch.einsum(
+            "bd,bdr->br", state,
+            self.operation_read_adapter_down[operation_ids]
+        )
+        adapted = torch.einsum(
+            "br,brd->bd", down,
+            self.operation_read_adapter_up[operation_ids]
+        ) + self.operation_read_adapter_bias[operation_ids]
         return nn.functional.gelu(adapted)
 
     def _operation_write_adapter(
@@ -553,16 +597,39 @@ class DynamicRegisterNeuralEngine(nn.Module):
             if active_indices.numel():
                 active_accumulator = accumulator[active_indices]
                 active_operand = operand_states[active_indices, step + 1]
-                pair = self.pair_encoder(torch.cat([active_accumulator, active_operand], dim=-1))
-                pair = pair + self.product_encoder(active_accumulator * active_operand)
+                current_operation_ids = operation_ids[active_indices, step]
+                read_accumulator = active_accumulator
+                if self.operation_read_adapter_rank:
+                    read_accumulator = read_accumulator + self.operation_read_adapter_scale * (
+                        self._operation_read_adapter(
+                            active_accumulator, current_operation_ids
+                        )
+                    )
+                pair = self.pair_encoder(torch.cat([read_accumulator, active_operand], dim=-1))
+                pair = pair + self.product_encoder(read_accumulator * active_operand)
                 query = (
                     pair
-                    + self.operation_embedding(operation_ids[active_indices, step])
+                    + self.operation_embedding(current_operation_ids)
                     + self.step_embedding[step]
                 )
+                if self.predecessor_operation_context:
+                    if step == 0:
+                        previous_operation_ids = torch.full_like(
+                            current_operation_ids, 3
+                        )
+                    else:
+                        previous_operation_ids = operation_ids[active_indices, step - 1]
+                        previous_operation_ids = torch.where(
+                            operation_mask[active_indices, step - 1],
+                            previous_operation_ids,
+                            torch.full_like(previous_operation_ids, 3),
+                        )
+                    query = query + self.predecessor_operation_embedding(
+                        previous_operation_ids
+                    )
                 if self.numeric_state_dim:
                     numeric_operation = self.numeric_operation_embedding(
-                        operation_ids[active_indices, step]
+                        current_operation_ids
                     )
                     numeric_input = torch.cat((
                         numeric_state[active_indices],
@@ -582,7 +649,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                             self.operation_adapter_gate
                         )
                     query = query + adapter_scale * self._operation_adapter(
-                        pair, operation_ids[active_indices, step]
+                        pair, current_operation_ids
                     )
                 if self.input_reinjection_scale:
                     query = query + self.input_reinjection_scale * input_context[active_indices]
@@ -598,10 +665,15 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 route_query = query
                 if self.route_context_mode == "operation_step":
                     route_query = (
-                        self.operation_embedding(operation_ids[active_indices, step])
+                        self.operation_embedding(current_operation_ids)
                         + self.step_embedding[step]
                     )
                     route_query = route_query + 0.25 * self.route_context(route_query)
+                elif self.route_context_mode == "hybrid":
+                    route_query = route_query + 0.25 * (
+                        self.operation_embedding(current_operation_ids)
+                        + self.step_embedding[step]
+                    )
                 if self.macro_cell_count:
                     macro_selected, macro_weights, macro_route_stats = self.macro_router(
                         route_query,
@@ -621,6 +693,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 selected, weights, route_stats = self.router(
                     route_query,
                     exploration_prob=(self.route_exploration_prob if self.training else 0.0),
+                    operation_ids=(current_operation_ids
+                                   if self.operation_router_keys else None),
                 )
                 if self.circuit_residual_scale:
                     circuit_query = (
@@ -629,7 +703,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     )
                     delta = self.circuit_residual_scale * self._apply_circuits(
                         circuit_query, selected, weights,
-                        operation_ids[active_indices, step],
+                        current_operation_ids,
                     )
                 else:
                     delta = torch.zeros_like(query)
@@ -637,7 +711,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 if self.operation_transition_rank:
                     write_input = write_input + self.operation_transition_scale * (
                         self._operation_transition(
-                            write_input, operation_ids[active_indices, step]
+                            write_input, current_operation_ids
                         )
                     )
                 candidate = self.register_writer(
@@ -646,7 +720,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 if self.operation_write_adapter_rank:
                     candidate = candidate + self.operation_write_adapter_scale * (
                         self._operation_write_adapter(
-                            candidate, operation_ids[active_indices, step]
+                            candidate, current_operation_ids
                         )
                     )
                 if self.write_gate_enabled:
@@ -770,6 +844,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
             )
             if self.operation_adapter_gate_enabled:
                 shared += self.operation_adapter_gate.numel()
+        if self.predecessor_operation_context:
+            shared += count_parameters(self.predecessor_operation_embedding)
+        if self.operation_read_adapter_rank:
+            shared += (
+                self.operation_read_adapter_down.numel()
+                + self.operation_read_adapter_up.numel()
+                + self.operation_read_adapter_bias.numel()
+            )
         if self.operation_write_adapter_rank:
             shared += (
                 self.operation_write_adapter_down.numel()
@@ -810,6 +892,17 @@ class DynamicRegisterNeuralEngine(nn.Module):
             bank_count = min(self.max_ops, 3) if self.operation_circuit_bank else 1
             active_circuit_params = one_circuit * self.router.active_circuits * bank_count
             candidate_params = self.router.keys[0].numel() * self.router.candidate_pool
+        operation_router_key_params = 0
+        operation_router_key_active = 0
+        if self.operation_router_keys:
+            operation_router_key_params = self.router.operation_key_deltas.numel()
+            operation_router_key_active = (
+                self.router.keys[0].numel()
+                * self.router.factor_candidate_pool
+                * 2
+                * bank_count
+            )
+            candidate_params += operation_router_key_active
         macro_total = 0
         macro_active = 0
         if self.macro_cell_count:
@@ -842,6 +935,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "value_encoder_mode": self.value_encoder_mode,
             "factor_mix_mode": self.factor_mix_mode,
             "route_context_mode": self.route_context_mode,
+            "predecessor_operation_context": self.predecessor_operation_context,
             "operation_adapter_rank": self.operation_adapter_rank,
             "operation_adapter_scale": self.operation_adapter_scale,
             "operation_adapter_gate": self.operation_adapter_gate_enabled,
@@ -849,9 +943,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 float(torch.tanh(self.operation_adapter_gate).detach().cpu())
                 if self.operation_adapter_gate_enabled else None
             ),
+            "operation_read_adapter_rank": self.operation_read_adapter_rank,
+            "operation_read_adapter_scale": self.operation_read_adapter_scale,
             "operation_write_adapter_rank": self.operation_write_adapter_rank,
             "operation_write_adapter_scale": self.operation_write_adapter_scale,
             "operation_circuit_bank": self.operation_circuit_bank,
+            "operation_router_keys": self.operation_router_keys,
+            "operation_router_key_params": operation_router_key_params,
+            "operation_router_key_active_estimate": operation_router_key_active,
             "operation_transition_rank": self.operation_transition_rank,
             "operation_transition_scale": self.operation_transition_scale,
             "numeric_state_dim": self.numeric_state_dim,

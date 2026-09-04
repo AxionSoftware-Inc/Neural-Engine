@@ -667,7 +667,8 @@ class FactorizedRouter(nn.Module):
                  routing_capacity: int | None = None,
                  routing_depth: int | None = None,
                  factor_count: int | None = None,
-                 factor_candidate_pool: int | None = None):
+                 factor_candidate_pool: int | None = None,
+                 operation_key_bank: bool = False):
         super().__init__()
         if num_addresses != 1:
             raise ValueError("FactorizedRouter currently supports one address")
@@ -684,6 +685,7 @@ class FactorizedRouter(nn.Module):
         self.active_circuits = active_circuits
         self.num_addresses = num_addresses
         self.factor_count = factor_count
+        self.operation_key_bank = bool(operation_key_bank)
         self.factor_candidate_pool = max(
             active_circuits,
             factor_candidate_pool or math.ceil(math.sqrt(candidate_pool)),
@@ -698,6 +700,12 @@ class FactorizedRouter(nn.Module):
         self.keys = nn.Parameter(torch.empty(factor_count, state_dim))
         self.pair_interaction_scale = nn.Parameter(torch.tensor(1.0))
         nn.init.normal_(self.keys, std=0.02)
+        if self.operation_key_bank:
+            # Start from the shared geometry and learn only an operation-local
+            # residual, preserving transfer across primitives.
+            self.operation_key_deltas = nn.Parameter(
+                torch.zeros(3, factor_count, state_dim)
+            )
 
     def set_routing_state(self, *, capacity: int | None = None,
                           depth: int | None = None) -> None:
@@ -720,7 +728,8 @@ class FactorizedRouter(nn.Module):
                 exploration_prob: float = 0.0,
                 routing_offset: int | torch.Tensor = 0,
                 routing_capacity: int | None = None,
-                routing_windows: torch.Tensor | None = None
+                routing_windows: torch.Tensor | None = None,
+                operation_ids: torch.Tensor | None = None,
                 ) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
         if coverage:
             raise NotImplementedError("FactorizedRouter coverage is not implemented")
@@ -735,7 +744,19 @@ class FactorizedRouter(nn.Module):
         if not 0 < local_capacity <= self.routing_capacity:
             raise ValueError("routing_capacity must be between 1 and the configured routing capacity")
 
-        factor_logits = torch.einsum("bd,fd->bf", state, self.keys)
+        if self.operation_key_bank:
+            if operation_ids is None:
+                raise ValueError("operation_ids are required for operation key banks")
+            if operation_ids.ndim != 1 or operation_ids.shape[0] != state.shape[0]:
+                raise ValueError("operation_ids must have one value per batch item")
+            operation_ids = operation_ids.to(device=state.device, dtype=torch.long)
+            if (operation_ids < 0).any() or (operation_ids >= 3).any():
+                raise ValueError("operation_ids must identify one of three operations")
+            factor_keys = self.keys + self.operation_key_deltas[operation_ids]
+            factor_logits = torch.einsum("bd,bfd->bf", state, factor_keys)
+        else:
+            factor_keys = self.keys
+            factor_logits = torch.einsum("bd,fd->bf", state, factor_keys)
         factor_probs = F.softmax(factor_logits, dim=-1)
         entropy = -(factor_probs * factor_probs.clamp_min(1e-8).log()).sum(dim=-1)
         pool = min(self.factor_candidate_pool, self.factor_count)
@@ -743,8 +764,13 @@ class FactorizedRouter(nn.Module):
         first = top_positions.unsqueeze(-1).expand(-1, -1, pool)
         second = top_positions.unsqueeze(1).expand(-1, pool, -1)
         candidate_ids = first + self.factor_count * second
-        first_keys = self.keys[first]
-        second_keys = self.keys[second]
+        if self.operation_key_bank:
+            batch_ids = torch.arange(state.shape[0], device=state.device).view(-1, 1, 1)
+            first_keys = factor_keys[batch_ids, first]
+            second_keys = factor_keys[batch_ids, second]
+        else:
+            first_keys = self.keys[first]
+            second_keys = self.keys[second]
         pair_interaction = torch.einsum(
             "bd,bijd->bij", state, first_keys * second_keys
         ) / math.sqrt(state.shape[-1])

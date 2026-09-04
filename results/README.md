@@ -104,6 +104,41 @@ V0.82 adds LayerNorm only on the sparse circuit input path. The two-seed
 generic input normalization is rejected. See
 `V0_82_OPERATION_BANKS_INPUT_NORM.md`.
 
+V0.83 adds a modest operation-and-step hint to the otherwise full router
+query. The two-seed 3,000-step mean falls to 77.25%, with no improvement on
+`multiply -> add`, so hybrid routing is rejected. See
+`V0_83_OPERATION_BANKS_HYBRID_ROUTING.md`.
+
+V0.84 adds zero-initialized operation-specific residuals to the factorized
+router keys. The two-seed 3,000-step mean falls to 75.46% and
+`multiply -> add` falls to 67.48%, so operation-specific router keys are
+rejected. Keep factor-key geometry shared and investigate the state interface
+between operation banks. See `V0_84_OPERATION_ROUTER_KEYS.md`.
+
+V0.85 adds a rank-8 operation-conditioned read residual before pair formation.
+The two-seed 3,000-step mean is 78.61%, below the 79.08% bank baseline, while
+`multiply -> add` moves only to 69.14%. Rank 8 is rejected as the default; a
+rank-16 capacity screen is retained as the final adapter test. See
+`V0_85_OPERATION_READ_ADAPTER.md`.
+
+V0.86 doubles the operation-conditioned read residual to rank 16. The
+two-seed 3,000-step mean rises to 79.81% and `multiply -> add` to 69.87%, a
+consistent but modest gain. Rank 16 is the provisional state-interface
+candidate pending 9k-step confirmation. See
+`V0_86_OPERATION_READ_ADAPTER_RANK16.md`.
+
+V0.87 runs the rank-16 read adapter for 9,000 steps. The two-seed mean falls
+to 78.52% versus the 79.59% long-training bank baseline; the small
+`multiply -> add` gain does not offset the `add -> multiply` loss. The
+generic read adapter is rejected as a stable default. See
+`V0_87_OPERATION_READ_ADAPTER_LONG.md`.
+
+V0.88 adds explicit predecessor-operation context with a START embedding. The
+two-seed 3,000-step mean falls to 76.05%, and `multiply -> add` remains near
+baseline at 68.75%, so extra operation metadata is rejected. The next work
+should change the state representation itself. See
+`V0_88_PREDECESSOR_OPERATION_CONTEXT.md`.
+
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.
