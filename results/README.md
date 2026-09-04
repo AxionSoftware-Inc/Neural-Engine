@@ -78,6 +78,12 @@ numeric scratch state. The two-seed 3,000-step mean is 78.34%, only 0.15
 points above the bank-only 78.20% screen, so the scratch state is rejected as
 extra default capacity. See `V0_77_OPERATION_BANKS_NUMERIC_STATE.md`.
 
+V0.78 removes both operation adapters from the operation-specific bank model.
+The two-seed mean falls to 75.63%, still above the shared-bank baseline but
+2.56 points below the full bank+adapter model. The banks provide the main gain,
+while the adapters provide useful secondary synergy. See
+`V0_78_OPERATION_BANKS_NO_ADAPTERS.md`.
+
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.
