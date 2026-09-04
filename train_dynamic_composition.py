@@ -46,6 +46,7 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "operation_circuit_bank",
         "operation_router_keys",
         "operation_transition_rank", "operation_transition_scale",
+        "structured_scalar_state", "structured_scalar_scale",
         "numeric_state_dim", "numeric_state_scale",
         "modular_prior_mode",
         "modular_template_init",

@@ -20,6 +20,13 @@ the mean falls further to 77.25%. Both placements are rejected, and the
 adapter-placement hypothesis is closed. See `V0_98_PRE_WRITER_OPERATION_ADAPTER.md`
 and `V0_99_TERMINAL_OPERATION_ADAPTER.md`.
 
+V0.100 adds a shared structured scalar value lane with learned bilinear
+primitive transitions. Unsupervised and stage-supervised versions, including
+a low injection scale, reach only 75.05%, 75.42%, and 76.17% mean held-out
+accuracy. All are below V0.80's 79.59%; the scalar lane is rejected and the
+V0.80 reference is frozen for the next benchmark/architecture phase. See
+`V0_100_STRUCTURED_SCALAR_STATE.md`.
+
 V0.92 tests stable factor warm-up during 300M -> 500M parent growth: route
 only through the parent 154 factors for 1,000 steps, then open all 199. The
 two-seed mean is 78.56%, below V0.90 scratch 500M (78.61%), V0.91 simple

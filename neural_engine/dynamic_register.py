@@ -102,6 +102,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         operation_router_keys: bool = False,
         operation_transition_rank: int = 0,
         operation_transition_scale: float = 1.0,
+        structured_scalar_state: bool = False,
+        structured_scalar_scale: float = 1.0,
         numeric_state_dim: int = 0,
         numeric_state_scale: float = 1.0,
         modular_prior: bool = False,
@@ -176,6 +178,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("operation_transition_rank must be non-negative")
         if operation_transition_scale < 0.0:
             raise ValueError("operation_transition_scale must be non-negative")
+        if structured_scalar_scale < 0.0:
+            raise ValueError("structured_scalar_scale must be non-negative")
         if numeric_state_dim < 0:
             raise ValueError("numeric_state_dim must be non-negative")
         if numeric_state_scale < 0.0:
@@ -241,6 +245,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.operation_router_keys = bool(operation_router_keys)
         self.operation_transition_rank = int(operation_transition_rank)
         self.operation_transition_scale = float(operation_transition_scale)
+        self.structured_scalar_state = bool(structured_scalar_state)
+        self.structured_scalar_scale = float(structured_scalar_scale)
         self.numeric_state_dim = int(numeric_state_dim)
         self.numeric_state_scale = float(numeric_state_scale)
         self.modular_prior_enabled = bool(modular_prior)
@@ -369,6 +375,18 @@ class DynamicRegisterNeuralEngine(nn.Module):
             self.operation_transition_bias = nn.Parameter(torch.zeros(3, state_dim))
             nn.init.normal_(self.operation_transition_down, std=0.02)
             nn.init.normal_(self.operation_transition_up, std=0.02)
+        if self.structured_scalar_state:
+            # A shared scalar value lane.  The four learned coefficients are
+            # intentionally operation-specific but the state format is not:
+            # every primitive receives (old, operand, product, bias).
+            self.structured_scalar_transition = nn.Parameter(torch.empty(3, 4))
+            with torch.no_grad():
+                self.structured_scalar_transition.zero_()
+                self.structured_scalar_transition[:, 0].fill_(1.0)
+                self.structured_scalar_transition[:, 1:].normal_(std=0.02)
+            self.structured_scalar_projection = nn.Sequential(
+                nn.Linear(1, state_dim), nn.GELU()
+            )
         if self.modular_prior_enabled:
             if self.modular_prior_mode == "fixed":
                 left = torch.arange(self.modulus).view(-1, 1)
@@ -599,6 +617,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
         operands = encoded[:, self.value_start:self.value_start + self.max_ops + 1]
         operand_states = self.operand_encoder(operands)
         operand_mask = inputs[:, self.value_start:self.value_start + self.max_ops + 1].ne(0)
+        if self.structured_scalar_state:
+            scalar_operands = (
+                inputs[:, self.value_start:self.value_start + self.max_ops + 1]
+                - VALUE_TOKEN_OFFSET
+            ).to(operand_states.dtype)
+            scalar_state = scalar_operands[:, 0]
         if self.numeric_state_dim:
             numeric_values = (
                 inputs[:, self.value_start:self.value_start + self.max_ops + 1]
@@ -641,6 +665,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             batch_size, self.max_ops, dtype=torch.bool, device=device
         )
         step_logits = []
+        scalar_step_states = []
 
         for step in range(self.max_ops):
             active_indices = operation_mask[:, step].nonzero(as_tuple=False).squeeze(-1)
@@ -701,6 +726,23 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     )
                     query = query + self.numeric_state_scale * self.numeric_state_projection(
                         numeric_candidate
+                    )
+                if self.structured_scalar_state:
+                    scalar_operand = scalar_operands[active_indices, step + 1]
+                    scalar_features = torch.stack((
+                        scalar_state[active_indices],
+                        scalar_operand,
+                        scalar_state[active_indices] * scalar_operand,
+                        torch.ones_like(scalar_operand),
+                    ), dim=-1)
+                    scalar_candidate = (
+                        scalar_features
+                        * self.structured_scalar_transition[current_operation_ids]
+                    ).sum(dim=-1)
+                    query = query + self.structured_scalar_scale * (
+                        self.structured_scalar_projection(
+                            scalar_candidate.unsqueeze(-1)
+                        )
                     )
                 if self.operation_adapter_rank:
                     adapter_scale = self.operation_adapter_scale
@@ -816,6 +858,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     next_numeric_state = numeric_state.clone()
                     next_numeric_state[active_indices] = numeric_candidate
                     numeric_state = next_numeric_state
+                if self.structured_scalar_state:
+                    next_scalar_state = scalar_state.clone()
+                    next_scalar_state[active_indices] = scalar_candidate
+                    scalar_state = next_scalar_state
                 if self.modular_prior_enabled:
                     operand_values = (
                         inputs[active_indices, self.value_start + step + 1]
@@ -864,6 +910,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 step_state = step_state + self.numeric_state_scale * self.numeric_state_projection(
                     numeric_state
                 )
+            if self.structured_scalar_state:
+                step_state = step_state + self.structured_scalar_scale * (
+                    self.structured_scalar_projection(
+                        scalar_state.unsqueeze(-1)
+                    )
+                )
             if self.modular_prior_enabled:
                 if self.modular_prior_mode == "fixed":
                     step_features = nn.functional.one_hot(
@@ -873,6 +925,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     step_features = modular_state
                 step_state = step_state + self.modular_projection(step_features)
             step_logits.append(self.output(step_state))
+            if self.structured_scalar_state:
+                scalar_step_states.append(scalar_state)
 
         stats = {
             "active_circuits": torch.tensor(self.router.active_circuits, device=device),
@@ -888,6 +942,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "macro_router_entropy": macro_step_entropies.sum()
             / executed_mask.sum().clamp_min(1),
         }
+        if self.structured_scalar_state:
+            stats["structured_scalar_states"] = torch.stack(
+                scalar_step_states, dim=1
+            )
         self._last_route = stats
         return stats["step_logits"][:, -1], stats
 
@@ -947,6 +1005,11 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 self.operation_transition_down.numel()
                 + self.operation_transition_up.numel()
                 + self.operation_transition_bias.numel()
+            )
+        if self.structured_scalar_state:
+            shared += (
+                self.structured_scalar_transition.numel()
+                + count_parameters(self.structured_scalar_projection)
             )
         if self.write_gate_enabled:
             shared += count_parameters(self.write_gate)
@@ -1074,6 +1137,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "operation_router_key_active_estimate": operation_router_key_active,
             "operation_transition_rank": self.operation_transition_rank,
             "operation_transition_scale": self.operation_transition_scale,
+            "structured_scalar_state": self.structured_scalar_state,
+            "structured_scalar_scale": self.structured_scalar_scale,
             "numeric_state_dim": self.numeric_state_dim,
             "numeric_state_scale": self.numeric_state_scale,
             "modular_prior": self.modular_prior_enabled,

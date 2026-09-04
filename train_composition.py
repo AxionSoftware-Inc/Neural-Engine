@@ -171,6 +171,25 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                         route_stats["step_logits"][mask, stage], batch.stage_targets[mask, stage]))
             if stage_losses:
                 loss = loss + stage_loss_weight * torch.stack(stage_losses).mean()
+        structured_scalar_loss_weight = float(
+            config.get("structured_scalar_loss_weight", 0.0)
+        )
+        if (
+            structured_scalar_loss_weight
+            and "structured_scalar_states" in route_stats
+        ):
+            target_scale = float(config.get("structured_scalar_target_scale", 64.0))
+            scalar_targets = (
+                batch.stage_targets[:, :model.max_ops].to(route_stats["structured_scalar_states"].dtype)
+                - float(target_offset)
+            ) / target_scale
+            scalar_predictions = route_stats["structured_scalar_states"] / target_scale
+            scalar_mask = batch.stage_mask[:, :model.max_ops]
+            if scalar_mask.any():
+                scalar_loss = nn.functional.mse_loss(
+                    scalar_predictions[scalar_mask], scalar_targets[scalar_mask]
+                )
+                loss = loss + structured_scalar_loss_weight * scalar_loss
         if hasattr(model, "adaptive_halting") and model.adaptive_halting:
             halt_targets = (torch.arange(model.internal_steps, device=device).unsqueeze(0)
                             >= (batch.depths.unsqueeze(1) - 1)).float()
@@ -207,6 +226,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "samples_per_second": steps * int(config["batch_size"]) / max(elapsed, 1e-9),
         "total_params": count_parameters(model),
         "stage_loss_weight": stage_loss_weight,
+        "structured_scalar_loss_weight": structured_scalar_loss_weight,
+        "structured_scalar_target_scale": float(
+            config.get("structured_scalar_target_scale", 64.0)
+        ),
         "routing_coverage_weight": coverage_weight,
         "routing_warmup_steps": routing_warmup_steps,
         "optimizer": str(config.get("optimizer", "adamw")),
