@@ -79,6 +79,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         factor_capacity: int | None = None,
         ordered_factor_slots: bool = False,
         query_factor_mix_scale: float = 0.0,
+        factor_pair_rank: int = 0,
+        factor_pair_scale: float = 1.0,
         circuit_mode: str = "serial",
         route_exploration_prob: float = 0.05,
         input_reinjection_scale: float = 0.0,
@@ -210,6 +212,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.query_factor_mix_scale = float(query_factor_mix_scale)
         if self.query_factor_mix_scale < 0.0:
             raise ValueError("query_factor_mix_scale must be non-negative")
+        self.factor_pair_rank = int(factor_pair_rank)
+        self.factor_pair_scale = float(factor_pair_scale)
+        if self.factor_pair_rank < 0:
+            raise ValueError("factor_pair_rank must be non-negative")
+        if self.factor_pair_scale < 0.0:
+            raise ValueError("factor_pair_scale must be non-negative")
         self.route_context_mode = route_context_mode
         self.state_layout = state_layout
         self.predecessor_operation_context = bool(predecessor_operation_context)
@@ -397,7 +405,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             def make_circuit_bank() -> nn.Module:
                 return FactorizedMicroCircuitBank(
                     num_circuits, state_dim, circuit_rank, factor_count, factor_mix_mode,
-                    ordered_factor_slots, query_factor_mix_scale
+                    ordered_factor_slots, query_factor_mix_scale,
+                    factor_pair_rank, factor_pair_scale
                 )
         else:
             self.router = HierarchicalRouter(
@@ -917,6 +926,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             if self.modular_prior_mode == "templates":
                 shared += self.modular_template_logits.numel()
         circuit_bank = self.circuits[0] if self.operation_circuit_bank else self.circuits
+        pair_basis_active = 0
         if self.circuit_bank_mode == "factorized":
             if self.ordered_factor_slots:
                 down_row = circuit_bank.down_factors[0, 0]
@@ -936,9 +946,17 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     if self.ordered_factor_slots else circuit_bank.factor_gate_keys[0]
                 )
                 factor_row += gate_row.numel()
+            if self.factor_pair_rank:
+                factor_row += circuit_bank.pair_codes[0].numel() * 2
             bank_count = min(self.max_ops, 3) if self.operation_circuit_bank else 1
             active_circuit_params = factor_row * self.router.active_circuits * 2 * bank_count
             candidate_params = self.router.keys[0].numel() * self.router.factor_candidate_pool * 2
+            if self.factor_pair_rank:
+                pair_basis_active = (
+                    circuit_bank.pair_down_basis.numel()
+                    + circuit_bank.pair_up_basis.numel()
+                    + circuit_bank.pair_bias_basis.numel()
+                ) * bank_count
         else:
             one_circuit = (
                 circuit_bank.down[0].numel()
@@ -977,10 +995,11 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 + macro_router_candidates
                 + self.macro_cell_bank.parameters_per_cell * self.active_macro_cells
             )
+        active_total = shared + pair_basis_active + candidate_params + active_circuit_params
         return {
             "total_params": total,
-            "active_params_estimate": shared + candidate_params + active_circuit_params,
-            "active_fraction": (shared + candidate_params + active_circuit_params) / total,
+            "active_params_estimate": active_total,
+            "active_fraction": active_total / total,
             "active_circuit_params": active_circuit_params,
             "max_ops": self.max_ops,
             "modulus": self.modulus,
@@ -992,6 +1011,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "factor_mix_mode": self.factor_mix_mode,
             "ordered_factor_slots": self.ordered_factor_slots,
             "query_factor_mix_scale": self.query_factor_mix_scale,
+            "factor_pair_rank": self.factor_pair_rank,
+            "factor_pair_scale": self.factor_pair_scale,
             "factor_count": self.router.factor_count if self.circuit_bank_mode == "factorized" else None,
             "factor_candidate_pool": (
                 self.router.factor_candidate_pool

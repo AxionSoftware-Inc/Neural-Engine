@@ -32,6 +32,12 @@ unions overlap strongly. The next screen therefore uses longer programs to
 stress capacity and state credit assignment before any 700M/1B run. See
 `V0_95_ROUTE_UTILIZATION_AUDIT.md` and `analyze_composition_routes.py`.
 
+V0.96 runs that depth stress: train depths 1--4, held-out depths 5--8. The
+300M two-seed mean is 96.39%; 500M is 96.29% with the same 1.90M active
+estimate. The harder recurrent task still gives no capacity advantage, so
+the next experiment must replace the additive shared-basis pair generator
+before another scale jump. See `V0_96_DYNAMIC_DEPTH_CAPACITY_SCREEN.md`.
+
 V0.66 tests halving the sparse circuit residual in the prior-free,
 non-modular composition setup. The two-seed mean is 83.11%, below the 84.18%
 full-residual operation-adapter reference but above the 79.20% no-residual

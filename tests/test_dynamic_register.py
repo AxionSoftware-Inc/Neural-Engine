@@ -499,6 +499,28 @@ def test_dynamic_register_query_conditioned_factor_mix_is_sparse_and_recurrent()
     assert model.parameter_report()["query_factor_mix_scale"] == 0.5
 
 
+def test_dynamic_register_factor_pair_basis_adds_nonlinear_pair_capacity():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        factor_pair_rank=4,
+    )
+    generator = DynamicCompositionGenerator(max_ops=2, train_max_ops=2, seed=17)
+    logits, stats = model(generator.batch(4).inputs)
+    assert logits.shape == (4, 64)
+    assert stats["selected_ids"].shape == (4, 2, 4)
+    assert model.circuits.pair_codes.shape == (8, 4)
+    assert model.parameter_report()["factor_pair_rank"] == 4
+
+
 def test_dynamic_register_operation_router_keys_start_from_shared_geometry():
     model = DynamicRegisterNeuralEngine(
         max_ops=2,

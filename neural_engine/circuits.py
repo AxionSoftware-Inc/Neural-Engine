@@ -122,7 +122,9 @@ class FactorizedMicroCircuitBank(nn.Module):
                  factor_count: int | None = None,
                  factor_mix_mode: str = "per_address",
                  ordered_factor_slots: bool = False,
-                 query_factor_mix_scale: float = 0.0):
+                 query_factor_mix_scale: float = 0.0,
+                 factor_pair_rank: int = 0,
+                 factor_pair_scale: float = 1.0):
         super().__init__()
         if num_circuits < 1:
             raise ValueError("num_circuits must be positive")
@@ -141,6 +143,12 @@ class FactorizedMicroCircuitBank(nn.Module):
         self.query_factor_mix_scale = float(query_factor_mix_scale)
         if self.query_factor_mix_scale < 0.0:
             raise ValueError("query_factor_mix_scale must be non-negative")
+        self.factor_pair_rank = int(factor_pair_rank)
+        self.factor_pair_scale = float(factor_pair_scale)
+        if self.factor_pair_rank < 0:
+            raise ValueError("factor_pair_rank must be non-negative")
+        if self.factor_pair_scale < 0.0:
+            raise ValueError("factor_pair_scale must be non-negative")
         factor_shape = (2, factor_count) if self.ordered_factor_slots else (factor_count,)
         self.down_factors = nn.Parameter(torch.empty(*factor_shape, state_dim, rank))
         self.up_factors = nn.Parameter(torch.empty(*factor_shape, rank, state_dim))
@@ -150,6 +158,23 @@ class FactorizedMicroCircuitBank(nn.Module):
                 torch.empty(*factor_shape, state_dim)
             )
             nn.init.normal_(self.factor_gate_keys, std=0.02)
+        if self.factor_pair_rank:
+            self.pair_codes = nn.Parameter(
+                torch.empty(factor_count, self.factor_pair_rank)
+            )
+            self.pair_down_basis = nn.Parameter(
+                torch.empty(self.factor_pair_rank, state_dim, rank)
+            )
+            self.pair_up_basis = nn.Parameter(
+                torch.empty(self.factor_pair_rank, rank, state_dim)
+            )
+            self.pair_bias_basis = nn.Parameter(
+                torch.empty(self.factor_pair_rank, state_dim)
+            )
+            nn.init.normal_(self.pair_codes, std=0.2)
+            nn.init.normal_(self.pair_down_basis, std=0.02)
+            nn.init.normal_(self.pair_up_basis, std=0.02)
+            nn.init.normal_(self.pair_bias_basis, std=0.02)
         # A tiny per-address code preserves distinctions between combinations
         # without restoring a full independent matrix for every virtual row.
         mix_shape = (num_circuits, 2) if factor_mix_mode == "per_address" else (2,)
@@ -221,6 +246,17 @@ class FactorizedMicroCircuitBank(nn.Module):
         down = first_down * first_mix + second_down * second_mix
         up = first_up * first_mix + second_up * second_mix
         bias = first_bias * first_bias_mix + second_bias * second_bias_mix
+        if self.factor_pair_rank:
+            pair_code = self.pair_codes[first] * self.pair_codes[second]
+            down = down + self.factor_pair_scale * torch.einsum(
+                "...p,pdr->...dr", pair_code, self.pair_down_basis
+            )
+            up = up + self.factor_pair_scale * torch.einsum(
+                "...p,prd->...rd", pair_code, self.pair_up_basis
+            )
+            bias = bias + self.factor_pair_scale * torch.einsum(
+                "...p,pd->...d", pair_code, self.pair_bias_basis
+            )
         return down, up, bias
 
     def forward(self, state: torch.Tensor, circuit_ids: torch.Tensor,
