@@ -426,6 +426,35 @@ def test_dynamic_register_operation_circuit_banks_select_by_operation():
     assert model.parameter_report()["operation_circuit_bank"] is True
 
 
+def test_factorized_router_can_warm_up_with_a_prefix_of_factor_capacity():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        factor_candidate_pool=4,
+        factor_capacity=4,
+    )
+    generator = DynamicCompositionGenerator(max_ops=2, train_max_ops=2, seed=17)
+    _, stats = model(generator.batch(4).inputs)
+    selected_ids = stats["selected_ids"].reshape(-1)
+    selected_ids = selected_ids[selected_ids.ge(0)]
+    first, second = model.router._factor_ids(selected_ids)
+    assert int(first.max()) < 4
+    assert int(second.max()) < 4
+    assert model.parameter_report()["factor_capacity"] == 4
+
+    model.router.set_routing_state(factor_capacity=8)
+    assert model.router.factor_capacity == 8
+    assert model.parameter_report()["factor_capacity"] == 8
+
+
 def test_dynamic_register_operation_router_keys_start_from_shared_geometry():
     model = DynamicRegisterNeuralEngine(
         max_ops=2,

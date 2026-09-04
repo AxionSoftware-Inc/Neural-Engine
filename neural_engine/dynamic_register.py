@@ -76,6 +76,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         circuit_bank_mode: str = "factorized",
         factor_count: int | None = None,
         factor_candidate_pool: int | None = None,
+        factor_capacity: int | None = None,
         circuit_mode: str = "serial",
         route_exploration_prob: float = 0.05,
         input_reinjection_scale: float = 0.0,
@@ -383,6 +384,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 candidate_pool, active_circuits, 1,
                 factor_count=factor_count,
                 factor_candidate_pool=factor_candidate_pool,
+                factor_capacity=factor_capacity,
                 operation_key_bank=operation_router_keys,
             )
 
@@ -969,6 +971,15 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "write_gate": self.write_gate_enabled,
             "value_encoder_mode": self.value_encoder_mode,
             "factor_mix_mode": self.factor_mix_mode,
+            "factor_count": self.router.factor_count if self.circuit_bank_mode == "factorized" else None,
+            "factor_candidate_pool": (
+                self.router.factor_candidate_pool
+                if self.circuit_bank_mode == "factorized" else None
+            ),
+            "factor_capacity": (
+                self.router.factor_capacity
+                if self.circuit_bank_mode == "factorized" else None
+            ),
             "route_context_mode": self.route_context_mode,
             "state_layout": self.state_layout,
             "predecessor_operation_context": self.predecessor_operation_context,

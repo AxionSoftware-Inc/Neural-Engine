@@ -118,10 +118,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     for step in range(1, steps + 1):
         if (hasattr(model, "router") and routing_warmup_steps
                 and step == routing_warmup_steps + 1):
-            model.router.set_routing_state(
-                capacity=model.router.num_circuits,
-                depth=model.router.depth,
-            )
+            routing_state = {
+                "capacity": model.router.num_circuits,
+                "depth": model.router.depth,
+            }
+            if hasattr(model.router, "factor_count"):
+                routing_state["factor_capacity"] = model.router.factor_count
+            model.router.set_routing_state(**routing_state)
         batch = train_generator.task_balanced_batch(int(config["batch_size"]), device)
         optimizer.zero_grad(set_to_none=True)
         if isinstance(model, DynamicRegisterNeuralEngine):
@@ -239,6 +242,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         if hasattr(model, "router"):
             checkpoint_config["routing_capacity"] = model.router.routing_capacity
             checkpoint_config["routing_depth"] = model.router.active_depth
+            if hasattr(model.router, "factor_capacity"):
+                checkpoint_config["factor_capacity"] = model.router.factor_capacity
         torch.save({"model_state": model.state_dict(), "config": checkpoint_config,
                    "report": report}, checkpoint_path)
     output_path.write_text(json.dumps(report, indent=2), encoding="utf-8")

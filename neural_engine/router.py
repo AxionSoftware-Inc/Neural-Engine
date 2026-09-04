@@ -668,6 +668,7 @@ class FactorizedRouter(nn.Module):
                  routing_depth: int | None = None,
                  factor_count: int | None = None,
                  factor_candidate_pool: int | None = None,
+                 factor_capacity: int | None = None,
                  operation_key_bank: bool = False):
         super().__init__()
         if num_addresses != 1:
@@ -690,6 +691,12 @@ class FactorizedRouter(nn.Module):
             active_circuits,
             factor_candidate_pool or math.ceil(math.sqrt(candidate_pool)),
         )
+        self.factor_capacity = (factor_count if factor_capacity is None
+                                else int(factor_capacity))
+        if not self.factor_candidate_pool <= self.factor_capacity <= factor_count:
+            raise ValueError(
+                "factor_capacity must be between factor_candidate_pool and factor_count"
+            )
         self.routing_capacity = (num_circuits if routing_capacity is None
                                  else int(routing_capacity))
         self.active_depth = depth if routing_depth is None else int(routing_depth)
@@ -708,15 +715,24 @@ class FactorizedRouter(nn.Module):
             )
 
     def set_routing_state(self, *, capacity: int | None = None,
-                          depth: int | None = None) -> None:
+                          depth: int | None = None,
+                          factor_capacity: int | None = None) -> None:
         next_capacity = self.routing_capacity if capacity is None else int(capacity)
         next_depth = self.active_depth if depth is None else int(depth)
+        next_factor_capacity = (
+            self.factor_capacity if factor_capacity is None else int(factor_capacity)
+        )
         if not 0 < next_capacity <= self.num_circuits:
             raise ValueError("routing capacity must be between 1 and num_circuits")
         if not 0 < next_depth <= self.depth:
             raise ValueError("routing depth must be between 1 and depth")
+        if not self.factor_candidate_pool <= next_factor_capacity <= self.factor_count:
+            raise ValueError(
+                "factor capacity must be between factor_candidate_pool and factor_count"
+            )
         self.routing_capacity = next_capacity
         self.active_depth = next_depth
+        self.factor_capacity = next_factor_capacity
 
     def _factor_ids(self, circuit_ids: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         first = circuit_ids.remainder(self.factor_count)
@@ -757,9 +773,15 @@ class FactorizedRouter(nn.Module):
         else:
             factor_keys = self.keys
             factor_logits = torch.einsum("bd,fd->bf", state, factor_keys)
+        if self.factor_capacity < self.factor_count:
+            factor_logits = factor_logits.masked_fill(
+                torch.arange(self.factor_count, device=state.device).view(1, -1)
+                >= self.factor_capacity,
+                torch.finfo(factor_logits.dtype).min,
+            )
         factor_probs = F.softmax(factor_logits, dim=-1)
         entropy = -(factor_probs * factor_probs.clamp_min(1e-8).log()).sum(dim=-1)
-        pool = min(self.factor_candidate_pool, self.factor_count)
+        pool = min(self.factor_candidate_pool, self.factor_capacity)
         top_values, top_positions = factor_logits.topk(pool, dim=-1)
         first = top_positions.unsqueeze(-1).expand(-1, -1, pool)
         second = top_positions.unsqueeze(1).expand(-1, pool, -1)
@@ -794,8 +816,15 @@ class FactorizedRouter(nn.Module):
         if exploration_prob and self.training:
             # Exploration stays within valid virtual addresses while preserving
             # the factorized address format.
-            random_ids = torch.randint(local_capacity, selected_ids.shape,
-                                       device=state.device)
+            factor_range = torch.arange(self.factor_capacity, device=state.device)
+            random_ids = (
+                factor_range.view(-1, 1)
+                + self.factor_count * factor_range.view(1, -1)
+            ).reshape(-1)
+            random_ids = random_ids[random_ids < local_capacity]
+            random_ids = random_ids[
+                torch.randint(random_ids.numel(), selected_ids.shape, device=state.device)
+            ]
             explore = torch.rand(state.shape[0], 1, device=state.device) < exploration_prob
             selected_ids = torch.where(explore, random_ids, selected_ids)
         stats = {

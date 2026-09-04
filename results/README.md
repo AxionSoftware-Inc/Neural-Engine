@@ -5,6 +5,13 @@ reports should record the exact command, commit SHA, hardware, quality, active
 parameter estimate, routing statistics, and whether the result is a failure or
 positive signal.
 
+V0.92 tests stable factor warm-up during 300M -> 500M parent growth: route
+only through the parent 154 factors for 1,000 steps, then open all 199. The
+two-seed mean is 78.56%, below V0.90 scratch 500M (78.61%), V0.91 simple
+growth (78.98%), and the V0.80 300M reference (79.59%). This rejects warm-up
+as the capacity fix and points to factor-bank expressivity/ordered semantics
+as the next bottleneck. See `V0_92_STABLE_FACTOR_WARMUP.md`.
+
 V0.66 tests halving the sparse circuit residual in the prior-free,
 non-modular composition setup. The two-seed mean is 83.11%, below the 84.18%
 full-residual operation-adapter reference but above the 79.20% no-residual
