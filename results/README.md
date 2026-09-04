@@ -1,5 +1,12 @@
 # Results
 
+V0.106 rejects the canonical equal-active-budget mesoscopic MacroCell
+replacement. With 64 independent `d=384,h=480,b=128` cells and top-2 routing,
+train accuracy stayed at 7.13% mean after 3,000 steps and held-out logits
+became non-finite. Route utilization was broad, so the failure is hard-routing
+credit assignment/state stability rather than dead cells. See
+`V0_106_MESOSCOPIC_MACRO_EQUAL_ACTIVE.md`.
+
 V0.105 transfers the canonical operator-valued layer into one unchanged
 300M composition transform. It reaches only 68.36% held-out mean versus the
 V0.80 reference at 79.59%, while fitting train pairs at 100%; this placement
