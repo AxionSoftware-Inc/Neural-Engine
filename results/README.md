@@ -84,6 +84,11 @@ The two-seed mean falls to 75.63%, still above the shared-bank baseline but
 while the adapters provide useful secondary synergy. See
 `V0_78_OPERATION_BANKS_NO_ADAPTERS.md`.
 
+V0.79 halves both operation adapter ranks from 16 to 8. The two-seed
+3,000-step mean rises to 79.08% while the active estimate falls by 36,864
+parameters. Rank 8 is the current efficiency candidate pending a 9,000-step
+confirmation. See `V0_79_OPERATION_BANKS_RANK8.md`.
+
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.
