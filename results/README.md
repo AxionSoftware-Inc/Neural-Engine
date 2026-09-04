@@ -13,6 +13,13 @@ Although `multiply -> add` improves by 0.83 points, `add -> multiply` drops by
 is rejected; do not scale this exact design to 500M/700M/1B. See
 `V0_97_FACTOR_PAIR_BASIS.md`.
 
+V0.98 moves the rank-8 operation write adapter before the shared writer. The
+two-seed mean falls to 77.78%, so changing the adapter locus does not repair
+the composition boundary. V0.99 keeps the adapter only on the terminal write;
+the mean falls further to 77.25%. Both placements are rejected, and the
+adapter-placement hypothesis is closed. See `V0_98_PRE_WRITER_OPERATION_ADAPTER.md`
+and `V0_99_TERMINAL_OPERATION_ADAPTER.md`.
+
 V0.92 tests stable factor warm-up during 300M -> 500M parent growth: route
 only through the parent 154 factors for 1,000 steps, then open all 199. The
 two-seed mean is 78.56%, below V0.90 scratch 500M (78.61%), V0.91 simple

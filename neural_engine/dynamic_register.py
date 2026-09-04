@@ -97,6 +97,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         operation_read_adapter_scale: float = 1.0,
         operation_write_adapter_rank: int = 0,
         operation_write_adapter_scale: float = 1.0,
+        operation_write_adapter_mode: str = "post_state",
         operation_circuit_bank: bool = False,
         operation_router_keys: bool = False,
         operation_transition_rank: int = 0,
@@ -164,6 +165,13 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("operation_write_adapter_rank must be non-negative")
         if operation_write_adapter_scale < 0.0:
             raise ValueError("operation_write_adapter_scale must be non-negative")
+        if operation_write_adapter_mode not in {
+            "post_state", "pre_writer", "terminal_only"
+        }:
+            raise ValueError(
+                "operation_write_adapter_mode must be post_state, pre_writer, "
+                "or terminal_only"
+            )
         if operation_transition_rank < 0:
             raise ValueError("operation_transition_rank must be non-negative")
         if operation_transition_scale < 0.0:
@@ -228,6 +236,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.operation_read_adapter_scale = float(operation_read_adapter_scale)
         self.operation_write_adapter_rank = int(operation_write_adapter_rank)
         self.operation_write_adapter_scale = float(operation_write_adapter_scale)
+        self.operation_write_adapter_mode = operation_write_adapter_mode
         self.operation_circuit_bank = bool(operation_circuit_bank)
         self.operation_router_keys = bool(operation_router_keys)
         self.operation_transition_rank = int(operation_transition_rank)
@@ -759,6 +768,15 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 else:
                     delta = torch.zeros_like(query)
                 write_input = query + delta
+                if (
+                    self.operation_write_adapter_rank
+                    and self.operation_write_adapter_mode == "pre_writer"
+                ):
+                    write_input = write_input + self.operation_write_adapter_scale * (
+                        self._operation_write_adapter(
+                            write_input, current_operation_ids
+                        )
+                    )
                 if self.operation_transition_rank:
                     write_input = write_input + self.operation_transition_scale * (
                         self._operation_transition(
@@ -767,11 +785,24 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     )
                 candidate = self._write_state(active_accumulator, write_input)
                 if self.operation_write_adapter_rank:
-                    candidate = candidate + self.operation_write_adapter_scale * (
-                        self._operation_write_adapter(
-                            candidate, current_operation_ids
+                    if self.operation_write_adapter_mode == "post_state":
+                        candidate = candidate + self.operation_write_adapter_scale * (
+                            self._operation_write_adapter(
+                                candidate, current_operation_ids
+                            )
                         )
-                    )
+                    elif self.operation_write_adapter_mode == "terminal_only":
+                        terminal_mask = ~operation_mask[active_indices, step + 1:].any(dim=1)
+                        if terminal_mask.any():
+                            terminal_candidate = candidate[terminal_mask]
+                            candidate = candidate.clone()
+                            candidate[terminal_mask] = terminal_candidate + (
+                                self.operation_write_adapter_scale
+                                * self._operation_write_adapter(
+                                    terminal_candidate,
+                                    current_operation_ids[terminal_mask],
+                                )
+                            )
                 if self.write_gate_enabled:
                     gate_input = torch.cat([active_accumulator, query + delta], dim=-1)
                     gate = self.write_gate(gate_input)
@@ -1036,6 +1067,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "operation_read_adapter_scale": self.operation_read_adapter_scale,
             "operation_write_adapter_rank": self.operation_write_adapter_rank,
             "operation_write_adapter_scale": self.operation_write_adapter_scale,
+            "operation_write_adapter_mode": self.operation_write_adapter_mode,
             "operation_circuit_bank": self.operation_circuit_bank,
             "operation_router_keys": self.operation_router_keys,
             "operation_router_key_params": operation_router_key_params,

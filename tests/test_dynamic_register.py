@@ -337,6 +337,49 @@ def test_dynamic_register_operation_write_adapter_is_operation_conditioned():
     assert logits.shape == (4, 64)
     assert model.operation_write_adapter_down.shape == (3, 32, 4)
     assert model.parameter_report()["operation_write_adapter_rank"] == 4
+    assert model.parameter_report()["operation_write_adapter_mode"] == "post_state"
+
+
+def test_dynamic_register_pre_writer_adapter_changes_write_locus():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        operation_write_adapter_rank=4,
+        operation_write_adapter_mode="pre_writer",
+    )
+    generator = DynamicCompositionGenerator(max_ops=2, train_max_ops=2, seed=151)
+    logits, _ = model(generator.batch(4).inputs)
+    assert logits.shape == (4, 64)
+    assert model.parameter_report()["operation_write_adapter_mode"] == "pre_writer"
+
+
+def test_dynamic_register_terminal_adapter_preserves_intermediate_state_path():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        operation_write_adapter_rank=4,
+        operation_write_adapter_mode="terminal_only",
+    )
+    generator = DynamicCompositionGenerator(max_ops=2, train_max_ops=2, seed=152)
+    logits, _ = model(generator.batch(4).inputs)
+    assert logits.shape == (4, 64)
+    assert model.parameter_report()["operation_write_adapter_mode"] == "terminal_only"
 
 
 def test_dynamic_register_structured_numeric_state_is_optional_and_recurrent():

@@ -42,6 +42,7 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "operation_adapter_gate",
         "operation_read_adapter_rank", "operation_read_adapter_scale",
         "operation_write_adapter_rank", "operation_write_adapter_scale",
+        "operation_write_adapter_mode",
         "operation_circuit_bank",
         "operation_router_keys",
         "operation_transition_rank", "operation_transition_scale",
