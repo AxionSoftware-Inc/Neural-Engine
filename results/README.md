@@ -1,5 +1,11 @@
 # Results
 
+V0.101 adds a matched 20M operation-bank point to the depth-5--8 capability
+frontier. The two-seed held-out mean is 90.04%, below 300M at 96.39%, while
+500M remains flat at 96.29%. Capacity helps from 20M to 300M but is saturated
+by 300M on this task; the next experiment targets grouped sparse execution,
+not another scale jump. See `V0_101_CAPABILITY_FRONTIER_20M_300M_500M.md`.
+
 Each meaningful run is saved as a JSON file under `results/runs/`. Milestone
 reports should record the exact command, commit SHA, hardware, quality, active
 parameter estimate, routing statistics, and whether the result is a failure or
