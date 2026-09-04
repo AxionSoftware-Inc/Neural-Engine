@@ -94,6 +94,11 @@ with 36,864 fewer active parameters. Rank 8 is therefore the current
 efficiency default; the remaining weakness is the `multiply -> add` order at
 68.60% mean. See `V0_80_OPERATION_BANKS_RANK8_LONG.md`.
 
+V0.81 gives every virtual circuit address its own factor-mix coefficients.
+The two-seed 3,000-step mean falls to 78.37% from the shared-mix 79.08% and
+adds 141,594 stored parameters. Per-address mixing is rejected; shared mixing
+remains the default. See `V0_81_OPERATION_BANKS_PER_ADDRESS_MIX.md`.
+
 Useful trained checkpoints and their reproducible GPU measurements are
 documented in `CHECKPOINTED_INFERENCE.md`. Checkpoint binaries live only in the
 local `results/checkpoints/` directory and are ignored by Git.
