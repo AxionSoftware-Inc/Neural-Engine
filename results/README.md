@@ -1,5 +1,12 @@
 # Results
 
+V0.109 rejects naive independent full handoff across two adjacent late Qwen
+FFNs: the single-layer child controls pass, but replacing both at alpha=0
+raises held-out CE by 0.2377. A 50% parent/child mixture still reaches only
++0.0279 CE delta, showing a partial handoff signal but clear representation
+drift/error accumulation. The next gate is joint end-to-end logit distillation
+with both parent layers frozen. See `V0_109_QWEN_TWO_LAYER_TRANSPLANT.md`.
+
 V0.108 passes the minimal Qwen-to-Neural-Engine parent-function transplant
 gate. A 384-wide attention-free child replaces one frozen late Qwen3-0.6B FFN
 with alpha=0 and stays within +0.0103, +0.0394, and +0.0183 CE across two
