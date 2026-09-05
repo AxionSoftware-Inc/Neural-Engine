@@ -1,5 +1,13 @@
 # Results
 
+V0.149 passes the four-layer Qwen rank-8 cascade gate on two seeds. Sequential
+ replacement of layers 23--26 keeps alpha=0 CE deltas at +0.0298 and +0.0376,
+ with 94.29% and 94.24% teacher top-1 agreement. Fifty-iteration full-model
+ timings are 0.982x and 0.971x of the dense parent, the first repeatable
+ positive multi-layer timing signal. The next gate is an eight-layer adjacent
+ cascade with the same 0.6B teacher. See
+ `V0_149_QWEN_FOUR_LAYER_CASCADE.md`.
+
 V0.119 conditionally passes the labels-free latent-route gate on two seeds.
 V0.120 conditionally passes the labels-free non-polynomial latent-route gate on two seeds.
 V0.121 conditionally passes the labels-free multidimensional latent-route gate on two seeds.
