@@ -661,6 +661,13 @@ quality gate at CE deltas +0.0537/+0.0708. Keep the dispatch implementation,
 reject this handoff quality, and make no wall-clock claim until grouped-kernel
 timing is measured. See `V0_137_QWEN_HARD_SPARSE_DISPATCH.md`.
 
+V0.138 turns the stable single-layer Qwen transplant into a 4-expert top-1
+bank. Both seeds pass alpha=0 with CE deltas +0.0237/+0.0257 and
+95.51%/96.39% teacher top-1 agreement, while selected-token dispatch executes
+only 25% of expert bodies. This is a quality and active-path GO for one layer;
+the next gate is grouped CUDA latency and independent-text validation. See
+`V0_138_QWEN_SINGLE_LAYER_SPARSE_BANK.md`.
+
 V0.60 fixes the main strict-value bottleneck with a trainable modular
 value-state/template interface. On values 0--31 train and unseen values
 32--63 eval, the 300M Macro-enabled model reaches 96.36% mean across two
