@@ -643,6 +643,13 @@ parent, with end-to-end timing about 1.015x and the quality gate still passing.
 This is accepted as the preferred Qwen path but not yet a measured speedup.
 See `V0_143_QWEN_GROUPED_NO_NORM.md`.
 
+V0.144 repeats the normless grouped bank at 1,024 tokens per batch. Isolated
+FFN timing reaches 0.462x and 0.444x of parent across two seeds, while the
+quality gate passes with CE deltas +0.0132 and +0.0140. End-to-end remains near
+neutral because only one of 28 Qwen layers is replaced. This is a performance
+GO for the next multi-layer gate, not yet a larger-model claim. See
+`V0_144_QWEN_LARGE_TOKEN_BLOCK.md`.
+
 V0.133 replaces the fixed learned address bank with an external random
 content-key lookup. With 2048 fact rows, only the first 1536 used in training,
 both seeds retrieve the 512 held-out rows at 100% and reach 4.21e-6/4.27e-6
