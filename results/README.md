@@ -647,6 +647,13 @@ without row-specific parameters, while the active computation cell stays at
 162 parameters. The key views remain synthetic, so the next gate is frozen
 Qwen-derived content features. See `V0_135_LATENT_MACHINE_DUAL_VIEW_KEYS.md`.
 
+V0.136 rechecks the single-layer Qwen parent transplant at sequence length 128
+and 600 steps. Both seeds pass alpha=0 with CE deltas +0.0068/+0.0171 and
+98.05%/98.44% teacher top-1 agreement. The 384-wide child remains only 8.37%
+of the 9.44M-parameter parent FFN. This confirms a stable local function
+transfer, but not multi-layer replacement or full Transformer removal. See
+`V0_136_QWEN_PARENT_TRANSPLANT_LONG_SEQUENCE.md`.
+
 V0.60 fixes the main strict-value bottleneck with a trainable modular
 value-state/template interface. On values 0--31 train and unseen values
 32--63 eval, the 300M Macro-enabled model reaches 96.36% mean across two
