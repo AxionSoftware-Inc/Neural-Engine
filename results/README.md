@@ -657,6 +657,18 @@ unrefined seed-2026 path reached +0.0993. Joint refinement is accepted as the
 current two-layer composition fix; its teacher-logit memory path still needs
 optimization before long runs. See `V0_145_QWEN_TWO_LAYER_JOINT_REFINE.md`.
 
+V0.146 retests joint refinement at 8×128. Soft and hard route variants, with
+learning rates 1e-3 and 1e-4, all fail seed2026 (`+0.1017` to `+0.1247`) even
+after teacher-logit CPU offload. Large-block joint refinement is rejected as a
+stable composition fix; the offload remains as a memory improvement. See
+`V0_146_QWEN_LARGE_JOINT_STABILITY.md`.
+
+V0.147 adds a zero-start rank-8 low-rank interface correction to each two-layer
+bank. On two 8×128 seeds the combined alpha=0 CE deltas are +0.0184 and +0.0289,
+with about 34.96% of parent FFN parameters and the quality gate passing. Rank 8
+is accepted as the current quality default pending timing. See
+`V0_147_QWEN_TWO_LAYER_CALIBRATION_RANK8.md`.
+
 V0.133 replaces the fixed learned address bank with an external random
 content-key lookup. With 2048 fact rows, only the first 1536 used in training,
 both seeds retrieve the 512 held-out rows at 100% and reach 4.21e-6/4.27e-6

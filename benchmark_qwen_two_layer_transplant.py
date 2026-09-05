@@ -85,6 +85,7 @@ class RoutedChild(nn.Module):
         self.active_experts = int(active_experts)
         self.temperature = float(temperature)
         self.use_norm = bool(use_norm)
+        self.hard_train = False
         if dispatch_mode not in {"grouped", "packed", "token-loop"}:
             raise ValueError("dispatch_mode must be grouped, packed, or token-loop")
         self.dispatch_mode = dispatch_mode
@@ -248,7 +249,7 @@ class RoutedChild(nn.Module):
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         scores = self.router(hidden_states)
-        if self.training:
+        if self.training and not self.hard_train:
             outputs = torch.stack([expert(hidden_states) for expert in self.experts], dim=-2)
             weights = F.softmax(scores / self.temperature, dim=-1)
             self.last_selected = scores.detach().argmax(dim=-1)
@@ -257,9 +258,9 @@ class RoutedChild(nn.Module):
         top_values, top_ids = scores.topk(self.active_experts, dim=-1)
         weights = F.softmax(top_values / self.temperature, dim=-1)
         self.last_selected = top_ids.detach()
-        if self.dispatch_mode == "grouped":
+        if not self.training and self.dispatch_mode == "grouped":
             return self._forward_grouped(hidden_states, top_ids, weights)
-        if self.dispatch_mode == "packed":
+        if not self.training and self.dispatch_mode == "packed":
             return self._forward_packed(hidden_states, top_ids, weights)
         # Hard evaluation must execute only the selected expert bodies. The
         # previous research implementation evaluated every expert and then
@@ -388,31 +389,40 @@ def joint_logit_refine(
         lr=learning_rate,
     )
     history = []
+    previous_hard_train = []
+    for child in (child25, child26):
+        if hasattr(child, "hard_train"):
+            previous_hard_train.append((child, bool(child.hard_train)))
+            child.hard_train = True
     child25.train()
     child26.train()
-    for step in range(1, steps + 1):
-        index = (step - 1) % len(input_batches)
-        ids = input_batches[index]
-        target = teacher_logits[index].to(device=device, dtype=torch.float32)
-        student = model(input_ids=ids, use_cache=False).logits.float()
-        target_probs = torch.softmax(target / temperature, dim=-1)
-        student_log_probs = F.log_softmax(student / temperature, dim=-1)
-        loss = F.kl_div(
-            student_log_probs,
-            target_probs,
-            reduction="batchmean",
-        ) * (temperature * temperature)
-        if not torch.isfinite(loss):
-            raise FloatingPointError(f"non-finite joint loss at step {step}")
-        optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        nn.utils.clip_grad_norm_(
-            list(child25.parameters()) + list(child26.parameters()),
-            max_grad_norm,
-        )
-        optimizer.step()
-        if step == 1 or step % log_every == 0 or step == steps:
-            history.append({"step": step, "loss": float(loss.detach().cpu())})
+    try:
+        for step in range(1, steps + 1):
+            index = (step - 1) % len(input_batches)
+            ids = input_batches[index]
+            target = teacher_logits[index].to(device=device, dtype=torch.float32)
+            student = model(input_ids=ids, use_cache=False).logits.float()
+            target_probs = torch.softmax(target / temperature, dim=-1)
+            student_log_probs = F.log_softmax(student / temperature, dim=-1)
+            loss = F.kl_div(
+                student_log_probs,
+                target_probs,
+                reduction="batchmean",
+            ) * (temperature * temperature)
+            if not torch.isfinite(loss):
+                raise FloatingPointError(f"non-finite joint loss at step {step}")
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            nn.utils.clip_grad_norm_(
+                list(child25.parameters()) + list(child26.parameters()),
+                max_grad_norm,
+            )
+            optimizer.step()
+            if step == 1 or step % log_every == 0 or step == steps:
+                history.append({"step": step, "loss": float(loss.detach().cpu())})
+    finally:
+        for child, previous in previous_hard_train:
+            child.hard_train = previous
     child25.eval()
     child26.eval()
     return history
@@ -428,7 +438,9 @@ def evaluate_variants(
     for batch_index, ids in enumerate(batches):
         with torch.no_grad():
             logits = model(input_ids=ids, use_cache=False).logits.float()
-        target = teacher_logits[batch_index].float()
+        target = teacher_logits[batch_index].to(
+            device=logits.device, dtype=torch.float32,
+        )
         results.append({
             "batch": batch_index,
             "ce": ce(logits, ids),
@@ -499,9 +511,26 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         device,
     ).reshape(args.eval_batches, args.batch_size, args.sequence_length)
     with torch.no_grad():
-        teacher_train_logits = [model(input_ids=ids, use_cache=False).logits.detach() for ids in train_ids]
-        teacher_logits = [model(input_ids=ids, use_cache=False).logits.detach() for ids in eval_ids]
-    teacher_ce = sum(ce(logits.float(), ids) for logits, ids in zip(teacher_logits, eval_ids)) / len(eval_ids)
+        teacher_train_logits = [
+            model(input_ids=ids, use_cache=False).logits.detach().to(
+                device="cpu", dtype=torch.float16,
+            )
+            for ids in train_ids
+        ]
+        teacher_logits_gpu = [
+            model(input_ids=ids, use_cache=False).logits.detach()
+            for ids in eval_ids
+        ]
+    teacher_ce = sum(
+        ce(logits.float(), ids)
+        for logits, ids in zip(teacher_logits_gpu, eval_ids)
+    ) / len(eval_ids)
+    # Keep the large vocabulary logits off the GPU between evaluation and any
+    # joint refinement step. The target batch is copied back only when used.
+    teacher_logits = [
+        logits.to(device="cpu", dtype=torch.float16)
+        for logits in teacher_logits_gpu
+    ]
 
     layer25 = model.model.layers[args.first_layer]
     layer26 = model.model.layers[args.second_layer]
