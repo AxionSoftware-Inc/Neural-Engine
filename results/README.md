@@ -632,6 +632,13 @@ cell is active per step. This is a strong addressing control, but not yet
 semantic key learning because query and fact keys are externally supplied and
 exactly matched. See `V0_133_LATENT_MACHINE_CONTENT_MEMORY.md`.
 
+V0.134 adds one shared trainable key projection before content lookup. It adds
+2,048 shared weights but no row-specific address parameters; both seeds still
+retrieve all 512 unseen rows at 100% with held-out MSE 4.51e-6/4.30e-6. This
+supports shared key transforms while preserving the one-active-cell path. It
+is still an externally paired-key control, not semantic end-to-end memory
+learning. See `V0_134_LATENT_MACHINE_SHARED_KEY_PROJECTION.md`.
+
 V0.60 fixes the main strict-value bottleneck with a trainable modular
 value-state/template interface. On values 0--31 train and unseen values
 32--63 eval, the 300M Macro-enabled model reaches 96.36% mean across two

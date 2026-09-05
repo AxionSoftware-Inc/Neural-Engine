@@ -363,6 +363,7 @@ class LatentComputationalMachine(nn.Module):
         num_entities: int = 32,
         memory_temperature: float = 1.0,
         memory_buckets: int = 32,
+        memory_key_dim: int = 64,
     ) -> None:
         super().__init__()
         self.state_dim = state_dim
@@ -371,6 +372,7 @@ class LatentComputationalMachine(nn.Module):
         self.memory_mode = memory_mode
         self.num_entities = num_entities
         self.memory_temperature = memory_temperature
+        self.memory_key_dim = memory_key_dim
         self.memory_buckets = memory_buckets if memory_mode == "hierarchical" else None
         self.memory_slots = memory_slots
         self.num_cells = num_cells
@@ -389,19 +391,24 @@ class LatentComputationalMachine(nn.Module):
             raise ValueError("route_mode must be context or operation-only")
         self.route_mode = route_mode
         if memory_mode not in {
-            "direct", "learned", "hierarchical", "coordinate", "content"
+            "direct", "learned", "hierarchical", "coordinate", "content",
+            "content-projected"
         }:
             raise ValueError(
-                "memory_mode must be direct, learned, hierarchical, coordinate, or content"
+                "memory_mode must be direct, learned, hierarchical, coordinate, content, or content-projected"
             )
         if memory_temperature <= 0:
             raise ValueError("memory_temperature must be positive")
+        if memory_key_dim <= 0:
+            raise ValueError("memory_key_dim must be positive")
         self.value_encoder = nn.Sequential(
             nn.Linear(value_dim, state_dim),
             nn.Tanh(),
         )
         self.operation_embedding = nn.Embedding(NUM_OPERATIONS + 1, latent_dim)
         self.operation_controller = nn.Linear(latent_dim, latent_dim)
+        if memory_mode == "content-projected":
+            self.memory_key_projection = nn.Linear(memory_key_dim, latent_dim, bias=False)
         if memory_mode in {"learned", "hierarchical"}:
             self.memory_queries = nn.Embedding(num_entities, latent_dim)
         if memory_mode == "learned":
@@ -466,7 +473,7 @@ class LatentComputationalMachine(nn.Module):
             scores = -8.0 * distance / (self.memory_temperature ** 2)
             weights = F.softmax(scores, dim=-1)
             return weights @ fact_table, scores
-        if self.memory_mode == "content":
+        if self.memory_mode in {"content", "content-projected"}:
             if fact_keys is None or query_keys is None:
                 raise ValueError("content memory requires external fact_keys and query_keys")
             if fact_keys.dim() != 2 or query_keys.dim() != 2:
@@ -475,10 +482,18 @@ class LatentComputationalMachine(nn.Module):
                 raise ValueError("content memory key tables must cover all entities")
             if fact_keys.shape[1] != query_keys.shape[1]:
                 raise ValueError("content memory key dimensions must match")
-            fact_keys = F.normalize(fact_keys.to(device=fact_table.device, dtype=fact_table.dtype), dim=-1)
+            fact_keys = fact_keys.to(device=fact_table.device, dtype=fact_table.dtype)
+            query = query_keys[entity_ids].to(
+                device=fact_table.device, dtype=fact_table.dtype
+            )
+            if fact_keys.shape[1] != self.memory_key_dim:
+                raise ValueError("content memory key dimension does not match memory_key_dim")
+            if self.memory_mode == "content-projected":
+                fact_keys = self.memory_key_projection(fact_keys)
+                query = self.memory_key_projection(query)
+            fact_keys = F.normalize(fact_keys, dim=-1)
             query = F.normalize(
-                query_keys[entity_ids].to(device=fact_table.device, dtype=fact_table.dtype),
-                dim=-1,
+                query, dim=-1
             )
             scores = (query @ fact_keys.t()) / self.memory_temperature
             weights = F.softmax(scores, dim=-1)
@@ -903,9 +918,10 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             num_entities=args.num_entities,
             memory_temperature=args.memory_temperature,
             memory_buckets=args.memory_buckets,
+            memory_key_dim=args.memory_key_dim,
         ).to(device)
     address_keys = None
-    if args.memory_mode == "content":
+    if args.memory_mode in {"content", "content-projected"}:
         if args.memory_key_dim <= 0:
             raise ValueError("memory_key_dim must be positive for content memory")
         # This table is deliberately external to the model. It is an exact
@@ -1138,7 +1154,10 @@ def main() -> None:
     parser.add_argument("--route-mode", choices=("context", "operation-only"), default="context")
     parser.add_argument(
         "--memory-mode",
-        choices=("direct", "learned", "hierarchical", "coordinate", "content"),
+        choices=(
+            "direct", "learned", "hierarchical", "coordinate", "content",
+            "content-projected",
+        ),
         default="direct",
     )
     parser.add_argument("--memory-temperature", type=float, default=1.0)
