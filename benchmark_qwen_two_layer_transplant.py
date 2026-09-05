@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from pathlib import Path
 
 import torch
@@ -19,6 +20,40 @@ from benchmark_qwen_parent_transplant import (
     ce,
     token_stream,
 )
+
+
+def synchronize(device: torch.device) -> None:
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+
+
+@torch.inference_mode()
+def benchmark_forward(
+    model: nn.Module,
+    input_batches: list[torch.Tensor],
+    device: torch.device,
+    warmup: int,
+    iterations: int,
+) -> dict[str, float]:
+    if iterations <= 0:
+        raise ValueError("timing_iterations must be positive")
+    for _ in range(warmup):
+        for ids in input_batches:
+            model(input_ids=ids, use_cache=False)
+    synchronize(device)
+    durations = []
+    for _ in range(iterations):
+        start = time.perf_counter()
+        for ids in input_batches:
+            model(input_ids=ids, use_cache=False)
+        synchronize(device)
+        durations.append((time.perf_counter() - start) * 1000.0 / len(input_batches))
+    ordered = sorted(durations)
+    return {
+        "mean_ms_per_batch": sum(durations) / len(durations),
+        "p50_ms_per_batch": ordered[len(ordered) // 2],
+        "p95_ms_per_batch": ordered[max(0, int(len(ordered) * 0.95) - 1)],
+    }
 
 
 class NEFunctionBlockNoNorm(nn.Module):
@@ -620,6 +655,17 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     layer25.mlp = parent25
     layer26.mlp = parent26
 
+    parent_timing = benchmark_forward(
+        model, list(eval_ids), device, args.timing_warmup, args.timing_iterations,
+    )
+    layer25.mlp = child25
+    layer26.mlp = child26
+    sparse_timing = benchmark_forward(
+        model, list(eval_ids), device, args.timing_warmup, args.timing_iterations,
+    )
+    layer25.mlp = parent25
+    layer26.mlp = parent26
+
     both = next(item for item in variants if item["variant"] == "shared_alpha_0")
     result = {
         "experiment": "qwen_two_layer_attention_free_parent_transplant",
@@ -657,6 +703,17 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "joint_distillation_steps": args.joint_steps,
         "joint_learning_rate": args.joint_learning_rate,
         "joint_temperature": args.joint_temperature,
+        "timing": {
+            "parent": parent_timing,
+            "sparse_bank": sparse_timing,
+            "bank_over_parent_mean_ratio": (
+                sparse_timing["mean_ms_per_batch"]
+                / max(parent_timing["mean_ms_per_batch"], 1e-9)
+            ),
+            "warmup": args.timing_warmup,
+            "iterations": args.timing_iterations,
+            "note": "end-to-end Qwen forward with both adjacent MLPs replaced",
+        },
         "teacher_ce": teacher_ce,
         "child25_train_history": history25,
         "child26_train_history": history26,
@@ -712,6 +769,8 @@ def main() -> None:
     parser.add_argument("--log-every", type=int, default=100)
     parser.add_argument("--max-ce-delta", type=float, default=0.05)
     parser.add_argument("--joint-temperature", type=float, default=2.0)
+    parser.add_argument("--timing-warmup", type=int, default=10)
+    parser.add_argument("--timing-iterations", type=int, default=30)
     parser.add_argument("--alphas", type=float, nargs="+", default=[1.0, 0.75, 0.5, 0.25, 0.0])
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")

@@ -669,6 +669,12 @@ with about 34.96% of parent FFN parameters and the quality gate passing. Rank 8
 is accepted as the current quality default pending timing. See
 `V0_147_QWEN_TWO_LAYER_CALIBRATION_RANK8.md`.
 
+V0.148 times that rank-8 two-layer bank end-to-end. Seed 2026 is 0.963x of
+parent and seed 2027 is 1.044x, with quality passing in both cases. The timing
+result is therefore neutral rather than a claimed speedup; repeatable timing or
+a fused grouped kernel is required before scaling to a larger teacher. See
+`V0_148_QWEN_TWO_LAYER_TIMING.md`.
+
 V0.133 replaces the fixed learned address bank with an external random
 content-key lookup. With 2048 fact rows, only the first 1536 used in training,
 both seeds retrieve the 512 held-out rows at 100% and reach 4.21e-6/4.27e-6
