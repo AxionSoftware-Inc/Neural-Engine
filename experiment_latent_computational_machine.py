@@ -225,6 +225,7 @@ class LatentComputationalMachine(nn.Module):
         stabilize_state: bool = False,
         structured_value_lane: bool = False,
         value_clip: float = 0.0,
+        transition_mode: str = "delta",
     ) -> None:
         super().__init__()
         self.state_dim = state_dim
@@ -236,6 +237,9 @@ class LatentComputationalMachine(nn.Module):
         self.stabilize_state = stabilize_state
         self.structured_value_lane = structured_value_lane
         self.value_clip = value_clip
+        if transition_mode not in {"delta", "absolute"}:
+            raise ValueError("transition_mode must be delta or absolute")
+        self.transition_mode = transition_mode
         self.value_encoder = nn.Sequential(
             nn.Linear(1, state_dim),
             nn.Tanh(),
@@ -298,7 +302,13 @@ class LatentComputationalMachine(nn.Module):
             delta = (outputs * weights.unsqueeze(-1)).sum(dim=1)
             delta = delta * active.unsqueeze(-1)
             if self.structured_value_lane:
-                value_lane = value_lane + self.state_update_scale * delta
+                if self.transition_mode == "absolute":
+                    value_lane = (
+                        (1.0 - self.state_update_scale) * value_lane
+                        + self.state_update_scale * delta
+                    )
+                else:
+                    value_lane = value_lane + self.state_update_scale * delta
                 if self.value_clip > 0:
                     value_lane = value_lane.clamp(-self.value_clip, self.value_clip)
                 state = self.value_encoder(value_lane)
@@ -523,8 +533,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             route_temperature=args.route_temperature,
             state_update_scale=args.state_update_scale,
             stabilize_state=args.stabilize_state,
-            structured_value_lane=args.structured_value_lane,
-            value_clip=args.value_clip,
+        structured_value_lane=args.structured_value_lane,
+        value_clip=args.value_clip,
+        transition_mode=args.transition_mode,
         ).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     history = train_machine(
@@ -571,6 +582,20 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         max_steps=args.eval_max_steps, batches=args.eval_batches, cases=ood_cases,
         zero_memory=True,
     )
+    depth_curve = {}
+    for depth in range(2, args.eval_max_steps + 1):
+        depth_cases = sample_program_cases(
+            args.eval_batches, args.batch_size, args.num_entities,
+            depth, device, min_steps=depth,
+        )
+        depth_result = evaluate(
+            model, device, facts=facts_a, batch_size=args.batch_size,
+            num_entities=args.num_entities, min_steps=depth,
+            max_steps=depth, batches=args.eval_batches, cases=depth_cases,
+        )
+        depth_curve[str(depth)] = {
+            key: value for key, value in depth_result.items() if key != "route_ids"
+        }
     operation_swap_before = evaluate(
         model, device, facts=facts_a, batch_size=args.batch_size,
         num_entities=args.num_entities, min_steps=2,
@@ -629,6 +654,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "stabilize_state": args.stabilize_state,
         "structured_value_lane": model.structured_value_lane,
         "value_clip": args.value_clip,
+        "transition_mode": args.transition_mode,
         "total_parameters": total_params,
         "one_active_cell_parameters": cell_params,
         "active_cell_fraction": cell_params / max(total_params, 1),
@@ -638,6 +664,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "fact_table_B_eval": {key: value for key, value in eval_b.items() if key != "route_ids"},
         "fact_table_B_in_range_eval": {key: value for key, value in eval_b_in_range.items() if key != "route_ids"},
         "zero_memory_eval": {key: value for key, value in eval_zero.items() if key != "route_ids"},
+        "depth_curve": depth_curve,
         "operation_swap_before": {key: value for key, value in operation_swap_before.items() if key != "route_ids"},
         "operation_swap_after": {key: value for key, value in operation_swap_after.items() if key != "route_ids"},
         "operation_adapt_steps": args.operation_adapt_steps,
@@ -669,6 +696,7 @@ def main() -> None:
     parser.add_argument("--stabilize-state", action="store_true")
     parser.add_argument("--structured-value-lane", action="store_true")
     parser.add_argument("--value-clip", type=float, default=0.0)
+    parser.add_argument("--transition-mode", choices=("delta", "absolute"), default="delta")
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--steps", type=int, default=4000)
     parser.add_argument("--train-max-steps", type=int, default=4)

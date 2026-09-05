@@ -45,4 +45,4 @@ problem.
 ## Artifact
 
 - `experiment_latent_computational_machine.py`
-- `results/runs/latent_computational_machine_v1_operation_swap_seed2026.json`
+- `results/runs/latent_computational_machine_v1_operation_swap_seed2026_final.json`

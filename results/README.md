@@ -1,5 +1,11 @@
 # Results
 
+V0.117 rejects the absolute next-state transition as the canonical repair.
+ It improves the exact-depth-5 point to MSE 0.0613, but depth 6 jumps to
+ 8.2828 and in-range quality regresses to 0.3018. The depth curve confirms
+ that state stability, not route usage, remains the blocker. See
+ `V0_117_LATENT_MACHINE_ABSOLUTE_TRANSITION.md`.
+
 V0.116 adds the compact dense recurrent control. It also fits in-range
  programs and uses external facts, but fails 5--6-step OOD at MSE 63.61,
  matching the routed machine's depth failure. This means router tuning alone
