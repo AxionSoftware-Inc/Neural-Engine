@@ -61,6 +61,7 @@ class RoutedChild(nn.Module):
         num_experts: int,
         active_experts: int,
         temperature: float = 1.0,
+        dispatch_mode: str = "token-loop",
     ) -> None:
         super().__init__()
         if not 1 <= active_experts <= num_experts:
@@ -68,6 +69,9 @@ class RoutedChild(nn.Module):
         self.num_experts = int(num_experts)
         self.active_experts = int(active_experts)
         self.temperature = float(temperature)
+        if dispatch_mode not in {"packed", "token-loop"}:
+            raise ValueError("dispatch_mode must be packed or token-loop")
+        self.dispatch_mode = dispatch_mode
         self.experts = nn.ModuleList([
             NEFunctionBlock(hidden_size, inner_size)
             for _ in range(num_experts)
@@ -81,6 +85,58 @@ class RoutedChild(nn.Module):
         nn.init.zeros_(self.router[-1].bias)
         self.last_selected: torch.Tensor | None = None
         self.last_active_expert_fraction = 1.0
+        self._packed_weights: tuple[torch.Tensor, ...] | None = None
+
+    @torch.no_grad()
+    def prepare_packed(self) -> None:
+        """Cache contiguous expert weights for vectorized hard dispatch."""
+        self._packed_weights = (
+            torch.stack([expert.norm.weight for expert in self.experts]),
+            torch.stack([expert.norm.bias for expert in self.experts]),
+            torch.stack([expert.input_projection.weight for expert in self.experts]),
+            torch.stack([expert.input_projection.bias for expert in self.experts]),
+            torch.stack([expert.output_projection.weight for expert in self.experts]),
+            torch.stack([expert.output_projection.bias for expert in self.experts]),
+        )
+
+    def _forward_packed(
+        self,
+        hidden_states: torch.Tensor,
+        top_ids: torch.Tensor,
+        weights: torch.Tensor,
+    ) -> torch.Tensor:
+        if self._packed_weights is None:
+            self.prepare_packed()
+        assert self._packed_weights is not None
+        norm_weight, norm_bias, input_weight, input_bias, output_weight, output_bias = (
+            tensor.to(device=hidden_states.device, dtype=hidden_states.dtype)
+            for tensor in self._packed_weights
+        )
+        flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
+        flat_ids = top_ids.reshape(-1, self.active_experts)
+        flat_weights = weights.reshape(-1, self.active_experts)
+        token_ids, slots = torch.where(torch.ones_like(flat_ids, dtype=torch.bool))
+        expert_ids = flat_ids[token_ids, slots]
+        selected_hidden = flat_hidden[token_ids]
+        mean = selected_hidden.mean(dim=-1, keepdim=True)
+        variance = (selected_hidden - mean).square().mean(dim=-1, keepdim=True)
+        normalized = (selected_hidden - mean) * torch.rsqrt(
+            variance + self.experts[0].norm.eps
+        )
+        normalized = normalized * norm_weight[expert_ids] + norm_bias[expert_ids]
+        input_matrices = input_weight[expert_ids].transpose(1, 2)
+        hidden = torch.bmm(normalized.unsqueeze(1), input_matrices).squeeze(1)
+        hidden = F.gelu(hidden + input_bias[expert_ids])
+        output_matrices = output_weight[expert_ids].transpose(1, 2)
+        output = torch.bmm(hidden.unsqueeze(1), output_matrices).squeeze(1)
+        output = output + output_bias[expert_ids]
+        output = output * flat_weights[token_ids, slots].unsqueeze(-1)
+        flat_output = torch.zeros_like(flat_hidden)
+        flat_output.index_add_(0, token_ids, output)
+        self.last_active_expert_fraction = token_ids.numel() / max(
+            flat_hidden.shape[0] * self.num_experts, 1
+        )
+        return flat_output.reshape_as(hidden_states)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         scores = self.router(hidden_states)
@@ -93,6 +149,8 @@ class RoutedChild(nn.Module):
         top_values, top_ids = scores.topk(self.active_experts, dim=-1)
         weights = F.softmax(top_values / self.temperature, dim=-1)
         self.last_selected = top_ids.detach()
+        if self.dispatch_mode == "packed":
+            return self._forward_packed(hidden_states, top_ids, weights)
         # Hard evaluation must execute only the selected expert bodies. The
         # previous research implementation evaluated every expert and then
         # gathered the top-k result, which was numerically valid but made no
@@ -126,11 +184,12 @@ def make_child(
     routing_temperature: float,
     device: torch.device,
     dtype: torch.dtype,
+    dispatch_mode: str = "token-loop",
 ) -> nn.Module:
     if kind == "routed":
         child = RoutedChild(
             hidden_size, inner_size, num_experts, active_experts,
-            routing_temperature,
+            routing_temperature, dispatch_mode,
         )
     else:
         child_class = NEFunctionBlock if kind == "gelu" else NESwiGLUBlock
@@ -350,7 +409,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     child25 = make_child(
         hidden_size, args.inner_size, args.child_kind, args.calibration_rank,
         args.num_experts, args.active_experts, args.routing_temperature,
-        device, dtype,
+        device, dtype, args.dispatch_mode,
     )
     history25 = train_child(
         child25, io25, device, dtype, args.steps, args.learning_rate,
@@ -367,7 +426,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     child26 = make_child(
         hidden_size, args.inner_size, args.child_kind, args.calibration_rank,
         args.num_experts, args.active_experts, args.routing_temperature,
-        device, dtype,
+        device, dtype, args.dispatch_mode,
     )
     history26 = train_child(
         child26, io26, device, dtype, args.steps, args.learning_rate,
@@ -442,9 +501,10 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             if args.child_kind == "routed" else 1.0
         ),
         "hard_route_dispatch": (
-            "selected-token-only"
+            f"selected-token-only:{args.dispatch_mode}"
             if args.child_kind == "routed" else "single-child"
         ),
+        "dispatch_mode": args.dispatch_mode,
         "routing_temperature": args.routing_temperature,
         "batch_size": args.batch_size,
         "sequence_length": args.sequence_length,
@@ -492,6 +552,7 @@ def main() -> None:
     parser.add_argument("--num-experts", type=int, default=4)
     parser.add_argument("--active-experts", type=int, default=2)
     parser.add_argument("--routing-temperature", type=float, default=1.0)
+    parser.add_argument("--dispatch-mode", choices=("packed", "token-loop"), default="token-loop")
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--sequence-length", type=int, default=64)
     parser.add_argument("--train-batches", type=int, default=8)

@@ -624,6 +624,13 @@ the control is given the mod-64 algebra. The next accepted experiment is a
 trainable equivariant template bank without a dense transition table. See
 `V0_53_MODULAR_PRIOR_PILOT.md` and the proposal `taklif7.md`.
 
+V0.141 tests a naive packed/vectorized dispatch implementation for the Qwen
+single-layer sparse circuit bank. It preserves numerical correctness and the
+V0.138 quality gate, but isolated FFN timing becomes 9.90x slower than the
+parent and end-to-end timing is about 1.12x slower. The packed path is rejected
+for performance; a grouped/fused kernel with weight reuse is required before
+scaling the experiment. See `V0_141_QWEN_PACKED_DISPATCH.md`.
+
 V0.133 replaces the fixed learned address bank with an external random
 content-key lookup. With 2048 fact rows, only the first 1536 used in training,
 both seeds retrieve the 512 held-out rows at 100% and reach 4.21e-6/4.27e-6

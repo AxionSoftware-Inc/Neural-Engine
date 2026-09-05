@@ -144,7 +144,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     )
     child = RoutedChild(
         hidden_size, args.inner_size, args.num_experts, args.active_experts,
-        args.routing_temperature,
+        args.routing_temperature, args.dispatch_mode,
     ).to(device=device, dtype=dtype)
     history = train_child(
         child, train_io, device, dtype, args.steps, args.learning_rate,
@@ -204,6 +204,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "active_experts": args.active_experts,
         "hard_route_expected_expert_fraction": args.active_experts / args.num_experts,
         "hard_route_dispatch": "selected-token-only",
+        "dispatch_mode": args.dispatch_mode,
         "routing_temperature": args.routing_temperature,
         "batch_size": args.batch_size,
         "sequence_length": args.sequence_length,
@@ -262,6 +263,7 @@ def main() -> None:
     parser.add_argument("--num-experts", type=int, default=4)
     parser.add_argument("--active-experts", type=int, default=1)
     parser.add_argument("--routing-temperature", type=float, default=1.0)
+    parser.add_argument("--dispatch-mode", choices=("packed", "token-loop"), default="token-loop")
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--sequence-length", type=int, default=64)
     parser.add_argument("--train-batches", type=int, default=8)
