@@ -11,6 +11,7 @@ V0.126 partially recovers 512-entity task-only memory with hierarchical addressi
 V0.127 rejects larger bucket counts; 32 buckets are the current 512-row sweet spot.
 V0.128 keeps temperature 1.0; temperature-only tuning does not solve the 512-row address bottleneck.
 V0.129 promotes a low-weight (0.1) address objective for the 512-row hierarchical memory reference.
+V0.130 passes the 2048-entity capacity gate with exact learned retrieval and one active cell.
  The bounded stable-cell machine reaches depth-6 MSE `8.62e-8` and `1.16e-7`,
  survives paired fact swap at `1.47e-7`/`1.80e-7`, and keeps 24.6--25.5% cell
  usage without role labels. This is the first real synthetic GO for the
