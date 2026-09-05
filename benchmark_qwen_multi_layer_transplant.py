@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from itertools import combinations
 from pathlib import Path
 
 import torch
@@ -397,8 +398,14 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 "or activation-cluster"
             )
         self.partition_mode = partition_mode
-        if route_source not in {"router", "oracle-dot", "oracle-energy"}:
-            raise ValueError("route_source must be router, oracle-dot, or oracle-energy")
+        if route_source not in {
+            "router", "subset-router", "oracle-dot", "oracle-energy",
+            "oracle-subset",
+        }:
+            raise ValueError(
+                "route_source must be router, subset-router, oracle-dot, "
+                "oracle-energy, or oracle-subset"
+            )
         self.route_source = route_source
         self.hard_route_scale = (
             self.num_experts / self.active_experts
@@ -480,13 +487,31 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             torch.stack([expert.output_projection.weight for expert in self.experts]),
             persistent=False,
         )
-        self.router = torch.nn.Sequential(
-            torch.nn.Linear(hidden_size, 128),
-            torch.nn.SiLU(),
-            torch.nn.Linear(128, num_experts),
-        )
-        torch.nn.init.zeros_(self.router[-1].weight)
-        torch.nn.init.zeros_(self.router[-1].bias)
+        if route_source == "subset-router":
+            subset_ids = torch.tensor(
+                list(combinations(range(num_experts), active_experts)),
+                device=parent.gate_proj.weight.device, dtype=torch.long,
+            )
+            self.register_buffer(
+                "subset_membership",
+                F.one_hot(subset_ids, num_classes=num_experts).sum(dim=1).float(),
+                persistent=False,
+            )
+            self.subset_router = torch.nn.Sequential(
+                torch.nn.Linear(hidden_size, 128),
+                torch.nn.SiLU(),
+                torch.nn.Linear(128, subset_ids.shape[0]),
+            )
+            torch.nn.init.zeros_(self.subset_router[-1].weight)
+            torch.nn.init.zeros_(self.subset_router[-1].bias)
+        else:
+            self.router = torch.nn.Sequential(
+                torch.nn.Linear(hidden_size, 128),
+                torch.nn.SiLU(),
+                torch.nn.Linear(128, num_experts),
+            )
+            torch.nn.init.zeros_(self.router[-1].weight)
+            torch.nn.init.zeros_(self.router[-1].bias)
         self.last_selected: torch.Tensor | None = None
         self.last_route_weights: torch.Tensor | None = None
         self.last_all_outputs: torch.Tensor | None = None
@@ -564,17 +589,69 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         )
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        scores = self.router(hidden_states)
+        if self.route_source == "subset-router":
+            subset_scores = self.subset_router(hidden_states)
+            if self.training and not self.hard_train:
+                scores = subset_scores @ self.subset_membership
+            else:
+                best_subset = subset_scores.argmax(dim=-1)
+                selected_membership = self.subset_membership[best_subset]
+                scores = torch.where(
+                    selected_membership.bool(),
+                    torch.ones_like(selected_membership),
+                    -torch.ones_like(selected_membership),
+                )
+        else:
+            scores = self.router(hidden_states)
         oracle_outputs = None
-        if not self.training and self.route_source in {"oracle-dot", "oracle-energy"}:
+        if not self.training and self.route_source in {
+            "oracle-dot", "oracle-energy", "oracle-subset",
+        }:
             oracle_outputs = torch.stack([
                 expert(hidden_states) for expert in self.experts
             ], dim=-2)
             if self.route_source == "oracle-dot":
                 full_output = oracle_outputs.sum(dim=-2)
                 scores = (oracle_outputs * full_output.unsqueeze(-2)).sum(dim=-1)
-            else:
+            elif self.route_source == "oracle-energy":
                 scores = oracle_outputs.square().mean(dim=-1)
+            else:
+                flat_outputs = oracle_outputs.float().reshape(
+                    -1, self.num_experts, hidden_states.shape[-1],
+                )
+                flat_target = flat_outputs.sum(dim=1)
+                gram = torch.einsum(
+                    "neh,nfh->nef", flat_outputs, flat_outputs,
+                )
+                cross = torch.einsum(
+                    "neh,nh->ne", flat_outputs, flat_target,
+                )
+                subset_ids = torch.tensor(
+                    list(combinations(
+                        range(self.num_experts), self.active_experts,
+                    )), device=hidden_states.device, dtype=torch.long,
+                )
+                membership = F.one_hot(
+                    subset_ids, num_classes=self.num_experts,
+                ).sum(dim=1).float()
+                pair_energy = torch.einsum(
+                    "ce,nef,cf->nc", membership, gram, membership,
+                )
+                cross_energy = cross @ membership.transpose(0, 1)
+                coefficient = self.hard_route_scale / self.active_experts
+                errors = (
+                    coefficient * coefficient * pair_energy
+                    - 2.0 * coefficient * cross_energy
+                    + flat_target.square().sum(dim=-1, keepdim=True)
+                )
+                best_subset = subset_ids[errors.argmin(dim=-1)]
+                scores = torch.full(
+                    (*hidden_states.shape[:-1], self.num_experts),
+                    -1.0, device=hidden_states.device, dtype=hidden_states.dtype,
+                )
+                scores.scatter_(-1, best_subset.reshape(
+                    *hidden_states.shape[:-1], self.active_experts,
+                ), 1.0)
         if self.training and not self.hard_train:
             outputs = torch.stack([
                 expert(hidden_states) for expert in self.experts
@@ -647,6 +724,7 @@ class TransferredRoutedQwenNeuronChild(torch.nn.Module):
         temperature: float,
         token_chunk_size: int = 64,
         route_source: str = "router",
+        hard_route_scale: float | None = None,
     ) -> None:
         super().__init__()
         inner_size, hidden_size = parent.gate_proj.weight.shape
@@ -664,6 +742,10 @@ class TransferredRoutedQwenNeuronChild(torch.nn.Module):
         self.route_source = route_source
         self.hard_train = False
         self.token_chunk_size = int(token_chunk_size)
+        self.hard_route_scale = (
+            self.num_neurons / self.active_neurons
+            if hard_route_scale is None else float(hard_route_scale)
+        )
         if self.token_chunk_size < 1:
             raise ValueError("token_chunk_size must be positive")
         self.register_buffer(
@@ -712,10 +794,7 @@ class TransferredRoutedQwenNeuronChild(torch.nn.Module):
         self.last_active_expert_fraction = flat_ids.numel() / max(
             flat_hidden.shape[0] * self.num_neurons, 1
         )
-        return (
-            self.num_neurons / self.active_neurons
-            * flat_output.reshape_as(hidden_states)
-        )
+        return self.hard_route_scale * flat_output.reshape_as(hidden_states)
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         scores = self.router(hidden_states)
@@ -949,6 +1028,73 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
         return correction if self.replace_base_output else base_output + correction
 
 
+class ResidualCoresetRoutedQwenChild(torch.nn.Module):
+    """Sparse copied groups plus a signed coefficient and compact residual.
+
+    The copied groups remain the main path.  A zero-start coefficient head can
+    add signed, input-conditioned corrections for selected groups, while the
+    always-on low-rank SwiGLU branch models residual structure that no selected
+    group can represent by itself.  The soft path remains an exact transfer at
+    initialization because the signed coefficients are centered and zero-start
+    and the residual output projection is zero-start.
+    """
+
+    def __init__(
+        self,
+        base: TransferredRoutedQwenChild,
+        rank: int,
+    ) -> None:
+        super().__init__()
+        if rank < 1:
+            raise ValueError("residual coreset rank must be positive")
+        hidden_size = int(base.group_gate_weight.shape[-1])
+        self.base = base
+        self.coefficient_router = torch.nn.Sequential(
+            torch.nn.Linear(hidden_size, 128),
+            torch.nn.SiLU(),
+            torch.nn.Linear(128, base.num_experts),
+        )
+        torch.nn.init.zeros_(self.coefficient_router[-1].weight)
+        torch.nn.init.zeros_(self.coefficient_router[-1].bias)
+        self.residual_gate = torch.nn.Linear(hidden_size, rank, bias=False)
+        self.residual_value = torch.nn.Linear(hidden_size, rank, bias=False)
+        self.residual_output = torch.nn.Linear(rank, hidden_size, bias=False)
+        torch.nn.init.zeros_(self.residual_output.weight)
+        self.hard_train = False
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        base_output = self.base(hidden_states)
+        selected = self.base.last_selected
+        if selected is None:
+            raise RuntimeError("base route state was not populated")
+        coefficient_delta = self.coefficient_router(hidden_states)
+        if self.base.training and not self.base.hard_train:
+            all_outputs = self.base.last_all_outputs
+            if all_outputs is None:
+                raise RuntimeError("soft route outputs were not populated")
+            centered_delta = coefficient_delta - coefficient_delta.mean(
+                dim=-1, keepdim=True,
+            )
+            signed_correction = (
+                all_outputs * centered_delta.unsqueeze(-1)
+            ).sum(dim=-2)
+        else:
+            selected_outputs = self.base.last_selected_outputs
+            if selected_outputs is None:
+                raise RuntimeError("hard route outputs were not populated")
+            selected_delta = torch.gather(
+                coefficient_delta, -1, selected,
+            )
+            signed_correction = (
+                selected_outputs * selected_delta.unsqueeze(-1)
+            ).sum(dim=-2)
+        residual = self.residual_output(
+            F.silu(self.residual_gate(hidden_states))
+            * self.residual_value(hidden_states),
+        )
+        return base_output + signed_correction + residual
+
+
 @torch.no_grad()
 def initialize_teacher_group_decoders(
     child: torch.nn.Module,
@@ -1125,6 +1271,10 @@ def make_transferred_routed_qwen_child(
             child = SwiGLUResidualChild(
                 child, int(parent.gate_proj.in_features), calibration_rank,
             ).to(device=device, dtype=dtype)
+        elif calibration_mode == "residual-coreset":
+            child = ResidualCoresetRoutedQwenChild(
+                child, int(calibration_rank),
+            ).to(device=device, dtype=dtype)
         else:
             calibration_class = {
                 "base-output": CalibratedChild,
@@ -1162,9 +1312,11 @@ def make_transferred_routed_qwen_neuron_child(
     device: torch.device,
     dtype: torch.dtype,
     route_source: str = "router",
+    hard_route_scale: float | None = None,
 ) -> torch.nn.Module:
     child = TransferredRoutedQwenNeuronChild(
         parent, active_neurons, routing_temperature, route_source=route_source,
+        hard_route_scale=hard_route_scale,
     ).to(device=device, dtype=dtype)
     if calibration_rank > 0:
         if calibration_mode == "swiglu":
@@ -1193,7 +1345,7 @@ def train_importance_router(
     log_every: int,
     target_mode: str = "energy",
 ) -> list[dict[str, float]]:
-    """Distill frozen group contribution importance into the cheap router."""
+    """Distill group importance or exact best-subset labels into the router."""
     base = next(
         nested for nested in child.modules()
         if isinstance(nested, TransferredRoutedQwenChild)
@@ -1202,7 +1354,12 @@ def train_importance_router(
     previous_requires_grad = [parameter.requires_grad for parameter in all_parameters]
     for parameter in all_parameters:
         parameter.requires_grad_(False)
-    router_parameters = list(base.router.parameters())
+    if base.route_source == "subset-router":
+        if target_mode != "subset":
+            raise ValueError("subset-router requires subset router supervision")
+        router_parameters = list(base.subset_router.parameters())
+    else:
+        router_parameters = list(base.router.parameters())
     for parameter in router_parameters:
         parameter.requires_grad_(True)
     optimizer = torch.optim.AdamW(router_parameters, lr=learning_rate)
@@ -1212,6 +1369,7 @@ def train_importance_router(
         for step in range(1, steps + 1):
             batch = io_batches[(step - 1) % len(io_batches)]
             inputs = batch["input"].to(device=device, dtype=dtype)
+            subset_target = None
             with torch.no_grad():
                 outputs = torch.stack([
                     expert(inputs) for expert in base.experts
@@ -1221,19 +1379,73 @@ def train_importance_router(
                     importance = (
                         outputs * full_output.unsqueeze(-2)
                     ).sum(dim=-1)
+                    target = F.softmax(importance, dim=-1)
                 elif target_mode == "energy":
                     importance = outputs.square().mean(dim=-1)
+                    target = F.softmax(
+                        torch.log(importance + 1e-8), dim=-1,
+                    )
+                elif target_mode == "subset":
+                    flat_outputs = outputs.reshape(
+                        -1, base.num_experts, outputs.shape[-1],
+                    )
+                    flat_target = (
+                        batch["output"].to(device=device, dtype=torch.float32)
+                        .reshape(-1, outputs.shape[-1])
+                    )
+                    gram = torch.einsum(
+                        "neh,nfh->nef", flat_outputs, flat_outputs,
+                    )
+                    cross = torch.einsum(
+                        "neh,nh->ne", flat_outputs, flat_target,
+                    )
+                    subset_ids = torch.tensor(
+                        list(combinations(
+                            range(base.num_experts), base.active_experts,
+                        )), device=device, dtype=torch.long,
+                    )
+                    membership = F.one_hot(
+                        subset_ids, num_classes=base.num_experts,
+                    ).sum(dim=1).float()
+                    pair_energy = torch.einsum(
+                        "ce,nef,cf->nc", membership, gram, membership,
+                    )
+                    cross_energy = cross @ membership.transpose(0, 1)
+                    coefficient = base.hard_route_scale / base.active_experts
+                    errors = (
+                        coefficient * coefficient * pair_energy
+                        - 2.0 * coefficient * cross_energy
+                        + flat_target.square().sum(dim=-1, keepdim=True)
+                    )
+                    best_subset_index = errors.argmin(dim=-1)
+                    best_subset = subset_ids[best_subset_index]
+                    subset_target = best_subset_index
+                    target = F.one_hot(
+                        best_subset, num_classes=base.num_experts,
+                    ).sum(dim=1).float().reshape(
+                        *inputs.shape[:-1], base.num_experts,
+                    )
                 else:
-                    raise ValueError("router target must be energy or dot")
-                target = F.softmax(
-                    importance if target_mode == "dot"
-                    else torch.log(importance + 1e-8),
-                    dim=-1,
-                )
-            scores = base.router(inputs).float()
-            loss = F.kl_div(
-                F.log_softmax(scores, dim=-1), target, reduction="batchmean",
+                    raise ValueError("router target must be energy, dot, or subset")
+            scores = (
+                base.subset_router(inputs).float()
+                if base.route_source == "subset-router"
+                else base.router(inputs).float()
             )
+            if target_mode == "subset":
+                if base.route_source == "subset-router":
+                    if subset_target is None:
+                        raise RuntimeError("subset target was not computed")
+                    loss = F.cross_entropy(
+                        scores.reshape(-1, scores.shape[-1]),
+                        subset_target.reshape(-1),
+                    )
+                else:
+                    loss = F.binary_cross_entropy_with_logits(scores, target)
+            else:
+                loss = F.kl_div(
+                    F.log_softmax(scores, dim=-1), target, reduction="batchmean",
+                )
             if not torch.isfinite(loss):
                 raise FloatingPointError(
                     f"non-finite router importance loss at step {step}"
@@ -1506,18 +1718,33 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 args.learning_rate, args.max_grad_norm, args.log_every,
                 args.router_target,
             ))
-            histories.append(train_child(
-                child, train_io, device, dtype, args.steps,
-                args.learning_rate, args.max_grad_norm, args.log_every,
-                args.hard_train_steps,
-                args.hard_learning_rate,
-            ))
+            frozen_subset_router = []
+            if args.route_source == "subset-router":
+                route_base = next(
+                    nested for nested in child.modules()
+                    if isinstance(nested, TransferredRoutedQwenChild)
+                )
+                for parameter in route_base.subset_router.parameters():
+                    frozen_subset_router.append(
+                        (parameter, bool(parameter.requires_grad))
+                    )
+                    parameter.requires_grad_(False)
+            try:
+                histories.append(train_child(
+                    child, train_io, device, dtype, args.steps,
+                    args.learning_rate, args.max_grad_norm, args.log_every,
+                    args.hard_train_steps,
+                    args.hard_learning_rate,
+                ))
+            finally:
+                for parameter, previous in frozen_subset_router:
+                    parameter.requires_grad_(previous)
         elif args.child_kind == "qwen-transfer-neuron-sparse":
             child = make_transferred_routed_qwen_neuron_child(
                 parents[len(children)], args.active_neurons,
                 args.routing_temperature, args.calibration_rank,
                 args.calibration_source, args.calibration_mode, device, dtype,
-                args.route_source,
+                args.route_source, hard_route_scale_schedule[len(children)],
             )
             router_histories.append(train_neuron_importance_router(
                 child, train_io, device, dtype, args.router_supervision_steps,
@@ -1775,7 +2002,7 @@ def main() -> None:
         "--calibration-mode",
         choices=(
             "low-rank", "swiglu", "shared-basis", "cross-group",
-            "teacher-group-decoder", "teacher-group-residual",
+            "teacher-group-decoder", "teacher-group-residual", "residual-coreset",
         ),
         default="low-rank",
         help="correction type for transferred sparse children",
@@ -1806,7 +2033,10 @@ def main() -> None:
     )
     parser.add_argument(
         "--route-source",
-        choices=("router", "oracle-dot", "oracle-energy"), default="router",
+        choices=(
+            "router", "subset-router", "oracle-dot", "oracle-energy",
+            "oracle-subset",
+        ), default="router",
         help="learned router or diagnostic parent-contribution oracle at eval",
     )
     parser.add_argument(
@@ -1844,7 +2074,7 @@ def main() -> None:
         help="steps distilling frozen expert contribution importance into the router",
     )
     parser.add_argument(
-        "--router-target", choices=("energy", "dot"), default="energy",
+        "--router-target", choices=("energy", "dot", "subset"), default="energy",
         help="calibration target for group router supervision",
     )
     parser.add_argument("--joint-steps", type=int, default=0)

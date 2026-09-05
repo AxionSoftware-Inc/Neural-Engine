@@ -40,19 +40,20 @@ distillation MSE reaches approximately `1e-6`. Therefore low soft-path loss is
 not evidence that the hard sparse path will preserve the function.
 
 Teacher-dot router supervision passes one seed but is not reproducible. More
-importantly, the correction-free oracle-dot control fails badly. Even with
-ideal access to every group output during selection, choosing four of eight
-contiguous groups and applying the current hard scaling cannot reconstruct the
-full FFN. The rank-64 oracle run is additionally affected by the mismatch
-between its teacher-trained correction and oracle selection, so the rank-0
-control is the cleaner decomposition result.
+importantly, the correction-free oracle-dot control fails badly. This is not an
+ideal subset oracle: dot alignment is only a heuristic and can choose a poor
+combination when group outputs cancel or interact. The rank-64 oracle run is
+additionally affected by the mismatch between its teacher-trained correction
+and oracle selection. The later exact best-subset oracle audit is therefore
+required before drawing a decomposition conclusion.
 
 ## Decision
 
 Reject activation clustering and teacher-dot supervision as primary paths, and
-do not scale either to 300M--1B. The evidence now points to a decomposition
-problem: a cell must carry a compact representation of the omitted nonlinear
-sum, not only a copied subset of Qwen neurons plus a positive top-k scale.
+do not scale either to 300M--1B. The dot-oracle failure alone is not evidence
+that the copied cell decomposition is impossible; it only rejects that routing
+heuristic. The exact best-subset follow-up determines whether a learned router
+can recover the available decomposition headroom.
 
 The next architecture experiment is a residual coreset: keep the copied
 selected micro-groups, but train an always-on compact residual representation

@@ -1,11 +1,25 @@
 # Results
 
+V0.167 finds the strongest routing result so far. An exact best-subset oracle
+passes at 2 and 4 layers (`+0.0384`, `+0.0439`), proving the current cells have
+headroom. A coupled 70-class subset router with its weights frozen after
+supervision is reproducible at 2 layers (`+0.0109`, `+0.0415`) and at 4 layers
+with a gentler hard phase (`+0.0095`, `+0.0454`). The same method still fails
+at 8 layers (`+0.5685`), so do not scale yet. See
+`V0_167_QWEN_COUPLED_SUBSET_ROUTER_AUDIT.md`.
+
+V0.166 rejects an always-on residual coreset (`+0.1378`), finds best-subset
+router supervision unstable (`+0.0407` vs `+0.0567` across seeds), and shows
+that removing neuron `N/K` rescaling helps but still fails (`+0.2779`). The
+next diagnostic is an exact group best-subset oracle before changing the FFN
+representation. See `V0_166_QWEN_RESIDUAL_SUBSET_AND_NEURON_SCALE_AUDIT.md`.
+
 V0.165 separates router error from decomposition error. Activation-signature
 clustering passes one seed at `+0.0377` but fails the second at `+0.0518`;
 teacher-dot supervision is also unstable (`+0.0274` vs `+0.1148`). A clean
-rank-0 oracle-dot control still fails at `+0.9487`, showing that ideal group
-selection cannot repair the current 50%-active cell decomposition. The next
-test is an always-on residual coreset with signed selected-cell coefficients.
+rank-0 oracle-dot control still fails at `+0.9487`; exact best-subset follow-up
+shows dot was only a bad heuristic, not an ideal group oracle. The next test is
+an always-on residual coreset with signed selected-cell coefficients.
 See `V0_165_QWEN_ROUTER_ORACLE_AND_CLUSTER_AUDIT.md`.
 
 V0.164 audits teacher-derived group decoders, activation-balanced and
