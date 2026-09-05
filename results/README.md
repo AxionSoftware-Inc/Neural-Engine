@@ -676,6 +676,13 @@ current performance implementation, and move to grouped/batched execution
 before adding layers or model capacity. See
 `V0_139_QWEN_SINGLE_LAYER_BANK_TIMING.md`.
 
+V0.140 isolates the layer timing on identical captured hidden states. Parent
+FFN is 0.850/0.847ms while the selected-token bank is 1.136/1.165ms
+(1.337x/1.375x) across two seeds. This confirms the overhead is inside the
+small-dispatch implementation, not the surrounding model. The next required
+step is packed grouped matmul or a fused CUDA/Triton kernel. See
+`V0_140_QWEN_BANK_ISOLATED_FFN_TIMING.md`.
+
 V0.60 fixes the main strict-value bottleneck with a trainable modular
 value-state/template interface. On values 0--31 train and unseen values
 32--63 eval, the 300M Macro-enabled model reaches 96.36% mean across two

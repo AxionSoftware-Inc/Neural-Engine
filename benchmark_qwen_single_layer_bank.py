@@ -57,6 +57,35 @@ def benchmark_forward(
     }
 
 
+@torch.inference_mode()
+def benchmark_module(
+    module: nn.Module,
+    inputs: list[torch.Tensor],
+    device: torch.device,
+    warmup: int,
+    iterations: int,
+) -> dict[str, float]:
+    if iterations <= 0:
+        raise ValueError("timing_iterations must be positive")
+    for _ in range(warmup):
+        for values in inputs:
+            module(values)
+    synchronize(device)
+    durations = []
+    for _ in range(iterations):
+        start = time.perf_counter()
+        for values in inputs:
+            module(values)
+        synchronize(device)
+        durations.append((time.perf_counter() - start) * 1000.0 / len(inputs))
+    ordered = sorted(durations)
+    return {
+        "mean_ms_per_batch": sum(durations) / len(durations),
+        "p50_ms_per_batch": ordered[len(ordered) // 2],
+        "p95_ms_per_batch": ordered[max(0, int(len(ordered) * 0.95) - 1)],
+    }
+
+
 def run(args: argparse.Namespace) -> dict[str, object]:
     try:
         from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -129,6 +158,15 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             ).item()
             for batch in eval_io
         ) / len(eval_io)
+    eval_inputs = [
+        batch["input"].to(device=device, dtype=dtype) for batch in eval_io
+    ]
+    parent_ffn_timing = benchmark_module(
+        parent, eval_inputs, device, args.timing_warmup, args.timing_iterations,
+    )
+    sparse_bank_ffn_timing = benchmark_module(
+        child, eval_inputs, device, args.timing_warmup, args.timing_iterations,
+    )
 
     variants = []
     for alpha in args.alphas:
@@ -189,6 +227,15 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "warmup": args.timing_warmup,
             "iterations": args.timing_iterations,
             "note": "end-to-end Qwen forward; no fused custom CUDA kernel",
+        },
+        "ffn_timing": {
+            "parent": parent_ffn_timing,
+            "sparse_bank": sparse_bank_ffn_timing,
+            "bank_over_parent_mean_ratio": (
+                sparse_bank_ffn_timing["mean_ms_per_batch"]
+                / max(parent_ffn_timing["mean_ms_per_batch"], 1e-9)
+            ),
+            "note": "isolated layer MLP timing on captured Qwen hidden states",
         },
         "quality_gate": {
             "criterion": "alpha=0 child CE delta <= 0.05 and all outputs finite",
