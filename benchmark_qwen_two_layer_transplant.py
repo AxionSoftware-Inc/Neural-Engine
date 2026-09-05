@@ -21,6 +21,20 @@ from benchmark_qwen_parent_transplant import (
 )
 
 
+class NEFunctionBlockNoNorm(nn.Module):
+    """Attention-free function block for inputs already normalized by Qwen."""
+
+    def __init__(self, hidden_size: int, inner_size: int) -> None:
+        super().__init__()
+        self.input_projection = nn.Linear(hidden_size, inner_size)
+        self.output_projection = nn.Linear(inner_size, hidden_size)
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        hidden = self.input_projection(hidden_states)
+        hidden = F.gelu(hidden)
+        return self.output_projection(hidden)
+
+
 class NESwiGLUBlock(nn.Module):
     """Attention-free gated NE block with Qwen-compatible local algebra."""
 
@@ -62,6 +76,7 @@ class RoutedChild(nn.Module):
         active_experts: int,
         temperature: float = 1.0,
         dispatch_mode: str = "token-loop",
+        use_norm: bool = True,
     ) -> None:
         super().__init__()
         if not 1 <= active_experts <= num_experts:
@@ -69,12 +84,13 @@ class RoutedChild(nn.Module):
         self.num_experts = int(num_experts)
         self.active_experts = int(active_experts)
         self.temperature = float(temperature)
+        self.use_norm = bool(use_norm)
         if dispatch_mode not in {"grouped", "packed", "token-loop"}:
             raise ValueError("dispatch_mode must be grouped, packed, or token-loop")
         self.dispatch_mode = dispatch_mode
+        expert_class = NEFunctionBlock if self.use_norm else NEFunctionBlockNoNorm
         self.experts = nn.ModuleList([
-            NEFunctionBlock(hidden_size, inner_size)
-            for _ in range(num_experts)
+            expert_class(hidden_size, inner_size) for _ in range(num_experts)
         ])
         self.router = nn.Sequential(
             nn.Linear(hidden_size, 128),
@@ -90,9 +106,19 @@ class RoutedChild(nn.Module):
     @torch.no_grad()
     def prepare_packed(self) -> None:
         """Cache contiguous expert weights for vectorized hard dispatch."""
+        reference = self.experts[0].input_projection.weight
+        if self.use_norm:
+            norm_weight = torch.stack([expert.norm.weight for expert in self.experts])
+            norm_bias = torch.stack([expert.norm.bias for expert in self.experts])
+        else:
+            norm_weight = torch.ones(
+                self.num_experts, reference.shape[1],
+                device=reference.device, dtype=reference.dtype,
+            )
+            norm_bias = torch.zeros_like(norm_weight)
         self._packed_weights = (
-            torch.stack([expert.norm.weight for expert in self.experts]),
-            torch.stack([expert.norm.bias for expert in self.experts]),
+            norm_weight,
+            norm_bias,
             torch.stack([expert.input_projection.weight for expert in self.experts]),
             torch.stack([expert.input_projection.bias for expert in self.experts]),
             torch.stack([expert.output_projection.weight for expert in self.experts]),
@@ -118,12 +144,15 @@ class RoutedChild(nn.Module):
         token_ids, slots = torch.where(torch.ones_like(flat_ids, dtype=torch.bool))
         expert_ids = flat_ids[token_ids, slots]
         selected_hidden = flat_hidden[token_ids]
-        mean = selected_hidden.mean(dim=-1, keepdim=True)
-        variance = (selected_hidden - mean).square().mean(dim=-1, keepdim=True)
-        normalized = (selected_hidden - mean) * torch.rsqrt(
-            variance + self.experts[0].norm.eps
-        )
-        normalized = normalized * norm_weight[expert_ids] + norm_bias[expert_ids]
+        if self.use_norm:
+            mean = selected_hidden.mean(dim=-1, keepdim=True)
+            variance = (selected_hidden - mean).square().mean(dim=-1, keepdim=True)
+            normalized = (selected_hidden - mean) * torch.rsqrt(
+                variance + self.experts[0].norm.eps
+            )
+            normalized = normalized * norm_weight[expert_ids] + norm_bias[expert_ids]
+        else:
+            normalized = selected_hidden
         input_matrices = input_weight[expert_ids].transpose(1, 2)
         hidden = torch.bmm(normalized.unsqueeze(1), input_matrices).squeeze(1)
         hidden = F.gelu(hidden + input_bias[expert_ids])
@@ -185,15 +214,16 @@ class RoutedChild(nn.Module):
         grouped_hidden = grouped_hidden.reshape(
             self.num_experts, max_count, flat_hidden.shape[-1],
         )
-        mean = grouped_hidden.mean(dim=-1, keepdim=True)
-        variance = (grouped_hidden - mean).square().mean(dim=-1, keepdim=True)
-        grouped_hidden = (grouped_hidden - mean) * torch.rsqrt(
-            variance + self.experts[0].norm.eps
-        )
-        grouped_hidden = (
-            grouped_hidden * norm_weight[:, None, :]
-            + norm_bias[:, None, :]
-        )
+        if self.use_norm:
+            mean = grouped_hidden.mean(dim=-1, keepdim=True)
+            variance = (grouped_hidden - mean).square().mean(dim=-1, keepdim=True)
+            grouped_hidden = (grouped_hidden - mean) * torch.rsqrt(
+                variance + self.experts[0].norm.eps
+            )
+            grouped_hidden = (
+                grouped_hidden * norm_weight[:, None, :]
+                + norm_bias[:, None, :]
+            )
         grouped_inner = torch.bmm(
             grouped_hidden, input_weight.transpose(1, 2),
         )
@@ -265,11 +295,12 @@ def make_child(
     device: torch.device,
     dtype: torch.dtype,
     dispatch_mode: str = "token-loop",
+    use_norm: bool = True,
 ) -> nn.Module:
     if kind == "routed":
         child = RoutedChild(
             hidden_size, inner_size, num_experts, active_experts,
-            routing_temperature, dispatch_mode,
+            routing_temperature, dispatch_mode, use_norm,
         )
     else:
         child_class = NEFunctionBlock if kind == "gelu" else NESwiGLUBlock
@@ -489,7 +520,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     child25 = make_child(
         hidden_size, args.inner_size, args.child_kind, args.calibration_rank,
         args.num_experts, args.active_experts, args.routing_temperature,
-        device, dtype, args.dispatch_mode,
+        device, dtype, args.dispatch_mode, not args.child_no_norm,
     )
     history25 = train_child(
         child25, io25, device, dtype, args.steps, args.learning_rate,
@@ -506,7 +537,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     child26 = make_child(
         hidden_size, args.inner_size, args.child_kind, args.calibration_rank,
         args.num_experts, args.active_experts, args.routing_temperature,
-        device, dtype, args.dispatch_mode,
+        device, dtype, args.dispatch_mode, not args.child_no_norm,
     )
     history26 = train_child(
         child26, io26, device, dtype, args.steps, args.learning_rate,
@@ -585,6 +616,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             if args.child_kind == "routed" else "single-child"
         ),
         "dispatch_mode": args.dispatch_mode,
+        "child_internal_norm": (
+            not args.child_no_norm if args.child_kind == "routed" else None
+        ),
         "routing_temperature": args.routing_temperature,
         "batch_size": args.batch_size,
         "sequence_length": args.sequence_length,
@@ -636,6 +670,7 @@ def main() -> None:
         "--dispatch-mode", choices=("grouped", "packed", "token-loop"),
         default="token-loop",
     )
+    parser.add_argument("--child-no-norm", action="store_true")
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--sequence-length", type=int, default=64)
     parser.add_argument("--train-batches", type=int, default=8)

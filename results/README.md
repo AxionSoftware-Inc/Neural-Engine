@@ -637,6 +637,12 @@ for token-loop dispatch, while preserving the quality gate. It is the best
 current reference path but is still not a speedup; redundant child LayerNorm
 cost is the next focused test. See `V0_142_QWEN_GROUPED_DISPATCH.md`.
 
+V0.143 removes that redundant child LayerNorm for the Qwen transplant. Across
+two 100-iteration repeats, isolated FFN timing is 1.057x and 1.005x over the
+parent, with end-to-end timing about 1.015x and the quality gate still passing.
+This is accepted as the preferred Qwen path but not yet a measured speedup.
+See `V0_143_QWEN_GROUPED_NO_NORM.md`.
+
 V0.133 replaces the fixed learned address bank with an external random
 content-key lookup. With 2048 fact rows, only the first 1536 used in training,
 both seeds retrieve the 512 held-out rows at 100% and reach 4.21e-6/4.27e-6
