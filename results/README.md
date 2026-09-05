@@ -1,9 +1,10 @@
 # Results
 
-V0.160 audits scalar hard-route scaling, nonlinear macro-cells, and late-layer
-scope. The best scale point (`scale=4`) still reaches `+0.0931` held-out CE
-delta, while a rank-384 macro-cell reaches `+0.1388`; neither passes the
-`+0.05` gate. The current sparse decomposition remains structurally lossy.
+V0.160 audits scalar hard-route scaling, nonlinear macro-cells, shared-basis
+correction, and late-layer scope. The best scale point (`scale=4`) reaches
+`+0.0931` held-out CE delta, while rank-384 shared-basis reaches `+0.0940`;
+neither passes the `+0.05` gate. The current sparse decomposition remains
+structurally lossy.
 See `V0_160_QWEN_SPARSE_APPROXIMATION_ABLATIONS.md`.
 
 V0.159 adds an individual-neuron sparse prototype. A chunked 2-layer run

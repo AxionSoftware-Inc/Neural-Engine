@@ -264,6 +264,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         torch.nn.init.zeros_(self.router[-1].weight)
         torch.nn.init.zeros_(self.router[-1].bias)
         self.last_selected: torch.Tensor | None = None
+        self.last_route_weights: torch.Tensor | None = None
         self.last_active_expert_fraction = 1.0
 
     def _forward_grouped(
@@ -345,12 +346,14 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             ], dim=-2)
             weights = F.softmax(scores / self.temperature, dim=-1)
             self.last_selected = scores.detach().argmax(dim=-1)
+            self.last_route_weights = weights
             self.last_active_expert_fraction = 1.0
             # At uniform routing, this exactly reconstructs the sum of slices.
             return self.num_experts * (outputs * weights.unsqueeze(-1)).sum(dim=-2)
         top_values, top_ids = scores.topk(self.active_experts, dim=-1)
         weights = F.softmax(top_values / self.temperature, dim=-1)
         self.last_selected = top_ids.detach()
+        self.last_route_weights = weights
         if oracle_outputs is not None:
             selected = torch.gather(
                 oracle_outputs, -2,
@@ -476,6 +479,57 @@ class TransferredRoutedQwenNeuronChild(torch.nn.Module):
         return self._forward_hard(hidden_states, top_ids, weights)
 
 
+class SharedBasisRoutedQwenChild(torch.nn.Module):
+    """Sparse Qwen groups plus a routed, shared nonlinear correction basis.
+
+    The copied group slices preserve the cheap transferred path.  A compact
+    nonlinear basis is evaluated once per token and each selected group mixes
+    that basis into the output, allowing selected groups to compensate for
+    omitted group interactions without evaluating all parent neurons.
+    """
+
+    def __init__(self, base: TransferredRoutedQwenChild, rank: int) -> None:
+        super().__init__()
+        if rank < 1:
+            raise ValueError("shared basis rank must be positive")
+        hidden_size = int(base.group_gate_weight.shape[-1])
+        self.base = base
+        self.shared_gate = torch.nn.Linear(hidden_size, rank, bias=False)
+        self.shared_value = torch.nn.Linear(hidden_size, rank, bias=False)
+        self.expert_mix = torch.nn.Parameter(
+            torch.zeros(base.num_experts, hidden_size, rank),
+        )
+        self.hard_train = False
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        base_output = self.base(hidden_states)
+        route_weights = self.base.last_route_weights
+        selected = self.base.last_selected
+        if route_weights is None or selected is None:
+            raise RuntimeError("base route state was not populated")
+        basis = F.silu(self.shared_gate(hidden_states)) * self.shared_value(
+            hidden_states,
+        )
+        expert_corrections = torch.einsum(
+            "...r,ehr->...eh", basis, self.expert_mix,
+        )
+        if self.base.training and not self.base.hard_train:
+            correction = self.base.num_experts * (
+                expert_corrections * route_weights.unsqueeze(-1)
+            ).sum(dim=-2)
+        else:
+            selected_corrections = torch.gather(
+                expert_corrections, -2,
+                selected.unsqueeze(-1).expand(
+                    *selected.shape, hidden_states.shape[-1],
+                ),
+            )
+            correction = self.base.hard_route_scale * (
+                selected_corrections * route_weights.unsqueeze(-1)
+            ).sum(dim=-2)
+        return base_output + correction
+
+
 def make_transferred_routed_qwen_child(
     parent: torch.nn.Module,
     num_experts: int,
@@ -496,7 +550,11 @@ def make_transferred_routed_qwen_child(
         partition_mode, route_source, hard_route_scale,
     ).to(device=device, dtype=dtype)
     if calibration_rank > 0:
-        if calibration_mode == "swiglu":
+        if calibration_mode == "shared-basis":
+            child = SharedBasisRoutedQwenChild(
+                child, int(calibration_rank),
+            ).to(device=device, dtype=dtype)
+        elif calibration_mode == "swiglu":
             child = SwiGLUResidualChild(
                 child, int(parent.gate_proj.in_features), calibration_rank,
             ).to(device=device, dtype=dtype)
@@ -983,7 +1041,7 @@ def main() -> None:
         help="hidden-state source for the low-rank correction",
     )
     parser.add_argument(
-        "--calibration-mode", choices=("low-rank", "swiglu"),
+        "--calibration-mode", choices=("low-rank", "swiglu", "shared-basis"),
         default="low-rank",
         help="correction type for transferred sparse children",
     )
