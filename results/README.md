@@ -1,5 +1,11 @@
 # Results
 
+V0.171 rejects the `6,6,6,6,4,4,4,4` depth-dependent active schedule. Giving
+the early layers 75% active groups makes the first hard-training layer
+unstable and worsens the eight-layer result to `+5.8722` (`6.35%` top-1), so
+capacity allocation alone is not the fix. See
+`V0_171_QWEN_DEPTH_ACTIVE_SCHEDULE_AUDIT.md`.
+
 V0.170 rejects a bounded per-channel output contract. Matching sparse-child
 mean/std to the parent lowers local MSE but worsens matched four-layer held-out
 CE from `+0.0095` to `+0.1549` (`78.59%` top-1). Token-level residual geometry
