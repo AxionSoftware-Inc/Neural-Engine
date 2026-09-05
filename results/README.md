@@ -1,5 +1,12 @@
 # Results
 
+V0.173 fixes a real full-active routing bug: when `K=E`, the hard path must
+use scale `E`, not `E/K`, to reconstruct the parent sum. The corrected child is
+exact at float32 noise, but the clean `8,8,8,8,4,4,4,4` depth control still
+fails at `+0.7671` (`68.68%` top-1). The depth cascade is therefore genuine,
+not just a scaling artifact. See
+`V0_173_QWEN_FULL_ACTIVE_SCALE_FIX_AUDIT.md`.
+
 V0.172 shows that removing the variable-`K` scale discontinuity only improves
 the failed depth schedule from `+5.8722` to `+4.5923` (`17.90%` top-1); it does
 not approach the gate. Manual active-count/scale tuning is therefore closed

@@ -408,7 +408,11 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             )
         self.route_source = route_source
         self.hard_route_scale = (
-            self.num_experts / self.active_experts
+            (
+                self.num_experts
+                if self.active_experts == self.num_experts
+                else self.num_experts / self.active_experts
+            )
             if hard_route_scale is None else float(hard_route_scale)
         )
         if dispatch_mode not in {"grouped", "token-loop"}:
@@ -743,7 +747,11 @@ class TransferredRoutedQwenNeuronChild(torch.nn.Module):
         self.hard_train = False
         self.token_chunk_size = int(token_chunk_size)
         self.hard_route_scale = (
-            self.num_neurons / self.active_neurons
+            (
+                self.num_neurons
+                if self.active_neurons == self.num_neurons
+                else self.num_neurons / self.active_neurons
+            )
             if hard_route_scale is None else float(hard_route_scale)
         )
         if self.token_chunk_size < 1:
@@ -1409,6 +1417,11 @@ def train_importance_router(
         nested for nested in child.modules()
         if isinstance(nested, TransferredRoutedQwenChild)
     )
+    if base.active_experts == base.num_experts:
+        # With every group active, routing is the identity and the copied
+        # FFN already reconstructs the parent exactly.  There is no useful
+        # subset label or router gradient in this case.
+        return []
     all_parameters = list(base.parameters())
     previous_requires_grad = [parameter.requires_grad for parameter in all_parameters]
     for parameter in all_parameters:
@@ -1751,6 +1764,10 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         args.active_experts_schedule, len(layer_indices), args.active_experts,
         int, "active-experts-schedule",
     )
+    calibration_rank_schedule = parse_schedule(
+        args.calibration_rank_schedule, len(layer_indices), args.calibration_rank,
+        int, "calibration-rank-schedule",
+    )
     hard_route_scale_schedule = parse_schedule(
         args.hard_route_scale_schedule, len(layer_indices), args.hard_route_scale,
         float, "hard-route-scale-schedule",
@@ -1870,7 +1887,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             child = make_transferred_routed_qwen_child(
                 parents[child_index], args.num_experts,
                 int(active_experts_schedule[child_index]),
-                args.routing_temperature, args.calibration_rank,
+                args.routing_temperature, int(calibration_rank_schedule[child_index]),
                 args.calibration_source, args.calibration_mode,
                 args.dispatch_mode,
                 args.partition_mode, args.route_source,
@@ -1902,12 +1919,16 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                     )
                     parameter.requires_grad_(False)
             try:
-                histories.append(train_child(
-                    child, train_io, device, dtype, args.steps,
-                    args.learning_rate, args.max_grad_norm, args.log_every,
-                    args.hard_train_steps,
-                    args.hard_learning_rate,
-                ))
+                if any(parameter.requires_grad for parameter in child.parameters()):
+                    histories.append(train_child(
+                        child, train_io, device, dtype, args.steps,
+                        args.learning_rate, args.max_grad_norm, args.log_every,
+                        args.hard_train_steps,
+                        args.hard_learning_rate,
+                    ))
+                else:
+                    child.eval()
+                    histories.append([])
             finally:
                 for parameter, previous in frozen_subset_router:
                     parameter.requires_grad_(previous)
@@ -2063,6 +2084,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "child_inner_size": effective_child_inner_size,
         "child_kind": args.child_kind,
         "calibration_rank": args.calibration_rank,
+        "calibration_rank_schedule": calibration_rank_schedule,
         "calibration_source": args.calibration_source,
         "calibration_mode": args.calibration_mode,
         "num_experts": args.num_experts,
@@ -2182,6 +2204,10 @@ def main() -> None:
         default="routed",
     )
     parser.add_argument("--calibration-rank", type=int, default=8)
+    parser.add_argument(
+        "--calibration-rank-schedule", default=None,
+        help="optional comma-separated correction rank per replaced layer",
+    )
     parser.add_argument(
         "--calibration-source", choices=("base-output", "input"),
         default="base-output",
