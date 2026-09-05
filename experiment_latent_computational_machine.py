@@ -348,6 +348,7 @@ class LatentComputationalMachine(nn.Module):
         memory_mode: str = "direct",
         num_entities: int = 32,
         memory_temperature: float = 1.0,
+        memory_buckets: int = 32,
     ) -> None:
         super().__init__()
         self.state_dim = state_dim
@@ -356,6 +357,7 @@ class LatentComputationalMachine(nn.Module):
         self.memory_mode = memory_mode
         self.num_entities = num_entities
         self.memory_temperature = memory_temperature
+        self.memory_buckets = memory_buckets if memory_mode == "hierarchical" else None
         self.memory_slots = memory_slots
         self.num_cells = num_cells
         self.route_temperature = route_temperature
@@ -372,8 +374,8 @@ class LatentComputationalMachine(nn.Module):
         if route_mode not in {"context", "operation-only"}:
             raise ValueError("route_mode must be context or operation-only")
         self.route_mode = route_mode
-        if memory_mode not in {"direct", "learned"}:
-            raise ValueError("memory_mode must be direct or learned")
+        if memory_mode not in {"direct", "learned", "hierarchical"}:
+            raise ValueError("memory_mode must be direct, learned, or hierarchical")
         if memory_temperature <= 0:
             raise ValueError("memory_temperature must be positive")
         self.value_encoder = nn.Sequential(
@@ -382,9 +384,19 @@ class LatentComputationalMachine(nn.Module):
         )
         self.operation_embedding = nn.Embedding(NUM_OPERATIONS + 1, latent_dim)
         self.operation_controller = nn.Linear(latent_dim, latent_dim)
-        if memory_mode == "learned":
+        if memory_mode in {"learned", "hierarchical"}:
             self.memory_queries = nn.Embedding(num_entities, latent_dim)
+        if memory_mode == "learned":
             self.memory_keys = nn.Parameter(torch.randn(num_entities, latent_dim) * 0.05)
+        elif memory_mode == "hierarchical":
+            if memory_buckets <= 0 or num_entities % memory_buckets != 0:
+                raise ValueError(
+                    "hierarchical memory requires a positive bucket count dividing entities"
+                )
+            self.memory_bucket_keys = nn.Parameter(
+                torch.randn(memory_buckets, latent_dim) * 0.05
+            )
+            self.memory_row_keys = nn.Parameter(torch.randn(num_entities, latent_dim) * 0.05)
         self.controller = nn.Sequential(
             nn.Linear(state_dim * 2 + latent_dim, 128),
             nn.SiLU(),
@@ -423,10 +435,22 @@ class LatentComputationalMachine(nn.Module):
         if self.memory_mode == "direct":
             return fact_table[entity_ids], None
         query = self.memory_queries(entity_ids)
-        scores = query @ self.memory_keys.t() / math.sqrt(self.latent_dim)
-        scores = scores / self.memory_temperature
-        weights = F.softmax(scores, dim=-1)
-        return weights @ fact_table, scores
+        if self.memory_mode == "learned":
+            scores = query @ self.memory_keys.t() / math.sqrt(self.latent_dim)
+            scores = scores / self.memory_temperature
+            weights = F.softmax(scores, dim=-1)
+            return weights @ fact_table, scores
+        bucket_scores = query @ self.memory_bucket_keys.t() / math.sqrt(self.latent_dim)
+        bucket_scores = bucket_scores / self.memory_temperature
+        bucket_weights = F.softmax(bucket_scores, dim=-1)
+        row_keys = self.memory_row_keys.reshape(self.memory_buckets, -1, self.latent_dim)
+        row_scores = torch.einsum("qd,ksd->qks", query, row_keys)
+        row_scores = row_scores / self.memory_temperature
+        row_weights = F.softmax(row_scores, dim=-1)
+        weights = (bucket_weights.unsqueeze(-1) * row_weights).reshape(
+            entity_ids.shape[0], self.num_entities
+        )
+        return weights @ fact_table, weights.clamp_min(1e-8).log()
 
     def forward(
         self,
@@ -581,8 +605,8 @@ def train_machine(
                 trace["route_scores"], program, model.num_cells
             )
         if memory_supervision_weight > 0:
-            if getattr(model, "memory_mode", "direct") != "learned":
-                raise ValueError("memory supervision requires --memory-mode learned")
+            if getattr(model, "memory_mode", "direct") not in {"learned", "hierarchical"}:
+                raise ValueError("memory supervision requires a learned memory mode")
             memory_loss = F.cross_entropy(trace["memory_scores"], entity_ids)
         loss = (
             task_loss
@@ -808,6 +832,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             memory_mode=args.memory_mode,
             num_entities=args.num_entities,
             memory_temperature=args.memory_temperature,
+            memory_buckets=args.memory_buckets,
         ).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     history = train_machine(
@@ -926,6 +951,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "value_dim": args.value_dim,
         "memory_mode": args.memory_mode,
         "memory_temperature": args.memory_temperature,
+        "memory_buckets": args.memory_buckets,
         "model_kind": args.model_kind,
         "device": str(device),
         "seed": args.seed,
@@ -1001,8 +1027,11 @@ def main() -> None:
     parser.add_argument("--transition-mode", choices=("delta", "absolute"), default="delta")
     parser.add_argument("--structured-cell-kind", choices=("mlp", "polynomial"), default="mlp")
     parser.add_argument("--route-mode", choices=("context", "operation-only"), default="context")
-    parser.add_argument("--memory-mode", choices=("direct", "learned"), default="direct")
+    parser.add_argument(
+        "--memory-mode", choices=("direct", "learned", "hierarchical"), default="direct"
+    )
     parser.add_argument("--memory-temperature", type=float, default=1.0)
+    parser.add_argument("--memory-buckets", type=int, default=32)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--steps", type=int, default=4000)
     parser.add_argument("--train-max-steps", type=int, default=4)
