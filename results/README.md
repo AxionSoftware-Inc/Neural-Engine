@@ -1,5 +1,11 @@
 # Results
 
+V0.170 rejects a bounded per-channel output contract. Matching sparse-child
+mean/std to the parent lowers local MSE but worsens matched four-layer held-out
+CE from `+0.0095` to `+0.1549` (`78.59%` top-1). Token-level residual geometry
+must be preserved; marginal statistics are insufficient. See
+`V0_170_QWEN_OUTPUT_CONTRACT_AUDIT.md`.
+
 V0.169 rejects layerwise final-logit refinement. Refining each child against
 the task loss while keeping the sparse prefix and dense suffix fixed worsens
 the matched four-layer result from `+0.0095` to `+0.4703` (`69.43%` top-1).

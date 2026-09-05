@@ -1095,6 +1095,57 @@ class ResidualCoresetRoutedQwenChild(torch.nn.Module):
         return base_output + signed_correction + residual
 
 
+class OutputContractRoutedQwenChild(torch.nn.Module):
+    """Sparse child with a bounded per-channel output-statistics contract."""
+
+    def __init__(self, base: torch.nn.Module) -> None:
+        super().__init__()
+        self.base = base
+        route_base = next(
+            nested for nested in base.modules()
+            if isinstance(nested, TransferredRoutedQwenChild)
+        )
+        hidden_size = int(route_base.group_gate_weight.shape[-1])
+        self.register_buffer("base_mean", torch.zeros(hidden_size))
+        self.register_buffer("output_mean", torch.zeros(hidden_size))
+        self.register_buffer("scale", torch.ones(hidden_size))
+        self.fitted = False
+
+    @torch.no_grad()
+    def fit(self, io_batches: list[dict[str, torch.Tensor]], device: torch.device) -> None:
+        was_training = self.base.training
+        self.base.eval()
+        base_outputs = []
+        target_outputs = []
+        for batch in io_batches:
+            inputs = batch["input"].to(
+                device=device,
+                dtype=next(self.base.parameters()).dtype,
+            )
+            base_outputs.append(self.base(inputs).float().reshape(-1, inputs.shape[-1]))
+            target_outputs.append(batch["output"].to(device=device).float().reshape(-1, inputs.shape[-1]))
+        base_flat = torch.cat(base_outputs, dim=0)
+        target_flat = torch.cat(target_outputs, dim=0)
+        base_mean = base_flat.mean(dim=0)
+        base_std = base_flat.std(dim=0, unbiased=False)
+        target_mean = target_flat.mean(dim=0)
+        target_std = target_flat.std(dim=0, unbiased=False)
+        scale = (target_std / base_std.clamp_min(1e-4)).clamp(0.25, 4.0)
+        self.base_mean.copy_(base_mean.to(self.base_mean.dtype))
+        self.output_mean.copy_(target_mean.to(self.output_mean.dtype))
+        self.scale.copy_(scale.to(self.scale.dtype))
+        self.fitted = True
+        self.base.train(was_training)
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        base_output = self.base(hidden_states)
+        if not self.fitted:
+            return base_output
+        return self.output_mean + (
+            base_output - self.base_mean
+        ) * self.scale
+
+
 @torch.no_grad()
 def initialize_teacher_group_decoders(
     child: torch.nn.Module,
@@ -1275,6 +1326,14 @@ def make_transferred_routed_qwen_child(
             child = ResidualCoresetRoutedQwenChild(
                 child, int(calibration_rank),
             ).to(device=device, dtype=dtype)
+        elif calibration_mode == "output-contract":
+            if calibration_rank > 0:
+                child = CrossGroupOutputMixRoutedQwenChild(
+                    child, int(calibration_rank),
+                ).to(device=device, dtype=dtype)
+            child = OutputContractRoutedQwenChild(child).to(
+                device=device, dtype=dtype,
+            )
         else:
             calibration_class = {
                 "base-output": CalibratedChild,
@@ -1852,6 +1911,12 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             finally:
                 for parameter, previous in frozen_subset_router:
                     parameter.requires_grad_(previous)
+            if args.calibration_mode == "output-contract":
+                contract = next(
+                    nested for nested in child.modules()
+                    if isinstance(nested, OutputContractRoutedQwenChild)
+                )
+                contract.fit(train_io, device)
         elif args.child_kind == "qwen-transfer-neuron-sparse":
             child = make_transferred_routed_qwen_neuron_child(
                 parents[len(children)], args.active_neurons,
@@ -2127,6 +2192,7 @@ def main() -> None:
         choices=(
             "low-rank", "swiglu", "shared-basis", "cross-group",
             "teacher-group-decoder", "teacher-group-residual", "residual-coreset",
+            "output-contract",
         ),
         default="low-rank",
         help="correction type for transferred sparse children",
