@@ -1,5 +1,13 @@
 # Results
 
+V0.112 screens routed child specialization for the Qwen two-layer handoff.
+The best 4-expert top-2 run reaches +0.0544 CE delta, far better than the
+dense-child +0.2377 failure, but the second seed is +0.0710 and top-3 is
++0.0766. This is a positive clue, not a stable GO; no runtime gain is claimed
+because the research path still evaluates all experts. Qwen routing tuning is
+paused in favor of the controlled `taklif22` machine benchmark. See
+`V0_112_QWEN_ROUTED_CHILD_BANK.md`.
+
 V0.111 rejects a zero-start rank-64 dense interface residual plus joint logit
  distillation: the two-layer alpha=0 CE delta is +0.2488 versus +0.2377 for
  the uncalibrated child. The joint loss is unstable, so simple dense

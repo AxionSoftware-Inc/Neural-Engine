@@ -51,16 +51,72 @@ class CalibratedChild(nn.Module):
         return base_output + correction
 
 
+class RoutedChild(nn.Module):
+    """A learned bank of small attention-free functions with top-k execution."""
+
+    def __init__(
+        self,
+        hidden_size: int,
+        inner_size: int,
+        num_experts: int,
+        active_experts: int,
+        temperature: float = 1.0,
+    ) -> None:
+        super().__init__()
+        if not 1 <= active_experts <= num_experts:
+            raise ValueError("active_experts must be within num_experts")
+        self.num_experts = int(num_experts)
+        self.active_experts = int(active_experts)
+        self.temperature = float(temperature)
+        self.experts = nn.ModuleList([
+            NEFunctionBlock(hidden_size, inner_size)
+            for _ in range(num_experts)
+        ])
+        self.router = nn.Sequential(
+            nn.Linear(hidden_size, 128),
+            nn.SiLU(),
+            nn.Linear(128, num_experts),
+        )
+        nn.init.zeros_(self.router[-1].weight)
+        nn.init.zeros_(self.router[-1].bias)
+        self.last_selected: torch.Tensor | None = None
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        scores = self.router(hidden_states)
+        outputs = torch.stack([expert(hidden_states) for expert in self.experts], dim=-2)
+        if self.training:
+            weights = F.softmax(scores / self.temperature, dim=-1)
+            self.last_selected = scores.detach().argmax(dim=-1)
+            return (outputs * weights.unsqueeze(-1)).sum(dim=-2)
+        top_values, top_ids = scores.topk(self.active_experts, dim=-1)
+        weights = F.softmax(top_values / self.temperature, dim=-1)
+        selected = outputs.gather(
+            -2,
+            top_ids.unsqueeze(-1).expand(*top_ids.shape, outputs.shape[-1]),
+        )
+        self.last_selected = top_ids.detach()
+        return (selected * weights.unsqueeze(-1)).sum(dim=-2)
+
+
 def make_child(
     hidden_size: int,
     inner_size: int,
     kind: str,
     calibration_rank: int,
+    num_experts: int,
+    active_experts: int,
+    routing_temperature: float,
     device: torch.device,
     dtype: torch.dtype,
 ) -> nn.Module:
-    child_class = NEFunctionBlock if kind == "gelu" else NESwiGLUBlock
-    child = child_class(hidden_size, inner_size)
+    if kind == "routed":
+        child = RoutedChild(
+            hidden_size, inner_size, num_experts, active_experts,
+            routing_temperature,
+        )
+    else:
+        child_class = NEFunctionBlock if kind == "gelu" else NESwiGLUBlock
+        child = child_class(hidden_size, inner_size)
     if calibration_rank > 0:
         child = CalibratedChild(child, hidden_size, calibration_rank)
     return child.to(device=device, dtype=dtype)
@@ -275,6 +331,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     )
     child25 = make_child(
         hidden_size, args.inner_size, args.child_kind, args.calibration_rank,
+        args.num_experts, args.active_experts, args.routing_temperature,
         device, dtype,
     )
     history25 = train_child(
@@ -291,6 +348,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     )
     child26 = make_child(
         hidden_size, args.inner_size, args.child_kind, args.calibration_rank,
+        args.num_experts, args.active_experts, args.routing_temperature,
         device, dtype,
     )
     history26 = train_child(
@@ -359,6 +417,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "child_inner_size": args.inner_size,
         "child_kind": args.child_kind,
         "calibration_rank": args.calibration_rank,
+        "num_experts": args.num_experts,
+        "active_experts": args.active_experts,
+        "routing_temperature": args.routing_temperature,
         "batch_size": args.batch_size,
         "sequence_length": args.sequence_length,
         "train_batches": args.train_batches,
@@ -400,8 +461,11 @@ def main() -> None:
     parser.add_argument("--first-layer", type=int, default=25)
     parser.add_argument("--second-layer", type=int, default=26)
     parser.add_argument("--inner-size", type=int, default=384)
-    parser.add_argument("--child-kind", choices=("gelu", "swiglu"), default="gelu")
+    parser.add_argument("--child-kind", choices=("gelu", "swiglu", "routed"), default="gelu")
     parser.add_argument("--calibration-rank", type=int, default=0)
+    parser.add_argument("--num-experts", type=int, default=4)
+    parser.add_argument("--active-experts", type=int, default=2)
+    parser.add_argument("--routing-temperature", type=float, default=1.0)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--sequence-length", type=int, default=64)
     parser.add_argument("--train-batches", type=int, default=8)
