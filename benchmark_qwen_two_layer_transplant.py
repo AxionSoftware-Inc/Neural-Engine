@@ -35,15 +35,35 @@ class NESwiGLUBlock(nn.Module):
         return self.output_projection(gated * self.value_projection(hidden_states))
 
 
+class CalibratedChild(nn.Module):
+    """Child plus a zero-start low-rank hidden-state interface residual."""
+
+    def __init__(self, base: nn.Module, hidden_size: int, rank: int) -> None:
+        super().__init__()
+        self.base = base
+        self.down = nn.Linear(hidden_size, rank, bias=False)
+        self.up = nn.Linear(rank, hidden_size, bias=False)
+        nn.init.zeros_(self.up.weight)
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        base_output = self.base(hidden_states)
+        correction = self.up(torch.tanh(self.down(base_output)))
+        return base_output + correction
+
+
 def make_child(
     hidden_size: int,
     inner_size: int,
     kind: str,
+    calibration_rank: int,
     device: torch.device,
     dtype: torch.dtype,
 ) -> nn.Module:
     child_class = NEFunctionBlock if kind == "gelu" else NESwiGLUBlock
-    return child_class(hidden_size, inner_size).to(device=device, dtype=dtype)
+    child = child_class(hidden_size, inner_size)
+    if calibration_rank > 0:
+        child = CalibratedChild(child, hidden_size, calibration_rank)
+    return child.to(device=device, dtype=dtype)
 
 
 def capture_batches(
@@ -253,7 +273,10 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         model, tokenizer, EVAL_TEXT, args.batch_size, args.sequence_length,
         args.eval_batches, device, args.first_layer,
     )
-    child25 = make_child(hidden_size, args.inner_size, args.child_kind, device, dtype)
+    child25 = make_child(
+        hidden_size, args.inner_size, args.child_kind, args.calibration_rank,
+        device, dtype,
+    )
     history25 = train_child(
         child25, io25, device, dtype, args.steps, args.learning_rate,
         args.max_grad_norm, args.log_every,
@@ -266,7 +289,10 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         model, tokenizer, TRAIN_TEXT, args.batch_size, args.sequence_length,
         args.train_batches, device, args.second_layer,
     )
-    child26 = make_child(hidden_size, args.inner_size, args.child_kind, device, dtype)
+    child26 = make_child(
+        hidden_size, args.inner_size, args.child_kind, args.calibration_rank,
+        device, dtype,
+    )
     history26 = train_child(
         child26, io26, device, dtype, args.steps, args.learning_rate,
         args.max_grad_norm, args.log_every,
@@ -332,6 +358,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "hidden_size": hidden_size,
         "child_inner_size": args.inner_size,
         "child_kind": args.child_kind,
+        "calibration_rank": args.calibration_rank,
         "batch_size": args.batch_size,
         "sequence_length": args.sequence_length,
         "train_batches": args.train_batches,
@@ -374,6 +401,7 @@ def main() -> None:
     parser.add_argument("--second-layer", type=int, default=26)
     parser.add_argument("--inner-size", type=int, default=384)
     parser.add_argument("--child-kind", choices=("gelu", "swiglu"), default="gelu")
+    parser.add_argument("--calibration-rank", type=int, default=0)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--sequence-length", type=int, default=64)
     parser.add_argument("--train-batches", type=int, default=8)

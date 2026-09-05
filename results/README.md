@@ -1,5 +1,12 @@
 # Results
 
+V0.111 rejects a zero-start rank-64 dense interface residual plus joint logit
+ distillation: the two-layer alpha=0 CE delta is +0.2488 versus +0.2377 for
+ the uncalibrated child. The joint loss is unstable, so simple dense
+ calibration is not the current repair. The next direction is sparse
+ functional specialization with only a small routed subset of child circuits
+ active per token. See `V0_111_QWEN_INTERFACE_CALIBRATION.md`.
+
 V0.110 closes two simple repairs for the V0.109 full-handoff failure. A
 Qwen-like attention-free SwiGLU child improves alpha=0 CE only from +0.2377 to
 +0.2230 at width 384, and doubling width to 768 remains +0.2277. One-child
