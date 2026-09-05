@@ -263,7 +263,10 @@ def main() -> None:
     parser.add_argument("--num-experts", type=int, default=4)
     parser.add_argument("--active-experts", type=int, default=1)
     parser.add_argument("--routing-temperature", type=float, default=1.0)
-    parser.add_argument("--dispatch-mode", choices=("packed", "token-loop"), default="token-loop")
+    parser.add_argument(
+        "--dispatch-mode", choices=("grouped", "packed", "token-loop"),
+        default="token-loop",
+    )
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--sequence-length", type=int, default=64)
     parser.add_argument("--train-batches", type=int, default=8)

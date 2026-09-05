@@ -631,6 +631,12 @@ parent and end-to-end timing is about 1.12x slower. The packed path is rejected
 for performance; a grouped/fused kernel with weight reuse is required before
 scaling the experiment. See `V0_141_QWEN_PACKED_DISPATCH.md`.
 
+V0.142 tests grouped selected-token dispatch. It improves isolated FFN timing
+to 1.166x and 1.204x over parent across two seeds, versus 1.337x and 1.375x
+for token-loop dispatch, while preserving the quality gate. It is the best
+current reference path but is still not a speedup; redundant child LayerNorm
+cost is the next focused test. See `V0_142_QWEN_GROUPED_DISPATCH.md`.
+
 V0.133 replaces the fixed learned address bank with an external random
 content-key lookup. With 2048 fact rows, only the first 1536 used in training,
 both seeds retrieve the 512 held-out rows at 100% and reach 4.21e-6/4.27e-6

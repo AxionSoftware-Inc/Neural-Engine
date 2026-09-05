@@ -69,8 +69,8 @@ class RoutedChild(nn.Module):
         self.num_experts = int(num_experts)
         self.active_experts = int(active_experts)
         self.temperature = float(temperature)
-        if dispatch_mode not in {"packed", "token-loop"}:
-            raise ValueError("dispatch_mode must be packed or token-loop")
+        if dispatch_mode not in {"grouped", "packed", "token-loop"}:
+            raise ValueError("dispatch_mode must be grouped, packed, or token-loop")
         self.dispatch_mode = dispatch_mode
         self.experts = nn.ModuleList([
             NEFunctionBlock(hidden_size, inner_size)
@@ -138,6 +138,84 @@ class RoutedChild(nn.Module):
         )
         return flat_output.reshape_as(hidden_states)
 
+    def _forward_grouped(
+        self,
+        hidden_states: torch.Tensor,
+        top_ids: torch.Tensor,
+        weights: torch.Tensor,
+    ) -> torch.Tensor:
+        """Run selected pairs in one padded batched matmul per projection.
+
+        Unlike ``packed``, this groups tokens by expert before the matrix
+        multiplications, so each expert weight is reused for a token block
+        instead of being gathered into one matrix per token.
+        """
+        if self._packed_weights is None:
+            self.prepare_packed()
+        assert self._packed_weights is not None
+        norm_weight, norm_bias, input_weight, input_bias, output_weight, output_bias = (
+            tensor.to(device=hidden_states.device, dtype=hidden_states.dtype)
+            for tensor in self._packed_weights
+        )
+        flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
+        flat_ids = top_ids.reshape(-1, self.active_experts)
+        flat_weights = weights.reshape(-1, self.active_experts)
+        pair_indices = torch.arange(flat_ids.numel(), device=flat_ids.device)
+        token_ids = pair_indices // self.active_experts
+        slots = pair_indices % self.active_experts
+        expert_ids = flat_ids[token_ids, slots]
+        sort_order = torch.argsort(expert_ids, stable=True)
+        sorted_experts = expert_ids[sort_order]
+        counts = torch.bincount(sorted_experts, minlength=self.num_experts)
+        max_count = int(counts.max().item())
+        starts = counts.cumsum(dim=0) - counts
+        positions = torch.arange(
+            pair_indices.numel(), device=flat_ids.device,
+        ) - starts[sorted_experts]
+        grouped_indices = sorted_experts * max_count + positions
+        grouped_hidden = torch.zeros(
+            self.num_experts * max_count,
+            flat_hidden.shape[-1],
+            device=flat_hidden.device,
+            dtype=flat_hidden.dtype,
+        )
+        grouped_hidden.index_copy_(
+            0, grouped_indices, flat_hidden[token_ids[sort_order]],
+        )
+        grouped_hidden = grouped_hidden.reshape(
+            self.num_experts, max_count, flat_hidden.shape[-1],
+        )
+        mean = grouped_hidden.mean(dim=-1, keepdim=True)
+        variance = (grouped_hidden - mean).square().mean(dim=-1, keepdim=True)
+        grouped_hidden = (grouped_hidden - mean) * torch.rsqrt(
+            variance + self.experts[0].norm.eps
+        )
+        grouped_hidden = (
+            grouped_hidden * norm_weight[:, None, :]
+            + norm_bias[:, None, :]
+        )
+        grouped_inner = torch.bmm(
+            grouped_hidden, input_weight.transpose(1, 2),
+        )
+        grouped_inner = F.gelu(grouped_inner + input_bias[:, None, :])
+        grouped_output = torch.bmm(
+            grouped_inner, output_weight.transpose(1, 2),
+        ) + output_bias[:, None, :]
+        selected_output = grouped_output.reshape(
+            self.num_experts * max_count, flat_hidden.shape[-1],
+        ).index_select(0, grouped_indices)
+        sorted_token_ids = token_ids[sort_order]
+        sorted_slots = slots[sort_order]
+        contribution = selected_output * flat_weights[
+            sorted_token_ids, sorted_slots,
+        ].unsqueeze(-1)
+        flat_output = torch.zeros_like(flat_hidden)
+        flat_output.index_add_(0, sorted_token_ids, contribution)
+        self.last_active_expert_fraction = pair_indices.numel() / max(
+            flat_hidden.shape[0] * self.num_experts, 1
+        )
+        return flat_output.reshape_as(hidden_states)
+
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         scores = self.router(hidden_states)
         if self.training:
@@ -149,6 +227,8 @@ class RoutedChild(nn.Module):
         top_values, top_ids = scores.topk(self.active_experts, dim=-1)
         weights = F.softmax(top_values / self.temperature, dim=-1)
         self.last_selected = top_ids.detach()
+        if self.dispatch_mode == "grouped":
+            return self._forward_grouped(hidden_states, top_ids, weights)
         if self.dispatch_mode == "packed":
             return self._forward_packed(hidden_states, top_ids, weights)
         # Hard evaluation must execute only the selected expert bodies. The
@@ -552,7 +632,10 @@ def main() -> None:
     parser.add_argument("--num-experts", type=int, default=4)
     parser.add_argument("--active-experts", type=int, default=2)
     parser.add_argument("--routing-temperature", type=float, default=1.0)
-    parser.add_argument("--dispatch-mode", choices=("packed", "token-loop"), default="token-loop")
+    parser.add_argument(
+        "--dispatch-mode", choices=("grouped", "packed", "token-loop"),
+        default="token-loop",
+    )
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--sequence-length", type=int, default=64)
     parser.add_argument("--train-batches", type=int, default=8)
