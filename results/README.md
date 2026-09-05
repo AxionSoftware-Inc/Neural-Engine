@@ -650,6 +650,13 @@ neutral because only one of 28 Qwen layers is replaced. This is a performance
 GO for the next multi-layer gate, not yet a larger-model claim. See
 `V0_144_QWEN_LARGE_TOKEN_BLOCK.md`.
 
+V0.145 applies 50-step full-model joint logit refinement after local training
+of two normless grouped top-2 children. The combined alpha=0 CE deltas are
++0.0433 and +0.0273 across two seeds, passing the composition gate where the
+unrefined seed-2026 path reached +0.0993. Joint refinement is accepted as the
+current two-layer composition fix; its teacher-logit memory path still needs
+optimization before long runs. See `V0_145_QWEN_TWO_LAYER_JOINT_REFINE.md`.
+
 V0.133 replaces the fixed learned address bank with an external random
 content-key lookup. With 2048 fact rows, only the first 1536 used in training,
 both seeds retrieve the 512 held-out rows at 100% and reach 4.21e-6/4.27e-6
