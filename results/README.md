@@ -1,10 +1,16 @@
 # Results
 
+V0.161 adds cross-group output mixing. It passes the held-out gate on two
+seeds for both 2-layer and 4-layer 50%-active replacements (`+0.0306`/
+`+0.0306` and `+0.0181`/`+0.0155`). Eight layers still fail at 50% and 75%
+active, while 25% active fails at four layers. See
+`V0_161_QWEN_CROSS_GROUP_MIXING_SCALE.md`.
+
 V0.160 audits scalar hard-route scaling, nonlinear macro-cells, shared-basis
 correction, and late-layer scope. The best scale point (`scale=4`) reaches
 `+0.0931` held-out CE delta, while rank-384 shared-basis reaches `+0.0940`;
-neither passes the `+0.05` gate. The current sparse decomposition remains
-structurally lossy.
+neither passes the `+0.05` gate. The current independent-group decomposition
+remains structurally lossy.
 See `V0_160_QWEN_SPARSE_APPROXIMATION_ABLATIONS.md`.
 
 V0.159 adds an individual-neuron sparse prototype. A chunked 2-layer run

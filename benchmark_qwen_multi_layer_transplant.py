@@ -265,6 +265,8 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         torch.nn.init.zeros_(self.router[-1].bias)
         self.last_selected: torch.Tensor | None = None
         self.last_route_weights: torch.Tensor | None = None
+        self.last_all_outputs: torch.Tensor | None = None
+        self.last_selected_outputs: torch.Tensor | None = None
         self.last_active_expert_fraction = 1.0
 
     def _forward_grouped(
@@ -316,6 +318,12 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         ).index_select(0, grouped_indices)
         sorted_token_ids = token_ids[sort_order]
         sorted_slots = slots[sort_order]
+        selected_by_pair = torch.empty_like(selected_output)
+        pair_slots = sorted_token_ids * self.active_experts + sorted_slots
+        selected_by_pair.index_copy_(0, pair_slots, selected_output)
+        self.last_selected_outputs = selected_by_pair.reshape(
+            flat_hidden.shape[0], self.active_experts, flat_hidden.shape[-1],
+        ).reshape(*hidden_states.shape[:-1], self.active_experts, hidden_states.shape[-1])
         contribution = selected_output * flat_weights[
             sorted_token_ids, sorted_slots,
         ].unsqueeze(-1)
@@ -347,6 +355,8 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             weights = F.softmax(scores / self.temperature, dim=-1)
             self.last_selected = scores.detach().argmax(dim=-1)
             self.last_route_weights = weights
+            self.last_all_outputs = outputs
+            self.last_selected_outputs = None
             self.last_active_expert_fraction = 1.0
             # At uniform routing, this exactly reconstructs the sum of slices.
             return self.num_experts * (outputs * weights.unsqueeze(-1)).sum(dim=-2)
@@ -354,11 +364,13 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         weights = F.softmax(top_values / self.temperature, dim=-1)
         self.last_selected = top_ids.detach()
         self.last_route_weights = weights
+        self.last_all_outputs = None
         if oracle_outputs is not None:
             selected = torch.gather(
                 oracle_outputs, -2,
                 top_ids.unsqueeze(-1).expand(*top_ids.shape, hidden_states.shape[-1]),
             )
+            self.last_selected_outputs = selected
             return self.hard_route_scale * (
                 selected * weights.unsqueeze(-1)
             ).sum(dim=-2)
@@ -368,15 +380,25 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         flat_ids = top_ids.reshape(-1, self.active_experts)
         flat_weights = weights.reshape(-1, self.active_experts)
         flat_output = torch.zeros_like(flat_hidden)
+        selected_outputs = torch.empty(
+            flat_ids.numel(), flat_hidden.shape[-1],
+            device=flat_hidden.device, dtype=flat_hidden.dtype,
+        )
         selected_pairs = 0
         for expert_id, expert in enumerate(self.experts):
             token_ids, slots = torch.where(flat_ids == expert_id)
             if token_ids.numel() == 0:
                 continue
             expert_output = expert(flat_hidden[token_ids])
+            selected_outputs.index_copy_(
+                0, token_ids * self.active_experts + slots, expert_output,
+            )
             contribution = expert_output * flat_weights[token_ids, slots].unsqueeze(-1)
             flat_output.index_add_(0, token_ids, contribution)
             selected_pairs += int(token_ids.numel())
+        self.last_selected_outputs = selected_outputs.reshape(
+            flat_hidden.shape[0], self.active_experts, flat_hidden.shape[-1],
+        ).reshape(*hidden_states.shape[:-1], self.active_experts, hidden_states.shape[-1])
         self.last_active_expert_fraction = selected_pairs / max(
             flat_hidden.shape[0] * self.num_experts, 1
         )
@@ -530,6 +552,67 @@ class SharedBasisRoutedQwenChild(torch.nn.Module):
         return base_output + correction
 
 
+class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
+    """Route copied groups and mix each selected output through a low-rank map.
+
+    Unlike an input-only residual cell, this correction is conditioned on the
+    actual transferred group output.  It can therefore learn a teacher-derived
+    map from a selected group's contribution toward the omitted groups while
+    retaining selected-group-only execution in the hard path.
+    """
+
+    def __init__(self, base: TransferredRoutedQwenChild, rank: int) -> None:
+        super().__init__()
+        if rank < 1:
+            raise ValueError("cross-group mix rank must be positive")
+        hidden_size = int(base.group_gate_weight.shape[-1])
+        self.base = base
+        self.mix_in = torch.nn.Parameter(
+            torch.empty(base.num_experts, rank, hidden_size),
+        )
+        self.mix_out = torch.nn.Parameter(
+            torch.zeros(base.num_experts, hidden_size, rank),
+        )
+        torch.nn.init.normal_(self.mix_in, std=hidden_size ** -0.5)
+        self.hard_train = False
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        base_output = self.base(hidden_states)
+        route_weights = self.base.last_route_weights
+        selected = self.base.last_selected
+        if route_weights is None or selected is None:
+            raise RuntimeError("base route state was not populated")
+        if self.base.training and not self.base.hard_train:
+            all_outputs = self.base.last_all_outputs
+            if all_outputs is None:
+                raise RuntimeError("soft route outputs were not populated")
+            latent = torch.einsum(
+                "...eh,erh->...er", all_outputs, self.mix_in,
+            )
+            expert_corrections = torch.einsum(
+                "...er,ehr->...eh", latent, self.mix_out,
+            )
+            correction = self.base.num_experts * (
+                expert_corrections * route_weights.unsqueeze(-1)
+            ).sum(dim=-2)
+        else:
+            selected_outputs = self.base.last_selected_outputs
+            if selected_outputs is None:
+                raise RuntimeError("hard route outputs were not populated")
+            selected_mix_in = self.mix_in[selected]
+            selected_mix_out = self.mix_out[selected]
+            latent = torch.einsum(
+                "...kh,...krh->...kr", selected_outputs, selected_mix_in,
+            )
+            selected_corrections = torch.einsum(
+                "...kr,...khr->...kh", latent, selected_mix_out,
+            )
+            correction = self.base.hard_route_scale * (
+                selected_corrections * route_weights.unsqueeze(-1)
+            ).sum(dim=-2)
+        return base_output + correction
+
+
 def make_transferred_routed_qwen_child(
     parent: torch.nn.Module,
     num_experts: int,
@@ -552,6 +635,10 @@ def make_transferred_routed_qwen_child(
     if calibration_rank > 0:
         if calibration_mode == "shared-basis":
             child = SharedBasisRoutedQwenChild(
+                child, int(calibration_rank),
+            ).to(device=device, dtype=dtype)
+        elif calibration_mode == "cross-group":
+            child = CrossGroupOutputMixRoutedQwenChild(
                 child, int(calibration_rank),
             ).to(device=device, dtype=dtype)
         elif calibration_mode == "swiglu":
@@ -1041,7 +1128,8 @@ def main() -> None:
         help="hidden-state source for the low-rank correction",
     )
     parser.add_argument(
-        "--calibration-mode", choices=("low-rank", "swiglu", "shared-basis"),
+        "--calibration-mode",
+        choices=("low-rank", "swiglu", "shared-basis", "cross-group"),
         default="low-rank",
         help="correction type for transferred sparse children",
     )
