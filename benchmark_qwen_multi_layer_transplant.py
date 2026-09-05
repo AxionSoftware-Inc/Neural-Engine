@@ -313,8 +313,8 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 "activation-balanced, sampled-overlap, or stratified-overlap"
             )
         self.partition_mode = partition_mode
-        if route_source not in {"router", "oracle-dot"}:
-            raise ValueError("route_source must be router or oracle-dot")
+        if route_source not in {"router", "oracle-dot", "oracle-energy"}:
+            raise ValueError("route_source must be router, oracle-dot, or oracle-energy")
         self.route_source = route_source
         self.hard_route_scale = (
             self.num_experts / self.active_experts
@@ -475,12 +475,15 @@ class TransferredRoutedQwenChild(torch.nn.Module):
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         scores = self.router(hidden_states)
         oracle_outputs = None
-        if not self.training and self.route_source == "oracle-dot":
+        if not self.training and self.route_source in {"oracle-dot", "oracle-energy"}:
             oracle_outputs = torch.stack([
                 expert(hidden_states) for expert in self.experts
             ], dim=-2)
-            full_output = oracle_outputs.sum(dim=-2)
-            scores = (oracle_outputs * full_output.unsqueeze(-2)).sum(dim=-1)
+            if self.route_source == "oracle-dot":
+                full_output = oracle_outputs.sum(dim=-2)
+                scores = (oracle_outputs * full_output.unsqueeze(-2)).sum(dim=-1)
+            else:
+                scores = oracle_outputs.square().mean(dim=-1)
         if self.training and not self.hard_train:
             outputs = torch.stack([
                 expert(hidden_states) for expert in self.experts
@@ -552,6 +555,7 @@ class TransferredRoutedQwenNeuronChild(torch.nn.Module):
         active_neurons: int,
         temperature: float,
         token_chunk_size: int = 64,
+        route_source: str = "router",
     ) -> None:
         super().__init__()
         inner_size, hidden_size = parent.gate_proj.weight.shape
@@ -562,6 +566,11 @@ class TransferredRoutedQwenNeuronChild(torch.nn.Module):
         self.num_neurons = int(inner_size)
         self.active_neurons = int(active_neurons)
         self.temperature = float(temperature)
+        if route_source not in {"router", "oracle-dot", "oracle-energy"}:
+            raise ValueError(
+                "neuron route_source must be router, oracle-dot, or oracle-energy"
+            )
+        self.route_source = route_source
         self.hard_train = False
         self.token_chunk_size = int(token_chunk_size)
         if self.token_chunk_size < 1:
@@ -619,6 +628,20 @@ class TransferredRoutedQwenNeuronChild(torch.nn.Module):
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         scores = self.router(hidden_states)
+        if not self.training and self.route_source != "router":
+            gate = F.linear(hidden_states, self.gate_weight)
+            value = F.linear(hidden_states, self.value_weight)
+            coefficient = F.silu(gate) * value
+            if self.route_source == "oracle-energy":
+                scores = coefficient.float().square() * (
+                    self.output_weight.float().square().sum(dim=0)
+                )
+            else:
+                full_output = F.linear(coefficient, self.output_weight)
+                contribution_alignment = F.linear(
+                    full_output, self.output_weight.transpose(0, 1),
+                )
+                scores = coefficient.float() * contribution_alignment.float()
         if self.training and not self.hard_train:
             gate = F.linear(hidden_states, self.gate_weight)
             value = F.linear(hidden_states, self.value_weight)
@@ -1041,9 +1064,10 @@ def make_transferred_routed_qwen_neuron_child(
     calibration_mode: str,
     device: torch.device,
     dtype: torch.dtype,
+    route_source: str = "router",
 ) -> torch.nn.Module:
     child = TransferredRoutedQwenNeuronChild(
-        parent, active_neurons, routing_temperature,
+        parent, active_neurons, routing_temperature, route_source=route_source,
     ).to(device=device, dtype=dtype)
     if calibration_rank > 0:
         if calibration_mode == "swiglu":
@@ -1396,6 +1420,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 parents[len(children)], args.active_neurons,
                 args.routing_temperature, args.calibration_rank,
                 args.calibration_source, args.calibration_mode, device, dtype,
+                args.route_source,
             )
             router_histories.append(train_neuron_importance_router(
                 child, train_io, device, dtype, args.router_supervision_steps,
@@ -1683,7 +1708,8 @@ def main() -> None:
         help="layout of copied parent neurons inside expert groups",
     )
     parser.add_argument(
-        "--route-source", choices=("router", "oracle-dot"), default="router",
+        "--route-source",
+        choices=("router", "oracle-dot", "oracle-energy"), default="router",
         help="learned router or diagnostic parent-contribution oracle at eval",
     )
     parser.add_argument(

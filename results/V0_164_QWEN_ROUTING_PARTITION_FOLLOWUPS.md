@@ -18,18 +18,27 @@ four late layers, which reached `+0.0181` and `+0.0155` on two seeds.
 | Activation-balanced partition + cross-group | 4 / 50% | `+0.0724` | 81.81% | FAIL |
 | Random sampled-overlap partition | 4 / 50% | `+0.0079` | 84.40% | PASS |
 | Random sampled-overlap partition, second seed | 4 / 50% | `+0.0983` | 78.78% | FAIL |
+| Random sampled-overlap, hard scale 8 | 4 / 50% | `+0.2620` | 67.33% | FAIL |
 | Stratified-overlap partition | 4 / 50% | `+0.0673` | 78.81% | FAIL |
 | E=16, K=8 cross-group | 4 / 50% | `+0.0330` | 80.20% | PASS |
 | Group router energy supervision | 4 / 50% | `+0.0312` | 80.66% | PASS |
 | Group router teacher-dot supervision | 8 / 50% | `+0.1834` | 62.18% | FAIL |
 | Sensitivity-selected five sparse layers | 5 / 31.25% global saving | `+0.0292` | 74.32% | PASS |
 | Sensitivity schedule, K=6 only on selected layers | 8 / 59.4% active | `+0.0975` | 66.48% | FAIL |
+| Individual-neuron router, 50% active | 2 / 50% | `+0.3497` | 71.09% | FAIL |
+| Individual-neuron oracle-dot, 50% active | 2 / 50% | `+0.4032` | 70.70% | FAIL |
+| Individual-neuron oracle-energy, 50% active | 2 / 50% | `+0.4292` | 68.75% | FAIL |
 
 The random overlap pass is not reproducible across seeds and is rejected.
 Activation balancing, finer E=16/K=8 routing, router supervision, and
 teacher-derived residual initialization do not beat the contiguous
 cross-group reference. Increasing K only on sensitive layers also does not
 repair the eight-layer cascade.
+
+The individual-neuron diagnostics are worse even with an oracle route. This
+means the current top-k neuron approximation and fixed `I/K` rescale lose
+the nonlinear sum before router prediction becomes the only problem. A fused
+kernel would improve speed, not this quality failure.
 
 ## Teacher-derived decoder decision
 
@@ -62,9 +71,13 @@ group bank is a research diagnostic, not yet a production sparse kernel.
 - `results/runs/qwen_multi_layer_activation_balanced_crossgroup_4layers_e8k4_rank64_seed2026.json`
 - `results/runs/qwen_multi_layer_sampled_overlap_crossgroup_4layers_e8k4_rank64_seed2026.json`
 - `results/runs/qwen_multi_layer_sampled_overlap_crossgroup_4layers_e8k4_rank64_seed2027.json`
+- `results/runs/qwen_multi_layer_sampled_overlap_crossgroup_4layers_e8k4_rank64_scale8_seed2026.json`
 - `results/runs/qwen_multi_layer_stratified_overlap_crossgroup_4layers_e8k4_rank64_seed2026.json`
 - `results/runs/qwen_multi_layer_crossgroup_4layers_e16k8_rank64_scale4_seed2026.json`
 - `results/runs/qwen_multi_layer_crossgroup_4layers_e8k4_router100_seed2026.json`
 - `results/runs/qwen_multi_layer_crossgroup_8layers_e8k4_routerdot100_seed2026.json`
 - `results/runs/qwen_multi_layer_crossgroup_sensitivity5_e8k4_seed2026.json`
 - `results/runs/qwen_multi_layer_crossgroup_sensitivity_schedule_e8_seed2026.json`
+- `results/runs/qwen_neuron_sparse_2layers_active1536_seed2026.json`
+- `results/runs/qwen_neuron_sparse_2layers_active1536_oracle_dot_seed2026.json`
+- `results/runs/qwen_neuron_sparse_2layers_active1536_oracle_energy_seed2026.json`
