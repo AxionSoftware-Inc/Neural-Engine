@@ -116,6 +116,25 @@ class InputCalibratedChild(nn.Module):
         return base_output + correction
 
 
+class SwiGLUResidualChild(nn.Module):
+    """Child plus a zero-start compact nonlinear residual cell."""
+
+    def __init__(self, base: nn.Module, hidden_size: int, inner_size: int) -> None:
+        super().__init__()
+        self.base = base
+        self.gate = nn.Linear(hidden_size, inner_size, bias=False)
+        self.value = nn.Linear(hidden_size, inner_size, bias=False)
+        self.output = nn.Linear(inner_size, hidden_size, bias=False)
+        nn.init.zeros_(self.output.weight)
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        base_output = self.base(hidden_states)
+        correction = self.output(
+            F.silu(self.gate(hidden_states)) * self.value(hidden_states),
+        )
+        return base_output + correction
+
+
 class RoutedChild(nn.Module):
     """A learned bank of small attention-free functions with top-k execution."""
 

@@ -1,9 +1,16 @@
 # Results
 
-V0.159 adds an individual-neuron sparse prototype. The 2-layer smoke reaches
-`+0.3487` held-out CE delta and `2.75x` timing, while the full 8-layer gather
-was stopped as impractical. A chunked or fused kernel is required before more
-training. See `V0_159_QWEN_NEURON_LEVEL_SMOKE.md`.
+V0.160 audits scalar hard-route scaling, nonlinear macro-cells, and late-layer
+scope. The best scale point (`scale=4`) still reaches `+0.0931` held-out CE
+delta, while a rank-384 macro-cell reaches `+0.1388`; neither passes the
+`+0.05` gate. The current sparse decomposition remains structurally lossy.
+See `V0_160_QWEN_SPARSE_APPROXIMATION_ABLATIONS.md`.
+
+V0.159 adds an individual-neuron sparse prototype. A chunked 2-layer run
+reaches `+0.2949` held-out CE delta and `2.97x` timing after 100/20 training
+steps; chunking fixes the large temporary allocation but not quality or
+runtime. A fused selected-neuron kernel is required before more training. See
+`V0_159_QWEN_NEURON_LEVEL_SMOKE.md`.
 
 V0.158 is a held-out audit of the transferred-neuron group path. The earlier
 synthetic 50%-active pass does not generalize: the same configuration reaches

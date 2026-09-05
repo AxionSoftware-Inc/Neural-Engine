@@ -15,6 +15,7 @@ from benchmark_qwen_two_layer_transplant import (
     InputCalibratedChild,
     MixedParentChild,
     NESwiGLUBlock,
+    SwiGLUResidualChild,
     benchmark_forward,
     capture_batches,
     ce,
@@ -182,6 +183,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         dispatch_mode: str,
         partition_mode: str,
         route_source: str,
+        hard_route_scale: float | None,
     ) -> None:
         super().__init__()
         if not 1 <= active_experts <= num_experts:
@@ -203,6 +205,10 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         if route_source not in {"router", "oracle-dot"}:
             raise ValueError("route_source must be router or oracle-dot")
         self.route_source = route_source
+        self.hard_route_scale = (
+            self.num_experts / self.active_experts
+            if hard_route_scale is None else float(hard_route_scale)
+        )
         if dispatch_mode not in {"grouped", "token-loop"}:
             raise ValueError("transferred sparse child supports grouped or token-loop")
         self.dispatch_mode = dispatch_mode
@@ -320,7 +326,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         # The router selects contribution-heavy groups rather than a random
         # subset, so the empirical stable scale is E/K, not an unbiased E
         # estimator that over-corrects the selected high-energy groups.
-        return self.num_experts / self.active_experts * flat_output.reshape_as(
+        return self.hard_route_scale * flat_output.reshape_as(
             hidden_states,
         )
 
@@ -350,7 +356,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 oracle_outputs, -2,
                 top_ids.unsqueeze(-1).expand(*top_ids.shape, hidden_states.shape[-1]),
             )
-            return self.num_experts / self.active_experts * (
+            return self.hard_route_scale * (
                 selected * weights.unsqueeze(-1)
             ).sum(dim=-2)
         if not self.training and self.dispatch_mode == "grouped":
@@ -387,6 +393,7 @@ class TransferredRoutedQwenNeuronChild(torch.nn.Module):
         parent: torch.nn.Module,
         active_neurons: int,
         temperature: float,
+        token_chunk_size: int = 64,
     ) -> None:
         super().__init__()
         inner_size, hidden_size = parent.gate_proj.weight.shape
@@ -398,6 +405,9 @@ class TransferredRoutedQwenNeuronChild(torch.nn.Module):
         self.active_neurons = int(active_neurons)
         self.temperature = float(temperature)
         self.hard_train = False
+        self.token_chunk_size = int(token_chunk_size)
+        if self.token_chunk_size < 1:
+            raise ValueError("token_chunk_size must be positive")
         self.register_buffer(
             "gate_weight", parent.gate_proj.weight.detach(), persistent=False,
         )
@@ -426,15 +436,21 @@ class TransferredRoutedQwenNeuronChild(torch.nn.Module):
         flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
         flat_ids = top_ids.reshape(-1, self.active_neurons)
         flat_weights = weights.reshape(-1, self.active_neurons)
-        selected_gate = self.gate_weight[flat_ids]
-        selected_value = self.value_weight[flat_ids]
-        gate = torch.einsum("nh,nkh->nk", flat_hidden, selected_gate)
-        value = torch.einsum("nh,nkh->nk", flat_hidden, selected_value)
-        coefficients = F.silu(gate) * value * flat_weights
-        selected_output = self.output_weight.transpose(0, 1)[flat_ids]
-        flat_output = torch.einsum(
-            "nk,nkh->nh", coefficients, selected_output,
-        )
+        flat_output = torch.empty_like(flat_hidden)
+        output_weight = self.output_weight.transpose(0, 1)
+        for start in range(0, flat_hidden.shape[0], self.token_chunk_size):
+            stop = min(start + self.token_chunk_size, flat_hidden.shape[0])
+            chunk_hidden = flat_hidden[start:stop]
+            chunk_ids = flat_ids[start:stop]
+            selected_gate = self.gate_weight[chunk_ids]
+            selected_value = self.value_weight[chunk_ids]
+            gate = torch.einsum("nh,nkh->nk", chunk_hidden, selected_gate)
+            value = torch.einsum("nh,nkh->nk", chunk_hidden, selected_value)
+            coefficients = F.silu(gate) * value * flat_weights[start:stop]
+            selected_output = output_weight[chunk_ids]
+            flat_output[start:stop] = torch.einsum(
+                "nk,nkh->nh", coefficients, selected_output,
+            )
         self.last_active_expert_fraction = flat_ids.numel() / max(
             flat_hidden.shape[0] * self.num_neurons, 1
         )
@@ -467,24 +483,31 @@ def make_transferred_routed_qwen_child(
     routing_temperature: float,
     calibration_rank: int,
     calibration_source: str,
+    calibration_mode: str,
     dispatch_mode: str,
     partition_mode: str,
     route_source: str,
+    hard_route_scale: float | None,
     device: torch.device,
     dtype: torch.dtype,
 ) -> torch.nn.Module:
     child = TransferredRoutedQwenChild(
         parent, num_experts, active_experts, routing_temperature, dispatch_mode,
-        partition_mode, route_source,
+        partition_mode, route_source, hard_route_scale,
     ).to(device=device, dtype=dtype)
     if calibration_rank > 0:
-        calibration_class = {
-            "base-output": CalibratedChild,
-            "input": InputCalibratedChild,
-        }[calibration_source]
-        child = calibration_class(
-            child, int(parent.gate_proj.in_features), calibration_rank,
-        ).to(device=device, dtype=dtype)
+        if calibration_mode == "swiglu":
+            child = SwiGLUResidualChild(
+                child, int(parent.gate_proj.in_features), calibration_rank,
+            ).to(device=device, dtype=dtype)
+        else:
+            calibration_class = {
+                "base-output": CalibratedChild,
+                "input": InputCalibratedChild,
+            }[calibration_source]
+            child = calibration_class(
+                child, int(parent.gate_proj.in_features), calibration_rank,
+            ).to(device=device, dtype=dtype)
     return child
 
 
@@ -494,6 +517,7 @@ def make_transferred_routed_qwen_neuron_child(
     routing_temperature: float,
     calibration_rank: int,
     calibration_source: str,
+    calibration_mode: str,
     device: torch.device,
     dtype: torch.dtype,
 ) -> torch.nn.Module:
@@ -501,13 +525,18 @@ def make_transferred_routed_qwen_neuron_child(
         parent, active_neurons, routing_temperature,
     ).to(device=device, dtype=dtype)
     if calibration_rank > 0:
-        calibration_class = {
-            "base-output": CalibratedChild,
-            "input": InputCalibratedChild,
-        }[calibration_source]
-        child = calibration_class(
-            child, int(parent.gate_proj.in_features), calibration_rank,
-        ).to(device=device, dtype=dtype)
+        if calibration_mode == "swiglu":
+            child = SwiGLUResidualChild(
+                child, int(parent.gate_proj.in_features), calibration_rank,
+            ).to(device=device, dtype=dtype)
+        else:
+            calibration_class = {
+                "base-output": CalibratedChild,
+                "input": InputCalibratedChild,
+            }[calibration_source]
+            child = calibration_class(
+                child, int(parent.gate_proj.in_features), calibration_rank,
+            ).to(device=device, dtype=dtype)
     return child
 
 
@@ -711,8 +740,10 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             child = make_transferred_routed_qwen_child(
                 parents[len(children)], args.num_experts, args.active_experts,
                 args.routing_temperature, args.calibration_rank,
-                args.calibration_source, args.dispatch_mode,
-                args.partition_mode, args.route_source, device, dtype,
+                args.calibration_source, args.calibration_mode,
+                args.dispatch_mode,
+                args.partition_mode, args.route_source,
+                args.hard_route_scale, device, dtype,
             )
             router_histories.append(train_importance_router(
                 child, train_io, device, dtype, args.router_supervision_steps,
@@ -728,7 +759,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             child = make_transferred_routed_qwen_neuron_child(
                 parents[len(children)], args.active_neurons,
                 args.routing_temperature, args.calibration_rank,
-                args.calibration_source, device, dtype,
+                args.calibration_source, args.calibration_mode, device, dtype,
             )
             histories.append(train_child(
                 child, train_io, device, dtype, args.steps,
@@ -842,6 +873,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "child_kind": args.child_kind,
         "calibration_rank": args.calibration_rank,
         "calibration_source": args.calibration_source,
+        "calibration_mode": args.calibration_mode,
         "num_experts": args.num_experts,
         "active_experts": args.active_experts,
         "active_neurons": args.active_neurons,
@@ -862,6 +894,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "dispatch_mode": args.dispatch_mode,
         "partition_mode": args.partition_mode,
         "route_source": args.route_source,
+        "hard_route_scale": args.hard_route_scale,
         "child_internal_norm": (
             not args.child_no_norm
             if args.child_kind == "routed" else None
@@ -949,6 +982,11 @@ def main() -> None:
         default="base-output",
         help="hidden-state source for the low-rank correction",
     )
+    parser.add_argument(
+        "--calibration-mode", choices=("low-rank", "swiglu"),
+        default="low-rank",
+        help="correction type for transferred sparse children",
+    )
     parser.add_argument("--num-experts", type=int, default=4)
     parser.add_argument("--active-experts", type=int, default=2)
     parser.add_argument(
@@ -969,6 +1007,10 @@ def main() -> None:
     parser.add_argument(
         "--route-source", choices=("router", "oracle-dot"), default="router",
         help="learned router or diagnostic parent-contribution oracle at eval",
+    )
+    parser.add_argument(
+        "--hard-route-scale", type=float, default=None,
+        help="override the sparse hard-route output scale (default E/K)",
     )
     parser.add_argument("--child-no-norm", action="store_true")
     parser.add_argument("--batch-size", type=int, default=8)
