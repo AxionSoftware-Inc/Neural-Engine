@@ -1,5 +1,17 @@
 # Results
 
+V0.159 adds an individual-neuron sparse prototype. The 2-layer smoke reaches
+`+0.3487` held-out CE delta and `2.75x` timing, while the full 8-layer gather
+was stopped as impractical. A chunked or fused kernel is required before more
+training. See `V0_159_QWEN_NEURON_LEVEL_SMOKE.md`.
+
+V0.158 is a held-out audit of the transferred-neuron group path. The earlier
+synthetic 50%-active pass does not generalize: the same configuration reaches
+`+0.2919` CE delta on `data/qwen_eval.txt`. Interleaved, norm-balanced, finer
+groups, and an oracle route all fail as well. The exact dense Qwen transfer
+remains valid, but do not scale the current sparse group path yet. See
+`V0_158_QWEN_HELDOUT_ROUTING_AUDIT.md`.
+
 V0.157 compares transferred-neuron dispatches: grouped gives +0.0413 CE
  delta but 1.101x timing, while token-loop gives +0.0789 and 1.031x on the
  same seed. Keep grouped as the quality reference until a fused path preserves

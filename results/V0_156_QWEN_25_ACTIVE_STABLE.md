@@ -27,10 +27,10 @@ parameters.
 
 ## Decision
 
-**Promote 16-group/top-4 as the current 25%-active quality configuration.**
-It is the first 25%-active multi-layer configuration to pass on two seeds.
-Do not claim latency improvement yet: the current Python dispatcher remains
-slower and has substantial seed/runtime variance.
+This is a **synthetic transfer-control pass only**. It remains the best result
+under the historical repeated-template evaluation, but V0.158 shows that the
+same group path fails on held-out varied text. Do not treat this as a general
+language-model quality pass or scale it to a larger model yet.
 
 ## Artifacts
 

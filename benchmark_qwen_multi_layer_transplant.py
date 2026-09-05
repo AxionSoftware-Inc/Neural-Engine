@@ -12,6 +12,7 @@ from torch.nn import functional as F
 from benchmark_qwen_parent_transplant import EVAL_TEXT, TRAIN_TEXT
 from benchmark_qwen_two_layer_transplant import (
     CalibratedChild,
+    InputCalibratedChild,
     MixedParentChild,
     NESwiGLUBlock,
     benchmark_forward,
@@ -24,11 +25,81 @@ from benchmark_qwen_two_layer_transplant import (
 )
 
 
+PROMPT_PARITY_TEXTS = (
+    "Explain why a sparse neural network can save compute without changing every parameter.",
+    "Solve this arithmetic problem step by step: 37 * 24 + 19.",
+    "Give three practical risks when replacing a dense feed-forward layer with routed circuits.",
+)
+
+
 def parse_layers(value: str) -> list[int]:
     layers = [int(item.strip()) for item in value.split(",") if item.strip()]
     if len(layers) < 2 or len(set(layers)) != len(layers):
         raise ValueError("layers must contain at least two distinct indices")
     return layers
+
+
+def load_text_file(path: str | None, default: str, label: str) -> str:
+    """Load optional UTF-8 text while keeping the historical default."""
+    if path is None:
+        return default
+    text_path = Path(path)
+    text = text_path.read_text(encoding="utf-8").strip()
+    if not text:
+        raise ValueError(f"{label} text file is empty: {text_path}")
+    return text
+
+
+@torch.inference_mode()
+def prompt_parity(
+    model: torch.nn.Module,
+    tokenizer,
+    layers: list[torch.nn.Module],
+    parents: list[torch.nn.Module],
+    children: list[torch.nn.Module],
+    max_new_tokens: int,
+) -> list[dict[str, object]]:
+    """Generate identical prompts with parent and sparse layer replacements."""
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "left"
+    encoded = tokenizer(
+        list(PROMPT_PARITY_TEXTS),
+        return_tensors="pt",
+        padding=True,
+    ).to(next(model.parameters()).device)
+    parent_outputs = []
+    for layer, parent in zip(layers, parents):
+        layer.mlp = parent
+    parent_ids = model.generate(
+        **encoded, do_sample=False, use_cache=True,
+        max_new_tokens=max_new_tokens,
+    )
+    parent_outputs = tokenizer.batch_decode(
+        parent_ids, skip_special_tokens=True,
+    )
+    for layer, child in zip(layers, children):
+        layer.mlp = child
+    sparse_ids = model.generate(
+        **encoded, do_sample=False, use_cache=True,
+        max_new_tokens=max_new_tokens,
+    )
+    sparse_outputs = tokenizer.batch_decode(
+        sparse_ids, skip_special_tokens=True,
+    )
+    for layer, parent in zip(layers, parents):
+        layer.mlp = parent
+    return [
+        {
+            "prompt": prompt,
+            "parent": parent_output,
+            "sparse": sparse_output,
+            "exact_text_match": parent_output == sparse_output,
+        }
+        for prompt, parent_output, sparse_output in zip(
+            PROMPT_PARITY_TEXTS, parent_outputs, sparse_outputs,
+        )
+    ]
 
 
 def _set_hard_train_modules(
@@ -109,6 +180,8 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         active_experts: int,
         temperature: float,
         dispatch_mode: str,
+        partition_mode: str,
+        route_source: str,
     ) -> None:
         super().__init__()
         if not 1 <= active_experts <= num_experts:
@@ -120,18 +193,47 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self.active_experts = int(active_experts)
         self.temperature = float(temperature)
         self.hard_train = False
+        if partition_mode not in {
+            "contiguous", "interleaved", "norm-balanced",
+        }:
+            raise ValueError(
+                "partition_mode must be contiguous, interleaved, or norm-balanced"
+            )
+        self.partition_mode = partition_mode
+        if route_source not in {"router", "oracle-dot"}:
+            raise ValueError("route_source must be router or oracle-dot")
+        self.route_source = route_source
         if dispatch_mode not in {"grouped", "token-loop"}:
             raise ValueError("transferred sparse child supports grouped or token-loop")
         self.dispatch_mode = dispatch_mode
         chunk = inner_size // num_experts
+        norm_order = None
+        if partition_mode == "norm-balanced":
+            neuron_score = (
+                parent.gate_proj.weight.detach().norm(dim=1)
+                * parent.up_proj.weight.detach().norm(dim=1)
+                * parent.down_proj.weight.detach().norm(dim=0)
+            )
+            norm_order = neuron_score.argsort(descending=True)
         self.experts = torch.nn.ModuleList()
         for expert_id in range(num_experts):
-            start = expert_id * chunk
-            stop = start + chunk
+            if partition_mode == "contiguous":
+                indices = torch.arange(
+                    expert_id * chunk, (expert_id + 1) * chunk,
+                    device=parent.gate_proj.weight.device,
+                )
+            elif partition_mode == "interleaved":
+                indices = torch.arange(
+                    expert_id, inner_size, num_experts,
+                    device=parent.gate_proj.weight.device,
+                )
+            else:
+                assert norm_order is not None
+                indices = norm_order[expert_id::num_experts]
             self.experts.append(QwenSwiGLUSlice(
-                parent.gate_proj.weight[start:stop].detach(),
-                parent.up_proj.weight[start:stop].detach(),
-                parent.down_proj.weight[:, start:stop].detach(),
+                parent.gate_proj.weight.index_select(0, indices).detach(),
+                parent.up_proj.weight.index_select(0, indices).detach(),
+                parent.down_proj.weight.index_select(1, indices).detach(),
             ))
         self.register_buffer(
             "group_gate_weight",
@@ -224,6 +326,13 @@ class TransferredRoutedQwenChild(torch.nn.Module):
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         scores = self.router(hidden_states)
+        oracle_outputs = None
+        if not self.training and self.route_source == "oracle-dot":
+            oracle_outputs = torch.stack([
+                expert(hidden_states) for expert in self.experts
+            ], dim=-2)
+            full_output = oracle_outputs.sum(dim=-2)
+            scores = (oracle_outputs * full_output.unsqueeze(-2)).sum(dim=-1)
         if self.training and not self.hard_train:
             outputs = torch.stack([
                 expert(hidden_states) for expert in self.experts
@@ -236,6 +345,14 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         top_values, top_ids = scores.topk(self.active_experts, dim=-1)
         weights = F.softmax(top_values / self.temperature, dim=-1)
         self.last_selected = top_ids.detach()
+        if oracle_outputs is not None:
+            selected = torch.gather(
+                oracle_outputs, -2,
+                top_ids.unsqueeze(-1).expand(*top_ids.shape, hidden_states.shape[-1]),
+            )
+            return self.num_experts / self.active_experts * (
+                selected * weights.unsqueeze(-1)
+            ).sum(dim=-2)
         if not self.training and self.dispatch_mode == "grouped":
             return self._forward_grouped(hidden_states, top_ids, weights)
         flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
@@ -262,21 +379,133 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         )
 
 
+class TransferredRoutedQwenNeuronChild(torch.nn.Module):
+    """Copied Qwen neurons with token-level top-k execution."""
+
+    def __init__(
+        self,
+        parent: torch.nn.Module,
+        active_neurons: int,
+        temperature: float,
+    ) -> None:
+        super().__init__()
+        inner_size, hidden_size = parent.gate_proj.weight.shape
+        if not 1 <= active_neurons <= inner_size:
+            raise ValueError("active_neurons must be within the Qwen intermediate size")
+        if parent.gate_proj.bias is not None or parent.up_proj.bias is not None:
+            raise ValueError("Qwen transfer currently expects bias-free projections")
+        self.num_neurons = int(inner_size)
+        self.active_neurons = int(active_neurons)
+        self.temperature = float(temperature)
+        self.hard_train = False
+        self.register_buffer(
+            "gate_weight", parent.gate_proj.weight.detach(), persistent=False,
+        )
+        self.register_buffer(
+            "value_weight", parent.up_proj.weight.detach(), persistent=False,
+        )
+        self.register_buffer(
+            "output_weight", parent.down_proj.weight.detach(), persistent=False,
+        )
+        self.router = torch.nn.Sequential(
+            torch.nn.Linear(hidden_size, 128),
+            torch.nn.SiLU(),
+            torch.nn.Linear(128, inner_size),
+        )
+        torch.nn.init.zeros_(self.router[-1].weight)
+        torch.nn.init.zeros_(self.router[-1].bias)
+        self.last_selected: torch.Tensor | None = None
+        self.last_active_expert_fraction = 1.0
+
+    def _forward_hard(
+        self,
+        hidden_states: torch.Tensor,
+        top_ids: torch.Tensor,
+        weights: torch.Tensor,
+    ) -> torch.Tensor:
+        flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
+        flat_ids = top_ids.reshape(-1, self.active_neurons)
+        flat_weights = weights.reshape(-1, self.active_neurons)
+        selected_gate = self.gate_weight[flat_ids]
+        selected_value = self.value_weight[flat_ids]
+        gate = torch.einsum("nh,nkh->nk", flat_hidden, selected_gate)
+        value = torch.einsum("nh,nkh->nk", flat_hidden, selected_value)
+        coefficients = F.silu(gate) * value * flat_weights
+        selected_output = self.output_weight.transpose(0, 1)[flat_ids]
+        flat_output = torch.einsum(
+            "nk,nkh->nh", coefficients, selected_output,
+        )
+        self.last_active_expert_fraction = flat_ids.numel() / max(
+            flat_hidden.shape[0] * self.num_neurons, 1
+        )
+        return (
+            self.num_neurons / self.active_neurons
+            * flat_output.reshape_as(hidden_states)
+        )
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        scores = self.router(hidden_states)
+        if self.training and not self.hard_train:
+            gate = F.linear(hidden_states, self.gate_weight)
+            value = F.linear(hidden_states, self.value_weight)
+            weights = F.softmax(scores / self.temperature, dim=-1)
+            self.last_selected = scores.detach().argmax(dim=-1)
+            self.last_active_expert_fraction = 1.0
+            return self.num_neurons * F.linear(
+                F.silu(gate) * value * weights, self.output_weight,
+            )
+        top_values, top_ids = scores.topk(self.active_neurons, dim=-1)
+        weights = F.softmax(top_values / self.temperature, dim=-1)
+        self.last_selected = top_ids.detach()
+        return self._forward_hard(hidden_states, top_ids, weights)
+
+
 def make_transferred_routed_qwen_child(
     parent: torch.nn.Module,
     num_experts: int,
     active_experts: int,
     routing_temperature: float,
     calibration_rank: int,
+    calibration_source: str,
     dispatch_mode: str,
+    partition_mode: str,
+    route_source: str,
     device: torch.device,
     dtype: torch.dtype,
 ) -> torch.nn.Module:
     child = TransferredRoutedQwenChild(
         parent, num_experts, active_experts, routing_temperature, dispatch_mode,
+        partition_mode, route_source,
     ).to(device=device, dtype=dtype)
     if calibration_rank > 0:
-        child = CalibratedChild(
+        calibration_class = {
+            "base-output": CalibratedChild,
+            "input": InputCalibratedChild,
+        }[calibration_source]
+        child = calibration_class(
+            child, int(parent.gate_proj.in_features), calibration_rank,
+        ).to(device=device, dtype=dtype)
+    return child
+
+
+def make_transferred_routed_qwen_neuron_child(
+    parent: torch.nn.Module,
+    active_neurons: int,
+    routing_temperature: float,
+    calibration_rank: int,
+    calibration_source: str,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.nn.Module:
+    child = TransferredRoutedQwenNeuronChild(
+        parent, active_neurons, routing_temperature,
+    ).to(device=device, dtype=dtype)
+    if calibration_rank > 0:
+        calibration_class = {
+            "base-output": CalibratedChild,
+            "input": InputCalibratedChild,
+        }[calibration_source]
+        child = calibration_class(
             child, int(parent.gate_proj.in_features), calibration_rank,
         ).to(device=device, dtype=dtype)
     return child
@@ -427,12 +656,16 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         args.tokenizer or args.model,
         local_files_only=args.local_files_only,
     )
+    calibration_text = load_text_file(
+        args.calibration_text_file, TRAIN_TEXT, "calibration",
+    )
+    eval_text = load_text_file(args.eval_text_file, EVAL_TEXT, "evaluation")
     train_ids = token_stream(
-        tokenizer, TRAIN_TEXT, args.batch_size,
+        tokenizer, calibration_text, args.batch_size,
         args.sequence_length * args.train_batches, device,
     ).reshape(args.train_batches, args.batch_size, args.sequence_length)
     eval_ids = token_stream(
-        tokenizer, EVAL_TEXT, args.batch_size,
+        tokenizer, eval_text, args.batch_size,
         args.sequence_length * args.eval_batches, device,
     ).reshape(args.eval_batches, args.batch_size, args.sequence_length)
     with torch.no_grad():
@@ -461,11 +694,11 @@ def run(args: argparse.Namespace) -> dict[str, object]:
 
     for layer_index, layer in zip(layer_indices, layers):
         train_io = capture_batches(
-            model, tokenizer, TRAIN_TEXT, args.batch_size,
+            model, tokenizer, calibration_text, args.batch_size,
             args.sequence_length, args.train_batches, device, layer_index,
         )
         eval_io = capture_batches(
-            model, tokenizer, EVAL_TEXT, args.batch_size,
+            model, tokenizer, eval_text, args.batch_size,
             args.sequence_length, args.eval_batches, device, layer_index,
         )
         if args.child_kind == "qwen-transfer":
@@ -478,7 +711,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             child = make_transferred_routed_qwen_child(
                 parents[len(children)], args.num_experts, args.active_experts,
                 args.routing_temperature, args.calibration_rank,
-                args.dispatch_mode, device, dtype,
+                args.calibration_source, args.dispatch_mode,
+                args.partition_mode, args.route_source, device, dtype,
             )
             router_histories.append(train_importance_router(
                 child, train_io, device, dtype, args.router_supervision_steps,
@@ -488,7 +722,21 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 child, train_io, device, dtype, args.steps,
                 args.learning_rate, args.max_grad_norm, args.log_every,
                 args.hard_train_steps,
+                args.hard_learning_rate,
             ))
+        elif args.child_kind == "qwen-transfer-neuron-sparse":
+            child = make_transferred_routed_qwen_neuron_child(
+                parents[len(children)], args.active_neurons,
+                args.routing_temperature, args.calibration_rank,
+                args.calibration_source, device, dtype,
+            )
+            histories.append(train_child(
+                child, train_io, device, dtype, args.steps,
+                args.learning_rate, args.max_grad_norm, args.log_every,
+                args.hard_train_steps,
+                args.hard_learning_rate,
+            ))
+            router_histories.append([])
         else:
             child = make_child(
                 hidden_size, args.inner_size, args.child_kind,
@@ -500,6 +748,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 child, train_io, device, dtype, args.steps,
                 args.learning_rate, args.max_grad_norm, args.log_every,
                 args.hard_train_steps,
+                args.hard_learning_rate,
             ))
             router_histories.append([])
         with torch.no_grad():
@@ -535,6 +784,13 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     for layer, parent in zip(layers, parents):
         layer.mlp = parent
 
+    prompt_results = []
+    if args.prompt_parity:
+        prompt_results = prompt_parity(
+            model, tokenizer, layers, parents, children,
+            args.generation_tokens,
+        )
+
     parent_timing = benchmark_forward(
         model, list(eval_ids), device,
         args.timing_warmup, args.timing_iterations,
@@ -552,6 +808,16 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         item for item in variants if item["variant"] == "shared_alpha_0"
     )
     child_params = [sum(parameter.numel() for parameter in child.parameters()) for child in children]
+    child_buffer_scalars = [
+        sum(buffer.numel() for buffer in child.buffers())
+        for child in children
+    ]
+    child_storage_scalars = [
+        parameter_count + buffer_count
+        for parameter_count, buffer_count in zip(
+            child_params, child_buffer_scalars,
+        )
+    ]
     parent_params = [sum(parameter.numel() for parameter in parent.parameters()) for parent in parents]
     if args.child_kind == "qwen-transfer":
         effective_child_inner_size = int(parents[0].gate_proj.out_features)
@@ -559,6 +825,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         effective_child_inner_size = int(
             parents[0].gate_proj.out_features // args.num_experts
         )
+    elif args.child_kind == "qwen-transfer-neuron-sparse":
+        effective_child_inner_size = 1
     else:
         effective_child_inner_size = args.inner_size
     result = {
@@ -573,19 +841,27 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "child_inner_size": effective_child_inner_size,
         "child_kind": args.child_kind,
         "calibration_rank": args.calibration_rank,
+        "calibration_source": args.calibration_source,
         "num_experts": args.num_experts,
         "active_experts": args.active_experts,
+        "active_neurons": args.active_neurons,
         "hard_route_expected_expert_fraction": (
-            args.active_experts / args.num_experts
+            args.active_neurons / parents[0].gate_proj.out_features
+            if args.child_kind == "qwen-transfer-neuron-sparse"
+            else args.active_experts / args.num_experts
             if args.child_kind in {"routed", "qwen-transfer-sparse"}
             else 1.0
         ),
         "hard_route_dispatch": (
             f"selected-token-only:{args.dispatch_mode}"
-            if args.child_kind in {"routed", "qwen-transfer-sparse"}
+            if args.child_kind in {
+                "routed", "qwen-transfer-sparse", "qwen-transfer-neuron-sparse",
+            }
             else "single-child"
         ),
         "dispatch_mode": args.dispatch_mode,
+        "partition_mode": args.partition_mode,
+        "route_source": args.route_source,
         "child_internal_norm": (
             not args.child_no_norm
             if args.child_kind == "routed" else None
@@ -593,9 +869,14 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "batch_size": args.batch_size,
         "sequence_length": args.sequence_length,
         "train_batches": args.train_batches,
+        "calibration_text_file": args.calibration_text_file,
+        "calibration_text_chars": len(calibration_text),
+        "eval_text_file": args.eval_text_file,
+        "eval_text_chars": len(eval_text),
         "eval_batches": args.eval_batches,
         "distillation_steps_per_child": args.steps,
         "hard_train_steps_per_child": args.hard_train_steps,
+        "hard_learning_rate": args.hard_learning_rate,
         "router_supervision_steps_per_child": args.router_supervision_steps,
         "joint_distillation_steps": args.joint_steps,
         "joint_learning_rate": args.joint_learning_rate,
@@ -604,12 +885,21 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "child_train_history": histories,
         "router_train_history": router_histories,
         "joint_train_history": joint_history,
+        "prompt_parity": prompt_results,
         "child_local_eval_mse": local_eval_mse,
         "parent_scalar_params_each": parent_params,
         "child_scalar_params_each": child_params,
+        "child_buffer_scalars_each": child_buffer_scalars,
+        "child_storage_scalars_each": child_storage_scalars,
         "child_parameter_fraction_each": [
             child_count / max(parent_count, 1)
             for child_count, parent_count in zip(child_params, parent_params)
+        ],
+        "child_storage_fraction_each": [
+            child_count / max(parent_count, 1)
+            for child_count, parent_count in zip(
+                child_storage_scalars, parent_params,
+            )
         ],
         "variants": variants,
         "timing": {
@@ -649,26 +939,58 @@ def main() -> None:
         "--child-kind",
         choices=(
             "gelu", "swiglu", "routed", "qwen-transfer", "qwen-transfer-sparse",
+            "qwen-transfer-neuron-sparse",
         ),
         default="routed",
     )
     parser.add_argument("--calibration-rank", type=int, default=8)
+    parser.add_argument(
+        "--calibration-source", choices=("base-output", "input"),
+        default="base-output",
+        help="hidden-state source for the low-rank correction",
+    )
     parser.add_argument("--num-experts", type=int, default=4)
     parser.add_argument("--active-experts", type=int, default=2)
+    parser.add_argument(
+        "--active-neurons", type=int, default=768,
+        help="active Qwen neurons for qwen-transfer-neuron-sparse",
+    )
     parser.add_argument("--routing-temperature", type=float, default=1.0)
     parser.add_argument(
         "--dispatch-mode", choices=("grouped", "packed", "token-loop"),
         default="grouped",
     )
+    parser.add_argument(
+        "--partition-mode",
+        choices=("contiguous", "interleaved", "norm-balanced"),
+        default="contiguous",
+        help="layout of copied parent neurons inside expert groups",
+    )
+    parser.add_argument(
+        "--route-source", choices=("router", "oracle-dot"), default="router",
+        help="learned router or diagnostic parent-contribution oracle at eval",
+    )
     parser.add_argument("--child-no-norm", action="store_true")
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--sequence-length", type=int, default=128)
     parser.add_argument("--train-batches", type=int, default=8)
+    parser.add_argument(
+        "--calibration-text-file", default=None,
+        help="optional UTF-8 text corpus for child/router calibration",
+    )
+    parser.add_argument(
+        "--eval-text-file", default=None,
+        help="optional UTF-8 held-out text corpus for evaluation",
+    )
     parser.add_argument("--eval-batches", type=int, default=4)
     parser.add_argument("--steps", type=int, default=300)
     parser.add_argument(
         "--hard-train-steps", type=int, default=0,
         help="final child-training steps using the hard top-k route",
+    )
+    parser.add_argument(
+        "--hard-learning-rate", type=float, default=None,
+        help="optional learning rate after switching to hard top-k routing",
     )
     parser.add_argument(
         "--router-supervision-steps", type=int, default=0,
@@ -677,6 +999,8 @@ def main() -> None:
     parser.add_argument("--joint-steps", type=int, default=0)
     parser.add_argument("--joint-learning-rate", type=float, default=1e-4)
     parser.add_argument("--joint-temperature", type=float, default=2.0)
+    parser.add_argument("--prompt-parity", action="store_true")
+    parser.add_argument("--generation-tokens", type=int, default=32)
     parser.add_argument("--learning-rate", type=float, default=3e-3)
     parser.add_argument("--max-grad-norm", type=float, default=1.0)
     parser.add_argument("--log-every", type=int, default=100)

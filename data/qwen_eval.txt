@@ -1,0 +1,41 @@
+Conditional computation is useful only when the skipped work is truly skipped. A system that computes every branch and discards most of the results may have the same arithmetic cost as a dense system. For that reason, an evaluation should separate routing overhead from expert-body work and report end-to-end latency on real tensors.
+
+The best partition of a feed-forward layer is not necessarily the partition with the fewest groups. Very large groups make each decision coarse, while very small groups can make routing and indexing expensive. The useful granularity is the one that preserves important transformations at the intended active budget.
+
+A language model predicts a distribution over the next token. Two models can have similar hidden-state mean squared error but different rankings among plausible tokens. A small change near a decision boundary may alter an entire greedy continuation, so language-model evaluation should include logit loss, top-token agreement, and decoded examples.
+
+Imagine a document that begins with a definition, follows with a numerical example, and ends with a short conclusion. A robust function bank should not send every token to the same circuit merely because all tokens belong to one document. Local syntax and semantic roles can change within one sequence.
+
+The number 907 comes from the calculation 37 times 24 plus 19. First, 37 times 20 is 740. Next, 37 times 4 is 148. Their sum is 888, and adding 19 produces 907. A model that has learned the operation should produce the same result for nearby inputs without copying the explanation word for word.
+
+Consider the instruction: compare a dense layer with a routed layer in three sentences. A complete answer should mention that the dense layer evaluates all intermediate units, that routing evaluates a selected subset, and that the router and dispatch machinery introduce overhead. It should not repeat the word “layer” indefinitely.
+
+A software test is strongest when it fails for a concrete reason. If a grouped kernel and a token-loop kernel disagree, compare their selected indices, weights, intermediate gate values, and final outputs in that order. Numerical closeness at the final output is not enough if the route decisions are already different.
+
+An experiment with a frozen parent has a clean interpretation. Any quality change comes from the replacement, its routing policy, its correction path, or numerical execution. If the parent is also fine-tuned, an improvement may come from ordinary training rather than from the proposed architecture.
+
+A compact correction path can recover systematic residual error, but it should not become a hidden dense feed-forward layer. Its rank, multiply count, and active status belong in the report. A low-rank path conditioned on the incoming state may capture omitted group contributions that cannot be predicted from the sparse output alone.
+
+When top-k selection is used, the selected weights are usually normalized over the chosen groups. Any rescaling applied after selection changes the estimator’s bias. The correct scale depends on how the router selects groups and on whether high-contribution groups are overrepresented, so it should be measured rather than assumed.
+
+Load balance and quality can conflict. A perfectly uniform router may waste capacity on unhelpful groups, while a highly concentrated router may starve most of the bank. The experiment should record both group frequency and function error so a good loss is not purchased by total expert collapse.
+
+Long cascades magnify local mismatch. Replacing one late layer can look excellent, yet replacing eight adjacent layers can change the representation seen by every later router. A layer-by-layer error curve identifies where the cascade begins to drift and helps choose whether to preserve a dense fallback at selected depths.
+
+The parent’s intermediate neurons are not interchangeable after arbitrary reshuffling. Contiguous slices preserve the exact gate, value, and output connections used by the original SwiGLU. A transferred bank should therefore be checked against a dense reconstruction before any router training is attempted.
+
+A prompt asking for a list tests structure, while a prompt asking for arithmetic tests compositional precision. A prompt asking for a risk analysis tests explanation and coverage. A small parity suite should include all three, and the result should preserve the parent and replacement outputs for inspection.
+
+The sentence “only the necessary parameters are active” has a measurable meaning. For a group bank, count the selected group projections for each token. Include router projections and correction projections in the active count. Do not call a model sparse merely because its parameter tensor contains zeros or because an inactive branch is masked after evaluation.
+
+A useful held-out set changes wording while preserving task type. Training can mention sparse networks and grouped dispatch, while evaluation can mention conditional functions, branch selection, and compute budgets. The goal is to test whether the router responds to representations rather than memorized phrases.
+
+Code examples provide a different distribution from prose. In the function `def add(a, b):`, the colon and indentation signal structure, while the return statement expresses a simple operation. A replacement that keeps prose quality but corrupts code punctuation is not a general language-model replacement.
+
+A route can be stable across numerical implementations only if its score margins are larger than floating-point perturbations. Log the gap between the kth and k-plus-one score. Small margins predict that grouped and token-loop paths may take different routes in later layers even when their outputs are close.
+
+When an architecture is scaled from 20 million to 300 million parameters, its invariants should remain explicit. The active fraction, group granularity, correction rank, and evaluation protocol should be stated independently of total size. Otherwise a larger model may appear better simply because it silently activates more computation.
+
+A fair speed test warms up the device, repeats the same input batches, synchronizes asynchronous work, and reports a distribution rather than one measurement. If the sparse prototype is slower, that does not disprove conditional computation; it identifies dispatch overhead that a fused implementation must remove.
+
+The practical objective is a model that answers ordinary prompts coherently while spending less work on easy tokens. A controlled transplant is valuable because it tests this objective without requiring a full billion-parameter training run. If the transplant cannot preserve the parent on held-out text, scaling it first would only make the diagnosis more expensive.

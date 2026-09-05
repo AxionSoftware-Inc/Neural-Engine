@@ -1,0 +1,99 @@
+Sparse neural networks can save computation by evaluating only a selected subset of function blocks for each token. The selection must depend on the current representation, remain stable enough for neighboring layers, and preserve the contribution that the dense parent would have produced.
+
+A routed circuit is not automatically efficient. If every expert is evaluated before the router chooses one, the model has sparse metadata but dense runtime. A useful implementation selects token expert pairs first, groups those pairs, and performs matrix operations only for the selected pairs.
+
+The quality of a replacement should be measured at several levels. Local function error checks one feed-forward block. Logit cross entropy checks the language-model output. Greedy generation checks whether a user prompt still receives a coherent continuation. Timing checks whether the selected computation is faster in the actual model.
+
+The arithmetic expression 37 * 24 + 19 can be solved by first multiplying 37 by 24. Since 37 * 20 is 740 and 37 * 4 is 148, the product is 888. Adding 19 gives 907. A model should expose the intermediate reasoning clearly instead of returning an unexplained number.
+
+To compute 144 divided by 12, observe that twelve times twelve equals 144, so the quotient is 12. Division, multiplication, comparison, and addition are different operations even when they occur in the same short prompt. A router should learn from representation rather than from a fixed position in the sequence.
+
+Consider the sequence 2, 4, 8, 16. Each term is twice the previous term, so the next term is 32. A compact model can represent this rule with a small active circuit if the routing state identifies the operation and keeps irrelevant circuits asleep.
+
+A reliable experiment uses a frozen parent model, identical token batches, fixed random seeds, and a held-out evaluation set. The replacement is promoted only when quality remains within a predeclared tolerance across more than one seed. One favorable run is evidence, not a conclusion.
+
+When a larger sparse child performs worse than a smaller child, capacity alone is not the first suspect. Possible causes include poor partitioning, unstable top-k choices, mismatched output scaling, a weak router objective, cumulative error across layers, or a benchmark that does not resemble the intended workload.
+
+The router receives a hidden vector and returns a score for each expert group. Top-k selection converts scores into a discrete execution plan. During calibration, soft routing can provide smoother gradients, while a final hard-route phase tests the behavior that inference will actually use.
+
+A group of transferred neurons should preserve its original gate, value, and output weights. Splitting the parent intermediate dimension into contiguous groups makes each group a genuine slice of the dense SwiGLU computation. The sparse child then changes execution policy without inventing unrelated weights.
+
+SwiGLU uses a gated product. One projection produces a gate, another produces a value, and the elementwise product is passed through the output projection. Copying all three parent projections into a dense child is an exact functional conversion when shapes and numerical precision agree.
+
+The phrase “attention-free function” describes a local transformation applied independently to each token representation. It does not provide token-to-token communication by itself. Removing attention therefore changes the architecture substantially, and a local transfer test must not be mistaken for a full Transformer replacement.
+
+A list of practical routing risks includes load imbalance, expert starvation, route oscillation, numerical scaling errors, and hidden dense work. Each risk should have a direct diagnostic: expert counts, route entropy, output norms, selected-pair counts, and measured end-to-end latency.
+
+Python code should keep data movement explicit. A tensor moved from CPU to GPU should have a documented reason, and cached weights should remain on the same device and dtype as the hidden states. Silent device conversions can erase the expected benefit of sparse execution.
+
+Here is a simple pseudocode plan: encode the prompt, run the frozen layers, compute router scores, select the top two groups, evaluate only those groups, merge their weighted outputs, and continue to the next layer. The merge must preserve the scale used during calibration.
+
+A good cache stores immutable parent slices and does not register duplicate trainable copies. If a tensor is only an execution cache, it should not inflate the optimizer state or appear as a learned parameter. Parameter count, stored bytes, active expert-body operations, and latency should be reported separately.
+
+The same prompt can require different computation. A greeting may need only a small linguistic circuit, while a multi-step arithmetic question may need circuits for parsing, multiplication, addition, and verification. Fixed active counts are useful controls, but adaptive routing is the actual hypothesis under test.
+
+For the question “What is the capital of France?”, the concise answer is Paris. For “Explain why a sparse network can save compute,” a useful answer should mention conditional execution, selected expert groups, and the need to avoid evaluating inactive groups. A benchmark should include both short factual and explanatory prompts.
+
+A model should not repeat a phrase merely because the prompt contains that phrase. Repetition can indicate that the replacement changed token logits enough to enter a self-reinforcing loop. Prompt-parity generation is therefore a necessary complement to cross entropy on synthetic repeated text.
+
+If a response is incomplete, inspect the first divergence in greedy decoding. Compare the parent and child next-token distributions at every generated position, record the top candidates, and identify whether the error begins in one replaced layer or accumulates across the cascade.
+
+The number of stored parameters is not the same as the number of active parameters. A sparse transferred child may store slices for all expert groups while evaluating only top-k groups per token. Reports should state both quantities so a claimed efficiency improvement is not confused with a memory reduction.
+
+Suppose there are sixteen expert groups and four are active. The expert-body active fraction is 4 divided by 16, or 25 percent. The router and low-rank correction still execute, so end-to-end compute will be higher than 25 percent of a dense feed-forward layer unless those overheads are measured and optimized.
+
+A stable route does not need to select the same expert for every token. It should select similar functional groups for representations that need similar transformations, while allowing syntax, arithmetic, code, and explanation tokens to diverge when their local requirements differ.
+
+A calibration corpus should contain varied sentence lengths, punctuation, numbers, questions, instructions, explanations, and code-like text. If it contains only one repeated template, the router can optimize that template without learning a useful representation of ordinary prompts.
+
+Training a router with an oracle based only on isolated expert output norm can be misleading. A large norm is not proof that the group is important after other groups are combined. The strongest target is the change in the complete model output when a group is removed, although that target is more expensive to collect.
+
+The expression x squared plus 2x plus 1 equals the square of x plus 1. Symbolic patterns can be short but still require precise token interactions. Numerical examples should include both familiar and held-out values so memorization does not look like generalization.
+
+For a small program, first read the input, then validate it, then compute the result, and finally format the output. A modular circuit architecture may assign different cells to these roles. The experiment must test role composition on unseen combinations rather than only repeating the training order.
+
+A sequence model can fail even when each local replacement has low mean squared error. Small representation errors are passed into the next layer, and a later router may make a different discrete choice. This is why sequential cascade evaluation is more informative than averaging isolated layer errors.
+
+The parent model is a reference, not a perfect oracle for every task. A sparse child that matches parent logits may still inherit the parent’s weaknesses. Conversely, a small mismatch on a synthetic control does not prove that all useful generation behavior is lost. Both parity and task-level evaluation are needed.
+
+For code, indentation and punctuation carry meaning. A router that treats every token as an interchangeable word may fail at colons, brackets, commas, and line breaks. Calibration examples should include function definitions, loops, conditionals, and short comments without requiring execution.
+
+An efficient grouped kernel reuses one expert matrix for a block of selected tokens. A token-loop implementation is easier to audit but may pay Python and indexing overhead. Both implementations should produce numerically close outputs before speed comparisons are trusted.
+
+The temperature of a router controls how sharply scores become weights. Raising temperature can spread probability across groups; lowering it can make selection decisive. Temperature is not a substitute for a good representation, and a sweep should report both quality and route utilization.
+
+When adding a low-rank correction, initialize it conservatively. A correction with excessive magnitude can hide whether the transferred neuron groups are useful and can destabilize later layers. The correction’s parameter count and contribution norm should be logged with the sparse body.
+
+An experiment log should include the commit, model identifier, layer indices, number of groups, active groups, dispatch mode, calibration text, sequence length, seeds, quality deltas, generation samples, and timing method. Without these fields, two apparently similar results may not be comparable.
+
+The phrase “only necessary parameters” requires an operational definition. In this study it means that inactive expert-body projections are not evaluated for a token. It does not yet mean that memory for every possible group disappears, nor that the router itself is free.
+
+A robust fallback can keep a dense parent for uncertain tokens. Such a fallback improves quality but weakens the claim of a fully sparse architecture. Its use must be counted, and the threshold should be selected on calibration data and tested on held-out prompts.
+
+If all groups are selected for every token, the sparse design has collapsed into a dense design. If one group receives every token, the bank may have collapsed into a single expert. Healthy utilization lies between these extremes and should be checked per layer rather than only in aggregate.
+
+The answer to a difficult question may need a longer continuation than the answer to a greeting. Adaptive halting and adaptive active-group counts are separate ideas. First establish that group selection is useful at a fixed budget; only then add variable compute so the source of any gain remains identifiable.
+
+A clean ablation changes one factor at a time. Compare the same transferred weights with different group counts, the same groups with different active counts, and the same routing with grouped versus token-loop dispatch. Mixing all changes makes a positive or negative result difficult to attribute.
+
+A language model’s vocabulary projection can amplify a small hidden-state difference into a large next-token change. This is especially likely near competing tokens with similar logits. Inspecting hidden MSE alone therefore cannot certify generation quality; logit and decoded-text checks are required.
+
+If a benchmark uses the same synthetic sentence hundreds of times, its train and evaluation batches may be nearly identical in meaning. A diverse calibration corpus reduces this shortcut. A separate held-out prompt suite then tests whether the router learned a transferable selection rule.
+
+A sparse architecture can be useful even before it is faster in an unoptimized Python prototype. First prove that transferred groups preserve quality at a lower active compute budget. Then replace the reference dispatch with a fused kernel, remove redundant copies, and measure wall-clock behavior on the target hardware.
+
+The safest conclusion from a failed experiment is specific. For example, “eight groups with two active groups and the current scale fails on an eight-layer cascade” is actionable. “Sparse routing does not work” is too broad because a different partition, objective, or workload may behave differently.
+
+When comparing a 100 million and a 300 million model, equal stored capacity does not imply equal active computation. The larger model may still use the same small number of active groups. A fair report includes total parameters, active body parameters, quality, and latency for both models.
+
+The word transformer refers to a family of architectures that commonly uses attention and feed-forward sublayers. Replacing only the feed-forward sublayer with a routed attention-free circuit is a controlled transplant, not a complete Transformer-free language model. It is the right first test because it isolates the value of conditional local computation.
+
+A model that answers arithmetic correctly once may still fail on a nearby number. Test 37 * 24 + 19, 38 * 24 + 19, and 37 * 25 + 19 separately. Small perturbations reveal whether the circuit represents an operation or memorizes a surface pattern.
+
+For an explanation task, compare factual coverage, repetition, completion, and structure. Exact string equality is too strict for open-ended language, but obvious loops and unfinished clauses are clear regression signals. Prompt parity should retain both parent and sparse text for manual inspection.
+
+The route decision is part of the model’s computation. It should be logged as data, not treated as an invisible implementation detail. Route entropy, group frequency, transition rate across layers, and sensitivity to small hidden perturbations can reveal why a larger bank fails.
+
+Before scaling to billions of parameters, make a small configuration obey the same invariants. A dimension-preserving transferred group, a deterministic router, a hard selected-pair execution path, and a held-out prompt check form a reusable unit. Scaling the unit is more informative than scaling an unstable end-to-end prototype.
+
+A useful next step after diverse calibration is to compare first-divergence positions. If sparse and parent generations match for several tokens and then diverge at one layer, the route or output scale at that layer is a concrete repair target. If they diverge immediately, the calibration interface itself is mismatched.
