@@ -1,5 +1,15 @@
 # Results
 
+V0.155 keeps grouped dispatch numerically correct (`1.68e-8` max error) and
+ caches transferred slice weights, but the 8-layer 50%-active full-model
+ timing remains 1.043x of the parent. `torch.compile` cannot run here because
+ Triton is unavailable. See `V0_155_QWEN_GROUPED_RUNTIME.md`.
+
+V0.154 finds a large but not yet stable 25%-active improvement: 16 groups/top-4
+ reaches +0.0499 and +0.0547 CE delta across two seeds, while 8 groups/top-2
+ reaches +1.3736. A contribution-norm oracle router is also negative. See
+ `V0_154_QWEN_GRANULARITY_ROUTER_ABLATIONS.md`.
+
 V0.153 rejects the first 25%-active transferred-neuron operating point:
  8 groups/top-2 reaches +1.3736 CE delta and 69.21% teacher agreement.
  A scale-E ablation is also negative, so the current stable scale remains

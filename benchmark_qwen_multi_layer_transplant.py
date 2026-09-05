@@ -133,6 +133,21 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 parent.up_proj.weight[start:stop].detach(),
                 parent.down_proj.weight[:, start:stop].detach(),
             ))
+        self.register_buffer(
+            "group_gate_weight",
+            torch.stack([expert.gate_projection.weight for expert in self.experts]),
+            persistent=False,
+        )
+        self.register_buffer(
+            "group_value_weight",
+            torch.stack([expert.value_projection.weight for expert in self.experts]),
+            persistent=False,
+        )
+        self.register_buffer(
+            "group_output_weight",
+            torch.stack([expert.output_projection.weight for expert in self.experts]),
+            persistent=False,
+        )
         self.router = torch.nn.Sequential(
             torch.nn.Linear(hidden_size, 128),
             torch.nn.SiLU(),
@@ -177,23 +192,15 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         grouped_hidden = grouped_hidden.reshape(
             self.num_experts, max_count, flat_hidden.shape[-1],
         )
-        gate_weight = torch.stack([
-            expert.gate_projection.weight for expert in self.experts
-        ])
-        value_weight = torch.stack([
-            expert.value_projection.weight for expert in self.experts
-        ])
-        output_weight = torch.stack([
-            expert.output_projection.weight for expert in self.experts
-        ])
         grouped_gate = F.silu(torch.bmm(
-            grouped_hidden, gate_weight.transpose(1, 2),
+            grouped_hidden, self.group_gate_weight.transpose(1, 2),
         ))
         grouped_value = torch.bmm(
-            grouped_hidden, value_weight.transpose(1, 2),
+            grouped_hidden, self.group_value_weight.transpose(1, 2),
         )
         grouped_output = torch.bmm(
-            grouped_gate * grouped_value, output_weight.transpose(1, 2),
+            grouped_gate * grouped_value,
+            self.group_output_weight.transpose(1, 2),
         )
         selected_output = grouped_output.reshape(
             self.num_experts * max_count, flat_hidden.shape[-1],
@@ -273,6 +280,63 @@ def make_transferred_routed_qwen_child(
             child, int(parent.gate_proj.in_features), calibration_rank,
         ).to(device=device, dtype=dtype)
     return child
+
+
+def train_importance_router(
+    child: torch.nn.Module,
+    io_batches: list[dict[str, torch.Tensor]],
+    device: torch.device,
+    dtype: torch.dtype,
+    steps: int,
+    learning_rate: float,
+    max_grad_norm: float,
+    log_every: int,
+) -> list[dict[str, float]]:
+    """Distill frozen group contribution importance into the cheap router."""
+    base = next(
+        nested for nested in child.modules()
+        if isinstance(nested, TransferredRoutedQwenChild)
+    )
+    all_parameters = list(base.parameters())
+    previous_requires_grad = [parameter.requires_grad for parameter in all_parameters]
+    for parameter in all_parameters:
+        parameter.requires_grad_(False)
+    router_parameters = list(base.router.parameters())
+    for parameter in router_parameters:
+        parameter.requires_grad_(True)
+    optimizer = torch.optim.AdamW(router_parameters, lr=learning_rate)
+    history = []
+    base.eval()
+    try:
+        for step in range(1, steps + 1):
+            batch = io_batches[(step - 1) % len(io_batches)]
+            inputs = batch["input"].to(device=device, dtype=dtype)
+            with torch.no_grad():
+                outputs = torch.stack([
+                    expert(inputs) for expert in base.experts
+                ], dim=-2).float()
+                importance = outputs.square().mean(dim=-1)
+                target = F.softmax(
+                    torch.log(importance + 1e-8), dim=-1,
+                )
+            scores = base.router(inputs).float()
+            loss = F.kl_div(
+                F.log_softmax(scores, dim=-1), target, reduction="batchmean",
+            )
+            if not torch.isfinite(loss):
+                raise FloatingPointError(
+                    f"non-finite router importance loss at step {step}"
+                )
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(router_parameters, max_grad_norm)
+            optimizer.step()
+            if step == 1 or step % log_every == 0 or step == steps:
+                history.append({"step": step, "loss": float(loss.detach().cpu())})
+    finally:
+        for parameter, previous in zip(all_parameters, previous_requires_grad):
+            parameter.requires_grad_(previous)
+    return history
 
 
 def joint_logit_refine_many(
@@ -392,6 +456,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     hidden_size = int(model.config.hidden_size)
     children = []
     histories = []
+    router_histories = []
     local_eval_mse = []
 
     for layer_index, layer in zip(layer_indices, layers):
@@ -408,12 +473,17 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 parents[len(children)], args.calibration_rank, device, dtype,
             )
             histories.append([])
+            router_histories.append([])
         elif args.child_kind == "qwen-transfer-sparse":
             child = make_transferred_routed_qwen_child(
                 parents[len(children)], args.num_experts, args.active_experts,
                 args.routing_temperature, args.calibration_rank,
                 args.dispatch_mode, device, dtype,
             )
+            router_histories.append(train_importance_router(
+                child, train_io, device, dtype, args.router_supervision_steps,
+                args.learning_rate, args.max_grad_norm, args.log_every,
+            ))
             histories.append(train_child(
                 child, train_io, device, dtype, args.steps,
                 args.learning_rate, args.max_grad_norm, args.log_every,
@@ -431,6 +501,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 args.learning_rate, args.max_grad_norm, args.log_every,
                 args.hard_train_steps,
             ))
+            router_histories.append([])
         with torch.no_grad():
             mse = sum(
                 F.mse_loss(
@@ -525,11 +596,13 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "eval_batches": args.eval_batches,
         "distillation_steps_per_child": args.steps,
         "hard_train_steps_per_child": args.hard_train_steps,
+        "router_supervision_steps_per_child": args.router_supervision_steps,
         "joint_distillation_steps": args.joint_steps,
         "joint_learning_rate": args.joint_learning_rate,
         "joint_temperature": args.joint_temperature,
         "teacher_ce": teacher_ce,
         "child_train_history": histories,
+        "router_train_history": router_histories,
         "joint_train_history": joint_history,
         "child_local_eval_mse": local_eval_mse,
         "parent_scalar_params_each": parent_params,
@@ -596,6 +669,10 @@ def main() -> None:
     parser.add_argument(
         "--hard-train-steps", type=int, default=0,
         help="final child-training steps using the hard top-k route",
+    )
+    parser.add_argument(
+        "--router-supervision-steps", type=int, default=0,
+        help="steps distilling frozen expert contribution importance into the router",
     )
     parser.add_argument("--joint-steps", type=int, default=0)
     parser.add_argument("--joint-learning-rate", type=float, default=1e-4)
