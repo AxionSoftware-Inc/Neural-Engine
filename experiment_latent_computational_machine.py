@@ -302,8 +302,11 @@ class DenseRecurrentControl(nn.Module):
         *,
         hard_route: bool | None = None,
         return_trace: bool = False,
+        fact_keys: torch.Tensor | None = None,
+        query_keys: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         del hard_route
+        del fact_keys, query_keys
         value_lane = fact_values[entity_ids].unsqueeze(-1)
         state = self.value_encoder(value_lane)
         working = torch.zeros(
@@ -385,9 +388,11 @@ class LatentComputationalMachine(nn.Module):
         if route_mode not in {"context", "operation-only"}:
             raise ValueError("route_mode must be context or operation-only")
         self.route_mode = route_mode
-        if memory_mode not in {"direct", "learned", "hierarchical", "coordinate"}:
+        if memory_mode not in {
+            "direct", "learned", "hierarchical", "coordinate", "content"
+        }:
             raise ValueError(
-                "memory_mode must be direct, learned, hierarchical, or coordinate"
+                "memory_mode must be direct, learned, hierarchical, coordinate, or content"
             )
         if memory_temperature <= 0:
             raise ValueError("memory_temperature must be positive")
@@ -443,6 +448,9 @@ class LatentComputationalMachine(nn.Module):
         self,
         fact_values: torch.Tensor,
         entity_ids: torch.Tensor,
+        *,
+        fact_keys: torch.Tensor | None = None,
+        query_keys: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor | None]:
         fact_table = fact_values if fact_values.dim() > 1 else fact_values.unsqueeze(-1)
         if self.memory_mode == "direct":
@@ -456,6 +464,23 @@ class LatentComputationalMachine(nn.Module):
                 query_positions.unsqueeze(-1) - row_positions.unsqueeze(0)
             ).square()
             scores = -8.0 * distance / (self.memory_temperature ** 2)
+            weights = F.softmax(scores, dim=-1)
+            return weights @ fact_table, scores
+        if self.memory_mode == "content":
+            if fact_keys is None or query_keys is None:
+                raise ValueError("content memory requires external fact_keys and query_keys")
+            if fact_keys.dim() != 2 or query_keys.dim() != 2:
+                raise ValueError("content memory keys must be rank-2 tensors")
+            if fact_keys.shape[0] != self.num_entities or query_keys.shape[0] != self.num_entities:
+                raise ValueError("content memory key tables must cover all entities")
+            if fact_keys.shape[1] != query_keys.shape[1]:
+                raise ValueError("content memory key dimensions must match")
+            fact_keys = F.normalize(fact_keys.to(device=fact_table.device, dtype=fact_table.dtype), dim=-1)
+            query = F.normalize(
+                query_keys[entity_ids].to(device=fact_table.device, dtype=fact_table.dtype),
+                dim=-1,
+            )
+            scores = (query @ fact_keys.t()) / self.memory_temperature
             weights = F.softmax(scores, dim=-1)
             return weights @ fact_table, scores
         query = self.memory_queries(entity_ids)
@@ -484,10 +509,14 @@ class LatentComputationalMachine(nn.Module):
         *,
         hard_route: bool | None = None,
         return_trace: bool = False,
+        fact_keys: torch.Tensor | None = None,
+        query_keys: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         if hard_route is None:
             hard_route = not self.training
-        values, memory_scores = self.read_external_memory(fact_values, entity_ids)
+        values, memory_scores = self.read_external_memory(
+            fact_values, entity_ids, fact_keys=fact_keys, query_keys=query_keys
+        )
         value_lane = values
         state = self.value_encoder(value_lane)
         working = torch.zeros(
@@ -580,6 +609,8 @@ def train_machine(
     memory_supervision_weight: float,
     entity_limit: int,
     log_every: int,
+    fact_keys: torch.Tensor | None = None,
+    query_keys: torch.Tensor | None = None,
 ) -> list[dict[str, float]]:
     history = []
     model.train()
@@ -601,6 +632,8 @@ def train_machine(
                 or route_balance_weight > 0
                 or memory_supervision_weight > 0
             ),
+            fact_keys=fact_keys,
+            query_keys=query_keys,
         )
         task_loss = F.mse_loss(prediction, target)
         route_loss = prediction.new_zeros(())
@@ -670,6 +703,8 @@ def adapt_operation_swap(
     log_every: int,
     variant: str,
     value_dim: int,
+    fact_keys: torch.Tensor | None = None,
+    query_keys: torch.Tensor | None = None,
 ) -> list[dict[str, float]]:
     """Adapt only cell 0 to a changed rule while external memory stays fixed."""
     for parameter in model.parameters():
@@ -685,7 +720,9 @@ def adapt_operation_swap(
             min_steps=2, swapped=True, variant=variant,
             value_dim=value_dim,
         )
-        prediction, _ = model(program, facts, entity_ids)
+        prediction, _ = model(
+            program, facts, entity_ids, fact_keys=fact_keys, query_keys=query_keys
+        )
         loss = F.mse_loss(prediction, target)
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
@@ -753,6 +790,8 @@ def evaluate(
     zero_memory: bool = False,
     cases: list[tuple[torch.Tensor, torch.Tensor]] | None = None,
     variant: str = "unbounded",
+    fact_keys: torch.Tensor | None = None,
+    query_keys: torch.Tensor | None = None,
 ) -> dict[str, object]:
     model.eval()
     losses = []
@@ -778,7 +817,8 @@ def evaluate(
             if zero_memory:
                 fact_table = torch.zeros_like(fact_table)
             prediction, trace = model(
-                program, fact_table, entity_ids, hard_route=True, return_trace=True
+                program, fact_table, entity_ids, hard_route=True, return_trace=True,
+                fact_keys=fact_keys, query_keys=query_keys,
             )
             losses.append(F.mse_loss(prediction, target).item())
             absolute_errors.append((prediction - target).abs().mean().item())
@@ -864,6 +904,17 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             memory_temperature=args.memory_temperature,
             memory_buckets=args.memory_buckets,
         ).to(device)
+    address_keys = None
+    if args.memory_mode == "content":
+        if args.memory_key_dim <= 0:
+            raise ValueError("memory_key_dim must be positive for content memory")
+        # This table is deliberately external to the model. It is an exact
+        # synthetic control for content-addressed retrieval, not a learned
+        # per-entity embedding table.
+        address_keys = F.normalize(
+            torch.randn(args.num_entities, args.memory_key_dim, device=device), dim=-1
+        )
+    memory_kwargs = {"fact_keys": address_keys, "query_keys": address_keys}
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     history = train_machine(
         model, optimizer, device, args.steps, args.batch_size, args.num_entities,
@@ -872,6 +923,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         args.route_consistency_weight, args.route_balance_weight, args.value_dim,
         args.memory_supervision_weight, args.train_entity_count,
         args.log_every,
+        **memory_kwargs,
     )
     if args.value_dim == 1:
         facts_a = torch.linspace(-0.5, 0.5, args.num_entities, device=device)
@@ -904,7 +956,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             model, device, facts=facts_a, batch_size=args.batch_size,
             num_entities=args.num_entities, min_steps=2,
             max_steps=args.train_max_steps, batches=args.eval_batches,
-            cases=heldout_cases, variant=args.task_variant,
+            cases=heldout_cases, variant=args.task_variant, **memory_kwargs,
         )
         heldout_eval = {
             key: value for key, value in heldout_result.items() if key != "route_ids"
@@ -913,31 +965,31 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         model, device, facts=facts_a, batch_size=args.batch_size,
         num_entities=args.num_entities, min_steps=args.eval_min_steps,
         max_steps=args.eval_max_steps, batches=args.eval_batches, cases=ood_cases,
-        variant=args.task_variant,
+        variant=args.task_variant, **memory_kwargs,
     )
     eval_in_range = evaluate(
         model, device, facts=facts_a, batch_size=args.batch_size,
         num_entities=args.num_entities, min_steps=2,
         max_steps=args.train_max_steps, batches=args.eval_batches, cases=in_range_cases,
-        variant=args.task_variant,
+        variant=args.task_variant, **memory_kwargs,
     )
     eval_b = evaluate(
         model, device, facts=facts_b, batch_size=args.batch_size,
         num_entities=args.num_entities, min_steps=args.eval_min_steps,
         max_steps=args.eval_max_steps, batches=args.eval_batches, cases=ood_cases,
-        variant=args.task_variant,
+        variant=args.task_variant, **memory_kwargs,
     )
     eval_b_in_range = evaluate(
         model, device, facts=facts_b, batch_size=args.batch_size,
         num_entities=args.num_entities, min_steps=2,
         max_steps=args.train_max_steps, batches=args.eval_batches,
-        cases=in_range_cases, variant=args.task_variant,
+        cases=in_range_cases, variant=args.task_variant, **memory_kwargs,
     )
     eval_zero = evaluate(
         model, device, facts=facts_a, batch_size=args.batch_size,
         num_entities=args.num_entities, min_steps=args.eval_min_steps,
         max_steps=args.eval_max_steps, batches=args.eval_batches, cases=ood_cases,
-        zero_memory=True, variant=args.task_variant,
+        zero_memory=True, variant=args.task_variant, **memory_kwargs,
     )
     depth_curve = {}
     for depth in range(2, args.eval_max_steps + 1):
@@ -949,7 +1001,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             model, device, facts=facts_a, batch_size=args.batch_size,
             num_entities=args.num_entities, min_steps=depth,
             max_steps=depth, batches=args.eval_batches, cases=depth_cases,
-            variant=args.task_variant,
+            variant=args.task_variant, **memory_kwargs,
         )
         depth_curve[str(depth)] = {
             key: value for key, value in depth_result.items() if key != "route_ids"
@@ -958,7 +1010,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         model, device, facts=facts_a, batch_size=args.batch_size,
         num_entities=args.num_entities, min_steps=2,
         max_steps=args.train_max_steps, batches=args.eval_batches,
-        cases=in_range_cases, swapped=True, variant=args.task_variant,
+        cases=in_range_cases, swapped=True, variant=args.task_variant, **memory_kwargs,
     )
     operation_swap_history = []
     if args.operation_adapt_steps > 0:
@@ -967,12 +1019,13 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             args.num_entities, args.train_max_steps,
             args.operation_adapt_learning_rate, args.log_every, args.task_variant,
             args.value_dim,
+            **memory_kwargs,
         )
     operation_swap_after = evaluate(
         model, device, facts=facts_a, batch_size=args.batch_size,
         num_entities=args.num_entities, min_steps=2,
         max_steps=args.train_max_steps, batches=args.eval_batches,
-        cases=in_range_cases, swapped=True, variant=args.task_variant,
+        cases=in_range_cases, swapped=True, variant=args.task_variant, **memory_kwargs,
     )
     # Diagnostic route reuse uses identical program batches with different
     # facts; the model is not given entity IDs after external retrieval.
@@ -989,6 +1042,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         _, reuse_trace = model(
             reuse_programs, reuse_facts, reuse_entities,
             hard_route=True, return_trace=True,
+            **memory_kwargs,
         )
     reuse_metrics = route_reuse(reuse_trace["route_ids"].cpu(), reuse_programs.cpu())
     total_params = sum(parameter.numel() for parameter in model.parameters())
@@ -998,6 +1052,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "task_variant": args.task_variant,
         "value_dim": args.value_dim,
         "memory_mode": args.memory_mode,
+        "memory_key_dim": args.memory_key_dim,
         "memory_temperature": args.memory_temperature,
         "memory_buckets": args.memory_buckets,
         "model_kind": args.model_kind,
@@ -1083,10 +1138,14 @@ def main() -> None:
     parser.add_argument("--route-mode", choices=("context", "operation-only"), default="context")
     parser.add_argument(
         "--memory-mode",
-        choices=("direct", "learned", "hierarchical", "coordinate"),
+        choices=("direct", "learned", "hierarchical", "coordinate", "content"),
         default="direct",
     )
     parser.add_argument("--memory-temperature", type=float, default=1.0)
+    parser.add_argument(
+        "--memory-key-dim", type=int, default=64,
+        help="dimension of the external key table used by content memory",
+    )
     parser.add_argument("--memory-buckets", type=int, default=32)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--steps", type=int, default=4000)

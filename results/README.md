@@ -624,6 +624,14 @@ the control is given the mod-64 algebra. The next accepted experiment is a
 trainable equivariant template bank without a dense transition table. See
 `V0_53_MODULAR_PRIOR_PILOT.md` and the proposal `taklif7.md`.
 
+V0.133 replaces the fixed learned address bank with an external random
+content-key lookup. With 2048 fact rows, only the first 1536 used in training,
+both seeds retrieve the 512 held-out rows at 100% and reach 4.21e-6/4.27e-6
+held-out MSE, while the four-cell route remains balanced and one 162-parameter
+cell is active per step. This is a strong addressing control, but not yet
+semantic key learning because query and fact keys are externally supplied and
+exactly matched. See `V0_133_LATENT_MACHINE_CONTENT_MEMORY.md`.
+
 V0.60 fixes the main strict-value bottleneck with a trainable modular
 value-state/template interface. On values 0--31 train and unseen values
 32--63 eval, the 300M Macro-enabled model reaches 96.36% mean across two
