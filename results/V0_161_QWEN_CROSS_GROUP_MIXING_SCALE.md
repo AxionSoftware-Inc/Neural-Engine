@@ -57,11 +57,10 @@ replacement for Qwen's FFN:
 
 Keep cross-group output mixing as the current research direction. Do not move
 to 300M--1B scale yet, and do not claim that 50% sparsity works for a full
-Qwen stack. The next experiment is a layer-wise active schedule: preserve the
-50% route in the stable late block, give earlier layers a larger active budget,
-and measure whether the depth boundary is caused by error accumulation rather
-than a failure of the local cell. In parallel, replace the Python gather path
-with a compiled selected-group kernel before making runtime claims.
+Qwen stack. The next experiment is a depth-aware schedule and leakage-free
+joint cascade refinement. Those follow-up results are recorded in
+`V0_162_QWEN_DEPTH_SCHEDULE_JOINT_AUDIT.md`. In parallel, replace the Python
+gather path with a compiled selected-group kernel before making runtime claims.
 
 ## Artifacts
 

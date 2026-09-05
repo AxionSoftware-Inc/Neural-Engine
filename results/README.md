@@ -1,5 +1,15 @@
 # Results
 
+V0.163 audits the `taklif15.md` learned latent basis. A 4-layer, 25%-active
+rank-384 basis reaches `+0.1519` held-out CE delta and `18.65x` timing despite
+using `0.764x` parent storage. It is a NO-GO in its current random-basis,
+soft-all-bases form. See `V0_163_QWEN_LATENT_BASIS_AUDIT.md`.
+
+V0.162 audits depth-aware schedules and leakage-free joint cascade refinement.
+Eight layers still fail with uniform 50% (`+0.0854`), uniform 75% (`+0.0777`),
+both depth schedules, and joint calibration refinement (`+0.0769` best). See
+`V0_162_QWEN_DEPTH_SCHEDULE_JOINT_AUDIT.md`.
+
 V0.161 adds cross-group output mixing. It passes the held-out gate on two
 seeds for both 2-layer and 4-layer 50%-active replacements (`+0.0306`/
 `+0.0306` and `+0.0181`/`+0.0155`). Eight layers still fail at 50% and 75%
