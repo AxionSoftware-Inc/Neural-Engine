@@ -654,6 +654,13 @@ of the 9.44M-parameter parent FFN. This confirms a stable local function
 transfer, but not multi-layer replacement or full Transformer removal. See
 `V0_136_QWEN_PARENT_TRANSPLANT_LONG_SEQUENCE.md`.
 
+V0.137 makes the routed Qwen evaluation path genuinely sparse: 4 experts with
+top-2 dispatch execute only the selected token-expert pairs, a 50% expert-body
+fraction. Accuracy remains the same as the prior audit but fails the two-layer
+quality gate at CE deltas +0.0537/+0.0708. Keep the dispatch implementation,
+reject this handoff quality, and make no wall-clock claim until grouped-kernel
+timing is measured. See `V0_137_QWEN_HARD_SPARSE_DISPATCH.md`.
+
 V0.60 fixes the main strict-value bottleneck with a trainable modular
 value-state/template interface. On values 0--31 train and unseen values
 32--63 eval, the 300M Macro-enabled model reaches 96.36% mean across two

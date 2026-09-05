@@ -80,22 +80,40 @@ class RoutedChild(nn.Module):
         nn.init.zeros_(self.router[-1].weight)
         nn.init.zeros_(self.router[-1].bias)
         self.last_selected: torch.Tensor | None = None
+        self.last_active_expert_fraction = 1.0
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         scores = self.router(hidden_states)
-        outputs = torch.stack([expert(hidden_states) for expert in self.experts], dim=-2)
         if self.training:
+            outputs = torch.stack([expert(hidden_states) for expert in self.experts], dim=-2)
             weights = F.softmax(scores / self.temperature, dim=-1)
             self.last_selected = scores.detach().argmax(dim=-1)
+            self.last_active_expert_fraction = 1.0
             return (outputs * weights.unsqueeze(-1)).sum(dim=-2)
         top_values, top_ids = scores.topk(self.active_experts, dim=-1)
         weights = F.softmax(top_values / self.temperature, dim=-1)
-        selected = outputs.gather(
-            -2,
-            top_ids.unsqueeze(-1).expand(*top_ids.shape, outputs.shape[-1]),
-        )
         self.last_selected = top_ids.detach()
-        return (selected * weights.unsqueeze(-1)).sum(dim=-2)
+        # Hard evaluation must execute only the selected expert bodies. The
+        # previous research implementation evaluated every expert and then
+        # gathered the top-k result, which was numerically valid but made no
+        # active-compute claim.
+        flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
+        flat_ids = top_ids.reshape(-1, self.active_experts)
+        flat_weights = weights.reshape(-1, self.active_experts)
+        flat_output = torch.zeros_like(flat_hidden)
+        selected_pairs = 0
+        for expert_id, expert in enumerate(self.experts):
+            token_ids, slots = torch.where(flat_ids == expert_id)
+            if token_ids.numel() == 0:
+                continue
+            expert_output = expert(flat_hidden[token_ids])
+            contribution = expert_output * flat_weights[token_ids, slots].unsqueeze(-1)
+            flat_output.index_add_(0, token_ids, contribution)
+            selected_pairs += int(token_ids.numel())
+        self.last_active_expert_fraction = selected_pairs / max(
+            flat_hidden.shape[0] * self.num_experts, 1
+        )
+        return flat_output.reshape_as(hidden_states)
 
 
 def make_child(
@@ -419,6 +437,14 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "calibration_rank": args.calibration_rank,
         "num_experts": args.num_experts,
         "active_experts": args.active_experts,
+        "hard_route_expected_expert_fraction": (
+            args.active_experts / args.num_experts
+            if args.child_kind == "routed" else 1.0
+        ),
+        "hard_route_dispatch": (
+            "selected-token-only"
+            if args.child_kind == "routed" else "single-child"
+        ),
         "routing_temperature": args.routing_temperature,
         "batch_size": args.batch_size,
         "sequence_length": args.sequence_length,
