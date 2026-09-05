@@ -1,5 +1,11 @@
 # Results
 
+V0.153 rejects the first 25%-active transferred-neuron operating point:
+ 8 groups/top-2 reaches +1.3736 CE delta and 69.21% teacher agreement.
+ A scale-E ablation is also negative, so the current stable scale remains
+ E/K and the next test is finer partitioning. See
+ `V0_153_QWEN_TRANSFERRED_25_ACTIVE.md`.
+
 V0.152 is the strongest Qwen multi-layer sparse signal so far. Partitioning
  copied Qwen SwiGLU intermediate neurons into 8 groups and selecting top-4
  keeps 50% active expert compute and passes the eight-layer quality gate on

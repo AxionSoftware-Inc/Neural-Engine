@@ -208,6 +208,9 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self.last_active_expert_fraction = pair_indices.numel() / max(
             flat_hidden.shape[0] * self.num_experts, 1
         )
+        # The router selects contribution-heavy groups rather than a random
+        # subset, so the empirical stable scale is E/K, not an unbiased E
+        # estimator that over-corrects the selected high-energy groups.
         return self.num_experts / self.active_experts * flat_output.reshape_as(
             hidden_states,
         )
