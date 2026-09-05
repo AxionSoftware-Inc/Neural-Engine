@@ -370,6 +370,18 @@ def capture_batches(
     return batches
 
 
+def _set_hard_train_modules(
+    module: nn.Module,
+    enabled: bool,
+) -> list[tuple[nn.Module, bool]]:
+    previous = []
+    for nested in module.modules():
+        if hasattr(nested, "hard_train"):
+            previous.append((nested, bool(nested.hard_train)))
+            nested.hard_train = enabled
+    return previous
+
+
 def train_child(
     child: nn.Module,
     io_batches: list[dict[str, torch.Tensor]],
@@ -379,24 +391,36 @@ def train_child(
     learning_rate: float,
     max_grad_norm: float,
     log_every: int,
+    hard_train_steps: int = 0,
 ) -> list[dict[str, float]]:
+    if hard_train_steps < 0 or hard_train_steps > steps:
+        raise ValueError("hard_train_steps must be within 0..steps")
     optimizer = torch.optim.AdamW(child.parameters(), lr=learning_rate)
     history = []
     child.train()
-    for step in range(1, steps + 1):
-        batch = io_batches[(step - 1) % len(io_batches)]
-        inputs = batch["input"].to(device=device, dtype=dtype)
-        targets = batch["output"].to(device=device, dtype=dtype)
-        prediction = child(inputs)
-        loss = F.mse_loss(prediction.float(), targets.float())
-        if not torch.isfinite(loss):
-            raise FloatingPointError(f"non-finite child loss at step {step}")
-        optimizer.zero_grad(set_to_none=True)
-        loss.backward()
-        nn.utils.clip_grad_norm_(child.parameters(), max_grad_norm)
-        optimizer.step()
-        if step == 1 or step % log_every == 0 or step == steps:
-            history.append({"step": step, "loss": float(loss.detach().cpu())})
+    previous_hard_train = _set_hard_train_modules(child, False)
+    hard_start = steps - hard_train_steps + 1
+    try:
+        for step in range(1, steps + 1):
+            if hard_train_steps and step == hard_start:
+                for nested, _ in previous_hard_train:
+                    nested.hard_train = True
+            batch = io_batches[(step - 1) % len(io_batches)]
+            inputs = batch["input"].to(device=device, dtype=dtype)
+            targets = batch["output"].to(device=device, dtype=dtype)
+            prediction = child(inputs)
+            loss = F.mse_loss(prediction.float(), targets.float())
+            if not torch.isfinite(loss):
+                raise FloatingPointError(f"non-finite child loss at step {step}")
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            nn.utils.clip_grad_norm_(child.parameters(), max_grad_norm)
+            optimizer.step()
+            if step == 1 or step % log_every == 0 or step == steps:
+                history.append({"step": step, "loss": float(loss.detach().cpu())})
+    finally:
+        for nested, previous in previous_hard_train:
+            nested.hard_train = previous
     child.eval()
     return history
 

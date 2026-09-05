@@ -1,5 +1,22 @@
 # Results
 
+V0.152 is the strongest Qwen multi-layer sparse signal so far. Partitioning
+ copied Qwen SwiGLU intermediate neurons into 8 groups and selecting top-4
+ keeps 50% active expert compute and passes the eight-layer quality gate on
+ both seeds (`+0.0129` and `-0.0041` CE delta). Current Python grouped timing
+ is still about 1.054x in the repeated seed-2026 run, so performance remains
+ open. See `V0_152_QWEN_TRANSFERRED_NEURON_SPARSE.md`.
+
+V0.151 passes exact eight-layer Qwen FFN function transfer without training:
+ copying gate/up/down weights into an attention-free SwiGLU child gives
+ `~1e-12` local MSE, zero alpha=0 CE delta, and 99.95% teacher agreement.
+ It is a conversion control, not a sparse speedup. See
+ `V0_151_QWEN_SWIGLU_WEIGHT_TRANSFER.md`.
+
+V0.150 rejects raw random-child eight-layer scaling. The best hard-route and
+ joint-refined variants remain around +0.19--+0.21 CE delta, and doubling
+ child width does not help. See `V0_150_QWEN_EIGHT_LAYER_CASCADE_FAILURE.md`.
+
 V0.149 passes the four-layer Qwen rank-8 cascade gate on two seeds. Sequential
  replacement of layers 23--26 keeps alpha=0 CE deltas at +0.0298 and +0.0376,
  with 94.29% and 94.24% teacher top-1 agreement. Fifty-iteration full-model
