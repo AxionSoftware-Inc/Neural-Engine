@@ -1,5 +1,10 @@
 # Results
 
+V0.172 shows that removing the variable-`K` scale discontinuity only improves
+the failed depth schedule from `+5.8722` to `+4.5923` (`17.90%` top-1); it does
+not approach the gate. Manual active-count/scale tuning is therefore closed
+as a path. See `V0_172_QWEN_VARIABLE_K_SCALE_AUDIT.md`.
+
 V0.171 rejects the `6,6,6,6,4,4,4,4` depth-dependent active schedule. Giving
 the early layers 75% active groups makes the first hard-training layer
 unstable and worsens the eight-layer result to `+5.8722` (`6.35%` top-1), so
