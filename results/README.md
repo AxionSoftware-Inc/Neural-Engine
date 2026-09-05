@@ -2,6 +2,7 @@
 
 V0.119 conditionally passes the labels-free latent-route gate on two seeds.
 V0.120 conditionally passes the labels-free non-polynomial latent-route gate on two seeds.
+V0.121 conditionally passes the labels-free multidimensional latent-route gate on two seeds.
  The bounded stable-cell machine reaches depth-6 MSE `8.62e-8` and `1.16e-7`,
  survives paired fact swap at `1.47e-7`/`1.80e-7`, and keeps 24.6--25.5% cell
  usage without role labels. This is the first real synthetic GO for the

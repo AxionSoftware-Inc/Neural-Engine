@@ -43,6 +43,24 @@ def apply_operations(
             scale = 0.75 * result + 0.10 * torch.sin(2.0 * result)
             negate = -0.60 * result + 0.05
             square = 0.45 * torch.tanh(result.square() + 0.15)
+        elif variant == "bounded-vector":
+            if result.shape[-1] != 2:
+                raise ValueError("bounded-vector requires --value-dim 2")
+            x0, x1 = result[..., :1], result[..., 1:]
+            offset = -0.25 if swapped else 0.20
+            add = torch.cat([
+                0.60 * torch.tanh(x0 + offset) + 0.10 * x1,
+                0.60 * torch.tanh(x1 - offset) + 0.10 * x0,
+            ], dim=-1)
+            scale = torch.cat([
+                0.72 * x0 + 0.10 * torch.sin(2.0 * x1),
+                0.72 * x1 + 0.10 * torch.sin(2.0 * x0),
+            ], dim=-1)
+            negate = torch.cat([-0.55 * x1 + 0.03, 0.55 * x0 - 0.02], dim=-1)
+            square = 0.42 * torch.tanh(torch.cat([
+                x0.square() + 0.20 * x1,
+                x1.square() + 0.20 * x0,
+            ], dim=-1) + 0.15)
         elif swapped:
             # Operation-swap intervention: alter one computation rule while
             # leaving the external fact table unchanged.
@@ -55,10 +73,11 @@ def apply_operations(
             scale = result * 0.80
             negate = 1.0 - result
             square = result * result
-        result = torch.where(op == 0, add, result)
-        result = torch.where(op == 1, scale, result)
-        result = torch.where(op == 2, negate, result)
-        result = torch.where(op == 3, square, result)
+        mask_shape = tuple(op.shape) + (1,) * (result.dim() - 1)
+        result = torch.where((op == 0).reshape(mask_shape), add, result)
+        result = torch.where((op == 1).reshape(mask_shape), scale, result)
+        result = torch.where((op == 2).reshape(mask_shape), negate, result)
+        result = torch.where((op == 3).reshape(mask_shape), square, result)
     return result
 
 
@@ -83,6 +102,24 @@ def operation_history(
             scale = 0.75 * result + 0.10 * torch.sin(2.0 * result)
             negate = -0.60 * result + 0.05
             square = 0.45 * torch.tanh(result.square() + 0.15)
+        elif variant == "bounded-vector":
+            if result.shape[-1] != 2:
+                raise ValueError("bounded-vector requires --value-dim 2")
+            x0, x1 = result[..., :1], result[..., 1:]
+            offset = -0.25 if swapped else 0.20
+            add = torch.cat([
+                0.60 * torch.tanh(x0 + offset) + 0.10 * x1,
+                0.60 * torch.tanh(x1 - offset) + 0.10 * x0,
+            ], dim=-1)
+            scale = torch.cat([
+                0.72 * x0 + 0.10 * torch.sin(2.0 * x1),
+                0.72 * x1 + 0.10 * torch.sin(2.0 * x0),
+            ], dim=-1)
+            negate = torch.cat([-0.55 * x1 + 0.03, 0.55 * x0 - 0.02], dim=-1)
+            square = 0.42 * torch.tanh(torch.cat([
+                x0.square() + 0.20 * x1,
+                x1.square() + 0.20 * x0,
+            ], dim=-1) + 0.15)
         elif swapped:
             add = result - 0.15
             scale = result * 0.80
@@ -93,10 +130,11 @@ def operation_history(
             scale = result * 0.80
             negate = 1.0 - result
             square = result * result
-        result = torch.where(op == 0, add, result)
-        result = torch.where(op == 1, scale, result)
-        result = torch.where(op == 2, negate, result)
-        result = torch.where(op == 3, square, result)
+        mask_shape = tuple(op.shape) + (1,) * (result.dim() - 1)
+        result = torch.where((op == 0).reshape(mask_shape), add, result)
+        result = torch.where((op == 1).reshape(mask_shape), scale, result)
+        result = torch.where((op == 2).reshape(mask_shape), negate, result)
+        result = torch.where((op == 3).reshape(mask_shape), square, result)
         history.append(result)
     return torch.stack(history, dim=1)
 
@@ -111,10 +149,12 @@ def sample_batch(
     facts: torch.Tensor | None = None,
     swapped: bool = False,
     variant: str = "unbounded",
+    value_dim: int = 1,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     entity_ids = torch.randint(num_entities, (batch_size,), device=device)
     if facts is None:
-        fact_table = torch.empty(num_entities, device=device).uniform_(-0.5, 0.5)
+        fact_shape = (num_entities,) if value_dim == 1 else (num_entities, value_dim)
+        fact_table = torch.empty(fact_shape, device=device).uniform_(-0.5, 0.5)
     else:
         fact_table = facts.to(device=device)
     values = fact_table[entity_ids]
@@ -170,6 +210,22 @@ class ScalarComputationCell(nn.Module):
             nn.Linear(1, 32),
             nn.SiLU(),
             nn.Linear(32, 1),
+        )
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        return self.transform(value)
+
+
+class VectorComputationCell(nn.Module):
+    """Small shared vector transition used by the multidimensional gate."""
+
+    def __init__(self, value_dim: int) -> None:
+        super().__init__()
+        hidden_dim = max(32, value_dim * 16)
+        self.transform = nn.Sequential(
+            nn.Linear(value_dim, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, value_dim),
         )
 
     def forward(self, value: torch.Tensor) -> torch.Tensor:
@@ -288,10 +344,12 @@ class LatentComputationalMachine(nn.Module):
         transition_mode: str = "delta",
         structured_cell_kind: str = "mlp",
         route_mode: str = "context",
+        value_dim: int = 1,
     ) -> None:
         super().__init__()
         self.state_dim = state_dim
         self.latent_dim = latent_dim
+        self.value_dim = value_dim
         self.memory_slots = memory_slots
         self.num_cells = num_cells
         self.route_temperature = route_temperature
@@ -309,7 +367,7 @@ class LatentComputationalMachine(nn.Module):
             raise ValueError("route_mode must be context or operation-only")
         self.route_mode = route_mode
         self.value_encoder = nn.Sequential(
-            nn.Linear(1, state_dim),
+            nn.Linear(value_dim, state_dim),
             nn.Tanh(),
         )
         self.operation_embedding = nn.Embedding(NUM_OPERATIONS + 1, latent_dim)
@@ -321,11 +379,17 @@ class LatentComputationalMachine(nn.Module):
         )
         self.cell_keys = nn.Parameter(torch.randn(num_cells, latent_dim) * 0.05)
         if structured_value_lane and structured_cell_kind == "polynomial":
+            if value_dim != 1:
+                raise ValueError("polynomial cells require --value-dim 1")
             cell_class = PolynomialComputationCell
+        elif structured_value_lane and value_dim > 1:
+            cell_class = VectorComputationCell
         else:
             cell_class = ScalarComputationCell if structured_value_lane else ComputationCell
         self.cells = nn.ModuleList([
-            cell_class() if structured_value_lane else cell_class(state_dim)
+            cell_class() if structured_value_lane and value_dim == 1 else (
+                cell_class(value_dim) if structured_value_lane else cell_class(state_dim)
+            )
             for _ in range(num_cells)
         ])
         self.state_norm = nn.LayerNorm(state_dim)
@@ -348,7 +412,8 @@ class LatentComputationalMachine(nn.Module):
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         if hard_route is None:
             hard_route = not self.training
-        values = fact_values[entity_ids].unsqueeze(-1)
+        fact_table = fact_values if fact_values.dim() > 1 else fact_values.unsqueeze(-1)
+        values = fact_table[entity_ids]
         value_lane = values
         state = self.value_encoder(value_lane)
         working = torch.zeros(
@@ -395,7 +460,9 @@ class LatentComputationalMachine(nn.Module):
                 if self.stabilize_state:
                     state = self.state_norm(state)
             if self.structured_value_lane:
-                value_history.append(value_lane.squeeze(-1))
+                value_history.append(
+                    value_lane.squeeze(-1) if self.value_dim == 1 else value_lane
+                )
             write_slot = step % self.memory_slots
             written = self.write_projections[write_slot](state)
             working[:, write_slot] = torch.where(
@@ -403,7 +470,10 @@ class LatentComputationalMachine(nn.Module):
             )
             route_ids.append(torch.where(active, selected, torch.full_like(selected, -1)))
             route_scores.append(scores)
-        prediction = value_lane.squeeze(-1) if self.structured_value_lane else self.decoder(state).squeeze(-1)
+        if self.structured_value_lane:
+            prediction = value_lane.squeeze(-1) if self.value_dim == 1 else value_lane
+        else:
+            prediction = self.decoder(state).squeeze(-1)
         trace = {
             "route_ids": torch.stack(route_ids, dim=1),
             "route_scores": torch.stack(route_scores, dim=1),
@@ -430,6 +500,7 @@ def train_machine(
     variant: str,
     route_consistency_weight: float,
     route_balance_weight: float,
+    value_dim: int,
     log_every: int,
 ) -> list[dict[str, float]]:
     history = []
@@ -438,6 +509,7 @@ def train_machine(
         entity_ids, program, facts, target = sample_batch(
             batch_size, num_entities, train_max_steps, device, min_steps=2,
             variant=variant,
+            value_dim=value_dim,
         )
         prediction, trace = model(
             program,
@@ -510,6 +582,7 @@ def adapt_operation_swap(
     learning_rate: float,
     log_every: int,
     variant: str,
+    value_dim: int,
 ) -> list[dict[str, float]]:
     """Adapt only cell 0 to a changed rule while external memory stays fixed."""
     for parameter in model.parameters():
@@ -523,6 +596,7 @@ def adapt_operation_swap(
         entity_ids, program, facts, target = sample_batch(
             batch_size, num_entities, max_steps, device,
             min_steps=2, swapped=True, variant=variant,
+            value_dim=value_dim,
         )
         prediction, _ = model(program, facts, entity_ids)
         loss = F.mse_loss(prediction, target)
@@ -661,6 +735,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     ) else "cpu")
     torch.manual_seed(args.seed)
     if args.model_kind == "dense-control":
+        if args.value_dim != 1:
+            raise ValueError("dense-control supports only --value-dim 1")
         model = DenseRecurrentControl(
             state_dim=args.state_dim,
             latent_dim=args.latent_dim,
@@ -681,16 +757,24 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             transition_mode=args.transition_mode,
             structured_cell_kind=args.structured_cell_kind,
             route_mode=args.route_mode,
+            value_dim=args.value_dim,
         ).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     history = train_machine(
         model, optimizer, device, args.steps, args.batch_size, args.num_entities,
         args.train_max_steps, args.role_loss_weight,
         args.state_supervision_weight, args.task_variant,
-        args.route_consistency_weight, args.route_balance_weight, args.log_every,
+        args.route_consistency_weight, args.route_balance_weight, args.value_dim,
+        args.log_every,
     )
-    facts_a = torch.linspace(-0.5, 0.5, args.num_entities, device=device)
-    facts_b = torch.linspace(0.45, -0.45, args.num_entities, device=device)
+    if args.value_dim == 1:
+        facts_a = torch.linspace(-0.5, 0.5, args.num_entities, device=device)
+        facts_b = torch.linspace(0.45, -0.45, args.num_entities, device=device)
+    else:
+        facts_a = torch.linspace(
+            -0.5, 0.5, args.num_entities * args.value_dim, device=device
+        ).reshape(args.num_entities, args.value_dim)
+        facts_b = torch.flip(facts_a, dims=[0])
     ood_cases = sample_program_cases(
         args.eval_batches, args.batch_size, args.num_entities,
         args.eval_max_steps, device,
@@ -758,6 +842,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             model, device, args.operation_adapt_steps, args.batch_size,
             args.num_entities, args.train_max_steps,
             args.operation_adapt_learning_rate, args.log_every, args.task_variant,
+            args.value_dim,
         )
     operation_swap_after = evaluate(
         model, device, facts=facts_a, batch_size=args.batch_size,
@@ -770,6 +855,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     _, reuse_programs, _, _ = sample_batch(
         args.batch_size * args.eval_batches, args.num_entities,
         args.eval_max_steps, device, min_steps=args.eval_min_steps, facts=facts_a,
+        value_dim=args.value_dim,
     )
     reuse_facts = facts_a
     reuse_entities = torch.arange(
@@ -786,6 +872,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     result = {
         "experiment": "taklif22_latent_computational_machine_v1",
         "task_variant": args.task_variant,
+        "value_dim": args.value_dim,
         "model_kind": args.model_kind,
         "device": str(device),
         "seed": args.seed,
@@ -843,9 +930,10 @@ def main() -> None:
     parser.add_argument("--model-kind", choices=("latent", "dense-control"), default="latent")
     parser.add_argument(
         "--task-variant",
-        choices=("unbounded", "bounded", "bounded-nonlinear"),
+        choices=("unbounded", "bounded", "bounded-nonlinear", "bounded-vector"),
         default="unbounded",
     )
+    parser.add_argument("--value-dim", type=int, default=1)
     parser.add_argument("--state-dim", type=int, default=64)
     parser.add_argument("--latent-dim", type=int, default=32)
     parser.add_argument("--memory-slots", type=int, default=8)
