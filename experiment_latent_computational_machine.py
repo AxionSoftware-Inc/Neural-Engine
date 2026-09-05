@@ -22,34 +22,71 @@ NUM_OPERATIONS = 4
 PAD_OPERATION = NUM_OPERATIONS
 
 
-def apply_operations(value: torch.Tensor, program: torch.Tensor, *, swapped: bool = False) -> torch.Tensor:
+def apply_operations(
+    value: torch.Tensor,
+    program: torch.Tensor,
+    *,
+    swapped: bool = False,
+    variant: str = "unbounded",
+) -> torch.Tensor:
     """Apply the hidden synthetic rules; the model only sees operation tokens."""
     result = value
     for step in range(program.shape[1]):
         op = program[:, step]
-        if swapped:
+        if variant == "bounded":
+            add = 0.70 * result + (-0.15 if swapped else 0.10)
+            scale = 0.80 * result
+            negate = -result
+            square = 0.50 * result.square()
+        elif swapped:
             # Operation-swap intervention: alter one computation rule while
             # leaving the external fact table unchanged.
             add = result - 0.15
+            scale = result * 0.80
+            negate = 1.0 - result
+            square = result * result
         else:
             add = result + 0.10
+            scale = result * 0.80
+            negate = 1.0 - result
+            square = result * result
         result = torch.where(op == 0, add, result)
-        result = torch.where(op == 1, result * 0.80, result)
-        result = torch.where(op == 2, 1.0 - result, result)
-        result = torch.where(op == 3, result * result, result)
+        result = torch.where(op == 1, scale, result)
+        result = torch.where(op == 2, negate, result)
+        result = torch.where(op == 3, square, result)
     return result
 
 
-def operation_history(value: torch.Tensor, program: torch.Tensor, *, swapped: bool = False) -> torch.Tensor:
+def operation_history(
+    value: torch.Tensor,
+    program: torch.Tensor,
+    *,
+    swapped: bool = False,
+    variant: str = "unbounded",
+) -> torch.Tensor:
     result = value
     history = []
     for step in range(program.shape[1]):
         op = program[:, step]
-        add = result - 0.15 if swapped else result + 0.10
+        if variant == "bounded":
+            add = 0.70 * result + (-0.15 if swapped else 0.10)
+            scale = 0.80 * result
+            negate = -result
+            square = 0.50 * result.square()
+        elif swapped:
+            add = result - 0.15
+            scale = result * 0.80
+            negate = 1.0 - result
+            square = result * result
+        else:
+            add = result + 0.10
+            scale = result * 0.80
+            negate = 1.0 - result
+            square = result * result
         result = torch.where(op == 0, add, result)
-        result = torch.where(op == 1, result * 0.80, result)
-        result = torch.where(op == 2, 1.0 - result, result)
-        result = torch.where(op == 3, result * result, result)
+        result = torch.where(op == 1, scale, result)
+        result = torch.where(op == 2, negate, result)
+        result = torch.where(op == 3, square, result)
         history.append(result)
     return torch.stack(history, dim=1)
 
@@ -63,6 +100,7 @@ def sample_batch(
     min_steps: int,
     facts: torch.Tensor | None = None,
     swapped: bool = False,
+    variant: str = "unbounded",
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     entity_ids = torch.randint(num_entities, (batch_size,), device=device)
     if facts is None:
@@ -74,7 +112,7 @@ def sample_batch(
     positions = torch.arange(max_steps, device=device).unsqueeze(0)
     program = torch.randint(NUM_OPERATIONS, (batch_size, max_steps), device=device)
     program = torch.where(positions < lengths.unsqueeze(1), program, PAD_OPERATION)
-    target = apply_operations(values, program, swapped=swapped)
+    target = apply_operations(values, program, swapped=swapped, variant=variant)
     return entity_ids, program, fact_table, target
 
 
@@ -126,6 +164,18 @@ class ScalarComputationCell(nn.Module):
 
     def forward(self, value: torch.Tensor) -> torch.Tensor:
         return self.transform(value)
+
+
+class PolynomialComputationCell(nn.Module):
+    """Stable low-order basis control for the synthetic scalar transitions."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.coefficients = nn.Parameter(torch.randn(3, 1) * 0.05)
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        features = torch.cat([value, value.square(), torch.ones_like(value)], dim=-1)
+        return features @ self.coefficients
 
 
 class DenseOperationCell(nn.Module):
@@ -226,6 +276,8 @@ class LatentComputationalMachine(nn.Module):
         structured_value_lane: bool = False,
         value_clip: float = 0.0,
         transition_mode: str = "delta",
+        structured_cell_kind: str = "mlp",
+        route_mode: str = "context",
     ) -> None:
         super().__init__()
         self.state_dim = state_dim
@@ -240,19 +292,32 @@ class LatentComputationalMachine(nn.Module):
         if transition_mode not in {"delta", "absolute"}:
             raise ValueError("transition_mode must be delta or absolute")
         self.transition_mode = transition_mode
+        if structured_cell_kind not in {"mlp", "polynomial"}:
+            raise ValueError("structured_cell_kind must be mlp or polynomial")
+        self.structured_cell_kind = structured_cell_kind
+        if route_mode not in {"context", "operation-only"}:
+            raise ValueError("route_mode must be context or operation-only")
+        self.route_mode = route_mode
         self.value_encoder = nn.Sequential(
             nn.Linear(1, state_dim),
             nn.Tanh(),
         )
         self.operation_embedding = nn.Embedding(NUM_OPERATIONS + 1, latent_dim)
+        self.operation_controller = nn.Linear(latent_dim, latent_dim)
         self.controller = nn.Sequential(
             nn.Linear(state_dim * 2 + latent_dim, 128),
             nn.SiLU(),
             nn.Linear(128, latent_dim),
         )
         self.cell_keys = nn.Parameter(torch.randn(num_cells, latent_dim) * 0.05)
-        cell_class = ScalarComputationCell if structured_value_lane else ComputationCell
-        self.cells = nn.ModuleList([cell_class() if structured_value_lane else cell_class(state_dim) for _ in range(num_cells)])
+        if structured_value_lane and structured_cell_kind == "polynomial":
+            cell_class = PolynomialComputationCell
+        else:
+            cell_class = ScalarComputationCell if structured_value_lane else ComputationCell
+        self.cells = nn.ModuleList([
+            cell_class() if structured_value_lane else cell_class(state_dim)
+            for _ in range(num_cells)
+        ])
         self.state_norm = nn.LayerNorm(state_dim)
         self.write_projections = nn.ModuleList([
             nn.Linear(state_dim, state_dim) for _ in range(memory_slots)
@@ -288,7 +353,10 @@ class LatentComputationalMachine(nn.Module):
             active = program[:, step] != PAD_OPERATION
             op_latent = self.operation_embedding(program[:, step])
             pooled = working.mean(dim=1)
-            instruction = self.controller(torch.cat([state, pooled, op_latent], dim=-1))
+            if self.route_mode == "operation-only":
+                instruction = self.operation_controller(op_latent)
+            else:
+                instruction = self.controller(torch.cat([state, pooled, op_latent], dim=-1))
             scores = instruction @ self.cell_keys.t() / math.sqrt(self.latent_dim)
             scores = scores / self.route_temperature
             cell_input = value_lane if self.structured_value_lane else state
@@ -349,23 +417,34 @@ def train_machine(
     train_max_steps: int,
     role_loss_weight: float,
     state_supervision_weight: float,
+    variant: str,
+    route_consistency_weight: float,
+    route_balance_weight: float,
     log_every: int,
 ) -> list[dict[str, float]]:
     history = []
     model.train()
     for step in range(1, steps + 1):
         entity_ids, program, facts, target = sample_batch(
-            batch_size, num_entities, train_max_steps, device, min_steps=2
+            batch_size, num_entities, train_max_steps, device, min_steps=2,
+            variant=variant,
         )
         prediction, trace = model(
             program,
             facts,
             entity_ids,
-            return_trace=role_loss_weight > 0 or state_supervision_weight > 0,
+            return_trace=(
+                role_loss_weight > 0
+                or state_supervision_weight > 0
+                or route_consistency_weight > 0
+                or route_balance_weight > 0
+            ),
         )
         task_loss = F.mse_loss(prediction, target)
         route_loss = prediction.new_zeros(())
         state_loss = prediction.new_zeros(())
+        consistency_loss = prediction.new_zeros(())
+        balance_loss = prediction.new_zeros(())
         if role_loss_weight > 0:
             active = program != PAD_OPERATION
             role_targets = program.remainder(model.num_cells)
@@ -378,14 +457,22 @@ def train_machine(
             if not model.structured_value_lane:
                 raise ValueError("state supervision requires --structured-value-lane")
             active = program != PAD_OPERATION
-            expected_history = operation_history(facts[entity_ids], program)
+            expected_history = operation_history(
+                facts[entity_ids], program, variant=variant
+            )
             state_loss = F.mse_loss(
                 trace["value_history"][active], expected_history[active]
+            )
+        if route_consistency_weight > 0 or route_balance_weight > 0:
+            consistency_loss, balance_loss = unsupervised_route_losses(
+                trace["route_scores"], program, model.num_cells
             )
         loss = (
             task_loss
             + role_loss_weight * route_loss
             + state_supervision_weight * state_loss
+            + route_consistency_weight * consistency_loss
+            + route_balance_weight * balance_loss
         )
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
@@ -397,6 +484,8 @@ def train_machine(
                 "task_loss": float(task_loss.detach().cpu()),
                 "route_loss": float(route_loss.detach().cpu()),
                 "state_loss": float(state_loss.detach().cpu()),
+                "route_consistency_loss": float(consistency_loss.detach().cpu()),
+                "route_balance_loss": float(balance_loss.detach().cpu()),
             })
     return history
 
@@ -410,6 +499,7 @@ def adapt_operation_swap(
     max_steps: int,
     learning_rate: float,
     log_every: int,
+    variant: str,
 ) -> list[dict[str, float]]:
     """Adapt only cell 0 to a changed rule while external memory stays fixed."""
     for parameter in model.parameters():
@@ -422,7 +512,7 @@ def adapt_operation_swap(
     for step in range(1, steps + 1):
         entity_ids, program, facts, target = sample_batch(
             batch_size, num_entities, max_steps, device,
-            min_steps=2, swapped=True,
+            min_steps=2, swapped=True, variant=variant,
         )
         prediction, _ = model(program, facts, entity_ids)
         loss = F.mse_loss(prediction, target)
@@ -438,6 +528,46 @@ def adapt_operation_swap(
     return history
 
 
+def unsupervised_route_losses(
+    route_scores: torch.Tensor,
+    program: torch.Tensor,
+    num_cells: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Cluster routes by repeated input token and balance cluster means."""
+    probabilities = F.softmax(route_scores, dim=-1)
+    operation_means = []
+    consistency_terms = []
+    for operation in range(min(NUM_OPERATIONS, num_cells)):
+        mask = program == operation
+        if not bool(mask.any()):
+            continue
+        selected = probabilities[mask]
+        mean = selected.mean(dim=0)
+        operation_means.append(mean)
+        consistency_terms.append(F.kl_div(
+            selected.clamp_min(1e-8).log(),
+            mean.detach().expand_as(selected),
+            reduction="batchmean",
+        ))
+    if not operation_means:
+        zero = route_scores.new_zeros(())
+        return zero, zero
+    means = torch.stack(operation_means)
+    uniform = torch.full((num_cells,), 1.0 / num_cells, device=means.device, dtype=means.dtype)
+    consistency = torch.stack(consistency_terms).mean()
+    global_usage = means.mean(dim=0)
+    balance = F.kl_div(
+        global_usage.clamp_min(1e-8).log(), uniform, reduction="sum"
+    )
+    if means.shape[0] > 1:
+        overlap = means @ means.t()
+        off_diagonal = overlap[~torch.eye(
+            means.shape[0], dtype=torch.bool, device=means.device
+        )]
+        balance = balance + off_diagonal.mean()
+    return consistency, balance
+
+
 def evaluate(
     model: LatentComputationalMachine,
     device: torch.device,
@@ -451,6 +581,7 @@ def evaluate(
     swapped: bool = False,
     zero_memory: bool = False,
     cases: list[tuple[torch.Tensor, torch.Tensor]] | None = None,
+    variant: str = "unbounded",
 ) -> dict[str, object]:
     model.eval()
     losses = []
@@ -462,12 +593,14 @@ def evaluate(
                 entity_ids, program, fact_table, target = sample_batch(
                     batch_size, num_entities, max_steps, device,
                     min_steps=min_steps, facts=facts, swapped=swapped,
+                    variant=variant,
                 )
             else:
                 entity_ids, program = cases[batch_index]
                 fact_table = facts
                 target = apply_operations(
-                    fact_table[entity_ids], program, swapped=swapped
+                    fact_table[entity_ids], program, swapped=swapped,
+                    variant=variant,
                 )
             if zero_memory:
                 fact_table = torch.zeros_like(fact_table)
@@ -533,15 +666,18 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             route_temperature=args.route_temperature,
             state_update_scale=args.state_update_scale,
             stabilize_state=args.stabilize_state,
-        structured_value_lane=args.structured_value_lane,
-        value_clip=args.value_clip,
-        transition_mode=args.transition_mode,
+            structured_value_lane=args.structured_value_lane,
+            value_clip=args.value_clip,
+            transition_mode=args.transition_mode,
+            structured_cell_kind=args.structured_cell_kind,
+            route_mode=args.route_mode,
         ).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     history = train_machine(
         model, optimizer, device, args.steps, args.batch_size, args.num_entities,
         args.train_max_steps, args.role_loss_weight,
-        args.state_supervision_weight, args.log_every,
+        args.state_supervision_weight, args.task_variant,
+        args.route_consistency_weight, args.route_balance_weight, args.log_every,
     )
     facts_a = torch.linspace(-0.5, 0.5, args.num_entities, device=device)
     facts_b = torch.linspace(0.45, -0.45, args.num_entities, device=device)
@@ -559,28 +695,31 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         model, device, facts=facts_a, batch_size=args.batch_size,
         num_entities=args.num_entities, min_steps=args.eval_min_steps,
         max_steps=args.eval_max_steps, batches=args.eval_batches, cases=ood_cases,
+        variant=args.task_variant,
     )
     eval_in_range = evaluate(
         model, device, facts=facts_a, batch_size=args.batch_size,
         num_entities=args.num_entities, min_steps=2,
         max_steps=args.train_max_steps, batches=args.eval_batches, cases=in_range_cases,
+        variant=args.task_variant,
     )
     eval_b = evaluate(
         model, device, facts=facts_b, batch_size=args.batch_size,
         num_entities=args.num_entities, min_steps=args.eval_min_steps,
         max_steps=args.eval_max_steps, batches=args.eval_batches, cases=ood_cases,
+        variant=args.task_variant,
     )
     eval_b_in_range = evaluate(
         model, device, facts=facts_b, batch_size=args.batch_size,
         num_entities=args.num_entities, min_steps=2,
         max_steps=args.train_max_steps, batches=args.eval_batches,
-        cases=in_range_cases,
+        cases=in_range_cases, variant=args.task_variant,
     )
     eval_zero = evaluate(
         model, device, facts=facts_a, batch_size=args.batch_size,
         num_entities=args.num_entities, min_steps=args.eval_min_steps,
         max_steps=args.eval_max_steps, batches=args.eval_batches, cases=ood_cases,
-        zero_memory=True,
+        zero_memory=True, variant=args.task_variant,
     )
     depth_curve = {}
     for depth in range(2, args.eval_max_steps + 1):
@@ -592,6 +731,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             model, device, facts=facts_a, batch_size=args.batch_size,
             num_entities=args.num_entities, min_steps=depth,
             max_steps=depth, batches=args.eval_batches, cases=depth_cases,
+            variant=args.task_variant,
         )
         depth_curve[str(depth)] = {
             key: value for key, value in depth_result.items() if key != "route_ids"
@@ -600,20 +740,20 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         model, device, facts=facts_a, batch_size=args.batch_size,
         num_entities=args.num_entities, min_steps=2,
         max_steps=args.train_max_steps, batches=args.eval_batches,
-        cases=in_range_cases, swapped=True,
+        cases=in_range_cases, swapped=True, variant=args.task_variant,
     )
     operation_swap_history = []
     if args.operation_adapt_steps > 0:
         operation_swap_history = adapt_operation_swap(
             model, device, args.operation_adapt_steps, args.batch_size,
             args.num_entities, args.train_max_steps,
-            args.operation_adapt_learning_rate, args.log_every,
+            args.operation_adapt_learning_rate, args.log_every, args.task_variant,
         )
     operation_swap_after = evaluate(
         model, device, facts=facts_a, batch_size=args.batch_size,
         num_entities=args.num_entities, min_steps=2,
         max_steps=args.train_max_steps, batches=args.eval_batches,
-        cases=in_range_cases, swapped=True,
+        cases=in_range_cases, swapped=True, variant=args.task_variant,
     )
     # Diagnostic route reuse uses identical program batches with different
     # facts; the model is not given entity IDs after external retrieval.
@@ -635,6 +775,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     cell_params = sum(parameter.numel() for parameter in model.cells[0].parameters())
     result = {
         "experiment": "taklif22_latent_computational_machine_v1",
+        "task_variant": args.task_variant,
         "model_kind": args.model_kind,
         "device": str(device),
         "seed": args.seed,
@@ -650,11 +791,15 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "eval_max_steps": args.eval_max_steps,
         "role_loss_weight": args.role_loss_weight,
         "state_supervision_weight": args.state_supervision_weight,
+        "route_consistency_weight": args.route_consistency_weight,
+        "route_balance_weight": args.route_balance_weight,
         "state_update_scale": args.state_update_scale,
         "stabilize_state": args.stabilize_state,
         "structured_value_lane": model.structured_value_lane,
         "value_clip": args.value_clip,
         "transition_mode": args.transition_mode,
+        "structured_cell_kind": args.structured_cell_kind,
+        "route_mode": args.route_mode,
         "total_parameters": total_params,
         "one_active_cell_parameters": cell_params,
         "active_cell_fraction": cell_params / max(total_params, 1),
@@ -686,6 +831,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-kind", choices=("latent", "dense-control"), default="latent")
+    parser.add_argument("--task-variant", choices=("unbounded", "bounded"), default="unbounded")
     parser.add_argument("--state-dim", type=int, default=64)
     parser.add_argument("--latent-dim", type=int, default=32)
     parser.add_argument("--memory-slots", type=int, default=8)
@@ -697,6 +843,8 @@ def main() -> None:
     parser.add_argument("--structured-value-lane", action="store_true")
     parser.add_argument("--value-clip", type=float, default=0.0)
     parser.add_argument("--transition-mode", choices=("delta", "absolute"), default="delta")
+    parser.add_argument("--structured-cell-kind", choices=("mlp", "polynomial"), default="mlp")
+    parser.add_argument("--route-mode", choices=("context", "operation-only"), default="context")
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--steps", type=int, default=4000)
     parser.add_argument("--train-max-steps", type=int, default=4)
@@ -706,6 +854,8 @@ def main() -> None:
     parser.add_argument("--learning-rate", type=float, default=2e-3)
     parser.add_argument("--role-loss-weight", type=float, default=0.05)
     parser.add_argument("--state-supervision-weight", type=float, default=0.0)
+    parser.add_argument("--route-consistency-weight", type=float, default=0.0)
+    parser.add_argument("--route-balance-weight", type=float, default=0.0)
     parser.add_argument("--operation-adapt-steps", type=int, default=0)
     parser.add_argument("--operation-adapt-learning-rate", type=float, default=2e-3)
     parser.add_argument("--log-every", type=int, default=500)

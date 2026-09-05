@@ -1,5 +1,21 @@
 # Results
 
+V0.119 conditionally passes the labels-free latent-route gate on two seeds.
+ The bounded stable-cell machine reaches depth-6 MSE `8.62e-8` and `1.16e-7`,
+ survives paired fact swap at `1.47e-7`/`1.80e-7`, and keeps 24.6--25.5% cell
+ usage without role labels. This is the first real synthetic GO for the
+ `taklif22` route objective, but the polynomial basis and direct memory lookup
+ remain diagnostic limitations. See
+ `V0_119_LATENT_MACHINE_UNSUPERVISED_ROUTE.md`.
+
+V0.118 gives the strongest `taklif22` synthetic signal so far, but only
+ conditionally. On a bounded state task, stable `1,x,x²` cells with role
+ alignment achieve about `1e-7` MSE through depth 6, survive fact swap, and
+ adapt one operation while memory stays frozen. Removing role labels causes
+ route collapse and depth-6 MSE 0.4633. Thus the decomposition works, but
+ labels-free latent instruction discovery is still NO-GO. See
+ `V0_118_LATENT_MACHINE_BOUNDED_CONTROL.md`.
+
 V0.117 rejects the absolute next-state transition as the canonical repair.
  It improves the exact-depth-5 point to MSE 0.0613, but depth 6 jumps to
  8.2828 and in-range quality regresses to 0.3018. The depth curve confirms
