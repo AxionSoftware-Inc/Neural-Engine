@@ -1,5 +1,33 @@
 # Results
 
+V0.116 adds the compact dense recurrent control. It also fits in-range
+ programs and uses external facts, but fails 5--6-step OOD at MSE 63.61,
+ matching the routed machine's depth failure. This means router tuning alone
+ is not the next move; a stable/equivariant state transition is required.
+ See `V0_116_LATENT_MACHINE_DENSE_CONTROL.md`.
+
+V0.115 passes the conditional operation-swap modularity gate. With the fact
+ table frozen, adapting only cell 0 to a changed operation reduces in-range
+ MSE from 0.05456 to 0.00204 in 1,000 steps, while route usage remains
+ unchanged. This validates computation/memory separation locally, but does not
+ repair the long-depth OOD failure. See
+ `V0_115_LATENT_MACHINE_OPERATION_SWAP.md`.
+
+V0.114 closes the current `taklif22` state/credit interventions. Training
+ across 2--6 steps lowers OOD MSE only to 51.17; explicit scalar state plus
+ strong role/intermediate supervision reaches 53.11; bounded LayerNorm/clip
+ variants do not help. Routes stay broad and zero-memory degrades sharply, so
+ the bottleneck is repeated learned cell dynamics, not dead cells or missing
+ fact use. Do not scale or transfer this V1 graph yet. See
+ `V0_114_LATENT_MACHINE_STATE_INTERVENTIONS.md`.
+
+V0.113 starts the independent `taklif22` machine benchmark. The 92K-parameter
+ four-cell machine fits 2--4-step programs but fails unseen 5--6-step programs
+ badly (MSE 62.83), despite balanced cell usage and measurable memory use.
+ This localizes the first failure to unbounded working-state drift rather than
+ routing collapse. The next gate adds bounded residual updates and state
+ stabilization. See `V0_113_LATENT_MACHINE_BASELINE.md`.
+
 V0.112 screens routed child specialization for the Qwen two-layer handoff.
 The best 4-expert top-2 run reaches +0.0544 CE delta, far better than the
 dense-child +0.2377 failure, but the second seed is +0.0710 and top-3 is
