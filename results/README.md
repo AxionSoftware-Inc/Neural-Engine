@@ -1,5 +1,13 @@
 # Results
 
+V0.164 audits teacher-derived group decoders, activation-balanced and
+overlapping partitions, finer group routing, router supervision, and
+sensitivity-aware active schedules. Random overlap is not reproducible
+(`+0.0079` vs `+0.0983` across seeds); teacher full-output/residual decoders
+fail; and eight-layer sensitivity schedules still fail (`+0.0975`). The
+five-layer sensitivity subset passes at `+0.0292` but is only a partial
+sparsity endpoint. See `V0_164_QWEN_ROUTING_PARTITION_FOLLOWUPS.md`.
+
 V0.163 audits the `taklif15.md` learned latent basis. A 4-layer, 25%-active
 rank-384 basis reaches `+0.1519` held-out CE delta and `18.65x` timing despite
 using `0.764x` parent storage. It is a NO-GO in its current random-basis,

@@ -162,6 +162,96 @@ def make_transferred_qwen_child(
     return child
 
 
+@torch.no_grad()
+def activation_balanced_partition(
+    parent: torch.nn.Module,
+    io_batches: list[dict[str, torch.Tensor]],
+    device: torch.device,
+    dtype: torch.dtype,
+    num_experts: int,
+) -> list[torch.Tensor]:
+    """Partition neurons by observed FFN contribution energy on calibration IO."""
+    gate_weight = parent.gate_proj.weight
+    up_weight = parent.up_proj.weight
+    down_weight = parent.down_proj.weight
+    inner_size = int(gate_weight.shape[0])
+    score = torch.zeros(inner_size, device=device, dtype=torch.float32)
+    down_norm_sq = down_weight.float().square().sum(dim=0)
+    for batch in io_batches:
+        inputs = batch["input"].to(device=device, dtype=dtype)
+        gate = F.linear(inputs, gate_weight)
+        value = F.linear(inputs, up_weight)
+        neuron_value = F.silu(gate) * value
+        score += neuron_value.float().square().mean(dim=(0, 1)) * down_norm_sq
+    order = score.argsort(descending=True).tolist()
+    loads = torch.zeros(num_experts, dtype=torch.float32)
+    chunk = inner_size // num_experts
+    counts = [0] * num_experts
+    groups: list[list[int]] = [[] for _ in range(num_experts)]
+    for neuron_id in order:
+        eligible_loads = loads.clone()
+        for expert_id, count in enumerate(counts):
+            if count >= chunk:
+                eligible_loads[expert_id] = float("inf")
+        expert_id = int(eligible_loads.argmin().item())
+        groups[expert_id].append(int(neuron_id))
+        loads[expert_id] += score[neuron_id].cpu()
+        counts[expert_id] += 1
+    parent_device = gate_weight.device
+    return [
+        torch.tensor(group, device=parent_device, dtype=torch.long)
+        for group in groups
+    ]
+
+
+def sampled_overlap_partition(
+    parent: torch.nn.Module,
+    num_experts: int,
+) -> list[torch.Tensor]:
+    """Give each macro-cell an independent representative sample of neurons."""
+    inner_size = int(parent.gate_proj.weight.shape[0])
+    chunk = inner_size // num_experts
+    parent_device = parent.gate_proj.weight.device
+    return [
+        torch.randperm(inner_size, device=parent_device)[:chunk]
+        for _ in range(num_experts)
+    ]
+
+
+@torch.no_grad()
+def stratified_overlap_partition(
+    parent: torch.nn.Module,
+    io_batches: list[dict[str, torch.Tensor]],
+    device: torch.device,
+    dtype: torch.dtype,
+    num_experts: int,
+) -> list[torch.Tensor]:
+    """Overlap cells while matching the calibration contribution-score strata."""
+    gate_weight = parent.gate_proj.weight
+    up_weight = parent.up_proj.weight
+    down_weight = parent.down_proj.weight
+    inner_size = int(gate_weight.shape[0])
+    chunk = inner_size // num_experts
+    score = torch.zeros(inner_size, device=device, dtype=torch.float32)
+    down_norm_sq = down_weight.float().square().sum(dim=0)
+    for batch in io_batches:
+        inputs = batch["input"].to(device=device, dtype=dtype)
+        neuron_value = F.silu(F.linear(inputs, gate_weight)) * F.linear(
+            inputs, up_weight,
+        )
+        score += neuron_value.float().square().mean(dim=(0, 1)) * down_norm_sq
+    ordered = score.argsort(descending=True)
+    strata = ordered.reshape(num_experts, chunk)
+    per_stratum = chunk // num_experts
+    cells = []
+    for _ in range(num_experts):
+        pieces = []
+        for stratum in strata:
+            pieces.append(stratum[torch.randperm(chunk, device=device)[:per_stratum]])
+        cells.append(torch.cat(pieces, dim=0))
+    return cells
+
+
 class QwenSwiGLUSlice(torch.nn.Module):
     """One contiguous intermediate-neuron slice of a Qwen SwiGLU."""
 
@@ -202,6 +292,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         partition_mode: str,
         route_source: str,
         hard_route_scale: float | None,
+        partition_indices: list[torch.Tensor] | None = None,
     ) -> None:
         super().__init__()
         if not 1 <= active_experts <= num_experts:
@@ -214,10 +305,12 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self.temperature = float(temperature)
         self.hard_train = False
         if partition_mode not in {
-            "contiguous", "interleaved", "norm-balanced",
+            "contiguous", "interleaved", "norm-balanced", "activation-balanced",
+            "sampled-overlap", "stratified-overlap",
         }:
             raise ValueError(
-                "partition_mode must be contiguous, interleaved, or norm-balanced"
+                "partition_mode must be contiguous, interleaved, norm-balanced, "
+                "activation-balanced, sampled-overlap, or stratified-overlap"
             )
         self.partition_mode = partition_mode
         if route_source not in {"router", "oracle-dot"}:
@@ -239,6 +332,21 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 * parent.down_proj.weight.detach().norm(dim=0)
             )
             norm_order = neuron_score.argsort(descending=True)
+        if partition_mode == "activation-balanced":
+            if partition_indices is None or len(partition_indices) != num_experts:
+                raise ValueError(
+                    "activation-balanced partition requires one index tensor per expert"
+                )
+        if partition_mode == "sampled-overlap":
+            if partition_indices is None or len(partition_indices) != num_experts:
+                raise ValueError(
+                    "sampled-overlap partition requires one index tensor per expert"
+                )
+        if partition_mode == "stratified-overlap":
+            if partition_indices is None or len(partition_indices) != num_experts:
+                raise ValueError(
+                    "stratified-overlap partition requires one index tensor per expert"
+                )
         self.experts = torch.nn.ModuleList()
         for expert_id in range(num_experts):
             if partition_mode == "contiguous":
@@ -251,8 +359,15 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                     expert_id, inner_size, num_experts,
                     device=parent.gate_proj.weight.device,
                 )
+            elif partition_mode == "activation-balanced":
+                indices = partition_indices[expert_id]
+            elif partition_mode == "sampled-overlap":
+                indices = partition_indices[expert_id]
+            elif partition_mode == "stratified-overlap":
+                indices = partition_indices[expert_id]
             else:
-                assert norm_order is not None
+                if norm_order is None:
+                    raise RuntimeError("norm-balanced partition order was not built")
                 indices = norm_order[expert_id::num_experts]
             self.experts.append(QwenSwiGLUSlice(
                 parent.gate_proj.weight.index_select(0, indices).detach(),
@@ -633,9 +748,11 @@ class SharedBasisRoutedQwenChild(torch.nn.Module):
             "...r,ehr->...eh", basis, self.expert_mix,
         )
         if self.base.training and not self.base.hard_train:
-            correction = self.base.num_experts * (
+            correction = (
                 expert_corrections * route_weights.unsqueeze(-1)
             ).sum(dim=-2)
+            if not self.replace_base_output:
+                correction = self.base.num_experts * correction
         else:
             selected_corrections = torch.gather(
                 expert_corrections, -2,
@@ -643,9 +760,11 @@ class SharedBasisRoutedQwenChild(torch.nn.Module):
                     *selected.shape, hidden_states.shape[-1],
                 ),
             )
-            correction = self.base.hard_route_scale * (
+            correction = (
                 selected_corrections * route_weights.unsqueeze(-1)
             ).sum(dim=-2)
+            if not self.replace_base_output:
+                correction = self.base.hard_route_scale * correction
         return base_output + correction
 
 
@@ -658,7 +777,12 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
     retaining selected-group-only execution in the hard path.
     """
 
-    def __init__(self, base: TransferredRoutedQwenChild, rank: int) -> None:
+    def __init__(
+        self,
+        base: TransferredRoutedQwenChild,
+        rank: int,
+        replace_base_output: bool = False,
+    ) -> None:
         super().__init__()
         if rank < 1:
             raise ValueError("cross-group mix rank must be positive")
@@ -671,6 +795,7 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
             torch.zeros(base.num_experts, hidden_size, rank),
         )
         torch.nn.init.normal_(self.mix_in, std=hidden_size ** -0.5)
+        self.replace_base_output = bool(replace_base_output)
         self.hard_train = False
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
@@ -707,7 +832,124 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
             correction = self.base.hard_route_scale * (
                 selected_corrections * route_weights.unsqueeze(-1)
             ).sum(dim=-2)
-        return base_output + correction
+        return correction if self.replace_base_output else base_output + correction
+
+
+@torch.no_grad()
+def initialize_teacher_group_decoders(
+    child: torch.nn.Module,
+    io_batches: list[dict[str, torch.Tensor]],
+    device: torch.device,
+    dtype: torch.dtype,
+    ridge: float = 1e-3,
+) -> None:
+    """Fit low-rank group-output decoders against frozen teacher MLP outputs."""
+    mixer = next(
+        nested for nested in child.modules()
+        if isinstance(nested, CrossGroupOutputMixRoutedQwenChild)
+    )
+    if not mixer.replace_base_output:
+        raise ValueError("teacher group decoder requires replace_base_output")
+    base = mixer.base
+    hidden_size = int(base.group_gate_weight.shape[-1])
+    num_experts = base.num_experts
+    gram = torch.zeros(
+        num_experts, hidden_size, hidden_size, device=device, dtype=torch.float32,
+    )
+    cross = torch.zeros_like(gram)
+    base.eval()
+    for batch in io_batches:
+        inputs = batch["input"].to(device=device, dtype=dtype)
+        target = batch["output"].to(device=device, dtype=torch.float32)
+        outputs = torch.stack([
+            expert(inputs) for expert in base.experts
+        ], dim=-2).float()
+        flat_outputs = outputs.reshape(-1, num_experts, hidden_size).transpose(0, 1)
+        flat_target = target.reshape(-1, hidden_size)
+        gram += torch.einsum("enh,enk->ehk", flat_outputs, flat_outputs)
+        cross += torch.einsum("enh,nk->ehk", flat_outputs, flat_target)
+    scale = gram.diagonal(dim1=-2, dim2=-1).mean(dim=-1).clamp_min(1e-6)
+    identity = torch.eye(hidden_size, device=device, dtype=torch.float32)
+    solved = torch.linalg.solve(
+        gram + (ridge * scale).view(num_experts, 1, 1) * identity,
+        cross,
+    )
+    left, singular, right = torch.linalg.svd(solved, full_matrices=False)
+    rank = min(mixer.mix_in.shape[1], singular.shape[-1])
+    root = singular[:, :rank].clamp_min(0).sqrt()
+    mixer.mix_in.zero_()
+    mixer.mix_out.zero_()
+    mixer.mix_in[:, :rank].copy_(root.unsqueeze(-1) * right[:, :rank])
+    mixer.mix_out[:, :, :rank].copy_(left[:, :, :rank] * root.unsqueeze(1))
+
+
+@torch.no_grad()
+def initialize_teacher_group_residuals(
+    child: torch.nn.Module,
+    io_batches: list[dict[str, torch.Tensor]],
+    device: torch.device,
+    dtype: torch.dtype,
+    ridge: float = 1e-3,
+) -> None:
+    """Fit group decoders to hard-route omitted residuals from teacher IO."""
+    mixer = next(
+        nested for nested in child.modules()
+        if isinstance(nested, CrossGroupOutputMixRoutedQwenChild)
+    )
+    if mixer.replace_base_output:
+        raise ValueError("residual initialization requires additive group mixing")
+    base = mixer.base
+    hidden_size = int(base.group_gate_weight.shape[-1])
+    num_experts = base.num_experts
+    active_experts = base.active_experts
+    hard_scale = float(base.hard_route_scale)
+    gram = torch.zeros(
+        num_experts, hidden_size, hidden_size, device=device, dtype=torch.float32,
+    )
+    cross = torch.zeros_like(gram)
+    base.eval()
+    for batch in io_batches:
+        inputs = batch["input"].to(device=device, dtype=dtype)
+        target = batch["output"].to(device=device, dtype=torch.float32)
+        outputs = torch.stack([
+            expert(inputs) for expert in base.experts
+        ], dim=-2).float()
+        flat_outputs = outputs.reshape(-1, num_experts, hidden_size)
+        flat_target = target.reshape(-1, hidden_size)
+        importance = flat_outputs.square().mean(dim=-1)
+        top_values, top_ids = importance.topk(active_experts, dim=-1)
+        weights = F.softmax(top_values / base.temperature, dim=-1)
+        selected = torch.gather(
+            flat_outputs, 1,
+            top_ids.unsqueeze(-1).expand(-1, -1, hidden_size),
+        )
+        base_selected = hard_scale * (
+            selected * weights.unsqueeze(-1)
+        ).sum(dim=1)
+        residual_target = (flat_target - base_selected) / max(hard_scale, 1e-6)
+        for expert_id in range(num_experts):
+            mask = top_ids == expert_id
+            if not mask.any():
+                continue
+            selected_rows = selected[mask]
+            gram[expert_id] += selected_rows.transpose(0, 1) @ selected_rows
+            residual_rows = residual_target.unsqueeze(1).expand(
+                -1, active_experts, -1,
+            )[mask]
+            cross[expert_id] += selected_rows.transpose(0, 1) @ residual_rows
+    scale = gram.diagonal(dim1=-2, dim2=-1).mean(dim=-1).clamp_min(1e-6)
+    identity = torch.eye(hidden_size, device=device, dtype=torch.float32)
+    solved = torch.linalg.solve(
+        gram + (ridge * scale).view(num_experts, 1, 1) * identity,
+        cross,
+    )
+    left, singular, right = torch.linalg.svd(solved, full_matrices=False)
+    rank = min(mixer.mix_in.shape[1], singular.shape[-1])
+    root = singular[:, :rank].clamp_min(0).sqrt()
+    mixer.mix_in.zero_()
+    mixer.mix_out.zero_()
+    mixer.mix_in[:, :rank].copy_(root.unsqueeze(-1) * right[:, :rank])
+    mixer.mix_out[:, :, :rank].copy_(left[:, :, :rank] * root.unsqueeze(1))
 
 
 def make_transferred_routed_qwen_child(
@@ -724,19 +966,40 @@ def make_transferred_routed_qwen_child(
     hard_route_scale: float | None,
     device: torch.device,
     dtype: torch.dtype,
+    partition_io: list[dict[str, torch.Tensor]] | None = None,
 ) -> torch.nn.Module:
+    partition_indices = None
+    if partition_mode == "activation-balanced":
+        if partition_io is None:
+            raise ValueError("activation-balanced partition requires calibration IO")
+        partition_indices = activation_balanced_partition(
+            parent, partition_io, device, dtype, num_experts,
+        )
+    elif partition_mode == "sampled-overlap":
+        partition_indices = sampled_overlap_partition(parent, num_experts)
+    elif partition_mode == "stratified-overlap":
+        if partition_io is None:
+            raise ValueError("stratified-overlap partition requires calibration IO")
+        partition_indices = stratified_overlap_partition(
+            parent, partition_io, device, dtype, num_experts,
+        )
     child = TransferredRoutedQwenChild(
         parent, num_experts, active_experts, routing_temperature, dispatch_mode,
         partition_mode, route_source, hard_route_scale,
+        partition_indices,
     ).to(device=device, dtype=dtype)
     if calibration_rank > 0:
         if calibration_mode == "shared-basis":
             child = SharedBasisRoutedQwenChild(
                 child, int(calibration_rank),
             ).to(device=device, dtype=dtype)
-        elif calibration_mode == "cross-group":
+        elif calibration_mode in {"cross-group", "teacher-group-residual"}:
             child = CrossGroupOutputMixRoutedQwenChild(
                 child, int(calibration_rank),
+            ).to(device=device, dtype=dtype)
+        elif calibration_mode == "teacher-group-decoder":
+            child = CrossGroupOutputMixRoutedQwenChild(
+                child, int(calibration_rank), replace_base_output=True,
             ).to(device=device, dtype=dtype)
         elif calibration_mode == "swiglu":
             child = SwiGLUResidualChild(
@@ -807,6 +1070,7 @@ def train_importance_router(
     learning_rate: float,
     max_grad_norm: float,
     log_every: int,
+    target_mode: str = "energy",
 ) -> list[dict[str, float]]:
     """Distill frozen group contribution importance into the cheap router."""
     base = next(
@@ -831,7 +1095,75 @@ def train_importance_router(
                 outputs = torch.stack([
                     expert(inputs) for expert in base.experts
                 ], dim=-2).float()
-                importance = outputs.square().mean(dim=-1)
+                if target_mode == "dot":
+                    full_output = outputs.sum(dim=-2)
+                    importance = (
+                        outputs * full_output.unsqueeze(-2)
+                    ).sum(dim=-1)
+                elif target_mode == "energy":
+                    importance = outputs.square().mean(dim=-1)
+                else:
+                    raise ValueError("router target must be energy or dot")
+                target = F.softmax(
+                    importance if target_mode == "dot"
+                    else torch.log(importance + 1e-8),
+                    dim=-1,
+                )
+            scores = base.router(inputs).float()
+            loss = F.kl_div(
+                F.log_softmax(scores, dim=-1), target, reduction="batchmean",
+            )
+            if not torch.isfinite(loss):
+                raise FloatingPointError(
+                    f"non-finite router importance loss at step {step}"
+                )
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(router_parameters, max_grad_norm)
+            optimizer.step()
+            if step == 1 or step % log_every == 0 or step == steps:
+                history.append({"step": step, "loss": float(loss.detach().cpu())})
+    finally:
+        for parameter, previous in zip(all_parameters, previous_requires_grad):
+            parameter.requires_grad_(previous)
+    return history
+
+
+def train_neuron_importance_router(
+    child: torch.nn.Module,
+    io_batches: list[dict[str, torch.Tensor]],
+    device: torch.device,
+    dtype: torch.dtype,
+    steps: int,
+    learning_rate: float,
+    max_grad_norm: float,
+    log_every: int,
+) -> list[dict[str, float]]:
+    """Pretrain a neuron router against teacher contribution energy."""
+    base = next(
+        nested for nested in child.modules()
+        if isinstance(nested, TransferredRoutedQwenNeuronChild)
+    )
+    all_parameters = list(base.parameters())
+    previous_requires_grad = [parameter.requires_grad for parameter in all_parameters]
+    for parameter in all_parameters:
+        parameter.requires_grad_(False)
+    router_parameters = list(base.router.parameters())
+    for parameter in router_parameters:
+        parameter.requires_grad_(True)
+    optimizer = torch.optim.AdamW(router_parameters, lr=learning_rate)
+    output_norm_sq = base.output_weight.float().square().sum(dim=0)
+    history = []
+    base.eval()
+    try:
+        for step in range(1, steps + 1):
+            batch = io_batches[(step - 1) % len(io_batches)]
+            inputs = batch["input"].to(device=device, dtype=dtype)
+            with torch.no_grad():
+                gate = F.linear(inputs, base.gate_weight)
+                value = F.linear(inputs, base.value_weight)
+                coefficient = F.silu(gate) * value
+                importance = coefficient.float().square() * output_norm_sq
                 target = F.softmax(
                     torch.log(importance + 1e-8), dim=-1,
                 )
@@ -841,7 +1173,7 @@ def train_importance_router(
             )
             if not torch.isfinite(loss):
                 raise FloatingPointError(
-                    f"non-finite router importance loss at step {step}"
+                    f"non-finite neuron router loss at step {step}"
                 )
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
@@ -1038,10 +1370,20 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 args.dispatch_mode,
                 args.partition_mode, args.route_source,
                 hard_route_scale_schedule[child_index], device, dtype,
+                partition_io=train_io,
             )
+            if args.calibration_mode == "teacher-group-decoder":
+                initialize_teacher_group_decoders(
+                    child, train_io, device, dtype,
+                )
+            elif args.calibration_mode == "teacher-group-residual":
+                initialize_teacher_group_residuals(
+                    child, train_io, device, dtype,
+                )
             router_histories.append(train_importance_router(
                 child, train_io, device, dtype, args.router_supervision_steps,
                 args.learning_rate, args.max_grad_norm, args.log_every,
+                args.router_target,
             ))
             histories.append(train_child(
                 child, train_io, device, dtype, args.steps,
@@ -1055,13 +1397,16 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 args.routing_temperature, args.calibration_rank,
                 args.calibration_source, args.calibration_mode, device, dtype,
             )
+            router_histories.append(train_neuron_importance_router(
+                child, train_io, device, dtype, args.router_supervision_steps,
+                args.learning_rate, args.max_grad_norm, args.log_every,
+            ))
             histories.append(train_child(
                 child, train_io, device, dtype, args.steps,
                 args.learning_rate, args.max_grad_norm, args.log_every,
                 args.hard_train_steps,
                 args.hard_learning_rate,
             ))
-            router_histories.append([])
         elif args.child_kind == "qwen-latent-basis":
             child_index = len(children)
             child = make_learned_latent_basis_qwen_child(
@@ -1306,7 +1651,10 @@ def main() -> None:
     )
     parser.add_argument(
         "--calibration-mode",
-        choices=("low-rank", "swiglu", "shared-basis", "cross-group"),
+        choices=(
+            "low-rank", "swiglu", "shared-basis", "cross-group",
+            "teacher-group-decoder", "teacher-group-residual",
+        ),
         default="low-rank",
         help="correction type for transferred sparse children",
     )
@@ -1327,7 +1675,10 @@ def main() -> None:
     )
     parser.add_argument(
         "--partition-mode",
-        choices=("contiguous", "interleaved", "norm-balanced"),
+        choices=(
+            "contiguous", "interleaved", "norm-balanced", "activation-balanced",
+            "sampled-overlap", "stratified-overlap",
+        ),
         default="contiguous",
         help="layout of copied parent neurons inside expert groups",
     )
@@ -1368,6 +1719,10 @@ def main() -> None:
     parser.add_argument(
         "--router-supervision-steps", type=int, default=0,
         help="steps distilling frozen expert contribution importance into the router",
+    )
+    parser.add_argument(
+        "--router-target", choices=("energy", "dot"), default="energy",
+        help="calibration target for group router supervision",
     )
     parser.add_argument("--joint-steps", type=int, default=0)
     parser.add_argument(
