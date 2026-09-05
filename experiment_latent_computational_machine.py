@@ -345,11 +345,17 @@ class LatentComputationalMachine(nn.Module):
         structured_cell_kind: str = "mlp",
         route_mode: str = "context",
         value_dim: int = 1,
+        memory_mode: str = "direct",
+        num_entities: int = 32,
+        memory_temperature: float = 1.0,
     ) -> None:
         super().__init__()
         self.state_dim = state_dim
         self.latent_dim = latent_dim
         self.value_dim = value_dim
+        self.memory_mode = memory_mode
+        self.num_entities = num_entities
+        self.memory_temperature = memory_temperature
         self.memory_slots = memory_slots
         self.num_cells = num_cells
         self.route_temperature = route_temperature
@@ -366,12 +372,19 @@ class LatentComputationalMachine(nn.Module):
         if route_mode not in {"context", "operation-only"}:
             raise ValueError("route_mode must be context or operation-only")
         self.route_mode = route_mode
+        if memory_mode not in {"direct", "learned"}:
+            raise ValueError("memory_mode must be direct or learned")
+        if memory_temperature <= 0:
+            raise ValueError("memory_temperature must be positive")
         self.value_encoder = nn.Sequential(
             nn.Linear(value_dim, state_dim),
             nn.Tanh(),
         )
         self.operation_embedding = nn.Embedding(NUM_OPERATIONS + 1, latent_dim)
         self.operation_controller = nn.Linear(latent_dim, latent_dim)
+        if memory_mode == "learned":
+            self.memory_queries = nn.Embedding(num_entities, latent_dim)
+            self.memory_keys = nn.Parameter(torch.randn(num_entities, latent_dim) * 0.05)
         self.controller = nn.Sequential(
             nn.Linear(state_dim * 2 + latent_dim, 128),
             nn.SiLU(),
@@ -401,6 +414,20 @@ class LatentComputationalMachine(nn.Module):
             nn.Linear(state_dim, 1),
         )
 
+    def read_external_memory(
+        self,
+        fact_values: torch.Tensor,
+        entity_ids: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
+        fact_table = fact_values if fact_values.dim() > 1 else fact_values.unsqueeze(-1)
+        if self.memory_mode == "direct":
+            return fact_table[entity_ids], None
+        query = self.memory_queries(entity_ids)
+        scores = query @ self.memory_keys.t() / math.sqrt(self.latent_dim)
+        scores = scores / self.memory_temperature
+        weights = F.softmax(scores, dim=-1)
+        return weights @ fact_table, scores
+
     def forward(
         self,
         program: torch.Tensor,
@@ -412,8 +439,7 @@ class LatentComputationalMachine(nn.Module):
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         if hard_route is None:
             hard_route = not self.training
-        fact_table = fact_values if fact_values.dim() > 1 else fact_values.unsqueeze(-1)
-        values = fact_table[entity_ids]
+        values, memory_scores = self.read_external_memory(fact_values, entity_ids)
         value_lane = values
         state = self.value_encoder(value_lane)
         working = torch.zeros(
@@ -482,6 +508,8 @@ class LatentComputationalMachine(nn.Module):
         }
         if self.structured_value_lane:
             trace["value_history"] = torch.stack(value_history, dim=1)
+        if memory_scores is not None:
+            trace["memory_scores"] = memory_scores
         if return_trace:
             return prediction, trace
         return prediction, {}
@@ -501,6 +529,7 @@ def train_machine(
     route_consistency_weight: float,
     route_balance_weight: float,
     value_dim: int,
+    memory_supervision_weight: float,
     log_every: int,
 ) -> list[dict[str, float]]:
     history = []
@@ -520,6 +549,7 @@ def train_machine(
                 or state_supervision_weight > 0
                 or route_consistency_weight > 0
                 or route_balance_weight > 0
+                or memory_supervision_weight > 0
             ),
         )
         task_loss = F.mse_loss(prediction, target)
@@ -527,6 +557,7 @@ def train_machine(
         state_loss = prediction.new_zeros(())
         consistency_loss = prediction.new_zeros(())
         balance_loss = prediction.new_zeros(())
+        memory_loss = prediction.new_zeros(())
         if role_loss_weight > 0:
             active = program != PAD_OPERATION
             role_targets = program.remainder(model.num_cells)
@@ -549,12 +580,17 @@ def train_machine(
             consistency_loss, balance_loss = unsupervised_route_losses(
                 trace["route_scores"], program, model.num_cells
             )
+        if memory_supervision_weight > 0:
+            if getattr(model, "memory_mode", "direct") != "learned":
+                raise ValueError("memory supervision requires --memory-mode learned")
+            memory_loss = F.cross_entropy(trace["memory_scores"], entity_ids)
         loss = (
             task_loss
             + role_loss_weight * route_loss
             + state_supervision_weight * state_loss
             + route_consistency_weight * consistency_loss
             + route_balance_weight * balance_loss
+            + memory_supervision_weight * memory_loss
         )
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
@@ -568,6 +604,7 @@ def train_machine(
                 "state_loss": float(state_loss.detach().cpu()),
                 "route_consistency_loss": float(consistency_loss.detach().cpu()),
                 "route_balance_loss": float(balance_loss.detach().cpu()),
+                "memory_loss": float(memory_loss.detach().cpu()),
             })
     return history
 
@@ -671,6 +708,8 @@ def evaluate(
     losses = []
     absolute_errors = []
     route_trace = []
+    memory_hits = 0
+    memory_total = 0
     with torch.no_grad():
         for batch_index in range(batches):
             if cases is None:
@@ -694,16 +733,24 @@ def evaluate(
             losses.append(F.mse_loss(prediction, target).item())
             absolute_errors.append((prediction - target).abs().mean().item())
             route_trace.append(trace["route_ids"].cpu())
+            if "memory_scores" in trace:
+                memory_hits += int(
+                    (trace["memory_scores"].argmax(dim=-1) == entity_ids).sum().item()
+                )
+                memory_total += int(entity_ids.numel())
     routes = torch.cat(route_trace, dim=0)
     active = routes >= 0
     usage = torch.bincount(routes[active], minlength=model.num_cells).float()
     usage = usage / usage.sum().clamp_min(1)
-    return {
+    result = {
         "mse": float(sum(losses) / len(losses)),
         "mae": float(sum(absolute_errors) / len(absolute_errors)),
         "route_usage": usage.tolist(),
         "route_ids": routes,
     }
+    if memory_total:
+        result["memory_retrieval_accuracy"] = memory_hits / memory_total
+    return result
 
 
 def route_reuse(routes: torch.Tensor, programs: torch.Tensor) -> dict[str, float]:
@@ -735,8 +782,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     ) else "cpu")
     torch.manual_seed(args.seed)
     if args.model_kind == "dense-control":
-        if args.value_dim != 1:
-            raise ValueError("dense-control supports only --value-dim 1")
+        if args.value_dim != 1 or args.memory_mode != "direct":
+            raise ValueError("dense-control supports only scalar direct memory")
         model = DenseRecurrentControl(
             state_dim=args.state_dim,
             latent_dim=args.latent_dim,
@@ -758,6 +805,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             structured_cell_kind=args.structured_cell_kind,
             route_mode=args.route_mode,
             value_dim=args.value_dim,
+            memory_mode=args.memory_mode,
+            num_entities=args.num_entities,
+            memory_temperature=args.memory_temperature,
         ).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     history = train_machine(
@@ -765,6 +815,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         args.train_max_steps, args.role_loss_weight,
         args.state_supervision_weight, args.task_variant,
         args.route_consistency_weight, args.route_balance_weight, args.value_dim,
+        args.memory_supervision_weight,
         args.log_every,
     )
     if args.value_dim == 1:
@@ -873,6 +924,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "experiment": "taklif22_latent_computational_machine_v1",
         "task_variant": args.task_variant,
         "value_dim": args.value_dim,
+        "memory_mode": args.memory_mode,
+        "memory_temperature": args.memory_temperature,
         "model_kind": args.model_kind,
         "device": str(device),
         "seed": args.seed,
@@ -890,6 +943,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "state_supervision_weight": args.state_supervision_weight,
         "route_consistency_weight": args.route_consistency_weight,
         "route_balance_weight": args.route_balance_weight,
+        "memory_supervision_weight": args.memory_supervision_weight,
         "state_update_scale": args.state_update_scale,
         "stabilize_state": args.stabilize_state,
         "structured_value_lane": model.structured_value_lane,
@@ -947,6 +1001,8 @@ def main() -> None:
     parser.add_argument("--transition-mode", choices=("delta", "absolute"), default="delta")
     parser.add_argument("--structured-cell-kind", choices=("mlp", "polynomial"), default="mlp")
     parser.add_argument("--route-mode", choices=("context", "operation-only"), default="context")
+    parser.add_argument("--memory-mode", choices=("direct", "learned"), default="direct")
+    parser.add_argument("--memory-temperature", type=float, default=1.0)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--steps", type=int, default=4000)
     parser.add_argument("--train-max-steps", type=int, default=4)
@@ -958,6 +1014,7 @@ def main() -> None:
     parser.add_argument("--state-supervision-weight", type=float, default=0.0)
     parser.add_argument("--route-consistency-weight", type=float, default=0.0)
     parser.add_argument("--route-balance-weight", type=float, default=0.0)
+    parser.add_argument("--memory-supervision-weight", type=float, default=0.0)
     parser.add_argument("--operation-adapt-steps", type=int, default=0)
     parser.add_argument("--operation-adapt-learning-rate", type=float, default=2e-3)
     parser.add_argument("--log-every", type=int, default=500)
