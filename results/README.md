@@ -1,5 +1,14 @@
 # Results
 
+V0.157 compares transferred-neuron dispatches: grouped gives +0.0413 CE
+ delta but 1.101x timing, while token-loop gives +0.0789 and 1.031x on the
+ same seed. Keep grouped as the quality reference until a fused path preserves
+ route stability. See `V0_157_QWEN_TRANSFERRED_DISPATCH_COMPARISON.md`.
+
+V0.156 promotes 16 groups/top-4 as the first stable 25%-active eight-layer
+ configuration. Two seeds pass at +0.0413 and +0.0412 CE delta, with 25% active
+ expert-body compute. See `V0_156_QWEN_25_ACTIVE_STABLE.md`.
+
 V0.155 keeps grouped dispatch numerically correct (`1.68e-8` max error) and
  caches transferred slice weights, but the 8-layer 50%-active full-model
  timing remains 1.043x of the parent. `torch.compile` cannot run here because
