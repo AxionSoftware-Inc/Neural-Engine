@@ -392,10 +392,10 @@ class LatentComputationalMachine(nn.Module):
         self.route_mode = route_mode
         if memory_mode not in {
             "direct", "learned", "hierarchical", "coordinate", "content",
-            "content-projected"
+            "content-projected", "content-dual-projected"
         }:
             raise ValueError(
-                "memory_mode must be direct, learned, hierarchical, coordinate, content, or content-projected"
+                "memory_mode must be direct, learned, hierarchical, coordinate, content, content-projected, or content-dual-projected"
             )
         if memory_temperature <= 0:
             raise ValueError("memory_temperature must be positive")
@@ -409,6 +409,9 @@ class LatentComputationalMachine(nn.Module):
         self.operation_controller = nn.Linear(latent_dim, latent_dim)
         if memory_mode == "content-projected":
             self.memory_key_projection = nn.Linear(memory_key_dim, latent_dim, bias=False)
+        elif memory_mode == "content-dual-projected":
+            self.memory_fact_projection = nn.Linear(memory_key_dim, latent_dim, bias=False)
+            self.memory_query_projection = nn.Linear(memory_key_dim, latent_dim, bias=False)
         if memory_mode in {"learned", "hierarchical"}:
             self.memory_queries = nn.Embedding(num_entities, latent_dim)
         if memory_mode == "learned":
@@ -473,7 +476,9 @@ class LatentComputationalMachine(nn.Module):
             scores = -8.0 * distance / (self.memory_temperature ** 2)
             weights = F.softmax(scores, dim=-1)
             return weights @ fact_table, scores
-        if self.memory_mode in {"content", "content-projected"}:
+        if self.memory_mode in {
+            "content", "content-projected", "content-dual-projected"
+        }:
             if fact_keys is None or query_keys is None:
                 raise ValueError("content memory requires external fact_keys and query_keys")
             if fact_keys.dim() != 2 or query_keys.dim() != 2:
@@ -491,6 +496,9 @@ class LatentComputationalMachine(nn.Module):
             if self.memory_mode == "content-projected":
                 fact_keys = self.memory_key_projection(fact_keys)
                 query = self.memory_key_projection(query)
+            elif self.memory_mode == "content-dual-projected":
+                fact_keys = self.memory_fact_projection(fact_keys)
+                query = self.memory_query_projection(query)
             fact_keys = F.normalize(fact_keys, dim=-1)
             query = F.normalize(
                 query, dim=-1
@@ -679,7 +687,9 @@ def train_machine(
                 trace["route_scores"], program, model.num_cells
             )
         if memory_supervision_weight > 0:
-            if getattr(model, "memory_mode", "direct") not in {"learned", "hierarchical"}:
+            if getattr(model, "memory_mode", "direct") not in {
+                "learned", "hierarchical", "content-dual-projected"
+            }:
                 raise ValueError("memory supervision requires a learned memory mode")
             memory_loss = F.cross_entropy(trace["memory_scores"], entity_ids)
         loss = (
@@ -921,7 +931,10 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             memory_key_dim=args.memory_key_dim,
         ).to(device)
     address_keys = None
-    if args.memory_mode in {"content", "content-projected"}:
+    query_keys = None
+    if args.memory_mode in {
+        "content", "content-projected", "content-dual-projected"
+    }:
         if args.memory_key_dim <= 0:
             raise ValueError("memory_key_dim must be positive for content memory")
         # This table is deliberately external to the model. It is an exact
@@ -930,7 +943,17 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         address_keys = F.normalize(
             torch.randn(args.num_entities, args.memory_key_dim, device=device), dim=-1
         )
-    memory_kwargs = {"fact_keys": address_keys, "query_keys": address_keys}
+        query_keys = address_keys
+        if args.memory_mode == "content-dual-projected":
+            # Two externally generated views of the same latent content. The
+            # orthogonal transform makes raw dot-product matching fail while
+            # preserving a shared relation that a pair of global projections
+            # can learn and transfer to unseen rows.
+            view_transform = torch.linalg.qr(
+                torch.randn(args.memory_key_dim, args.memory_key_dim, device=device)
+            ).Q
+            query_keys = F.normalize(address_keys @ view_transform, dim=-1)
+    memory_kwargs = {"fact_keys": address_keys, "query_keys": query_keys}
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
     history = train_machine(
         model, optimizer, device, args.steps, args.batch_size, args.num_entities,
@@ -1156,7 +1179,7 @@ def main() -> None:
         "--memory-mode",
         choices=(
             "direct", "learned", "hierarchical", "coordinate", "content",
-            "content-projected",
+            "content-projected", "content-dual-projected",
         ),
         default="direct",
     )

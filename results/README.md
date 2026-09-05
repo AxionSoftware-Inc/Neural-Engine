@@ -639,6 +639,14 @@ supports shared key transforms while preserving the one-active-cell path. It
 is still an externally paired-key control, not semantic end-to-end memory
 learning. See `V0_134_LATENT_MACHINE_SHARED_KEY_PROJECTION.md`.
 
+V0.135 aligns two different external key views with two global projections. A
+fixed orthogonal transform separates query and fact representations, yet both
+seeds retrieve all 512 unseen rows at 100% with held-out MSE 3.84e-6/6.05e-6.
+This is the strongest addressing signal so far: shared alignment transfers
+without row-specific parameters, while the active computation cell stays at
+162 parameters. The key views remain synthetic, so the next gate is frozen
+Qwen-derived content features. See `V0_135_LATENT_MACHINE_DUAL_VIEW_KEYS.md`.
+
 V0.60 fixes the main strict-value bottleneck with a trainable modular
 value-state/template interface. On values 0--31 train and unseen values
 32--63 eval, the 300M Macro-enabled model reaches 96.36% mean across two
