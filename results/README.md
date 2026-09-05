@@ -668,6 +668,14 @@ only 25% of expert bodies. This is a quality and active-path GO for one layer;
 the next gate is grouped CUDA latency and independent-text validation. See
 `V0_138_QWEN_SINGLE_LAYER_SPARSE_BANK.md`.
 
+V0.139 measures that bank end-to-end with isolated synchronized CUDA timing.
+Across two serial seeds, parent latency is 66.70/66.86ms and sparse-bank
+latency is 68.00/68.25ms (1.020x/1.021x), so Python-level dispatch erases the
+theoretical 25% expert-body reduction. Keep the quality bank, reject the
+current performance implementation, and move to grouped/batched execution
+before adding layers or model capacity. See
+`V0_139_QWEN_SINGLE_LAYER_BANK_TIMING.md`.
+
 V0.60 fixes the main strict-value bottleneck with a trainable modular
 value-state/template interface. On values 0--31 train and unseen values
 32--63 eval, the 300M Macro-enabled model reaches 96.36% mean across two

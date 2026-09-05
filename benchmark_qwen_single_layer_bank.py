@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from pathlib import Path
 
 import torch
@@ -20,6 +21,40 @@ from benchmark_qwen_two_layer_transplant import (
     token_stream,
     train_child,
 )
+
+
+def synchronize(device: torch.device) -> None:
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+
+
+@torch.inference_mode()
+def benchmark_forward(
+    model: nn.Module,
+    input_ids: list[torch.Tensor],
+    device: torch.device,
+    warmup: int,
+    iterations: int,
+) -> dict[str, float]:
+    if iterations <= 0:
+        raise ValueError("timing_iterations must be positive")
+    for _ in range(warmup):
+        for ids in input_ids:
+            model(input_ids=ids, use_cache=False)
+    synchronize(device)
+    durations = []
+    for _ in range(iterations):
+        start = time.perf_counter()
+        for ids in input_ids:
+            model(input_ids=ids, use_cache=False)
+        synchronize(device)
+        durations.append((time.perf_counter() - start) * 1000.0 / len(input_ids))
+    ordered = sorted(durations)
+    return {
+        "mean_ms_per_batch": sum(durations) / len(durations),
+        "p50_ms_per_batch": ordered[len(ordered) // 2],
+        "p95_ms_per_batch": ordered[max(0, int(len(ordered) * 0.95) - 1)],
+    }
 
 
 def run(args: argparse.Namespace) -> dict[str, object]:
@@ -106,6 +141,15 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         )
     layer.mlp = parent
     alpha_zero = next(item for item in variants if item["variant"] == "alpha_0")
+    layer.mlp = parent
+    parent_timing = benchmark_forward(
+        model, list(eval_ids), device, args.timing_warmup, args.timing_iterations,
+    )
+    layer.mlp = MixedParentChild(parent, child, 0.0)
+    bank_timing = benchmark_forward(
+        model, list(eval_ids), device, args.timing_warmup, args.timing_iterations,
+    )
+    layer.mlp = parent
     child_params = sum(parameter.numel() for parameter in child.parameters())
     parent_params = sum(parameter.numel() for parameter in parent.parameters())
     result = {
@@ -135,6 +179,17 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "child_scalar_params": child_params,
         "child_parameter_fraction": child_params / max(parent_params, 1),
         "variants": variants,
+        "timing": {
+            "parent": parent_timing,
+            "sparse_bank": bank_timing,
+            "bank_over_parent_mean_ratio": (
+                bank_timing["mean_ms_per_batch"]
+                / max(parent_timing["mean_ms_per_batch"], 1e-9)
+            ),
+            "warmup": args.timing_warmup,
+            "iterations": args.timing_iterations,
+            "note": "end-to-end Qwen forward; no fused custom CUDA kernel",
+        },
         "quality_gate": {
             "criterion": "alpha=0 child CE delta <= 0.05 and all outputs finite",
             "passed": bool(
@@ -175,6 +230,8 @@ def main() -> None:
     parser.add_argument("--dtype", choices=("float32", "float16", "bfloat16"), default="float32")
     parser.add_argument("--local-files-only", action="store_true")
     parser.add_argument("--output", default="results/runs/qwen_single_layer_bank.json")
+    parser.add_argument("--timing-warmup", type=int, default=10)
+    parser.add_argument("--timing-iterations", type=int, default=30)
     print(json.dumps(run(parser.parse_args()), indent=2))
 
 
