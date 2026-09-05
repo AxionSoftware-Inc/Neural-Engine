@@ -38,6 +38,11 @@ def apply_operations(
             scale = 0.80 * result
             negate = -result
             square = 0.50 * result.square()
+        elif variant == "bounded-nonlinear":
+            add = 0.65 * torch.tanh(result + (-0.25 if swapped else 0.20))
+            scale = 0.75 * result + 0.10 * torch.sin(2.0 * result)
+            negate = -0.60 * result + 0.05
+            square = 0.45 * torch.tanh(result.square() + 0.15)
         elif swapped:
             # Operation-swap intervention: alter one computation rule while
             # leaving the external fact table unchanged.
@@ -73,6 +78,11 @@ def operation_history(
             scale = 0.80 * result
             negate = -result
             square = 0.50 * result.square()
+        elif variant == "bounded-nonlinear":
+            add = 0.65 * torch.tanh(result + (-0.25 if swapped else 0.20))
+            scale = 0.75 * result + 0.10 * torch.sin(2.0 * result)
+            negate = -0.60 * result + 0.05
+            square = 0.45 * torch.tanh(result.square() + 0.15)
         elif swapped:
             add = result - 0.15
             scale = result * 0.80
@@ -831,7 +841,11 @@ def run(args: argparse.Namespace) -> dict[str, object]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model-kind", choices=("latent", "dense-control"), default="latent")
-    parser.add_argument("--task-variant", choices=("unbounded", "bounded"), default="unbounded")
+    parser.add_argument(
+        "--task-variant",
+        choices=("unbounded", "bounded", "bounded-nonlinear"),
+        default="unbounded",
+    )
     parser.add_argument("--state-dim", type=int, default=64)
     parser.add_argument("--latent-dim", type=int, default=32)
     parser.add_argument("--memory-slots", type=int, default=8)
