@@ -1,5 +1,13 @@
 # Results
 
+V0.165 separates router error from decomposition error. Activation-signature
+clustering passes one seed at `+0.0377` but fails the second at `+0.0518`;
+teacher-dot supervision is also unstable (`+0.0274` vs `+0.1148`). A clean
+rank-0 oracle-dot control still fails at `+0.9487`, showing that ideal group
+selection cannot repair the current 50%-active cell decomposition. The next
+test is an always-on residual coreset with signed selected-cell coefficients.
+See `V0_165_QWEN_ROUTER_ORACLE_AND_CLUSTER_AUDIT.md`.
+
 V0.164 audits teacher-derived group decoders, activation-balanced and
 overlapping partitions, finer group routing, router supervision, and
 sensitivity-aware active schedules. Random overlap is not reproducible

@@ -252,6 +252,89 @@ def stratified_overlap_partition(
     return cells
 
 
+@torch.no_grad()
+def activation_cluster_partition(
+    parent: torch.nn.Module,
+    io_batches: list[dict[str, torch.Tensor]],
+    device: torch.device,
+    dtype: torch.dtype,
+    num_experts: int,
+    iterations: int = 6,
+    max_tokens: int = 512,
+) -> list[torch.Tensor]:
+    """Group neurons with similar calibration-time SwiGLU activation signatures.
+
+    Each neuron is represented by its activation coefficient over a deterministic
+    token sample.  Cosine-normalized signatures are clustered with a balanced
+    greedy assignment so every expert owns exactly the same number of neurons.
+    The partition is intentionally deterministic for reproducible benchmark runs.
+    """
+    gate_weight = parent.gate_proj.weight
+    up_weight = parent.up_proj.weight
+    inner_size = int(gate_weight.shape[0])
+    if inner_size % num_experts:
+        raise ValueError("Qwen intermediate size must divide evenly into experts")
+    signatures = []
+    remaining_tokens = max(1, int(max_tokens))
+    for batch in io_batches:
+        if remaining_tokens <= 0:
+            break
+        inputs = batch["input"].to(device=device, dtype=dtype)
+        activation = F.silu(F.linear(inputs, gate_weight)) * F.linear(
+            inputs, up_weight,
+        )
+        flat = activation.float().reshape(-1, inner_size)
+        take = min(int(flat.shape[0]), remaining_tokens)
+        positions = torch.linspace(
+            0, flat.shape[0] - 1, steps=take, device=device,
+        ).long()
+        signatures.append(flat.index_select(0, positions))
+        remaining_tokens -= take
+    if not signatures:
+        raise ValueError("activation-cluster partition requires non-empty calibration IO")
+    features = torch.cat(signatures, dim=0).transpose(0, 1).contiguous()
+    features = F.normalize(features, p=2, dim=1, eps=1e-6)
+
+    # Evenly spaced deterministic seeds avoid introducing a second random source
+    # into a benchmark whose model/training seed is already controlled globally.
+    seed_ids = torch.linspace(
+        0, inner_size - 1, steps=num_experts, device=device,
+    ).long()
+    centers = features.index_select(0, seed_ids).clone()
+    chunk = inner_size // num_experts
+    for _ in range(max(1, int(iterations))):
+        distances = 1.0 - features @ centers.transpose(0, 1)
+        remaining = torch.full(
+            (num_experts,), chunk, device=device, dtype=torch.int32,
+        )
+        unassigned = torch.ones(inner_size, device=device, dtype=torch.bool)
+        assignments = torch.full(
+            (inner_size,), -1, device=device, dtype=torch.long,
+        )
+        # Greedily take the globally closest available neuron/expert pair.  This
+        # enforces exact cell sizes while preserving local signature similarity.
+        for _ in range(inner_size):
+            costs = distances.masked_fill(~unassigned[:, None], float("inf"))
+            costs = costs.masked_fill(remaining[None, :] <= 0, float("inf"))
+            flat_id = int(costs.argmin().item())
+            neuron_id = flat_id // num_experts
+            expert_id = flat_id % num_experts
+            assignments[neuron_id] = expert_id
+            unassigned[neuron_id] = False
+            remaining[expert_id] -= 1
+        updated = []
+        for expert_id in range(num_experts):
+            selected = features[assignments == expert_id]
+            updated.append(F.normalize(selected.mean(dim=0), p=2, dim=0, eps=1e-6))
+        centers = torch.stack(updated, dim=0)
+
+    parent_device = gate_weight.device
+    return [
+        torch.where(assignments == expert_id)[0].to(device=parent_device)
+        for expert_id in range(num_experts)
+    ]
+
+
 class QwenSwiGLUSlice(torch.nn.Module):
     """One contiguous intermediate-neuron slice of a Qwen SwiGLU."""
 
@@ -306,11 +389,12 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self.hard_train = False
         if partition_mode not in {
             "contiguous", "interleaved", "norm-balanced", "activation-balanced",
-            "sampled-overlap", "stratified-overlap",
+            "sampled-overlap", "stratified-overlap", "activation-cluster",
         }:
             raise ValueError(
                 "partition_mode must be contiguous, interleaved, norm-balanced, "
-                "activation-balanced, sampled-overlap, or stratified-overlap"
+                "activation-balanced, sampled-overlap, stratified-overlap, "
+                "or activation-cluster"
             )
         self.partition_mode = partition_mode
         if route_source not in {"router", "oracle-dot", "oracle-energy"}:
@@ -347,6 +431,11 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 raise ValueError(
                     "stratified-overlap partition requires one index tensor per expert"
                 )
+        if partition_mode == "activation-cluster":
+            if partition_indices is None or len(partition_indices) != num_experts:
+                raise ValueError(
+                    "activation-cluster partition requires one index tensor per expert"
+                )
         self.experts = torch.nn.ModuleList()
         for expert_id in range(num_experts):
             if partition_mode == "contiguous":
@@ -364,6 +453,8 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             elif partition_mode == "sampled-overlap":
                 indices = partition_indices[expert_id]
             elif partition_mode == "stratified-overlap":
+                indices = partition_indices[expert_id]
+            elif partition_mode == "activation-cluster":
                 indices = partition_indices[expert_id]
             else:
                 if norm_order is None:
@@ -1004,6 +1095,12 @@ def make_transferred_routed_qwen_child(
         if partition_io is None:
             raise ValueError("stratified-overlap partition requires calibration IO")
         partition_indices = stratified_overlap_partition(
+            parent, partition_io, device, dtype, num_experts,
+        )
+    elif partition_mode == "activation-cluster":
+        if partition_io is None:
+            raise ValueError("activation-cluster partition requires calibration IO")
+        partition_indices = activation_cluster_partition(
             parent, partition_io, device, dtype, num_experts,
         )
     child = TransferredRoutedQwenChild(
@@ -1702,7 +1799,7 @@ def main() -> None:
         "--partition-mode",
         choices=(
             "contiguous", "interleaved", "norm-balanced", "activation-balanced",
-            "sampled-overlap", "stratified-overlap",
+            "sampled-overlap", "stratified-overlap", "activation-cluster",
         ),
         default="contiguous",
         help="layout of copied parent neurons inside expert groups",
