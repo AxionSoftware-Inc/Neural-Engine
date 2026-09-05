@@ -6,6 +6,7 @@ V0.121 conditionally passes the labels-free multidimensional latent-route gate o
 V0.122 conditionally passes the learned external-memory gate on two seeds.
 V0.123 conditionally passes the task-only learned-memory gate on two seeds.
 V0.124 conditionally passes the 128-entity learned-memory scale gate on two seeds, with a 2--3x quality cost.
+V0.125 rejects task-only 512-entity memory scaling but recovers with an explicit address objective.
  The bounded stable-cell machine reaches depth-6 MSE `8.62e-8` and `1.16e-7`,
  survives paired fact swap at `1.47e-7`/`1.80e-7`, and keeps 24.6--25.5% cell
  usage without role labels. This is the first real synthetic GO for the
