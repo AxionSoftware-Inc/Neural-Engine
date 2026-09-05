@@ -1,5 +1,12 @@
 # Results
 
+V0.169 rejects layerwise final-logit refinement. Refining each child against
+the task loss while keeping the sparse prefix and dense suffix fixed worsens
+the matched four-layer result from `+0.0095` to `+0.4703` (`69.43%` top-1).
+The sparse interface needs a stable hidden-state contract, not only a
+different training objective. See
+`V0_169_QWEN_LAYERWISE_TASK_REFINEMENT_AUDIT.md`.
+
 V0.168 rejects generic joint cascade refinement. With the same eight-layer
 protocol, 50 logit-level joint steps worsen the held-out delta from `+0.5685`
 to `+0.9811` (`55.18%` top-1), so a single end-to-end objective is not fixing

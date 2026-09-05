@@ -1581,6 +1581,106 @@ def joint_logit_refine_many(
     return history
 
 
+def layerwise_logit_refine_many(
+    model: torch.nn.Module,
+    layers: list[torch.nn.Module],
+    parents: list[torch.nn.Module],
+    children: list[torch.nn.Module],
+    input_batches: list[torch.Tensor],
+    teacher_logits: list[torch.Tensor],
+    device: torch.device,
+    steps: int,
+    learning_rate: float,
+    max_grad_norm: float,
+    log_every: int,
+    temperature: float,
+) -> list[list[dict[str, float]]]:
+    """Refine one sparse child at a time against the final teacher logits.
+
+    Earlier layers use their already-trained sparse children, the active layer
+    uses its sparse child, and later layers remain dense parents.  This keeps
+    the optimization signal task-aware while preventing a joint optimizer from
+    trading errors between multiple sparse interfaces at once.
+    """
+    if steps < 1:
+        raise ValueError("layerwise refinement steps must be positive")
+    if len(input_batches) != len(teacher_logits):
+        raise ValueError("layerwise inputs and teacher logits must have equal length")
+    for layer, parent in zip(layers, parents):
+        layer.mlp = parent
+    model_parameters = list(model.parameters())
+    previous_requires_grad = [parameter.requires_grad for parameter in model_parameters]
+    history: list[list[dict[str, float]]] = []
+    try:
+        for index, (layer, child) in enumerate(zip(layers, children)):
+            for previous_layer, previous_child in zip(
+                layers[:index], children[:index],
+            ):
+                previous_layer.mlp = previous_child
+            layer.mlp = child
+            for later_layer, later_parent in zip(
+                layers[index + 1:], parents[index + 1:],
+            ):
+                later_layer.mlp = later_parent
+            for parameter in model_parameters:
+                parameter.requires_grad_(False)
+            child_parameters = list(child.parameters())
+            for parameter in child_parameters:
+                parameter.requires_grad_(True)
+            previous_hard_train = _set_hard_train_modules(child, True)
+            optimizer = torch.optim.AdamW(child_parameters, lr=learning_rate)
+            child_history: list[dict[str, float]] = []
+            model.eval()
+            child.train()
+            try:
+                for step in range(1, steps + 1):
+                    batch_index = (step - 1) % len(input_batches)
+                    ids = input_batches[batch_index]
+                    target = teacher_logits[batch_index].to(
+                        device=device, dtype=torch.float32,
+                    )
+                    student = model(
+                        input_ids=ids, use_cache=False,
+                    ).logits.float()
+                    target_probs = torch.softmax(target / temperature, dim=-1)
+                    student_log_probs = F.log_softmax(
+                        student / temperature, dim=-1,
+                    )
+                    loss = F.kl_div(
+                        student_log_probs,
+                        target_probs,
+                        reduction="batchmean",
+                    ) * (temperature * temperature)
+                    if not torch.isfinite(loss):
+                        raise FloatingPointError(
+                            f"non-finite layerwise loss at layer {index}, step {step}"
+                        )
+                    optimizer.zero_grad(set_to_none=True)
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(
+                        child_parameters, max_grad_norm,
+                    )
+                    optimizer.step()
+                    if (
+                        step == 1 or step % log_every == 0 or step == steps
+                    ):
+                        child_history.append({
+                            "step": step,
+                            "loss": float(loss.detach().cpu()),
+                        })
+            finally:
+                for nested, previous in previous_hard_train:
+                    nested.hard_train = previous
+            child.eval()
+            history.append(child_history)
+    finally:
+        for parameter, previous in zip(model_parameters, previous_requires_grad):
+            parameter.requires_grad_(previous)
+    for layer, child in zip(layers, children):
+        layer.mlp = child
+    return history
+
+
 def run(args: argparse.Namespace) -> dict[str, object]:
     try:
         from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -1643,6 +1743,19 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         logits.to(device="cpu", dtype=torch.float16)
         for logits in teacher_logits_gpu
     ]
+    layerwise_input_batches = []
+    layerwise_teacher_logits = []
+    if args.layerwise_steps > 0:
+        layerwise_input_batches = list(train_ids)
+        with torch.no_grad():
+            layerwise_teacher_logits_gpu = [
+                model(input_ids=ids, use_cache=False).logits.detach()
+                for ids in layerwise_input_batches
+            ]
+        layerwise_teacher_logits = [
+            logits.to(device="cpu", dtype=torch.float16)
+            for logits in layerwise_teacher_logits_gpu
+        ]
     joint_input_batches = []
     joint_teacher_logits = []
     if args.joint_steps > 0:
@@ -1800,6 +1913,14 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         layer.mlp = child
 
     joint_history = []
+    layerwise_history = []
+    if args.layerwise_steps > 0:
+        layerwise_history = layerwise_logit_refine_many(
+            model, layers, parents, children,
+            layerwise_input_batches, layerwise_teacher_logits, device,
+            args.layerwise_steps, args.layerwise_learning_rate,
+            args.max_grad_norm, args.log_every, args.joint_temperature,
+        )
     if args.joint_steps > 0:
         joint_history = joint_logit_refine_many(
             model, layers, children, joint_input_batches, joint_teacher_logits, device,
@@ -1930,6 +2051,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "joint_batch_size": args.joint_batch_size,
         "joint_learning_rate": args.joint_learning_rate,
         "joint_temperature": args.joint_temperature,
+        "layerwise_distillation_steps": args.layerwise_steps,
+        "layerwise_learning_rate": args.layerwise_learning_rate,
+        "layerwise_train_history": layerwise_history,
         "teacher_ce": teacher_ce,
         "child_train_history": histories,
         "router_train_history": router_histories,
@@ -2088,6 +2212,14 @@ def main() -> None:
     )
     parser.add_argument("--joint-learning-rate", type=float, default=1e-4)
     parser.add_argument("--joint-temperature", type=float, default=2.0)
+    parser.add_argument(
+        "--layerwise-steps", type=int, default=0,
+        help="task-loss refinement steps for each sparse child in cascade order",
+    )
+    parser.add_argument(
+        "--layerwise-learning-rate", type=float, default=1e-5,
+        help="learning rate for per-layer task-loss refinement",
+    )
     parser.add_argument("--prompt-parity", action="store_true")
     parser.add_argument("--generation-tokens", type=int, default=32)
     parser.add_argument("--learning-rate", type=float, default=3e-3)
