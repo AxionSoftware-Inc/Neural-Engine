@@ -150,8 +150,12 @@ def sample_batch(
     swapped: bool = False,
     variant: str = "unbounded",
     value_dim: int = 1,
+    entity_limit: int | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    entity_ids = torch.randint(num_entities, (batch_size,), device=device)
+    entity_limit = num_entities if entity_limit is None else entity_limit
+    if not 1 <= entity_limit <= num_entities:
+        raise ValueError("entity_limit must be within the fact-table size")
+    entity_ids = torch.randint(entity_limit, (batch_size,), device=device)
     if facts is None:
         fact_shape = (num_entities,) if value_dim == 1 else (num_entities, value_dim)
         fact_table = torch.empty(fact_shape, device=device).uniform_(-0.5, 0.5)
@@ -174,11 +178,18 @@ def sample_program_cases(
     device: torch.device,
     *,
     min_steps: int,
+    entity_start: int = 0,
+    entity_count: int | None = None,
 ) -> list[tuple[torch.Tensor, torch.Tensor]]:
     """Create fixed entity/program cases for paired interventions."""
+    entity_count = num_entities - entity_start if entity_count is None else entity_count
+    if entity_start < 0 or entity_count <= 0 or entity_start + entity_count > num_entities:
+        raise ValueError("entity case range must fit inside the fact table")
     cases = []
     for _ in range(num_batches):
-        entity_ids = torch.randint(num_entities, (batch_size,), device=device)
+        entity_ids = torch.randint(
+            entity_count, (batch_size,), device=device
+        ) + entity_start
         lengths = torch.randint(min_steps, max_steps + 1, (batch_size,), device=device)
         positions = torch.arange(max_steps, device=device).unsqueeze(0)
         program = torch.randint(NUM_OPERATIONS, (batch_size, max_steps), device=device)
@@ -374,8 +385,10 @@ class LatentComputationalMachine(nn.Module):
         if route_mode not in {"context", "operation-only"}:
             raise ValueError("route_mode must be context or operation-only")
         self.route_mode = route_mode
-        if memory_mode not in {"direct", "learned", "hierarchical"}:
-            raise ValueError("memory_mode must be direct, learned, or hierarchical")
+        if memory_mode not in {"direct", "learned", "hierarchical", "coordinate"}:
+            raise ValueError(
+                "memory_mode must be direct, learned, hierarchical, or coordinate"
+            )
         if memory_temperature <= 0:
             raise ValueError("memory_temperature must be positive")
         self.value_encoder = nn.Sequential(
@@ -434,6 +447,17 @@ class LatentComputationalMachine(nn.Module):
         fact_table = fact_values if fact_values.dim() > 1 else fact_values.unsqueeze(-1)
         if self.memory_mode == "direct":
             return fact_table[entity_ids], None
+        if self.memory_mode == "coordinate":
+            row_positions = torch.arange(
+                self.num_entities, device=entity_ids.device, dtype=fact_table.dtype
+            )
+            query_positions = entity_ids.to(dtype=fact_table.dtype)
+            distance = (
+                query_positions.unsqueeze(-1) - row_positions.unsqueeze(0)
+            ).square()
+            scores = -8.0 * distance / (self.memory_temperature ** 2)
+            weights = F.softmax(scores, dim=-1)
+            return weights @ fact_table, scores
         query = self.memory_queries(entity_ids)
         if self.memory_mode == "learned":
             scores = query @ self.memory_keys.t() / math.sqrt(self.latent_dim)
@@ -554,6 +578,7 @@ def train_machine(
     route_balance_weight: float,
     value_dim: int,
     memory_supervision_weight: float,
+    entity_limit: int,
     log_every: int,
 ) -> list[dict[str, float]]:
     history = []
@@ -563,6 +588,7 @@ def train_machine(
             batch_size, num_entities, train_max_steps, device, min_steps=2,
             variant=variant,
             value_dim=value_dim,
+            entity_limit=entity_limit,
         )
         prediction, trace = model(
             program,
@@ -805,6 +831,10 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         args.device == "auto" and torch.cuda.is_available()
     ) else "cpu")
     torch.manual_seed(args.seed)
+    if args.train_entity_count <= 0:
+        args.train_entity_count = args.num_entities
+    if args.train_entity_count > args.num_entities:
+        raise ValueError("train_entity_count cannot exceed num_entities")
     if args.model_kind == "dense-control":
         if args.value_dim != 1 or args.memory_mode != "direct":
             raise ValueError("dense-control supports only scalar direct memory")
@@ -840,7 +870,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         args.train_max_steps, args.role_loss_weight,
         args.state_supervision_weight, args.task_variant,
         args.route_consistency_weight, args.route_balance_weight, args.value_dim,
-        args.memory_supervision_weight,
+        args.memory_supervision_weight, args.train_entity_count,
         args.log_every,
     )
     if args.value_dim == 1:
@@ -861,6 +891,24 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         args.train_max_steps, device,
         min_steps=2,
     )
+    heldout_eval = None
+    if args.train_entity_count < args.num_entities:
+        heldout_cases = sample_program_cases(
+            args.eval_batches, args.batch_size, args.num_entities,
+            args.train_max_steps, device,
+            min_steps=2,
+            entity_start=args.train_entity_count,
+            entity_count=args.num_entities - args.train_entity_count,
+        )
+        heldout_result = evaluate(
+            model, device, facts=facts_a, batch_size=args.batch_size,
+            num_entities=args.num_entities, min_steps=2,
+            max_steps=args.train_max_steps, batches=args.eval_batches,
+            cases=heldout_cases, variant=args.task_variant,
+        )
+        heldout_eval = {
+            key: value for key, value in heldout_result.items() if key != "route_ids"
+        }
     eval_a = evaluate(
         model, device, facts=facts_a, batch_size=args.batch_size,
         num_entities=args.num_entities, min_steps=args.eval_min_steps,
@@ -961,6 +1009,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "num_cells": model.num_cells,
         "active_cells_per_step": 1,
         "num_entities": args.num_entities,
+        "train_entity_count": args.train_entity_count,
         "train_steps": args.steps,
         "train_max_steps": args.train_max_steps,
         "eval_min_steps": args.eval_min_steps,
@@ -985,6 +1034,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "in_range_eval": {key: value for key, value in eval_in_range.items() if key != "route_ids"},
         "fact_table_B_eval": {key: value for key, value in eval_b.items() if key != "route_ids"},
         "fact_table_B_in_range_eval": {key: value for key, value in eval_b_in_range.items() if key != "route_ids"},
+        "heldout_entity_eval": heldout_eval,
         "zero_memory_eval": {key: value for key, value in eval_zero.items() if key != "route_ids"},
         "depth_curve": depth_curve,
         "operation_swap_before": {key: value for key, value in operation_swap_before.items() if key != "route_ids"},
@@ -1019,6 +1069,10 @@ def main() -> None:
     parser.add_argument("--memory-slots", type=int, default=8)
     parser.add_argument("--num-cells", type=int, default=4)
     parser.add_argument("--num-entities", type=int, default=32)
+    parser.add_argument(
+        "--train-entity-count", type=int, default=0,
+        help="number of leading entities exposed during training; 0 means all",
+    )
     parser.add_argument("--route-temperature", type=float, default=1.0)
     parser.add_argument("--state-update-scale", type=float, default=1.0)
     parser.add_argument("--stabilize-state", action="store_true")
@@ -1028,7 +1082,9 @@ def main() -> None:
     parser.add_argument("--structured-cell-kind", choices=("mlp", "polynomial"), default="mlp")
     parser.add_argument("--route-mode", choices=("context", "operation-only"), default="context")
     parser.add_argument(
-        "--memory-mode", choices=("direct", "learned", "hierarchical"), default="direct"
+        "--memory-mode",
+        choices=("direct", "learned", "hierarchical", "coordinate"),
+        default="direct",
     )
     parser.add_argument("--memory-temperature", type=float, default=1.0)
     parser.add_argument("--memory-buckets", type=int, default=32)
