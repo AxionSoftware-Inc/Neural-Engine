@@ -1,5 +1,14 @@
 # Results
 
+V0.108 passes the minimal Qwen-to-Neural-Engine parent-function transplant
+gate. A 384-wide attention-free child replaces one frozen late Qwen3-0.6B FFN
+with alpha=0 and stays within +0.0103, +0.0394, and +0.0183 CE across two
+seeds and two late layers, with 94.53%--98.44% teacher top-1 agreement. The
+child uses 8.37% of the parent FFN's scalar parameters. This is a positive
+local function-transfer signal, not yet an end-to-end language result; the
+next gate is multi-batch two-layer replacement. See
+`V0_108_QWEN_PARENT_TRANSPLANT.md`.
+
 V0.107 passes a synthetic self-describing semantic-address audit. A coupled
 descriptor reaches 100% coarse/active routing accuracy, 100% full-scan top-k
 recall, and descriptor/body cosine 0.729 while evaluating 16 local dot
