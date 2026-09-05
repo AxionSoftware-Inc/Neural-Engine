@@ -1,5 +1,11 @@
 # Results
 
+V0.168 rejects generic joint cascade refinement. With the same eight-layer
+protocol, 50 logit-level joint steps worsen the held-out delta from `+0.5685`
+to `+0.9811` (`55.18%` top-1), so a single end-to-end objective is not fixing
+the depth cascade. The next experiment must constrain the interface between
+adjacent sparse layers. See `V0_168_QWEN_JOINT_CASCADE_REFINEMENT_AUDIT.md`.
+
 V0.167 finds the strongest routing result so far. An exact best-subset oracle
 passes at 2 and 4 layers (`+0.0384`, `+0.0439`), proving the current cells have
 headroom. A coupled 70-class subset router with its weights frozen after
