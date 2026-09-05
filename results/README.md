@@ -1,5 +1,12 @@
 # Results
 
+V0.110 closes two simple repairs for the V0.109 full-handoff failure. A
+Qwen-like attention-free SwiGLU child improves alpha=0 CE only from +0.2377 to
++0.2230 at width 384, and doubling width to 768 remains +0.2277. One-child
+controls still pass, so the bottleneck is successive child-interface error,
+not isolated capacity or activation choice. The next gate is compact joint
+state/interface calibration. See `V0_110_QWEN_GATED_CHILD.md`.
+
 V0.109 rejects naive independent full handoff across two adjacent late Qwen
 FFNs: the single-layer child controls pass, but replacing both at alpha=0
 raises held-out CE by 0.2377. A 50% parent/child mixture still reaches only

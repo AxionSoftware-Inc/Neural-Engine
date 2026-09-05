@@ -21,6 +21,31 @@ from benchmark_qwen_parent_transplant import (
 )
 
 
+class NESwiGLUBlock(nn.Module):
+    """Attention-free gated NE block with Qwen-compatible local algebra."""
+
+    def __init__(self, hidden_size: int, inner_size: int) -> None:
+        super().__init__()
+        self.gate_projection = nn.Linear(hidden_size, inner_size)
+        self.value_projection = nn.Linear(hidden_size, inner_size)
+        self.output_projection = nn.Linear(inner_size, hidden_size)
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        gated = F.silu(self.gate_projection(hidden_states))
+        return self.output_projection(gated * self.value_projection(hidden_states))
+
+
+def make_child(
+    hidden_size: int,
+    inner_size: int,
+    kind: str,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> nn.Module:
+    child_class = NEFunctionBlock if kind == "gelu" else NESwiGLUBlock
+    return child_class(hidden_size, inner_size).to(device=device, dtype=dtype)
+
+
 def capture_batches(
     model: nn.Module,
     tokenizer,
@@ -73,6 +98,59 @@ def train_child(
         if step == 1 or step % log_every == 0 or step == steps:
             history.append({"step": step, "loss": float(loss.detach().cpu())})
     child.eval()
+    return history
+
+
+def joint_logit_refine(
+    model: nn.Module,
+    layer25: nn.Module,
+    layer26: nn.Module,
+    child25: nn.Module,
+    child26: nn.Module,
+    input_batches: list[torch.Tensor],
+    teacher_logits: list[torch.Tensor],
+    device: torch.device,
+    steps: int,
+    learning_rate: float,
+    max_grad_norm: float,
+    log_every: int,
+    temperature: float,
+) -> list[dict[str, float]]:
+    """Refine both children against frozen full-model teacher logits."""
+    layer25.mlp = child25
+    layer26.mlp = child26
+    optimizer = torch.optim.AdamW(
+        list(child25.parameters()) + list(child26.parameters()),
+        lr=learning_rate,
+    )
+    history = []
+    child25.train()
+    child26.train()
+    for step in range(1, steps + 1):
+        index = (step - 1) % len(input_batches)
+        ids = input_batches[index]
+        target = teacher_logits[index].to(device=device, dtype=torch.float32)
+        student = model(input_ids=ids, use_cache=False).logits.float()
+        target_probs = torch.softmax(target / temperature, dim=-1)
+        student_log_probs = F.log_softmax(student / temperature, dim=-1)
+        loss = F.kl_div(
+            student_log_probs,
+            target_probs,
+            reduction="batchmean",
+        ) * (temperature * temperature)
+        if not torch.isfinite(loss):
+            raise FloatingPointError(f"non-finite joint loss at step {step}")
+        optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        nn.utils.clip_grad_norm_(
+            list(child25.parameters()) + list(child26.parameters()),
+            max_grad_norm,
+        )
+        optimizer.step()
+        if step == 1 or step % log_every == 0 or step == steps:
+            history.append({"step": step, "loss": float(loss.detach().cpu())})
+    child25.eval()
+    child26.eval()
     return history
 
 
@@ -148,15 +226,16 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     )
     train_ids = token_stream(
         tokenizer, TRAIN_TEXT, args.batch_size,
-        args.sequence_length * args.eval_batches,
+        args.sequence_length * args.train_batches,
         device,
-    ).reshape(args.eval_batches, args.batch_size, args.sequence_length)
+    ).reshape(args.train_batches, args.batch_size, args.sequence_length)
     eval_ids = token_stream(
         tokenizer, EVAL_TEXT, args.batch_size,
         args.sequence_length * args.eval_batches,
         device,
     ).reshape(args.eval_batches, args.batch_size, args.sequence_length)
     with torch.no_grad():
+        teacher_train_logits = [model(input_ids=ids, use_cache=False).logits.detach() for ids in train_ids]
         teacher_logits = [model(input_ids=ids, use_cache=False).logits.detach() for ids in eval_ids]
     teacher_ce = sum(ce(logits.float(), ids) for logits, ids in zip(teacher_logits, eval_ids)) / len(eval_ids)
 
@@ -174,7 +253,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         model, tokenizer, EVAL_TEXT, args.batch_size, args.sequence_length,
         args.eval_batches, device, args.first_layer,
     )
-    child25 = NEFunctionBlock(hidden_size, args.inner_size).to(device=device, dtype=dtype)
+    child25 = make_child(hidden_size, args.inner_size, args.child_kind, device, dtype)
     history25 = train_child(
         child25, io25, device, dtype, args.steps, args.learning_rate,
         args.max_grad_norm, args.log_every,
@@ -187,7 +266,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         model, tokenizer, TRAIN_TEXT, args.batch_size, args.sequence_length,
         args.train_batches, device, args.second_layer,
     )
-    child26 = NEFunctionBlock(hidden_size, args.inner_size).to(device=device, dtype=dtype)
+    child26 = make_child(hidden_size, args.inner_size, args.child_kind, device, dtype)
     history26 = train_child(
         child26, io26, device, dtype, args.steps, args.learning_rate,
         args.max_grad_norm, args.log_every,
@@ -212,6 +291,15 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             ).item()
             for batch in eval_io26
         ) / args.eval_batches
+
+    joint_history = []
+    if args.joint_steps > 0:
+        joint_history = joint_logit_refine(
+            model, layer25, layer26, child25, child26,
+            list(train_ids), teacher_train_logits, device,
+            args.joint_steps, args.joint_learning_rate, args.max_grad_norm,
+            args.log_every, args.joint_temperature,
+        )
 
     # Restore the original parent pair before the controlled final sweeps.
     layer25.mlp = parent25
@@ -243,14 +331,19 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "second_layer": args.second_layer,
         "hidden_size": hidden_size,
         "child_inner_size": args.inner_size,
+        "child_kind": args.child_kind,
         "batch_size": args.batch_size,
         "sequence_length": args.sequence_length,
         "train_batches": args.train_batches,
         "eval_batches": args.eval_batches,
         "distillation_steps_per_child": args.steps,
+        "joint_distillation_steps": args.joint_steps,
+        "joint_learning_rate": args.joint_learning_rate,
+        "joint_temperature": args.joint_temperature,
         "teacher_ce": teacher_ce,
         "child25_train_history": history25,
         "child26_train_history": history26,
+        "joint_train_history": joint_history,
         "child25_local_eval_mse": local_mse25,
         "child26_local_eval_mse_after_child25": local_mse26,
         "parent_scalar_params_each": sum(parameter.numel() for parameter in parent25.parameters()),
@@ -280,15 +373,19 @@ def main() -> None:
     parser.add_argument("--first-layer", type=int, default=25)
     parser.add_argument("--second-layer", type=int, default=26)
     parser.add_argument("--inner-size", type=int, default=384)
+    parser.add_argument("--child-kind", choices=("gelu", "swiglu"), default="gelu")
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--sequence-length", type=int, default=64)
     parser.add_argument("--train-batches", type=int, default=8)
     parser.add_argument("--eval-batches", type=int, default=4)
     parser.add_argument("--steps", type=int, default=300)
+    parser.add_argument("--joint-steps", type=int, default=0)
     parser.add_argument("--learning-rate", type=float, default=3e-3)
+    parser.add_argument("--joint-learning-rate", type=float, default=1e-3)
     parser.add_argument("--max-grad-norm", type=float, default=1.0)
     parser.add_argument("--log-every", type=int, default=100)
     parser.add_argument("--max-ce-delta", type=float, default=0.05)
+    parser.add_argument("--joint-temperature", type=float, default=2.0)
     parser.add_argument("--alphas", type=float, nargs="+", default=[1.0, 0.75, 0.5, 0.25, 0.0])
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
