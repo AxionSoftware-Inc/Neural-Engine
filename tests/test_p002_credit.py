@@ -6,6 +6,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from benchmark_p002_specialization import make_source
 from neural_engine.circuits import MicroCircuitBank
 from neural_engine.p002_credit import CounterfactualCircuitCredit
 from train import load_config, make_model
@@ -219,3 +220,11 @@ def test_p002_config_is_opt_in_20m_32_bank() -> None:
     model = make_model(config)
     report = model.parameter_report()
     assert 18_000_000 <= report["total_params"] <= 22_000_000
+
+
+def test_p002_benchmark_uses_true_heldout_split() -> None:
+    config = load_config("configs/ne_p002_20m_32.yaml", smoke=False)
+    eval_source = make_source(config, torch.device("cpu"), "eval")
+    heldout_source = make_source(config, torch.device("cpu"), "heldout")
+    assert eval_source.generator.split == config["eval_split"] == "train"
+    assert heldout_source.generator.split == config["heldout_split"] == "heldout"
