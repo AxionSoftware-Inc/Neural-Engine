@@ -34,7 +34,9 @@ single-seed stable (`+0.04038` vs `+0.05156`), 1000 router steps give only a
 small seed-specific improvement (`+0.04900`), and the same extra steps worsen
 the eight-layer result (`+0.06981`). A group-energy subset-router input is
 also rejected (`+0.07236`, paired oracle `+0.04523`), worse than the hidden
-router control. K=6 remains the quality baseline.
+router control. Hard subset labels (`+0.06744`) and a 1000-step final-child
+refit (`+0.07404`) also fail the eight-layer gate. K=4 is closed for the
+current recipe; K=6 remains the quality baseline.
 
 V0.173 fixes a real full-active routing bug: when `K=E`, the hard path must
 use scale `E`, not `E/K`, to reconstruct the parent sum. The corrected child is

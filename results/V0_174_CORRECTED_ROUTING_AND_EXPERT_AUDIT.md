@@ -195,6 +195,8 @@ the router representation:
 | default hidden subset router | 2027 | `+0.05156` | `+0.02724` | `1.335x` | fail; not two-seed stable |
 | hidden router, 1000 supervision steps | 2027 | `+0.04900` | `+0.02689` | `1.328x` | small single-seed improvement only |
 | hidden router, 1000 supervision steps, 8 layers | 2026 | `+0.06981` | `+0.01391` | `1.664x` | reject; depth generalization worsened |
+| hard-label subset target, 8 layers | 2026 | `+0.06744` | `+0.01884` | `1.665x` | reject; worse than subset-soft |
+| final-child target, 1000 post steps, 8 layers | 2026 | `+0.07404` | `+0.01719` | `1.661x` | reject; more refit steps do not help |
 
 As a different architecture control, `group-energy` replaced the hidden state
 input to the 70-class subset router with cheap per-group SwiGLU activation
@@ -250,9 +252,10 @@ The direct-hard eight-layer K=6 reference is stable across two seeds, while
 the 50%-active K=4 reference has a stable learned-router failure but a passing
 oracle. Post-child refit, final-corrected subset targets, extra router steps,
 and group-energy router features do not close that gap, so K=6 is the current
-quality baseline. K=4 routing remains a separate research track. Runtime
-optimization is also separate; do not interpret the current 1.32–2.13x timing
-as a deployment result.
+quality baseline. K=4 routing is closed for the current recipe: further work
+should change the routing/cascade architecture rather than repeat target or
+step-count sweeps. Runtime optimization is also separate; do not interpret the
+current 1.32–2.13x timing as a deployment result.
 
 The JSON artifacts for the runs above are kept under `results/runs/` locally;
 that directory remains ignored by the repository, while this report records
