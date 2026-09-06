@@ -111,6 +111,34 @@ present, but it is not sufficient to explain that large difference. The next
 control therefore reduces the hard-phase learning rate before changing the
 architecture or increasing model size.
 
+## Training-operator parity controls
+
+The mixed result above came from 300 soft-calibration steps followed by 200
+hard-route steps. That handoff trains one operator and then abruptly optimizes
+another. The following seed-2026 controls isolate that transition:
+
+| training protocol | learned CE delta | paired oracle CE delta | decision |
+|---|---:|---:|---|
+| handoff, hard LR `3e-4` | `+0.05391` | `+0.04257` | borderline/fail |
+| handoff, hard LR `1e-4` | `+0.31384` | `+0.27967` | reject; child 3 diverged |
+| no hard phase (`0/300`) | `+1.53048` | `+1.52453` | reject; soft operator is not a sparse endpoint |
+| soft-to-hard blend, 100 steps | `+0.08783` | `+0.10253` | reject; blended operator worsened the cascade |
+| direct hard (`300/300`) | `+0.01731` | `+0.00486` | pass |
+
+Direct-hard was then repeated on seed 2027:
+
+| seed | learned CE delta | paired exact-oracle CE delta | child local MSE range | timing / parent |
+|---|---:|---:|---:|---:|
+| 2026 | `+0.01731` | `+0.00486` | `0.300–0.339` | `1.566x` |
+| 2027 | `+0.01535` | `+0.00378` | `0.310–0.342` | `1.562x` |
+
+This is the first stable four-layer K=6 result across both seeds. It changes
+the interpretation of the earlier failure: the transferred sparse cells and
+router are viable, but a soft-to-hard training mismatch destabilizes the
+composition. The direct-hard recipe is a training control, not yet a runtime
+win; grouped sparse execution remains about 1.56x slower than the dense
+parent.
+
 ## Causal controls and oracle headroom
 
 Single-layer corrected runs pass comfortably:
@@ -152,12 +180,11 @@ quality result, but K=4 remains unstable and the runtime is still worse than
 the dense parent. Therefore this is not yet a general scaling law or a
 deployment claim for 700M/1B.
 
-The four-layer K=6 reference is promising but not yet stable across seeds.
-The next experiment holds the architecture fixed and retries the unstable
-seed with a lower hard-phase learning rate. If that removes the child-local
-blow-up, make the schedule part of the controlled recipe and repeat both
-seeds. If it does not, focus on the child interface and router
-generalization; do not add another correction cell or jump to 700M/1B first.
+The direct-hard four-layer K=6 reference is now stable across two seeds, while
+the runtime is still worse than the dense parent. The next experiment is an
+eight-layer direct-hard K=6 depth test with the same protocol. If that passes,
+the next gate is a larger model; if depth fails while paired oracle remains
+good, focus on multi-layer router generalization before scaling capacity.
 
 The JSON artifacts for the runs above are kept under `results/runs/` locally;
 that directory remains ignored by the repository, while this report records

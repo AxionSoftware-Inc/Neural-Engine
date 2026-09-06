@@ -12,9 +12,11 @@ to `+0.08689`, and a 64-wide router worsens seed 2027 to `+0.05490`. The
 same corrected protocol at E=8/K=6 passes on two seeds (`+0.03619` and
 `+0.03837`) with paired-oracle deltas `+0.02186` and `+0.02574`, but it is
 still 1.28x slower than the dense parent at 75% active. Do not scale to
-700M/1B yet. The four-layer K=6 extension is mixed (`+0.05391` and `+0.01794`)
-while paired-oracle routing passes on both (`+0.04257` and `+0.00801`), with
-1.57x timing; the immediate issue is seed-dependent child training stability.
+700M/1B yet. The original four-layer handoff was mixed (`+0.05391` and
+`+0.01794`), but direct-hard training (`300/300`) now passes on both seeds
+(`+0.01731` and `+0.01535`) with paired-oracle deltas `+0.00486` and
+`+0.00378`; timing remains 1.56x. The immediate issue was soft-to-hard
+training-operator mismatch, not missing capacity.
 A 256-wide router is unstable (`+0.08855`), and an independent energy router
 fails at `+0.08221`. See
 `V0_174_CORRECTED_ROUTING_AND_EXPERT_AUDIT.md`.
