@@ -184,6 +184,27 @@ cross-group correction, but it does not improve held-out route selection. The
 K=4 router gap therefore needs a different generalization mechanism, not just
 more post-training steps or a more local reconstruction target.
 
+## Four-layer K=4 controls and group-energy router
+
+The same direct-hard recipe was also checked at four layers before changing
+the router representation:
+
+| control | seed | learned CE delta | paired exact-oracle CE delta | timing / parent | decision |
+|---|---:|---:|---:|---:|---|
+| default hidden subset router | 2026 | `+0.04038` | `+0.02273` | `1.316x` | pass |
+| default hidden subset router | 2027 | `+0.05156` | `+0.02724` | `1.335x` | fail; not two-seed stable |
+| hidden router, 1000 supervision steps | 2027 | `+0.04900` | `+0.02689` | `1.328x` | small single-seed improvement only |
+| hidden router, 1000 supervision steps, 8 layers | 2026 | `+0.06981` | `+0.01391` | `1.664x` | reject; depth generalization worsened |
+
+As a different architecture control, `group-energy` replaced the hidden state
+input to the 70-class subset router with cheap per-group SwiGLU activation
+energies computed from the copied gate/value slices. On the four-layer K=4
+seed-2026 smoke it reached learned `+0.07236`, paired oracle `+0.04523`, and
+`1.365x` timing. This is worse than the default hidden-input control
+(`+0.04038`/`+0.02273`), so the feature is rejected and was not scaled to
+eight layers. It does not close the router gap; more router steps also do not
+solve the eight-layer generalization failure.
+
 ## Causal controls and oracle headroom
 
 Single-layer corrected runs pass comfortably:
@@ -227,11 +248,11 @@ deployment claim for 700M/1B.
 
 The direct-hard eight-layer K=6 reference is stable across two seeds, while
 the 50%-active K=4 reference has a stable learned-router failure but a passing
-oracle. Post-child refit and final-corrected subset targets do not close that
-gap, so K=6 is the current quality baseline. The next step is a small larger-
-model smoke using the direct-hard K=6 recipe; K=4 routing remains a separate
-research track. Runtime optimization is also separate; do not interpret the
-current 1.66–2.13x timing as a deployment result.
+oracle. Post-child refit, final-corrected subset targets, extra router steps,
+and group-energy router features do not close that gap, so K=6 is the current
+quality baseline. K=4 routing remains a separate research track. Runtime
+optimization is also separate; do not interpret the current 1.32–2.13x timing
+as a deployment result.
 
 The JSON artifacts for the runs above are kept under `results/runs/` locally;
 that directory remains ignored by the repository, while this report records

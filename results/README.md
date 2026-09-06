@@ -29,6 +29,13 @@ failure. Post-child copied-target and final-corrected-target refits also fail
 router generalization remains open. See
 `V0_174_CORRECTED_ROUTING_AND_EXPERT_AUDIT.md`.
 
+Follow-up controls keep the conclusion unchanged: four-layer K=4 is only
+single-seed stable (`+0.04038` vs `+0.05156`), 1000 router steps give only a
+small seed-specific improvement (`+0.04900`), and the same extra steps worsen
+the eight-layer result (`+0.06981`). A group-energy subset-router input is
+also rejected (`+0.07236`, paired oracle `+0.04523`), worse than the hidden
+router control. K=6 remains the quality baseline.
+
 V0.173 fixes a real full-active routing bug: when `K=E`, the hard path must
 use scale `E`, not `E/K`, to reconstruct the parent sum. The corrected child is
 exact at float32 noise, but the clean `8,8,8,8,4,4,4,4` depth control still

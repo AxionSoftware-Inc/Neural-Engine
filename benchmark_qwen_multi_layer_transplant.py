@@ -378,6 +378,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         hard_route_scale: float | None,
         partition_indices: list[torch.Tensor] | None = None,
         router_hidden_size: int = 128,
+        router_input: str = "hidden",
     ) -> None:
         super().__init__()
         if not 1 <= active_experts <= num_experts:
@@ -411,7 +412,10 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self.route_source = route_source
         if router_hidden_size < 1:
             raise ValueError("router hidden size must be positive")
+        if router_input not in {"hidden", "group-energy"}:
+            raise ValueError("router input must be hidden or group-energy")
         self.router_hidden_size = int(router_hidden_size)
+        self.router_input = router_input
         self.hard_route_scale = (
             (
                 self.num_experts
@@ -506,8 +510,11 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 F.one_hot(subset_ids, num_classes=num_experts).sum(dim=1).float(),
                 persistent=False,
             )
+            router_input_size = (
+                hidden_size if router_input == "hidden" else num_experts
+            )
             self.subset_router = torch.nn.Sequential(
-                torch.nn.Linear(hidden_size, self.router_hidden_size),
+                torch.nn.Linear(router_input_size, self.router_hidden_size),
                 torch.nn.SiLU(),
                 torch.nn.Linear(self.router_hidden_size, subset_ids.shape[0]),
             )
@@ -526,6 +533,24 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self.last_all_outputs: torch.Tensor | None = None
         self.last_selected_outputs: torch.Tensor | None = None
         self.last_active_expert_fraction = 1.0
+
+    def _router_features(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        if self.router_input == "hidden":
+            return hidden_states
+        flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
+        grouped_gate = torch.einsum(
+            "nh,ech->nec", flat_hidden, self.group_gate_weight,
+        )
+        grouped_value = torch.einsum(
+            "nh,ech->nec", flat_hidden, self.group_value_weight,
+        )
+        coefficient = F.silu(grouped_gate) * grouped_value
+        energy = coefficient.float().square().mean(dim=-1)
+        output_scale = self.group_output_weight.float().square().mean(dim=(1, 2))
+        features = torch.log1p(energy * output_scale.unsqueeze(0))
+        return features.reshape(*hidden_states.shape[:-1], self.num_experts).to(
+            dtype=hidden_states.dtype,
+        )
 
     def _forward_grouped(
         self,
@@ -601,7 +626,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         soft_output = None
         hard_blend = 1.0
         if self.route_source in {"subset-router", "oracle-subset"}:
-            subset_scores = self.subset_router(hidden_states)
+            subset_scores = self.subset_router(self._router_features(hidden_states))
             if self.training:
                 hard_blend = float(self.hard_train_blend)
             if self.training and (not self.hard_train or hard_blend < 1.0):
@@ -1325,6 +1350,7 @@ def make_transferred_routed_qwen_child(
     dtype: torch.dtype,
     partition_io: list[dict[str, torch.Tensor]] | None = None,
     router_hidden_size: int = 128,
+    router_input: str = "hidden",
 ) -> torch.nn.Module:
     partition_indices = None
     if partition_mode == "activation-balanced":
@@ -1352,6 +1378,7 @@ def make_transferred_routed_qwen_child(
         partition_mode, route_source, hard_route_scale,
         partition_indices,
         router_hidden_size,
+        router_input,
     ).to(device=device, dtype=dtype)
     if calibration_rank > 0:
         if calibration_mode == "shared-basis":
@@ -1567,7 +1594,7 @@ def train_importance_router(
                         "or final-subset-soft"
                     )
             scores = (
-                base.subset_router(inputs).float()
+                base.subset_router(base._router_features(inputs)).float()
                 if base.route_source in {"subset-router", "oracle-subset"}
                 else base.router(inputs).float()
             )
@@ -1658,7 +1685,9 @@ def routing_diagnostics(
         best_subset_index = errors.argmin(dim=-1)
         best_membership = membership[best_subset_index]
         if base.route_source == "subset-router":
-            predicted_subset_index = base.subset_router(inputs).argmax(dim=-1)
+            predicted_subset_index = base.subset_router(
+                base._router_features(inputs),
+            ).argmax(dim=-1)
             predicted_subset_index = predicted_subset_index.reshape(-1)
         else:
             predicted_subset_index = best_subset_index
@@ -2243,6 +2272,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 hard_route_scale_schedule[child_index], device, dtype,
                 partition_io=train_io,
                 router_hidden_size=args.router_hidden_size,
+                router_input=args.router_input,
             )
             if args.calibration_mode == "teacher-group-decoder":
                 initialize_teacher_group_decoders(
@@ -2548,6 +2578,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "partition_mode": args.partition_mode,
         "route_source": args.route_source,
         "router_hidden_size": args.router_hidden_size,
+        "router_input": args.router_input,
         "router_target": args.router_target,
         "post_router_target": args.post_router_target,
         "router_target_temperature": args.router_target_temperature,
@@ -2706,6 +2737,12 @@ def main() -> None:
     parser.add_argument(
         "--router-hidden-size", type=int, default=128,
         help="hidden width of the learned group/subset router",
+    )
+    parser.add_argument(
+        "--router-input",
+        choices=("hidden", "group-energy"),
+        default="hidden",
+        help="features provided to the learned subset router",
     )
     parser.add_argument(
         "--hard-route-scale", type=float, default=None,
