@@ -1935,6 +1935,7 @@ def routing_diagnostics(
     oracle_optimal_mse = 0.0
     learned_optimal_scale = 0.0
     oracle_optimal_scale = 0.0
+    subset_regret_values = []
     for batch in io_batches:
         inputs = batch["input"].to(device=device, dtype=dtype)
         target = batch["output"].to(device=device, dtype=torch.float32)
@@ -1977,6 +1978,14 @@ def routing_diagnostics(
         ).sum(dim=1)
         learned_output = coefficient * learned_sum
         oracle_output = coefficient * oracle_sum
+        learned_error = errors.gather(
+            1, predicted_subset_index.unsqueeze(1),
+        ).squeeze(1)
+        oracle_error = errors.min(dim=1).values
+        subset_regret_values.append(
+            ((learned_error - oracle_error) /
+             max(flat_outputs.shape[-1], 1)).detach().cpu()
+        )
         learned_denominator = learned_sum.square().sum(dim=-1).clamp_min(1e-8)
         oracle_denominator = oracle_sum.square().sum(dim=-1).clamp_min(1e-8)
         learned_scale = (
@@ -2018,11 +2027,15 @@ def routing_diagnostics(
     oracle_optimal_mse /= denominator
     learned_optimal_scale /= max(total_tokens, 1)
     oracle_optimal_scale /= max(total_tokens, 1)
+    subset_regret_p95 = float(torch.quantile(
+        torch.cat(subset_regret_values), 0.95,
+    ).item()) if subset_regret_values else 0.0
     return {
         "exact_subset_match": exact_matches / max(total_tokens, 1),
         "learned_mse": learned_mse,
         "oracle_mse": oracle_mse,
         "subset_regret": learned_mse - oracle_mse,
+        "subset_regret_p95": subset_regret_p95,
         "learned_optimal_scalar_mse": learned_optimal_mse,
         "oracle_optimal_scalar_mse": oracle_optimal_mse,
         "learned_optimal_scalar_gain": learned_mse - learned_optimal_mse,

@@ -265,6 +265,34 @@ final-target refit versus iterative cascade data aggregation is the required
 control. It was intentionally not expanded to eight layers. The
 implementation remains available as an optional research path.
 
+## Final-target refit versus cascade data aggregation
+
+The proposal author inspected the JSON and corrected the protocol reading:
+the original pairwise run used 100 router-supervision steps, then 300
+correction/child hard-training steps with the router frozen, and zero
+post-router refit steps. Therefore the original `+0.05206` four-layer result
+was not a final-correction router A/B test.
+
+The clean control kept copied experts, rank-64 correction, partition, scale,
+seed, and training data fixed. It compared a static 300-step final-target
+refit with three 100-step rounds that preserved optimizer state, recaptured
+current-cascade inputs, and mixed each new rollout 50/50 with old data.
+
+| seed | refit | learned CE delta | mean layer regret | mean layer p95 regret | decision |
+|---|---|---:|---:|---:|---|
+| 2026 | static | `+0.04712` | `0.10572` | `0.42709` | pass |
+| 2026 | aggregate | `+0.04781` | `0.10422` | `0.42693` | pass |
+| 2027 | static | `+0.04120` | `0.09981` | `0.41281` | pass |
+| 2027 | aggregate | `+0.04220` | `0.10041` | `0.41379` | pass |
+
+Both methods pass the `+0.05` CE gate. Aggregation does not improve over the
+static refit by the proposed `0.005` on either seed, and its mean regret
+reduction is only about 3.6–5.8%, not 20%. Global p95 regret is lower after
+refit, although one per-layer p95 tail worsens at layer 24 on seed 2026. The
+practical decision is to keep static final-target router refit as the current
+K4 recipe, reject iterative aggregation for now, and not expand this
+aggregation scheme to eight layers.
+
 K=6 remains the higher-margin quality reference, while K5 is now the best
 active-budget result. The valid K6 token-loop rerun preserves quality but is
 slightly slower (`2.129x` versus grouped `2.082x`), so it provides no runtime
@@ -320,14 +348,15 @@ deployment claim for 700M/1B.
 
 The direct-hard eight-layer K=6 reference is stable across two seeds, and the
 matched-scale K5 result is also stable across two seeds at a lower active
-budget. K4 still has a router gap: its paired oracle passes but learned
- routing fails. The optimal-scalar diagnostic is now complete and negative.
-The pairwise cost-router gives only a marginal two-layer improvement and fails
-at four layers, so it is not the current architecture. The next research step
-is iterative router/data aggregation over the learned cascade, or another
-route-selection mechanism that reduces subset regret while preserving the
-matched scale rule; K5 is the current best active-budget operating point and
-K6 remains the higher-margin reference.
+budget. The original K4 router gap is reduced by a final-target static refit:
+the pairwise cost-router plus normalized regret now passes four layers on both
+seeds (`+0.04712` and `+0.04120`). Iterative aggregation also passes, but is
+not better than static by the proposed margin and does not achieve the 20%
+regret-reduction target. The optimal-scalar diagnostic is complete and
+negative. Therefore static final-target refit is the current K4 research
+recipe; aggregation is closed for now and neither route should be expanded to
+eight layers before a tail-focused or independent-seed validation. K5 remains
+the best active-budget operating point and K6 the higher-margin reference.
 Runtime optimization is separate; do not interpret the current 1.32–2.13x
 timing as a deployment result.
 

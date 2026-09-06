@@ -51,16 +51,18 @@ An exploratory K=5 rank-128 correction run was stopped after more than twenty
 minutes without a metric, so it is not treated as evidence; higher-rank
 correction needs a more efficient implementation first.
 
-The expert-proposed pairwise cost-router was then tested with frozen child
-cells. Its 36-output structured cost head gives a marginal two-layer result
-with normalized regret (`+0.04996`, paired oracle `+0.03033`), but the same
-method fails at four layers (`+0.05206`, oracle `+0.02904`). The old
-subset-soft loss gives no improvement at two layers (`+0.05427`). Thus the
-pairwise interaction hypothesis is useful diagnostically but is not promoted
-as the current architecture; it was not scaled to eight layers. The next
-route experiment should follow the learned cascade distribution and aggregate
-new teacher-cost data rather than add more width or correction scale. See
-`V0_174_CORRECTED_ROUTING_AND_EXPERT_AUDIT.md`.
+The expert-proposed pairwise cost-router was then tested with a corrected
+final-target protocol. Its initial 36-output structured cost head gives a
+marginal two-layer result with normalized regret (`+0.04996`, paired oracle
+`+0.03033`), while the pre-refit four-layer run is `+0.05206` (oracle
+`+0.02904`). The expert identified that the old run trained the router for
+100 steps before 300 correction steps and performed no final refit. A static
+300-step final-target refit now passes K4 on two seeds (`+0.04712`, `+0.04120`).
+The proposed three-round cascade aggregation also passes (`+0.04781`,
+`+0.04220`) but is not better than static by `0.005`, and mean regret falls
+only about 3.6–5.8%, not the proposed 20%. Therefore static refit is retained
+as the current K4 recipe; aggregation is closed for now and neither is scaled
+to eight layers. See `V0_174_CORRECTED_ROUTING_AND_EXPERT_AUDIT.md`.
 For a shareable experiment-by-experiment handoff to the proposal author, see
 `EXPERT_FEEDBACK_PAIRWISE_COST_ROUTER.md`.
 
