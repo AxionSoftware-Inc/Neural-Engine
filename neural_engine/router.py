@@ -333,6 +333,165 @@ class FlatRouter(nn.Module):
         return selected_ids, weights, stats
 
 
+class ProbeRouteRouter(nn.Module):
+    """Retrieve a small pool, then score pair interactions inside that pool.
+
+    The router exposes score helpers so a frozen-bank trainer can supervise it
+    with observed final-loss differences from sparse probe branches.  Probes
+    are a training diagnostic; normal forward execution still evaluates only
+    the selected pair.
+    """
+
+    def __init__(self, state_dim: int, num_circuits: int, branch: int = 8,
+                 depth: int = 4, candidate_pool: int = 8,
+                 active_circuits: int = 2, num_addresses: int = 1,
+                 routing_capacity: int | None = None, routing_depth: int | None = None,
+                 pair_rank: int = 8, retriever_temperature: float = 0.2):
+        super().__init__()
+        if num_addresses != 1:
+            raise ValueError("ProbeRouteRouter currently supports one address")
+        if active_circuits != 2:
+            raise ValueError("ProbeRouteRouter currently supports active_circuits=2")
+        if active_circuits > candidate_pool:
+            raise ValueError("active_circuits cannot exceed candidate_pool")
+        if pair_rank < 1:
+            raise ValueError("pair_rank must be positive")
+        if retriever_temperature <= 0:
+            raise ValueError("retriever_temperature must be positive")
+        self.num_circuits = num_circuits
+        self.branch = branch
+        self.depth = depth
+        self.candidate_pool = candidate_pool
+        self.active_circuits = active_circuits
+        self.num_addresses = num_addresses
+        self.pair_rank = pair_rank
+        self.retriever_temperature = retriever_temperature
+        self.routing_capacity = num_circuits if routing_capacity is None else int(routing_capacity)
+        self.active_depth = 1 if routing_depth is None else int(routing_depth)
+        if not 0 < self.routing_capacity <= num_circuits:
+            raise ValueError("routing_capacity must be between 1 and num_circuits")
+        if self.routing_capacity < candidate_pool:
+            raise ValueError("routing_capacity must be at least candidate_pool")
+        if self.active_depth != 1:
+            raise ValueError("ProbeRouteRouter has one retrieval decision depth")
+        self.retriever_query = nn.Linear(state_dim, state_dim, bias=False)
+        self.keys = nn.Parameter(torch.empty(num_circuits, state_dim))
+        self.utility_query = nn.Linear(state_dim, state_dim, bias=False)
+        self.utility_keys = nn.Parameter(torch.empty(num_circuits, state_dim))
+        self.pair_embeddings = nn.Parameter(torch.empty(num_circuits, pair_rank))
+        self.interaction_query = nn.Linear(state_dim, pair_rank, bias=False)
+        pair_positions = [
+            (left, right)
+            for left in range(candidate_pool)
+            for right in range(left + 1, candidate_pool)
+        ]
+        self.register_buffer("pair_positions", torch.tensor(pair_positions, dtype=torch.long), persistent=False)
+        nn.init.normal_(self.keys, std=0.02)
+        nn.init.normal_(self.utility_keys, std=0.02)
+        nn.init.normal_(self.pair_embeddings, std=0.02)
+
+    def set_routing_state(self, *, capacity: int | None = None,
+                          depth: int | None = None) -> None:
+        next_capacity = self.routing_capacity if capacity is None else int(capacity)
+        if not 0 < next_capacity <= self.num_circuits:
+            raise ValueError("routing capacity must be between 1 and num_circuits")
+        if next_capacity < self.candidate_pool:
+            raise ValueError("routing capacity must be at least candidate_pool")
+        if depth is not None and int(depth) != 1:
+            raise ValueError("ProbeRouteRouter has one retrieval decision depth")
+        self.routing_capacity = next_capacity
+        self.active_depth = 1
+
+    def retriever_scores(self, state: torch.Tensor, capacity: int | None = None) -> torch.Tensor:
+        local_capacity = self.routing_capacity if capacity is None else int(capacity)
+        query = F.normalize(self.retriever_query(state), dim=-1)
+        keys = F.normalize(self.keys[:local_capacity], dim=-1)
+        return torch.einsum("bd,cd->bc", query, keys) / self.retriever_temperature
+
+    def utility_scores(self, state: torch.Tensor, capacity: int | None = None) -> torch.Tensor:
+        local_capacity = self.routing_capacity if capacity is None else int(capacity)
+        query = self.utility_query(state)
+        return torch.einsum("bd,cd->bc", query, self.utility_keys[:local_capacity]) / math.sqrt(state.shape[-1])
+
+    def selection_scores(self, state: torch.Tensor, pair_ids: torch.Tensor) -> torch.Tensor:
+        if pair_ids.ndim != 2 or pair_ids.shape[-1] != 2 or pair_ids.shape[0] != state.shape[0]:
+            raise ValueError("pair_ids must have shape [batch, 2]")
+        utility = self.utility_scores(state)
+        left = pair_ids[:, 0].clamp_min(0)
+        right = pair_ids[:, 1].clamp_min(0)
+        utility_sum = utility.gather(1, torch.stack([left, right], dim=-1)).sum(dim=-1)
+        pair_product = self.pair_embeddings[left] * self.pair_embeddings[right]
+        interaction = (self.interaction_query(state) * pair_product).sum(dim=-1)
+        return utility_sum + interaction / math.sqrt(self.pair_rank)
+
+    def candidate_pair_scores(self, state: torch.Tensor,
+                              candidate_ids: torch.Tensor) -> torch.Tensor:
+        if candidate_ids.ndim != 2 or candidate_ids.shape[-1] != self.candidate_pool:
+            raise ValueError("candidate_ids must have shape [batch, candidate_pool]")
+        utility = self.utility_scores(state)
+        positions = self.pair_positions.to(device=state.device)
+        left_ids = candidate_ids[:, positions[:, 0]]
+        right_ids = candidate_ids[:, positions[:, 1]]
+        utility_sum = utility.gather(1, left_ids) + utility.gather(1, right_ids)
+        pair_product = self.pair_embeddings[left_ids] * self.pair_embeddings[right_ids]
+        interaction_query = self.interaction_query(state).unsqueeze(1)
+        interaction = (interaction_query * pair_product).sum(dim=-1) / math.sqrt(self.pair_rank)
+        return utility_sum + interaction
+
+    def forward(self, state: torch.Tensor, coverage: bool = False,
+                coverage_temperature: float = 0.25,
+                exploration_prob: float = 0.0,
+                routing_offset: int | torch.Tensor = 0,
+                routing_capacity: int | None = None,
+                routing_windows: torch.Tensor | None = None,
+                target_bases: torch.Tensor | None = None,
+                ) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
+        if coverage_temperature <= 0:
+            raise ValueError("coverage_temperature must be positive")
+        if not 0.0 <= exploration_prob <= 1.0:
+            raise ValueError("exploration_prob must be between 0 and 1")
+        if routing_windows is not None or (
+                isinstance(routing_offset, int) and routing_offset != 0):
+            raise ValueError("ProbeRouteRouter does not support bank windows")
+        if not isinstance(routing_offset, int) or target_bases is not None:
+            raise ValueError("ProbeRouteRouter only supports standard full-bank routing")
+        local_capacity = self.routing_capacity if routing_capacity is None else int(routing_capacity)
+        if not 0 < local_capacity <= self.routing_capacity:
+            raise ValueError("routing_capacity must be between 1 and the configured routing capacity")
+        retriever_logits = self.retriever_scores(state, local_capacity)
+        entropy_probs = F.softmax(retriever_logits, dim=-1)
+        entropy = -(entropy_probs * entropy_probs.clamp_min(1e-8).log()).sum(dim=-1)
+        candidate_values, candidate_positions = retriever_logits.topk(self.candidate_pool, dim=-1)
+        pair_scores = self.candidate_pair_scores(state, candidate_positions)
+        selected_pair = pair_scores.argmax(dim=-1)
+        selected_ids = candidate_positions.gather(
+            1, self.pair_positions[selected_pair].to(device=state.device))
+        weights = torch.full_like(selected_ids, 0.5, dtype=state.dtype)
+        if exploration_prob and self.training:
+            explore = torch.rand(state.shape[0], device=state.device) < exploration_prob
+            random_ids = torch.randint(local_capacity, selected_ids.shape, device=state.device)
+            distinct = random_ids[:, 0].eq(random_ids[:, 1])
+            random_ids[:, 1] = torch.where(
+                distinct, (random_ids[:, 1] + 1).remainder(local_capacity), random_ids[:, 1])
+            selected_ids = torch.where(explore.unsqueeze(-1), random_ids, selected_ids)
+        stats = {
+            "router_entropy": entropy.mean(),
+            "router_decisions": torch.tensor(1, device=state.device),
+            "route_gain": torch.ones(state.shape[0], device=state.device),
+            "candidate_ids": candidate_positions,
+            "selected_ids": selected_ids,
+            "retriever_logits": retriever_logits,
+            "candidate_pair_scores": pair_scores,
+            "soft_route": torch.tensor(False, device=state.device),
+        }
+        if coverage:
+            distribution = entropy_probs.mean(dim=0)
+            stats["routing_coverage_loss"] = (
+                distribution * (distribution.clamp_min(1e-8).log() + math.log(self.num_circuits))
+            ).sum()
+        return selected_ids, weights, stats
+
+
 class StableFamilyRouter(nn.Module):
     """Route within a stable operator/stage family plus a shared fallback.
 

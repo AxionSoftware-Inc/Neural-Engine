@@ -7,7 +7,8 @@ from .circuits import MicroCircuitBank
 from .encoding import (VALUE_HARMONICS, VALUE_MODULUS, VALUE_TOKEN_OFFSET,
                        encode_tokens)
 from .instrumentation import count_parameters
-from .router import FlatRouter, HierarchicalRouter, StableFamilyRouter
+from .router import (FlatRouter, HierarchicalRouter, ProbeRouteRouter,
+                      StableFamilyRouter)
 from .state import PersistentState
 
 
@@ -53,8 +54,8 @@ class NeuralEngineV0(nn.Module):
         self.route_exploration_prob = route_exploration_prob
         self.input_reinjection = input_reinjection
         self.memory_write_mode = memory_write_mode
-        if router_variant not in {"global", "flat", "family_local", "family_conditioned"}:
-            raise ValueError("router_variant must be 'global', 'flat', 'family_local', or 'family_conditioned'")
+        if router_variant not in {"global", "flat", "probe", "family_local", "family_conditioned"}:
+            raise ValueError("router_variant must be 'global', 'flat', 'probe', 'family_local', or 'family_conditioned'")
         if router_variant in {"family_local", "family_conditioned"} and family_count < 2:
             raise ValueError("NeuralEngineV0 semantic family routing requires at least two families")
         self.router_variant = router_variant
@@ -91,6 +92,11 @@ class NeuralEngineV0(nn.Module):
                 candidate_pool, active_circuits, router_addresses,
                 routing_capacity=routing_capacity, routing_depth=routing_depth,
                 soft_routing_temperature=soft_routing_temperature)
+        elif router_variant == "probe":
+            self.router = ProbeRouteRouter(
+                state_dim, num_circuits, router_branch, router_depth,
+                candidate_pool, active_circuits, router_addresses,
+                routing_capacity=routing_capacity, routing_depth=1)
         else:
             self.router = HierarchicalRouter(
                 state_dim, num_circuits, router_branch, router_depth,
@@ -166,6 +172,7 @@ class NeuralEngineV0(nn.Module):
         num_classes = self.output[-1].out_features
         selected_steps = []
         candidate_steps = []
+        query_steps = []
         coverage_losses = []
         routing_target_losses = []
         soft_route = (self.training and getattr(self.router, "soft_routing_temperature", 0.0) > 0.0
@@ -205,6 +212,7 @@ class NeuralEngineV0(nn.Module):
             if active_indices.numel() == 0:
                 selected_steps.append(selected_step)
                 candidate_steps.append(candidate_step)
+                query_steps.append(torch.zeros(batch_size, self.state_dim, device=inputs.device))
                 step_logits[:, step] = last_logits
                 continue
             active_state = state[active_indices]
@@ -213,6 +221,8 @@ class NeuralEngineV0(nn.Module):
             step_query = active_state + self.step_embedding[step]
             if task_context is not None:
                 step_query = step_query + task_context[active_indices]
+            query_step = torch.zeros(batch_size, self.state_dim, device=inputs.device)
+            query_step[active_indices] = step_query
             router_kwargs = {
                 "coverage": coverage,
                 "coverage_temperature": self.routing_coverage_temperature,
@@ -294,6 +304,7 @@ class NeuralEngineV0(nn.Module):
             selected_step[active_indices] = selected
             selected_steps.append(selected_step)
             candidate_steps.append(candidate_step)
+            query_steps.append(query_step)
             selected_weights[active_indices, step] = weights
             route_gains[active_indices, step] = route_gain
             executed_mask[active_indices, step] = True
@@ -319,6 +330,7 @@ class NeuralEngineV0(nn.Module):
             "router_entropy": step_entropies.sum() / executed_mask.sum().clamp_min(1),
             "selected_ids": torch.stack(selected_steps, dim=1),
             "candidate_ids": torch.stack(candidate_steps, dim=1),
+            "query_states": torch.stack(query_steps, dim=1),
             "selected_weights": selected_weights,
             "route_gains": route_gains,
             "step_logits": step_logits,

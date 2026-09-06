@@ -1,6 +1,6 @@
 import torch
 
-from neural_engine.router import FlatRouter, HierarchicalRouter
+from neural_engine.router import FlatRouter, HierarchicalRouter, ProbeRouteRouter
 
 
 def test_router_returns_local_structured_selection():
@@ -53,6 +53,25 @@ def test_flat_router_scores_full_bank_but_executes_topk():
     loss = selected.float().mean() * 0.0 + weights.square().mean()
     loss.backward()
     assert router.keys.grad is not None
+
+
+def test_probe_router_retrieves_pool_and_scores_pairs():
+    router = ProbeRouteRouter(32, num_circuits=32, candidate_pool=8,
+                              active_circuits=2, pair_rank=4)
+    state = torch.randn(7, 32)
+    selected, weights, stats = router(state)
+    assert selected.shape == (7, 2)
+    assert weights.shape == (7, 2)
+    assert stats["candidate_ids"].shape == (7, 8)
+    assert stats["candidate_pair_scores"].shape == (7, 28)
+    assert torch.allclose(weights, torch.full_like(weights, 0.5))
+    loss = router.candidate_pair_scores(state, stats["candidate_ids"]).mean()
+    loss.backward()
+    assert router.utility_keys.grad is not None
+    assert router.pair_embeddings.grad is not None
+    router.zero_grad(set_to_none=True)
+    router.retriever_scores(state).mean().backward()
+    assert router.retriever_query.weight.grad is not None
 
 
 def test_multi_address_router_keeps_total_candidate_budget_structured():
