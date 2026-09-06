@@ -417,6 +417,19 @@ def _set_hard_train_modules(
     return previous
 
 
+def _set_hard_train_blend(
+    module: nn.Module,
+    blend: float,
+) -> list[tuple[nn.Module, float]]:
+    """Set an optional soft-to-hard route blend on sparse child modules."""
+    previous = []
+    for nested in module.modules():
+        if hasattr(nested, "hard_train_blend"):
+            previous.append((nested, float(nested.hard_train_blend)))
+            nested.hard_train_blend = float(blend)
+    return previous
+
+
 def train_child(
     child: nn.Module,
     io_batches: list[dict[str, torch.Tensor]],
@@ -428,13 +441,19 @@ def train_child(
     log_every: int,
     hard_train_steps: int = 0,
     hard_learning_rate: float | None = None,
+    hard_transition_steps: int = 0,
 ) -> list[dict[str, float]]:
     if hard_train_steps < 0 or hard_train_steps > steps:
         raise ValueError("hard_train_steps must be within 0..steps")
+    if hard_transition_steps < 0 or hard_transition_steps > hard_train_steps:
+        raise ValueError(
+            "hard_transition_steps must be within 0..hard_train_steps"
+        )
     optimizer = torch.optim.AdamW(child.parameters(), lr=learning_rate)
     history = []
     child.train()
     previous_hard_train = _set_hard_train_modules(child, False)
+    previous_hard_blend = _set_hard_train_blend(child, 0.0)
     hard_start = steps - hard_train_steps + 1
     try:
         for step in range(1, steps + 1):
@@ -444,6 +463,16 @@ def train_child(
                 if hard_learning_rate is not None:
                     for group in optimizer.param_groups:
                         group["lr"] = hard_learning_rate
+            if hard_train_steps and step >= hard_start:
+                if hard_transition_steps:
+                    blend = min(
+                        1.0,
+                        (step - hard_start + 1) / hard_transition_steps,
+                    )
+                else:
+                    blend = 1.0
+                for nested, _ in previous_hard_blend:
+                    nested.hard_train_blend = blend
             batch = io_batches[(step - 1) % len(io_batches)]
             inputs = batch["input"].to(device=device, dtype=dtype)
             targets = batch["output"].to(device=device, dtype=dtype)
@@ -460,6 +489,8 @@ def train_child(
     finally:
         for nested, previous in previous_hard_train:
             nested.hard_train = previous
+        for nested, previous in previous_hard_blend:
+            nested.hard_train_blend = previous
     child.eval()
     return history
 

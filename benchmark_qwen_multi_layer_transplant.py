@@ -389,6 +389,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self.active_experts = int(active_experts)
         self.temperature = float(temperature)
         self.hard_train = False
+        self.hard_train_blend = 0.0
         if partition_mode not in {
             "contiguous", "interleaved", "norm-balanced", "activation-balanced",
             "sampled-overlap", "stratified-overlap", "activation-cluster",
@@ -597,10 +598,37 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         )
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        soft_output = None
+        hard_blend = 1.0
         if self.route_source in {"subset-router", "oracle-subset"}:
             subset_scores = self.subset_router(hidden_states)
-            if self.training and not self.hard_train:
+            if self.training:
+                hard_blend = float(self.hard_train_blend)
+            if self.training and (not self.hard_train or hard_blend < 1.0):
                 scores = subset_scores @ self.subset_membership
+                outputs = torch.stack([
+                    expert(hidden_states) for expert in self.experts
+                ], dim=-2)
+                weights = F.softmax(scores / self.temperature, dim=-1)
+                soft_output = self.num_experts * (
+                    outputs * weights.unsqueeze(-1)
+                ).sum(dim=-2)
+                if not self.hard_train or hard_blend <= 0.0:
+                    self.last_selected = scores.detach().argmax(dim=-1)
+                    self.last_route_weights = weights
+                    self.last_all_outputs = outputs
+                    self.last_selected_outputs = None
+                    self.last_active_expert_fraction = 1.0
+                    return soft_output
+                # Continue below with the hard top-k path and blend its
+                # output with the soft operator during the transition.
+                hard_scores = subset_scores.argmax(dim=-1)
+                selected_membership = self.subset_membership[hard_scores]
+                scores = torch.where(
+                    selected_membership.bool(),
+                    torch.ones_like(selected_membership),
+                    -torch.ones_like(selected_membership),
+                )
             else:
                 best_subset = subset_scores.argmax(dim=-1)
                 selected_membership = self.subset_membership[best_subset]
@@ -660,7 +688,11 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 scores.scatter_(-1, best_subset.reshape(
                     *hidden_states.shape[:-1], self.active_experts,
                 ), 1.0)
-        if self.training and not self.hard_train:
+        if (
+            self.training
+            and not self.hard_train
+            and self.route_source not in {"subset-router", "oracle-subset"}
+        ):
             outputs = torch.stack([
                 expert(hidden_states) for expert in self.experts
             ], dim=-2)
@@ -718,7 +750,10 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         # inference.  The scale is an explicit experiment parameter; using a
         # second implicit E/K rule here makes the correction learn one
         # operator and evaluation execute another.
-        return self.hard_route_scale * flat_output.reshape_as(hidden_states)
+        hard_output = self.hard_route_scale * flat_output.reshape_as(hidden_states)
+        if soft_output is not None:
+            return (1.0 - hard_blend) * soft_output + hard_blend * hard_output
+        return hard_output
 
 
 class TransferredRoutedQwenNeuronChild(torch.nn.Module):
@@ -2226,6 +2261,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                         args.learning_rate, args.max_grad_norm, args.log_every,
                         args.hard_train_steps,
                         args.hard_learning_rate,
+                        args.hard_transition_steps,
                     ))
                 else:
                     child.eval()
@@ -2272,6 +2308,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 args.learning_rate, args.max_grad_norm, args.log_every,
                 args.hard_train_steps,
                 args.hard_learning_rate,
+                args.hard_transition_steps,
             ))
             post_router_histories.append([])
         elif args.child_kind == "qwen-latent-basis":
@@ -2287,6 +2324,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 args.learning_rate, args.max_grad_norm, args.log_every,
                 args.hard_train_steps,
                 args.hard_learning_rate,
+                args.hard_transition_steps,
             ))
             router_histories.append([])
             post_router_histories.append([])
@@ -2302,6 +2340,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 args.learning_rate, args.max_grad_norm, args.log_every,
                 args.hard_train_steps,
                 args.hard_learning_rate,
+                args.hard_transition_steps,
             ))
             router_histories.append([])
             post_router_histories.append([])
@@ -2509,6 +2548,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "distillation_steps_per_child": args.steps,
         "hard_train_steps_per_child": args.hard_train_steps,
         "hard_learning_rate": args.hard_learning_rate,
+        "hard_transition_steps_per_child": args.hard_transition_steps,
         "router_supervision_steps_per_child": args.router_supervision_steps,
         "post_router_supervision_steps_per_child": args.post_router_supervision_steps,
         "joint_distillation_steps": args.joint_steps,
@@ -2676,6 +2716,10 @@ def main() -> None:
     parser.add_argument(
         "--hard-learning-rate", type=float, default=None,
         help="optional learning rate after switching to hard top-k routing",
+    )
+    parser.add_argument(
+        "--hard-transition-steps", type=int, default=0,
+        help="soft-to-hard route blend steps inside the hard-training phase",
     )
     parser.add_argument(
         "--router-supervision-steps", type=int, default=0,
