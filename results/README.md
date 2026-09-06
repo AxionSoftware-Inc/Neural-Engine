@@ -8,10 +8,12 @@ the same children passes strongly (`+0.03282`/`+0.03004`). This proves useful
 sparse subsets exist; the remaining bottleneck is router generalization and
 subset regret. Cost-aware soft subset supervision improves seed 2026 to
 `+0.04874` but is not yet a two-seed pass; README-domain calibration worsens
-to `+0.08689`, and a 64-wide router worsens seed 2027 to `+0.05490`. Do not
-scale to 700M/1B until the corrected two-layer reference is stable; a 256-wide
-router is unstable (`+0.08855`), and an independent energy router fails at
-`+0.08221`. See
+to `+0.08689`, and a 64-wide router worsens seed 2027 to `+0.05490`. The
+same corrected protocol at E=8/K=6 passes on two seeds (`+0.03619` and
+`+0.03837`) with paired-oracle deltas `+0.02186` and `+0.02574`, but it is
+still 1.28x slower than the dense parent at 75% active. Do not scale to
+700M/1B yet; a 256-wide router is unstable (`+0.08855`), and an independent
+energy router fails at `+0.08221`. See
 `V0_174_CORRECTED_ROUTING_AND_EXPERT_AUDIT.md`.
 
 V0.173 fixes a real full-active routing bug: when `K=E`, the hard path must

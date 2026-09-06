@@ -72,6 +72,27 @@ Reducing the router hidden width from 128 to 64 worsened seed 2027 to
 `+0.05490`; increasing it to 256 made child-2 local MSE `4.57` and final
 delta `+0.08855`. Router width is therefore not the current solution.
 
+## Active-budget control: E=8/K=6
+
+After the K=4 router controls, the same corrected two-layer protocol was run
+with six of eight groups active and explicit hard scale 6. This is a lower
+sparsity setting (75% active), so it tests whether the earlier quality loss was
+primarily caused by an overly aggressive active budget rather than by the
+operator itself.
+
+| seed | learned CE delta | paired exact-oracle CE delta | active fraction | sparse-bank timing / parent |
+|---|---:|---:|---:|---:|
+| 2026 | `+0.03619` | `+0.02186` | `75%` | `1.281x` |
+| 2027 | `+0.03837` | `+0.02574` | `75%` | `1.282x` |
+
+Both seeds pass the corrected `+0.05` quality gate, making K=6 the first
+stable learned-router result after the parity fixes. The oracle is also good,
+but the gap between learned and oracle routing remains. The result is not yet
+a deployment win: the current grouped sparse-bank implementation is about
+28% slower end-to-end than the dense parent, and only 25% of the expert groups
+are removed. This is evidence that the capacity problem is partly active-budget
+related, not proof that arbitrary scale-up will continue improving quality.
+
 ## Causal controls and oracle headroom
 
 Single-layer corrected runs pass comfortably:
@@ -108,15 +129,16 @@ passes while the learned route misses the gate.
 ## Decision and next step
 
 The fundamental operator mismatch is fixed, and the architecture is not
-discarded: exact routing proves headroom. However, the learned router is not
-yet stable enough for 4-layer scaling, 700M/1B scaling, or a deployment claim.
+discarded: exact routing proves headroom. K=6 now has a stable two-seed
+quality result, but K=4 remains unstable and the runtime is still worse than
+the dense parent. Therefore this is not yet a general scaling law or a
+deployment claim for 700M/1B.
 
-The next experiment should use a larger, non-repeated calibration corpus and
-cost-aware router training with held-out route regret. Only after a corrected
-two-seed 2-layer reference passes should we repeat the 4-layer reference. If
-the oracle remains good but learned regret remains high, focus on router
+The next experiment is the corrected four-layer K=6 reference using the same
+calibration/evaluation protocol. If it passes, repeat it on the second seed.
+If the oracle remains good but learned regret rises, focus on router
 generalization and multi-subset supervision; do not add another correction
-cell or increase model capacity first.
+cell or jump to 700M/1B first.
 
 The JSON artifacts for the runs above are kept under `results/runs/` locally;
 that directory remains ignored by the repository, while this report records
