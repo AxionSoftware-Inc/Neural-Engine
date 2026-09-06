@@ -219,6 +219,12 @@ escape hatch: it is slightly slower and produces a large held-out regression.
 A real deployment speedup now requires a fused selected-expert kernel (CUDA,
 Triton, or an equivalent compiled backend), not another Python dispatch mode.
 
+A K=5 rank-128 cross-group correction attempt was also started as a capacity
+control. It was stopped after more than twenty minutes without reaching a
+metric or writing its JSON artifact; no quality claim is made for it. This
+confirms that simply doubling correction rank is not yet an efficient next
+experiment in the current unfused implementation.
+
 ## Causal controls and oracle headroom
 
 Single-layer corrected runs pass comfortably:

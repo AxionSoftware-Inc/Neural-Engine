@@ -42,6 +42,9 @@ worsens it to `+0.11902`. The K=6 Python token-loop dispatch also fails
 (`+0.13244`, oracle `+0.10378`, `2.124x` timing), so grouped dispatch remains
 the quality reference and a real speedup now requires a fused selected-expert
 kernel. K=6 remains the quality baseline.
+An exploratory K=5 rank-128 correction run was stopped after more than twenty
+minutes without a metric, so it is not treated as evidence; higher-rank
+correction needs a more efficient implementation first.
 
 V0.173 fixes a real full-active routing bug: when `K=E`, the hard path must
 use scale `E`, not `E/K`, to reconstruct the parent sum. The corrected child is
