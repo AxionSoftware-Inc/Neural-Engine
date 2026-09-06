@@ -38,7 +38,10 @@ router control. Hard subset labels (`+0.06744`) and a 1000-step final-child
 refit (`+0.07404`) also fail the eight-layer gate. K=4 is closed for the
 current recipe. The intermediate K=5 (`62.5%` active) control also fails
 (`+0.08358`, exact oracle `+0.04649`); lowering its route scale to `1.333`
-worsens it to `+0.11902`. K=6 remains the quality baseline.
+worsens it to `+0.11902`. The K=6 Python token-loop dispatch also fails
+(`+0.13244`, oracle `+0.10378`, `2.124x` timing), so grouped dispatch remains
+the quality reference and a real speedup now requires a fused selected-expert
+kernel. K=6 remains the quality baseline.
 
 V0.173 fixes a real full-active routing bug: when `K=E`, the hard path must
 use scale `E`, not `E/K`, to reconstruct the parent sum. The corrected child is

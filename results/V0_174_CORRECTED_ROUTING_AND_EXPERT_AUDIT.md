@@ -199,6 +199,7 @@ the router representation:
 | final-child target, 1000 post steps, 8 layers | 2026 | `+0.07404` | `+0.01719` | `1.661x` | reject; more refit steps do not help |
 | K=5 (`62.5%` active), scale `1.6` | 2026 | `+0.08358` | `+0.04649` | `1.926x` | reject; oracle misses gate |
 | K=5, scale `1.333` | 2026 | `+0.11902` | `+0.08575` | `1.907x` | reject; scale is not the root cause |
+| K=6 with Python token-loop dispatch | 2026 | `+0.13244` | `+0.10378` | `2.124x` | reject; slower and numerically worse |
 
 As a different architecture control, `group-energy` replaced the hidden state
 input to the 70-class subset router with cheap per-group SwiGLU activation
@@ -211,6 +212,12 @@ solve the eight-layer generalization failure. The intermediate K=5 budget
 (`62.5%` active) also fails even under exact oracle routing, and lowering its
 scale makes it worse; the present cascade has a sharp quality boundary at the
 K=6 (`75%` active) operating point.
+
+The K=6 grouped implementation is therefore still the quality reference.
+Replacing it with the current Python token-loop does not provide a runtime
+escape hatch: it is slightly slower and produces a large held-out regression.
+A real deployment speedup now requires a fused selected-expert kernel (CUDA,
+Triton, or an equivalent compiled backend), not another Python dispatch mode.
 
 ## Causal controls and oracle headroom
 
