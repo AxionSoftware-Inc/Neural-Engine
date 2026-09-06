@@ -273,3 +273,9 @@ Oldingi experimentlar va acceptance gate'larini saqlang. Kod, test, benchmark,
 reproduction command va natijani yozing. Gate bajarilmasa, yechimni rad eting
 va nima sabab ishlamaganini ko‘rsating.
 ```
+
+### C-P002-CRCA-001 — Causal responsibility sparse credit
+
+**Status:** `REJECTED`
+**Muammo:** P-002
+**Natija:** seed17/18 held-out mean accuracy delta `+0.052 pp`, held-out counterfactual NMI delta `-0.09967`, specialization delta `-0.12178`, positive final-CE advantage delta `+0.89793`. Pre-registered P-002 gate bajarilmadi; CRCA default uchun qabul qilinmadi.
