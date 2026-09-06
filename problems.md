@@ -33,6 +33,12 @@ bo‘lmagan circuitlarga sarflanishi.
   recall har ikki seedda `−8.33 pp` tushdi.
 - FlatRouter barcha keylarni score qilganida ham sifat yaxshilanmadi; demak,
   faqat full-bank score qo‘shish yetarli emas.
+- P-001 retrieval-window auditida M=8 → M=16/24 candidate oracle regret
+  `0.1953/0.1710 → 0.1099/0.0744 → 0.0383/0.0377` ga tushdi, recall esa
+  `9.9%/12.1% → 28.4%/28.2% → 64.2%/55.9%` bo‘ldi. Lekin ayni key-score
+  selectorning selection regreti M=32 da `0.4878/0.5092` gacha oshdi. Demak
+  retrieval haqiqiy bottleneck, ammo tor poolni shunchaki kengaytirish yechim
+  emas; selection/objective mismatch ham mustaqil muammo.
 
 #### Muammo ta’rifi
 
@@ -56,6 +62,11 @@ loss patchini yozing. Pair selector, circuit body va recurrent state update'ni
 bir vaqtda o‘zgartirmang. Candidate recall, retrieval regret, selection regret,
 hard accuracy va CE ni eski router bilan paired benchmarkda o‘lchang. Gate
 bajarilmasa, taklifni `REJECTED` deb aniq belgilang.
+
+**Qo‘shimcha cheklov:** M=16/24/32 counterfactual oracle natijalarini amaliy
+quality improvement deb hisoblamang. Widened pool faqat retrieval headroomni
+ko‘rsatadi; expert patchi candidate poolga kirgan circuitlardan final corrected
+output uchun to‘g‘ri pairni tanlay olishini ham isbotlashi kerak.
 
 ---
 
