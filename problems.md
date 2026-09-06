@@ -295,3 +295,18 @@ Codex mustaqil qayta ishlatgan to‘liq CUDA benchmark ham ayni qaror va raqamla
 **Muammo:** P-003
 **Natija:** Bir xil 5,000-step, balanced, coverage-aware trainingda ikki seed mean accuracy NE-20 `72.06%`, NE-50 `71.54%`, NE-100 `71.69%` bo‘ldi. NE-50/100 NE-20dan mos ravishda `−0.52/−0.36 pp`; dead fraction `0.18% → 6.28%/6.61%`. P-003 `ACTIVE` qoladi: warmup, longer learning curve va clean held-out matched training hali kerak.
 **Batafsil:** `results/P003_MATCHED_CAPACITY_SEED17_18.md`.
+
+### C-P003-10K-SCALE-001 — Longer-budget capacity continuation
+
+**Status:** `REJECTED FOR SCALING`
+**Muammo:** P-003
+**Natija:** 10,000-step, uch-seed matched screenda NE-20 direct mean
+`77.99%`, NE-100 progressive mean `77.86%` bo‘ldi (`−0.13 pp`). Seedlar
+bo‘yicha farq `+0.29 / −0.99 / +0.31 pp`; seed18 regressiyasi capacity foydasi
+barqaror emasligini ko‘rsatadi. NE-100 progressive NE-100 direct 2-seed
+controldan `+0.49 pp` yuqori bo‘lsa-da, bu schedule foydasi bo‘lib, NE-20dan
+ustun capacity dalili emas. 20M modelning 5k→10k o‘sishi `+6.56 pp` bo‘lib,
+oldingi screen undertraining ta’sirida bo‘lganini ko‘rsatdi. P-003 `ACTIVE`
+qoladi: routing/circuit utilization va murakkab task regressiyalari tekshirilishi
+kerak.
+**Batafsil:** `results/P003_MATCHED_10K_SEED17_19.md`.
