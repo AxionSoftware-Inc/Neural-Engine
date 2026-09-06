@@ -197,9 +197,11 @@ the router representation:
 | hidden router, 1000 supervision steps, 8 layers | 2026 | `+0.06981` | `+0.01391` | `1.664x` | reject; depth generalization worsened |
 | hard-label subset target, 8 layers | 2026 | `+0.06744` | `+0.01884` | `1.665x` | reject; worse than subset-soft |
 | final-child target, 1000 post steps, 8 layers | 2026 | `+0.07404` | `+0.01719` | `1.661x` | reject; more refit steps do not help |
-| K=5 (`62.5%` active), scale `1.6` | 2026 | `+0.08358` | `+0.04649` | `1.926x` | reject; oracle misses gate |
-| K=5, scale `1.333` | 2026 | `+0.11902` | `+0.08575` | `1.907x` | reject; scale is not the root cause |
-| K=6 with Python token-loop dispatch | 2026 | `+0.13244` | `+0.10378` | `2.124x` | reject; slower and numerically worse |
+| K=5 (`62.5%` active), scale `1.6` | 2026 | `+0.08358` | `+0.04649` | `1.926x` | invalid scale comparison; superseded |
+| K=5, scale `1.333` | 2026 | `+0.11902` | `+0.08575` | `1.907x` | invalid scale comparison; superseded |
+| K=5, scale `5` | 2026 | `+0.04101` | `+0.00512` | `1.910x` | pass |
+| K=5, scale `5` | 2027 | `+0.04186` | `+0.00055` | `1.908x` | pass |
+| K=6 with Python token-loop, scale `1.333` | 2026 | `+0.13244` | `+0.10378` | `2.124x` | invalid scale comparison; superseded |
 
 As a different architecture control, `group-energy` replaced the hidden state
 input to the 70-class subset router with cheap per-group SwiGLU activation
@@ -208,16 +210,36 @@ seed-2026 smoke it reached learned `+0.07236`, paired oracle `+0.04523`, and
 `1.365x` timing. This is worse than the default hidden-input control
 (`+0.04038`/`+0.02273`), so the feature is rejected and was not scaled to
 eight layers. It does not close the router gap; more router steps also do not
-solve the eight-layer generalization failure. The intermediate K=5 budget
-(`62.5%` active) also fails even under exact oracle routing, and lowering its
-scale makes it worse; the present cascade has a sharp quality boundary at the
-K=6 (`75%` active) operating point.
+solve the eight-layer generalization failure. The earlier K=5 runs with
+scales `1.6` and `1.333` are invalid comparisons: unlike K4 and K6, they used
+`scale/K != 1`. With the matched scale `5`, K5 passes on two seeds with learned
+deltas `+0.04101` and `+0.04186`, paired-oracle deltas `+0.00512` and
+`+0.00055`, and about `1.91x` timing at `62.5%` active. This removes the
+claimed K5 capacity boundary; scale normalization was the actual confounder.
 
-The K=6 grouped implementation is therefore still the quality reference.
-Replacing it with the current Python token-loop does not provide a runtime
-escape hatch: it is slightly slower and produces a large held-out regression.
-A real deployment speedup now requires a fused selected-expert kernel (CUDA,
-Triton, or an equivalent compiled backend), not another Python dispatch mode.
+## Optimal-scalar diagnostic
+
+For each held-out token and selected subset, the diagnostic computed the
+nonnegative least-squares scalar `g* = max(0, <z,y>/<z,z>)` against the teacher
+FFN output. It is an oracle-only measurement and is not used at inference.
+
+| active budget | learned MSE gain | oracle MSE gain | mean learned `g*` | decision |
+|---|---:|---:|---:|---|
+| K4, 50%, seed 2026 | `0.00222` | `0.00239` | `0.992` | no scale predictor |
+| K5, 62.5%, seed 2026 | `0.00158` | `0.00151` | `0.992` | no scale predictor |
+
+The optimal scalar is already very close to one and reduces local MSE only
+slightly. The K4 failure is therefore not an amplitude problem; it remains a
+subset-selection/router generalization problem. A learned scale head would
+add inference work without addressing the measured regret, so it is not
+promoted to the architecture.
+
+K=6 remains the higher-margin quality reference, while K5 is now the best
+active-budget result. The earlier K6 token-loop run also used the wrong scale
+`1.333`, so it cannot support a runtime or quality conclusion. A token-loop
+benchmark must be rerun with scale `6` before judging dispatch performance.
+A real deployment speedup still likely requires a fused selected-expert kernel
+(CUDA, Triton, or an equivalent compiled backend).
 
 A K=5 rank-128 cross-group correction attempt was also started as a capacity
 control. It was stopped after more than twenty minutes without reaching a
@@ -266,14 +288,15 @@ quality result, but K=4 remains unstable and the runtime is still worse than
 the dense parent. Therefore this is not yet a general scaling law or a
 deployment claim for 700M/1B.
 
-The direct-hard eight-layer K=6 reference is stable across two seeds, while
-the 50%-active K=4 reference has a stable learned-router failure but a passing
-oracle. Post-child refit, final-corrected subset targets, extra router steps,
-and group-energy router features do not close that gap, so K=6 is the current
-quality baseline. K=4 routing is closed for the current recipe: further work
-should change the routing/cascade architecture rather than repeat target or
-step-count sweeps. Runtime optimization is also separate; do not interpret the
-current 1.32–2.13x timing as a deployment result.
+The direct-hard eight-layer K=6 reference is stable across two seeds, and the
+matched-scale K5 result is also stable across two seeds at a lower active
+budget. K4 still has a router gap: its paired oracle passes but learned
+routing fails. The optimal-scalar diagnostic is now complete and negative. The
+next research step is a route-selection/cascade mechanism that reduces subset
+regret while preserving the matched scale rule; K5 is the current best
+active-budget operating point and K6 remains the higher-margin reference.
+Runtime optimization is separate; do not interpret the current 1.32–2.13x
+timing as a deployment result.
 
 The JSON artifacts for the runs above are kept under `results/runs/` locally;
 that directory remains ignored by the repository, while this report records

@@ -1637,6 +1637,37 @@ def train_importance_router(
 
 
 @torch.no_grad()
+def routing_group_outputs(
+    child: torch.nn.Module,
+    inputs: torch.Tensor,
+) -> tuple[TransferredRoutedQwenChild, torch.Tensor]:
+    """Return per-group outputs, including a trained cross-group correction."""
+    base = next(
+        nested for nested in child.modules()
+        if isinstance(nested, TransferredRoutedQwenChild)
+    )
+    outputs = torch.stack([
+        expert(inputs) for expert in base.experts
+    ], dim=-2).float()
+    mixer = next(
+        (
+            nested for nested in child.modules()
+            if isinstance(nested, CrossGroupOutputMixRoutedQwenChild)
+        ),
+        None,
+    )
+    if mixer is not None:
+        latent = torch.einsum(
+            "...eh,erh->...er", outputs, mixer.mix_in,
+        )
+        corrections = torch.einsum(
+            "...er,ehr->...eh", latent, mixer.mix_out,
+        )
+        outputs = corrections if mixer.replace_base_output else outputs + corrections
+    return base, outputs
+
+
+@torch.no_grad()
 def routing_diagnostics(
     child: torch.nn.Module,
     io_batches: list[dict[str, torch.Tensor]],
@@ -1654,12 +1685,14 @@ def routing_diagnostics(
     total_tokens = 0
     learned_mse = 0.0
     oracle_mse = 0.0
+    learned_optimal_mse = 0.0
+    oracle_optimal_mse = 0.0
+    learned_optimal_scale = 0.0
+    oracle_optimal_scale = 0.0
     for batch in io_batches:
         inputs = batch["input"].to(device=device, dtype=dtype)
         target = batch["output"].to(device=device, dtype=torch.float32)
-        outputs = torch.stack([
-            expert(inputs) for expert in base.experts
-        ], dim=-2).float()
+        _, outputs = routing_group_outputs(child, inputs)
         flat_outputs = outputs.reshape(-1, base.num_experts, outputs.shape[-1])
         flat_target = target.reshape(-1, outputs.shape[-1])
         gram = torch.einsum("neh,nfh->nef", flat_outputs, flat_outputs)
@@ -1692,12 +1725,26 @@ def routing_diagnostics(
         else:
             predicted_subset_index = best_subset_index
         predicted_membership = membership[predicted_subset_index]
-        learned_output = coefficient * (
+        learned_sum = (
             flat_outputs * predicted_membership.unsqueeze(-1)
         ).sum(dim=1)
-        oracle_output = coefficient * (
+        oracle_sum = (
             flat_outputs * best_membership.unsqueeze(-1)
         ).sum(dim=1)
+        learned_output = coefficient * learned_sum
+        oracle_output = coefficient * oracle_sum
+        learned_denominator = learned_sum.square().sum(dim=-1).clamp_min(1e-8)
+        oracle_denominator = oracle_sum.square().sum(dim=-1).clamp_min(1e-8)
+        learned_scale = (
+            learned_sum * flat_target
+        ).sum(dim=-1) / learned_denominator
+        oracle_scale = (
+            oracle_sum * flat_target
+        ).sum(dim=-1) / oracle_denominator
+        learned_scale = learned_scale.clamp_min(0.0)
+        oracle_scale = oracle_scale.clamp_min(0.0)
+        learned_optimal_output = learned_scale.unsqueeze(-1) * learned_sum
+        oracle_optimal_output = oracle_scale.unsqueeze(-1) * oracle_sum
         exact_matches += int(
             (predicted_subset_index == best_subset_index).sum().item()
         )
@@ -1708,14 +1755,36 @@ def routing_diagnostics(
         oracle_mse += float(
             F.mse_loss(oracle_output, flat_target, reduction="sum").item()
         )
+        learned_optimal_mse += float(
+            F.mse_loss(
+                learned_optimal_output, flat_target, reduction="sum",
+            ).item()
+        )
+        oracle_optimal_mse += float(
+            F.mse_loss(
+                oracle_optimal_output, flat_target, reduction="sum",
+            ).item()
+        )
+        learned_optimal_scale += float(learned_scale.sum().item())
+        oracle_optimal_scale += float(oracle_scale.sum().item())
     denominator = max(total_tokens * int(base.group_gate_weight.shape[-1]), 1)
     learned_mse /= denominator
     oracle_mse /= denominator
+    learned_optimal_mse /= denominator
+    oracle_optimal_mse /= denominator
+    learned_optimal_scale /= max(total_tokens, 1)
+    oracle_optimal_scale /= max(total_tokens, 1)
     return {
         "exact_subset_match": exact_matches / max(total_tokens, 1),
         "learned_mse": learned_mse,
         "oracle_mse": oracle_mse,
         "subset_regret": learned_mse - oracle_mse,
+        "learned_optimal_scalar_mse": learned_optimal_mse,
+        "oracle_optimal_scalar_mse": oracle_optimal_mse,
+        "learned_optimal_scalar_gain": learned_mse - learned_optimal_mse,
+        "oracle_optimal_scalar_gain": oracle_mse - oracle_optimal_mse,
+        "learned_optimal_scalar_mean": learned_optimal_scale,
+        "oracle_optimal_scalar_mean": oracle_optimal_scale,
     }
 
 

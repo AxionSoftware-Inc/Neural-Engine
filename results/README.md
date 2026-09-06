@@ -19,7 +19,7 @@ still 1.28x slower than the dense parent at 75% active. Do not scale to
 training-operator mismatch, not missing capacity. The full eight-layer
 direct-hard K=6 control also passes on both seeds (`+0.01103` and `+0.02117`)
 with paired-oracle deltas `-0.00649` and `-0.00088`; timing is 2.08–2.13x at
-75% active. Next is the 50%-active K=4 depth control. A 256-wide router is
+75% active. The subsequent 50%-active K=4 depth control showed a router gap. A 256-wide router is
 unstable (`+0.08855`), and an independent energy router fails at `+0.08221`.
 The K=4 direct-hard eight-layer control fails learned routing on both seeds
 (`+0.06462` and `+0.06165`) while paired-oracle routing passes
@@ -36,12 +36,16 @@ the eight-layer result (`+0.06981`). A group-energy subset-router input is
 also rejected (`+0.07236`, paired oracle `+0.04523`), worse than the hidden
 router control. Hard subset labels (`+0.06744`) and a 1000-step final-child
 refit (`+0.07404`) also fail the eight-layer gate. K=4 is closed for the
-current recipe. The intermediate K=5 (`62.5%` active) control also fails
-(`+0.08358`, exact oracle `+0.04649`); lowering its route scale to `1.333`
-worsens it to `+0.11902`. The K=6 Python token-loop dispatch also fails
-(`+0.13244`, oracle `+0.10378`, `2.124x` timing), so grouped dispatch remains
-the quality reference and a real speedup now requires a fused selected-expert
-kernel. K=6 remains the quality baseline.
+current recipe. The earlier K=5 controls were incorrectly scaled; their
+`scale=1.6` and `scale=1.333` runs are superseded because K4/K6 use
+`scale/K=1`. With matched `scale=5`, K5 passes on two seeds (`+0.04101` and
+`+0.04186`; paired oracle `+0.00512` and `+0.00055`) at `62.5%` active and
+about `1.91x` timing. K6 remains the higher-margin reference. The earlier K6
+token-loop run also used the wrong scale and must be rerun before judging
+dispatch speed.
+The optimal-scalar diagnostic is small on both budgets: local MSE gain is
+`0.00222` for K4 and `0.00158` for K5, with mean `g*≈0.992`; therefore a scale
+predictor is not promoted and the remaining target is router/subset regret.
 An exploratory K=5 rank-128 correction run was stopped after more than twenty
 minutes without a metric, so it is not treated as evidence; higher-rank
 correction needs a more efficient implementation first.
