@@ -280,3 +280,4 @@ va nima sabab ishlamaganini ko‘rsating.
 **Muammo:** P-002
 **Natija:** seed17/18 held-out mean accuracy delta `+0.052 pp`, held-out counterfactual NMI delta `-0.09967`, specialization delta `-0.12178`, positive final-CE advantage delta `+0.89793`. Pre-registered P-002 gate bajarilmadi; CRCA default uchun qabul qilinmadi.
 **Batafsil:** `results/P002_CRCA_SEED17_18.md` va `results/P002_CRCA_SEED17_18.json`.
+Codex mustaqil qayta ishlatgan to‘liq CUDA benchmark ham ayni qaror va raqamlarni tasdiqladi; batafsil: `results/P002_CRCA_RECHECK_20260907.md`.
