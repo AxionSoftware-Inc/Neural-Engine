@@ -1,0 +1,35 @@
+{
+  "experiment": "probe_route_frozen",
+  "checkpoint": "results/checkpoints/capacity_audit_c32_global_s17.pt",
+  "seed": 17,
+  "mode": "selection-only",
+  "steps": 2000,
+  "imitation_steps": 200,
+  "batch_count": 8,
+  "examples_per_task": 8,
+  "trainable_router_params": 21760,
+  "training_seconds": 72.06631589999961,
+  "mean_train_router_loss": 0.1448933097459376,
+  "probe_kind_counts": {
+    "inside": 21401,
+    "outside": 21688,
+    "double": 10706
+  },
+  "positive_retrieval_probes": 8085,
+  "teacher_heldout": {
+    "loss": 2.257682681083679,
+    "accuracy": 0.5125,
+    "examples": 240,
+    "dead_circuits": 1,
+    "used_circuits": 31
+  },
+  "probe_heldout": {
+    "loss": 2.375829339027405,
+    "accuracy": 0.44166666666666665,
+    "examples": 240,
+    "dead_circuits": 0,
+    "used_circuits": 32
+  },
+  "heldout_loss_delta_vs_teacher": 0.11814665794372559,
+  "heldout_accuracy_delta_vs_teacher": -0.0708333333333333
+}
