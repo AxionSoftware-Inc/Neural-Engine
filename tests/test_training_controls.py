@@ -1,7 +1,8 @@
 import pytest
 import torch
 
-from train import controlled_task_route_ids
+from neural_engine.model import NeuralEngineV0
+from train import apply_routing_schedule, controlled_task_route_ids
 
 
 def test_controlled_task_routes_are_fixed_and_grouped():
@@ -21,3 +22,30 @@ def test_controlled_task_routes_are_fixed_and_grouped():
 def test_controlled_task_routes_reject_invalid_dimensions():
     with pytest.raises(ValueError):
         controlled_task_route_ids(torch.tensor([0]), 2, 4, 2)
+
+
+def test_routing_schedule_exposes_capacity_and_depth_at_requested_step():
+    model = NeuralEngineV0(
+        vocab_size=32, num_classes=8, seq_len=4, d_model=16, state_dim=16,
+        num_circuits=16, circuit_rank=4, router_branch=2, router_depth=3,
+        candidate_pool=4, active_circuits=2, internal_steps=2,
+    )
+    schedule = [{"step": 3, "capacity": 8, "depth": 2}]
+
+    apply_routing_schedule(model, schedule, step=2)
+    assert model.router.routing_capacity == 16
+    assert model.router.active_depth == 3
+
+    apply_routing_schedule(model, schedule, step=3)
+    assert model.router.routing_capacity == 8
+    assert model.router.active_depth == 2
+
+
+def test_routing_schedule_requires_capacity():
+    model = NeuralEngineV0(
+        vocab_size=32, num_classes=8, seq_len=4, d_model=16, state_dim=16,
+        num_circuits=16, circuit_rank=4, router_branch=2, router_depth=3,
+        candidate_pool=4, active_circuits=2, internal_steps=2,
+    )
+    with pytest.raises(ValueError):
+        apply_routing_schedule(model, [{"step": 1}], step=1)

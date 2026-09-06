@@ -149,6 +149,27 @@ def controlled_task_route_ids(task_ids: torch.Tensor, internal_steps: int,
     return selected.unsqueeze(1).expand(-1, internal_steps, -1).clone()
 
 
+def apply_routing_schedule(model: nn.Module, schedule: list[dict[str, int]], step: int) -> None:
+    """Expose a larger routing prefix at explicit training steps.
+
+    The model is constructed with the initial ``routing_capacity`` and
+    ``routing_depth`` from its config. Schedule events only change the
+    router's reachable prefix/tree depth; they do not alter model weights or
+    the inference-time active circuit budget.
+    """
+    if not isinstance(model, NeuralEngineV0):
+        return
+    for event in schedule:
+        if int(event.get("step", -1)) != int(step):
+            continue
+        if "capacity" not in event:
+            raise ValueError("routing schedule events require capacity")
+        kwargs = {"capacity": int(event["capacity"])}
+        if "depth" in event:
+            kwargs["depth"] = int(event["depth"])
+        model.router.set_routing_state(**kwargs)
+
+
 @torch.no_grad()
 def evaluate(model: nn.Module, source: BatchSource, batches: int = 8) -> dict[str, Any]:
     model.eval()
@@ -269,11 +290,16 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     coverage_weight = float(config.get("routing_coverage_weight", 0.0))
     coverage_enabled = isinstance(model, NeuralEngineV0) and coverage_weight > 0.0
     routing_warmup_steps = int(config.get("routing_warmup_steps", 0))
+    routing_schedule = list(config.get("routing_schedule", []))
+    if routing_schedule and routing_warmup_steps:
+        raise ValueError("routing_schedule and routing_warmup_steps are mutually exclusive")
     soft_routing_temperature = float(config.get("soft_routing_temperature", 0.0))
     soft_routing_steps = int(config.get("soft_routing_steps", 0))
     for step in range(1, steps + 1):
-        if (isinstance(model, NeuralEngineV0) and routing_warmup_steps
-                and step == routing_warmup_steps + 1):
+        if routing_schedule:
+            apply_routing_schedule(model, routing_schedule, step)
+        elif (isinstance(model, NeuralEngineV0) and routing_warmup_steps
+              and step == routing_warmup_steps + 1):
             model.router.set_routing_state(
                 capacity=model.router.num_circuits,
                 depth=model.router.depth,
@@ -371,6 +397,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "routing_coverage_weight": coverage_weight,
         "routing_coverage_temperature": float(config.get("routing_coverage_temperature", 0.25)),
         "routing_warmup_steps": routing_warmup_steps,
+        "routing_schedule": routing_schedule,
         "routing_mode": str(config.get("routing_mode", "learned")),
         "soft_routing_temperature": float(config.get("soft_routing_temperature", 0.0)),
         "soft_routing_steps": soft_routing_steps,

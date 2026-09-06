@@ -281,3 +281,17 @@ va nima sabab ishlamaganini ko‘rsating.
 **Natija:** seed17/18 held-out mean accuracy delta `+0.052 pp`, held-out counterfactual NMI delta `-0.09967`, specialization delta `-0.12178`, positive final-CE advantage delta `+0.89793`. Pre-registered P-002 gate bajarilmadi; CRCA default uchun qabul qilinmadi.
 **Batafsil:** `results/P002_CRCA_SEED17_18.md` va `results/P002_CRCA_SEED17_18.json`.
 Codex mustaqil qayta ishlatgan to‘liq CUDA benchmark ham ayni qaror va raqamlarni tasdiqladi; batafsil: `results/P002_CRCA_RECHECK_20260907.md`.
+
+### C-P003-PROGRESSIVE-CAPACITY-001 — Progressive bank exposure
+
+**Status:** `REJECTED FOR DEFAULT`  
+**Muammo:** P-003
+**Natija:** NE-50 ikki seed mean accuracy `71.54% → 71.11%` (`−0.43 pp`), NE-100 `71.69% → 72.10%` (`+0.40 pp`). NE-100 dead fraction biroz kamaydi, active parametrlar `~1.98M`da qoldi, lekin +2 pp gate bajarilmadi va NE-50 seed18 regressiya qildi. P-003 `ACTIVE` qoladi.
+**Batafsil:** `results/P003_PROGRESSIVE_CAPACITY_SEED17_18.md`.
+
+### C-P003-MATCHED-SCALE-001 — Matched 20M/50M/100M capacity screen
+
+**Status:** `REJECTED FOR SCALING`  
+**Muammo:** P-003
+**Natija:** Bir xil 5,000-step, balanced, coverage-aware trainingda ikki seed mean accuracy NE-20 `72.06%`, NE-50 `71.54%`, NE-100 `71.69%` bo‘ldi. NE-50/100 NE-20dan mos ravishda `−0.52/−0.36 pp`; dead fraction `0.18% → 6.28%/6.61%`. P-003 `ACTIVE` qoladi: warmup, longer learning curve va clean held-out matched training hali kerak.
+**Batafsil:** `results/P003_MATCHED_CAPACITY_SEED17_18.md`.
