@@ -428,3 +428,10 @@ va nima sabab ishlamaganini ko‘rsating.
 **Muammo:** P-001 / Handoff D  
 **Natija:** seed17/18 mean hard accuracy delta `-0.052 pp`, mean selection-regret reduction `6.37%`, p95 reduction `13.06%`, max latency `1.125x`. Gate bajarilmadi. Dense full-bank inference ishlatilmadi; P-001 `ACTIVE` qoladi.
 
+### C-P004-SPARSE-CREDIT-001 — Underused-circuit final-output credit
+
+**Status:** `REJECTED`  
+**Muammo:** P-002 / P-004
+**Natija:** Codex mustaqil qayta tekshiruvda seed17/18 accuracy foydasi o‘rtacha `+0.078 pp`, mean regret yaxshilanishi `0.859%/1.190%`, p95 `0.668%/0.588%` bo‘ldi. Gradient exposure oshgan bo‘lsa ham +2 pp va 10% regret gate bajarilmadi. `P-002` va `P-004` `ACTIVE` qoladi.
+**Batafsil:** `results/P001_P006_SPARSE_CREDIT_RECHECK_20260907.md` va expertning `results/P001_P006_SPARSE_CREDIT_AUDIT_20260907.md` hisobotlari.
+
