@@ -33,17 +33,66 @@ def _window(base: torch.Tensor, width: int, capacity: int) -> torch.Tensor:
     return (base.unsqueeze(-1) + offsets).remainder(capacity)
 
 
+def _local_pair_losses(model, batch, query: torch.Tensor, step: int,
+                       all_pairs: list[tuple[int, int]]) -> torch.Tensor:
+    """Score pairs using only the immediate post-update output.
+
+    This is deliberately a diagnostic proxy.  It omits later recurrent suffix
+    routing, but uses the real circuit body, GRU update and output head.  The
+    frozen capacity checkpoints use the plain state path; task-context and
+    memory-write variants are rejected rather than silently approximated.
+    """
+    if model.use_task_context or model.memory_write is not None:
+        raise ValueError("local cost proxy requires the plain NeuralEngineV0 state path")
+    device = query.device
+    batch_size, state_dim = query.shape
+    bank = model.router.num_circuits
+    circuit_ids = torch.arange(bank, device=device, dtype=torch.long).view(1, bank)
+    circuit_ids = circuit_ids.expand(batch_size, -1)
+    down = model.circuits.down[circuit_ids]
+    up = model.circuits.up[circuit_ids]
+    bias = model.circuits.bias[circuit_ids]
+    hidden = torch.einsum("bd,bcdr->bcr", query, down)
+    hidden = F.gelu(hidden)
+    outputs = torch.einsum("bcr,bcrd->bcd", hidden, up) + bias
+    left = torch.tensor([pair[0] for pair in all_pairs], device=device, dtype=torch.long)
+    right = torch.tensor([pair[1] for pair in all_pairs], device=device, dtype=torch.long)
+    encoded = model.encode(batch.inputs)
+    active_state = query - model.step_embedding[step]
+    step_embedding = model.step_embedding[step]
+    local_losses = []
+    chunk_size = 64
+    for start in range(0, len(all_pairs), chunk_size):
+        end = min(start + chunk_size, len(all_pairs))
+        pair_delta = (outputs[:, left[start:end]] + outputs[:, right[start:end]]) * 0.5
+        update = (pair_delta + model.input_reinjection * encoded.unsqueeze(1)
+                  + step_embedding.view(1, 1, state_dim))
+        count = end - start
+        flat_state = active_state.unsqueeze(1).expand(-1, count, -1).reshape(-1, state_dim)
+        flat_update = update.reshape(-1, state_dim)
+        proposal = model.state.step(flat_state, flat_update)
+        local_logits = model.output(proposal).reshape(batch_size, count, -1)
+        targets = batch.targets.view(-1, 1).expand(-1, count).reshape(-1)
+        local_losses.append(F.cross_entropy(
+            local_logits.reshape(-1, local_logits.shape[-1]), targets, reduction="none",
+        ).reshape(batch_size, count))
+    return torch.cat(local_losses, dim=1)
+
+
 def _new_bucket() -> dict[str, Any]:
     return {
         "decisions": 0,
         "candidate_loss": 0.0,
         "selector_loss": 0.0,
+        "proxy_loss": 0.0,
         "full_loss": 0.0,
         "candidate_regret": [],
         "selection_regret": [],
+        "proxy_regret": [],
         "retrieval_regret": [],
         "candidate_correct": 0,
         "selector_correct": 0,
+        "proxy_correct": 0,
         "full_correct": 0,
         "recall": 0,
     }
@@ -59,15 +108,18 @@ def _summarize(bucket: dict[str, Any], width: int) -> dict[str, Any]:
         "decisions": decisions,
         "candidate_oracle_loss": bucket.pop("candidate_loss") / decisions,
         "selector_loss": bucket.pop("selector_loss") / decisions,
+        "local_proxy_selected_final_loss": bucket.pop("proxy_loss") / decisions,
         "full_oracle_loss": bucket.pop("full_loss") / decisions,
         "candidate_regret_mean": float(candidate_regret.mean()),
         "candidate_regret_p95": float(torch.quantile(candidate_regret, 0.95)),
         "selection_regret_mean": float(selection_regret.mean()),
         "selection_regret_p95": float(torch.quantile(selection_regret, 0.95)),
+        "local_proxy_regret_mean": float(torch.tensor(bucket.pop("proxy_regret")).mean()),
         "retrieval_regret_mean": float(retrieval_regret.mean()),
         "retrieval_regret_p95": float(torch.quantile(retrieval_regret, 0.95)),
         "candidate_oracle_accuracy": bucket.pop("candidate_correct") / decisions,
         "selector_accuracy": bucket.pop("selector_correct") / decisions,
+        "local_proxy_accuracy": bucket.pop("proxy_correct") / decisions,
         "full_oracle_accuracy": bucket.pop("full_correct") / decisions,
         "candidate_recall": bucket.pop("recall") / decisions,
     }
@@ -167,6 +219,7 @@ def audit_checkpoint(path: Path, device: torch.device, batches: int,
                     )
 
             pair_losses = torch.stack(pair_losses, dim=1)
+            local_pair_losses = _local_pair_losses(model, batch, query, step, all_pairs)
             full_ties = pair_losses.le(full_best.unsqueeze(1) + 1e-6)
             pair_left = torch.tensor(
                 [pair[0] for pair in all_pairs], device=device, dtype=torch.long,
@@ -180,21 +233,40 @@ def audit_checkpoint(path: Path, device: torch.device, batches: int,
                 recall = (full_ties & valid_pairs).any(dim=1)
                 selection_regret = selector_loss[width] - candidate_best[width]
                 retrieval_regret = candidate_best[width] - full_best
+                proxy_pair_index = torch.where(
+                    valid_pairs, local_pair_losses,
+                    torch.full_like(local_pair_losses, float("inf")),
+                ).argmin(dim=1)
+                proxy_final_loss = pair_losses.gather(
+                    1, proxy_pair_index.view(-1, 1),
+                ).squeeze(1)
+                proxy_regret = proxy_final_loss - candidate_best[width]
+                pair_lookup = torch.tensor(all_pairs, device=device, dtype=torch.long)
+                proxy_pair_ids = pair_lookup[proxy_pair_index]
+                proxy_plan = _step_plan(base_ids, step, proxy_pair_ids)
+                proxy_logits, _ = model(
+                    batch.inputs, adaptive=False, forced_selected_ids=proxy_plan,
+                )
                 for bucket in (totals[width], per_step[width][str(step)]):
                     bucket["decisions"] += batch.targets.numel()
                     bucket["candidate_loss"] += float(candidate_best[width].sum())
                     bucket["selector_loss"] += float(selector_loss[width].sum())
+                    bucket["proxy_loss"] += float(proxy_final_loss.sum())
                     bucket["full_loss"] += float(full_best.sum())
                     bucket["candidate_regret"].extend(
                         (candidate_best[width] - full_best).cpu().tolist()
                     )
                     bucket["selection_regret"].extend(selection_regret.cpu().tolist())
+                    bucket["proxy_regret"].extend(proxy_regret.cpu().tolist())
                     bucket["retrieval_regret"].extend(retrieval_regret.cpu().tolist())
                     bucket["candidate_correct"] += int(
                         candidate_best_logits[width].argmax(-1).eq(batch.targets).sum()
                     )
                     bucket["selector_correct"] += int(
                         selector_logits[width].argmax(-1).eq(batch.targets).sum()
+                    )
+                    bucket["proxy_correct"] += int(
+                        proxy_logits.argmax(-1).eq(batch.targets).sum()
                     )
                     bucket["full_correct"] += int(
                         full_best_logits.argmax(-1).eq(batch.targets).sum()
@@ -233,18 +305,19 @@ def _markdown(payload: dict[str, Any]) -> str:
         "",
         "## Aggregate results",
         "",
-        "| Seed | M | Candidate oracle CE | Same-key selector CE | Full oracle CE | Retrieval regret | Selection regret | p95 retrieval | Recall | Candidate acc | Selector acc | Full acc |",
-        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| Seed | M | Candidate oracle CE | Same-key selector CE | Local proxy final CE | Full oracle CE | Retrieval regret | Selection regret | Local proxy regret | Recall | Selector acc | Proxy acc | Full acc |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for result in payload["results"]:
         for item in result["widths"]:
             lines.append(
                 f"| {result['seed']} | {item['candidate_pool']} | "
                 f"{item['candidate_oracle_loss']:.4f} | {item['selector_loss']:.4f} | "
-                f"{item['full_oracle_loss']:.4f} | {item['retrieval_regret_mean']:.4f} | "
-                f"{item['selection_regret_mean']:.4f} | {item['retrieval_regret_p95']:.4f} | "
-                f"{item['candidate_recall']:.1%} | {item['candidate_oracle_accuracy']:.1%} | "
-                f"{item['selector_accuracy']:.1%} | {item['full_oracle_accuracy']:.1%} |"
+                f"{item['local_proxy_selected_final_loss']:.4f} | {item['full_oracle_loss']:.4f} | "
+                f"{item['retrieval_regret_mean']:.4f} | {item['selection_regret_mean']:.4f} | "
+                f"{item['local_proxy_regret_mean']:.4f} | {item['candidate_recall']:.1%} | "
+                f"{item['selector_accuracy']:.1%} | {item['local_proxy_accuracy']:.1%} | "
+                f"{item['full_oracle_accuracy']:.1%} |"
             )
     lines += [
         "",
@@ -254,6 +327,13 @@ def _markdown(payload: dict[str, Any]) -> str:
         "same-key selector remains poor, retrieval is a real bottleneck but the",
         "selector/objective still needs separate work. If M=16/24 barely changes",
         "the result, candidate width is not the main explanation for scaling failure.",
+        "",
+        "The local proxy uses each frozen circuit output, the real GRU update and",
+        "the immediate output head, but omits suffix rerouting. It is a cheap",
+        "mathematical engineering probe, not an end-to-end model result.",
+        "If its final selected loss approaches the candidate oracle, a local",
+        "output-aware selector is promising; otherwise the selector likely needs",
+        "cascade-aware cost prediction.",
         "",
         "Exact JSON: `results/runs/p001_retrieval_window_s17_s18.json`.",
     ]

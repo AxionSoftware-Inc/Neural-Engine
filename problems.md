@@ -39,6 +39,12 @@ bo‘lmagan circuitlarga sarflanishi.
   selectorning selection regreti M=32 da `0.4878/0.5092` gacha oshdi. Demak
   retrieval haqiqiy bottleneck, ammo tor poolni shunchaki kengaytirish yechim
   emas; selection/objective mismatch ham mustaqil muammo.
+- Frozen bankda real circuit output → GRU → immediate output proxy key-score'dan
+  ancha yaxshi juftlik tanladi: M=8 proxy selection regreti seed17/18 uchun
+  `0.079/0.036`, key-score esa `0.262/0.276`; M=32 proxy `0.118/0.060`,
+  key-score `0.488/0.509`. Bu kuchli arxitektura signali, lekin proxy barcha
+  circuit chiqishini diagnostic sifatida hisoblaydi va hali sparse inference
+  yechimi emas.
 
 #### Muammo ta’rifi
 
@@ -337,6 +343,29 @@ circuit body, recurrent step hamda correction bo‘yicha touched bound bilan
 to‘ldiring. Training probe cost va inference routing costni ajrating. Formula
 uchun unit test va eski benchmark JSONlariga backward-compatible maydonlar
 qo‘shing. Instrumentation patchi quality modelini o‘zgartirmasin.
+
+### Handoff D — local output-aware cost signalni sparse ko‘rinishga keltirish
+
+P-001 diagnosticida immediate post-update output proxy oddiy key-score’dan
+sezilarli yaxshi bo‘ldi. Bu natija faqat frozen counterfactual upper-bound emas:
+u candidate pool ichida final pairni tanlash uchun foydali signal borligini
+ko‘rsatadi. Lekin diagnostic proxy har bir bank circuitining real chiqishini
+hisoblaydi; uni bevosita inference routerga qo‘yish Neural Engine’ning active
+parameter maqsadini buzadi.
+
+Expert task: avval proxy formulasi qaysi qismdan foyda olayotganini ajrating —
+individual circuit output, pair interaction, immediate GRU state yoki output
+head. Keyin faqat bitta sparse implementation taklif qiling: masalan,
+oldindan o‘qitilgan compact output signature, candidate-only output probe yoki
+shared low-rank summary. Barcha bankni inference vaqtida dense ishlatadigan
+variantni yechim deb hisoblamang. Circuit body va default model birinchi
+patchda o‘zgarmasin; retrieval va selector natijalari alohida ko‘rsatilsin.
+
+Acceptance: seed17/18, E=32, active=2, T=3; candidate recall pasaymasin;
+hard accuracy kamida `+2 pp`, mean/p95 regret kamida `10%` yaxshilansin;
+latency `<=1.25x`; active parameters va probe cost to‘liq hisoblansin. Faqat
+proxy oracle yaxshilangani adoption uchun yetarli emas. Kod, test, smoke/full
+benchmark, JSON/Markdown audit va gate bajarilmasa negative report yozilsin.
 
 ### Expertga yuboriladigan ish tartibi
 
