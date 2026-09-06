@@ -61,6 +61,8 @@ as the current architecture; it was not scaled to eight layers. The next
 route experiment should follow the learned cascade distribution and aggregate
 new teacher-cost data rather than add more width or correction scale. See
 `V0_174_CORRECTED_ROUTING_AND_EXPERT_AUDIT.md`.
+For a shareable experiment-by-experiment handoff to the proposal author, see
+`EXPERT_FEEDBACK_PAIRWISE_COST_ROUTER.md`.
 
 V0.173 fixes a real full-active routing bug: when `K=E`, the hard path must
 use scale `E`, not `E/K`, to reconstruct the parent sum. The corrected child is
