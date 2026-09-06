@@ -1,5 +1,9 @@
 # Results
 
+## Current capacity-signal experiment
+
+- [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
+
 V0.174 follows the expert audit in `KEYINGI_YOL_2026-09-06.md` and fixes the
 hard-training/grouped-inference scale mismatch plus stale copied-expert
 refinement. The corrected two-layer learned router is still borderline

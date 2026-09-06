@@ -123,6 +123,26 @@ class BatchSource:
         return self.generator.balanced_batch(examples_per_task, self.device)
 
 
+def controlled_task_route_ids(task_ids: torch.Tensor, internal_steps: int,
+                              active_circuits: int, num_circuits: int) -> torch.Tensor:
+    """Assign each task to a fixed group of independent circuits.
+
+    This is the capacity-control arm of the scaling diagnostic.  It removes
+    learned route selection while keeping the active circuit count fixed.  A
+    task is mapped to one contiguous group; when the bank is too small for a
+    one-to-one task mapping, tasks deliberately share a group.  The returned
+    route has the same shape as ``NeuralEngineV0``'s replay hook.
+    """
+    if internal_steps < 1 or active_circuits < 1 or num_circuits < active_circuits:
+        raise ValueError("invalid circuit dimensions for controlled task routing")
+    group_count = max(1, num_circuits // active_circuits)
+    group_ids = task_ids.remainder(group_count)
+    slots = torch.arange(active_circuits, device=task_ids.device).view(1, -1)
+    base = group_ids.view(-1, 1) * active_circuits
+    selected = (base + slots).remainder(num_circuits)
+    return selected.unsqueeze(1).expand(-1, internal_steps, -1).clone()
+
+
 @torch.no_grad()
 def evaluate(model: nn.Module, source: BatchSource, batches: int = 8) -> dict[str, Any]:
     model.eval()
@@ -131,7 +151,13 @@ def evaluate(model: nn.Module, source: BatchSource, batches: int = 8) -> dict[st
     for _ in range(batches):
         batch = source.balanced(16 if batches <= 2 else 32)
         if isinstance(model, NeuralEngineV0):
-            logits, route_stats = model(batch.inputs, adaptive=model.adaptive_inference)
+            forced_ids = None
+            if getattr(model, "routing_mode", "learned") == "controlled_task":
+                forced_ids = controlled_task_route_ids(
+                    batch.task_ids, model.internal_steps, model.active_circuits,
+                    model.router.num_circuits)
+            logits, route_stats = model(batch.inputs, adaptive=model.adaptive_inference,
+                                        forced_selected_ids=forced_ids)
         else:
             logits, route_stats = model(batch.inputs)
         losses.append(float(nn.functional.cross_entropy(logits, batch.targets).cpu()))
@@ -179,11 +205,23 @@ def evaluate(model: nn.Module, source: BatchSource, batches: int = 8) -> dict[st
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
     config = load_config(args.config, args.smoke)
+    if args.num_circuits is not None:
+        config["num_circuits"] = args.num_circuits
+    if args.active_circuits is not None:
+        config["active_circuits"] = args.active_circuits
+    if args.routing_mode is not None:
+        config["routing_mode"] = args.routing_mode
+    if args.seed is not None:
+        config["seed"] = args.seed
     seed_everything(int(config["seed"]))
     device = torch.device("cuda" if args.device == "auto" and torch.cuda.is_available() else args.device)
     if args.device == "auto":
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = make_model(config).to(device)
+    if isinstance(model, NeuralEngineV0):
+        model.routing_mode = str(config.get("routing_mode", "learned"))
+        if model.routing_mode not in {"learned", "controlled_task"}:
+            raise ValueError("routing_mode must be 'learned' or 'controlled_task'")
     if args.init_checkpoint:
         initialization = torch.load(Path(args.init_checkpoint), map_location="cpu", weights_only=True)
         model.load_state_dict(initialization.get("model_state", initialization))
@@ -225,7 +263,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         batch = train_source.batch()
         optimizer.zero_grad(set_to_none=True)
         if isinstance(model, NeuralEngineV0):
-            logits, route_stats = model(batch.inputs, adaptive=False, coverage=coverage_enabled)
+            forced_ids = None
+            if model.routing_mode == "controlled_task":
+                forced_ids = controlled_task_route_ids(
+                    batch.task_ids, model.internal_steps, model.active_circuits,
+                    model.router.num_circuits)
+            logits, route_stats = model(batch.inputs, adaptive=False,
+                                        forced_selected_ids=forced_ids,
+                                        coverage=coverage_enabled)
         else:
             logits, route_stats = model(batch.inputs)
         if hasattr(optimizer, "set_active_rows") and isinstance(model, NeuralEngineV0):
@@ -263,7 +308,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 row_indices = torch.arange(batch.inputs.shape[0], device=device)
                 exit_logits = route_stats["step_logits"][row_indices, exit_steps]
                 loss = loss + exit_loss_weight * nn.functional.cross_entropy(exit_logits, batch.targets)
-        if "router_entropy" in route_stats:
+        if "router_entropy" in route_stats and model.routing_mode != "controlled_task":
             loss = loss - 0.0001 * route_stats["router_entropy"]
         if coverage_enabled and "routing_coverage_loss" in route_stats:
             loss = loss + coverage_weight * route_stats["routing_coverage_loss"]
@@ -300,6 +345,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "routing_coverage_weight": coverage_weight,
         "routing_coverage_temperature": float(config.get("routing_coverage_temperature", 0.25)),
         "routing_warmup_steps": routing_warmup_steps,
+        "routing_mode": str(config.get("routing_mode", "learned")),
         "input_reinjection": float(config.get("input_reinjection", 1.0)),
         "memory_write_mode": str(config.get("memory_write_mode", "none")),
         "optimizer": str(config.get("optimizer", "adamw")),
@@ -366,6 +412,14 @@ def main() -> None:
                         help="Oversample depth-2/3 tasks during training")
     parser.add_argument("--composition-strength", type=float, default=0.0,
                         help="Extra sampling weight per depth level (e.g. 0.5 gives 1:1.5:2)")
+    parser.add_argument("--num-circuits", type=int, default=None,
+                        help="Override the config circuit-bank size for scaling controls")
+    parser.add_argument("--active-circuits", type=int, default=None,
+                        help="Override the active circuit budget for scaling controls")
+    parser.add_argument("--routing-mode", choices=("learned", "controlled_task"), default=None,
+                        help="Use learned routing or fixed task-to-circuit allocation")
+    parser.add_argument("--seed", type=int, default=None,
+                        help="Override the config seed for multi-seed controls")
     args = parser.parse_args()
     if args.model == "baseline":
         args.config = "configs/transformer_30m.yaml"
