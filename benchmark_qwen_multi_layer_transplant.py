@@ -379,6 +379,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         partition_indices: list[torch.Tensor] | None = None,
         router_hidden_size: int = 128,
         router_input: str = "hidden",
+        pairwise_cost_parameterization: str = "components",
     ) -> None:
         super().__init__()
         if not 1 <= active_experts <= num_experts:
@@ -416,6 +417,11 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             raise ValueError("router input must be hidden or group-energy")
         self.router_hidden_size = int(router_hidden_size)
         self.router_input = router_input
+        if pairwise_cost_parameterization not in {"components", "centered-basis"}:
+            raise ValueError(
+                "pairwise cost parameterization must be components or centered-basis"
+            )
+        self.pairwise_cost_parameterization = pairwise_cost_parameterization
         self.hard_route_scale = (
             (
                 self.num_experts
@@ -534,12 +540,33 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                     subset_pair_membership,
                     persistent=False,
                 )
+                component_membership = torch.cat(
+                    (subset_membership, subset_pair_membership), dim=1,
+                )
+                if pairwise_cost_parameterization == "centered-basis":
+                    centered_components = (
+                        component_membership
+                        - component_membership.mean(dim=0, keepdim=True)
+                    )
+                    left, singular, _ = torch.linalg.svd(
+                        centered_components, full_matrices=False,
+                    )
+                    rank = max(
+                        1,
+                        int((singular > singular.max() * 1e-6).sum().item()),
+                    )
+                    self.register_buffer(
+                        "pairwise_cost_basis", left[:, :rank], persistent=False,
+                    )
+                    router_output_size = rank
+                else:
+                    router_output_size = num_experts + pair_ids.shape[0]
                 self.pairwise_cost_router = torch.nn.Sequential(
                     torch.nn.Linear(router_input_size, self.router_hidden_size),
                     torch.nn.SiLU(),
                     torch.nn.Linear(
                         self.router_hidden_size,
-                        num_experts + pair_ids.shape[0],
+                        router_output_size,
                     ),
                 )
                 torch.nn.init.zeros_(self.pairwise_cost_router[-1].weight)
@@ -589,12 +616,15 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         features = self._router_features(hidden_states)
         if self.route_source == "pairwise-cost-router":
             components = self.pairwise_cost_router(features)
-            singles = components[..., :self.num_experts]
-            pairs = components[..., self.num_experts:]
-            costs = (
-                singles @ self.subset_membership.transpose(0, 1)
-                + pairs @ self.subset_pair_membership.transpose(0, 1)
-            )
+            if self.pairwise_cost_parameterization == "centered-basis":
+                costs = components @ self.pairwise_cost_basis.transpose(0, 1)
+            else:
+                singles = components[..., :self.num_experts]
+                pairs = components[..., self.num_experts:]
+                costs = (
+                    singles @ self.subset_membership.transpose(0, 1)
+                    + pairs @ self.subset_pair_membership.transpose(0, 1)
+                )
             return -costs
         if hasattr(self, "subset_router"):
             return self.subset_router(features)
@@ -1409,6 +1439,7 @@ def make_transferred_routed_qwen_child(
     partition_io: list[dict[str, torch.Tensor]] | None = None,
     router_hidden_size: int = 128,
     router_input: str = "hidden",
+    pairwise_cost_parameterization: str = "components",
 ) -> torch.nn.Module:
     partition_indices = None
     if partition_mode == "activation-balanced":
@@ -1437,6 +1468,7 @@ def make_transferred_routed_qwen_child(
         partition_indices,
         router_hidden_size,
         router_input,
+        pairwise_cost_parameterization,
     ).to(device=device, dtype=dtype)
     if calibration_rank > 0:
         if calibration_mode == "shared-basis":
@@ -1557,7 +1589,8 @@ def train_importance_router(
         "subset-router", "oracle-subset", "pairwise-cost-router",
     }:
         if target_mode not in {
-            "subset", "subset-soft", "final-subset-soft", "pairwise-regret",
+            "subset", "subset-soft", "final-subset-soft",
+            "pairwise-regret", "pairwise-regret-tail",
         }:
             raise ValueError("subset router requires subset or regret supervision")
         router_parameters = list(
@@ -1601,7 +1634,7 @@ def train_importance_router(
                     )
                 elif target_mode in {
                     "subset", "subset-soft", "final-subset-soft",
-                    "pairwise-regret",
+                    "pairwise-regret", "pairwise-regret-tail",
                 }:
                     if (
                         target_mode == "final-subset-soft"
@@ -1664,7 +1697,9 @@ def train_importance_router(
                         centered_errors = errors - errors.min(dim=-1, keepdim=True).values
                         subset_regrets = (
                             centered_errors / max(outputs.shape[-1], 1)
-                            if target_mode == "pairwise-regret"
+                            if target_mode in {
+                                "pairwise-regret", "pairwise-regret-tail",
+                            }
                             else centered_errors
                         )
                         subset_target = F.softmax(
@@ -1674,7 +1709,8 @@ def train_importance_router(
                 else:
                     raise ValueError(
                         "router target must be energy, dot, subset, subset-soft, "
-                        "final-subset-soft, or pairwise-regret"
+                        "final-subset-soft, pairwise-regret, or "
+                        "pairwise-regret-tail"
                     )
             scores = (
                 base._subset_scores(inputs).float()
@@ -1683,10 +1719,12 @@ def train_importance_router(
                 }
                 else base.router(inputs).float()
             )
-            if target_mode == "pairwise-regret":
+            if target_mode in {
+                "pairwise-regret", "pairwise-regret-tail",
+            }:
                 if base.route_source != "pairwise-cost-router":
                     raise ValueError(
-                        "pairwise-regret requires pairwise-cost-router"
+                        "pairwise-regret targets require pairwise-cost-router"
                     )
                 if subset_regrets is None:
                     raise RuntimeError("pairwise regrets were not computed")
@@ -1696,9 +1734,19 @@ def train_importance_router(
                 predicted_probabilities = F.softmax(
                     flat_scores / target_temperature, dim=-1,
                 )
-                regret_loss = (
+                per_token_regret = (
                     predicted_probabilities * subset_regrets
-                ).sum(dim=-1).mean()
+                ).sum(dim=-1)
+                expected_regret = per_token_regret.mean()
+                if target_mode == "pairwise-regret-tail":
+                    tail_count = max(
+                        1, (per_token_regret.shape[0] + 3) // 4,
+                    )
+                    regret_loss = expected_regret + 0.5 * torch.topk(
+                        per_token_regret, tail_count,
+                    ).values.mean()
+                else:
+                    regret_loss = expected_regret
                 soft_target = F.softmax(
                     -subset_regrets / target_temperature, dim=-1,
                 )
@@ -1844,6 +1892,7 @@ def refit_pairwise_router_cascade(
     max_grad_norm: float,
     log_every: int,
     target_temperature: float,
+    target_mode: str = "pairwise-regret",
 ) -> list[list[dict[str, float]]]:
     """Refit pairwise routers on static or aggregated cascade inputs.
 
@@ -1873,7 +1922,7 @@ def refit_pairwise_router_cascade(
             histories[index].extend(train_importance_router(
                 child, io_batches, device, dtype, steps,
                 learning_rate, max_grad_norm, log_every,
-                "pairwise-regret", target_temperature, optimizer,
+                target_mode, target_temperature, optimizer,
             ))
         return histories
 
@@ -1906,7 +1955,7 @@ def refit_pairwise_router_cascade(
             histories[index].extend(train_importance_router(
                 child, io_batches, device, dtype, steps,
                 learning_rate, max_grad_norm, log_every,
-                "pairwise-regret", target_temperature, optimizer,
+                target_mode, target_temperature, optimizer,
             ))
     return histories
 
@@ -2600,6 +2649,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 partition_io=train_io,
                 router_hidden_size=args.router_hidden_size,
                 router_input=args.router_input,
+                pairwise_cost_parameterization=args.pairwise_cost_parameterization,
             )
             if args.calibration_mode == "teacher-group-decoder":
                 initialize_teacher_group_decoders(
@@ -2792,6 +2842,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             args.router_refit_rounds, args.router_refit_learning_rate,
             args.max_grad_norm, args.log_every,
             args.router_target_temperature,
+            args.router_refit_target,
         )
         routing_metrics = [
             routing_diagnostics(child, eval_io, device, dtype)
@@ -2943,6 +2994,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "route_source": args.route_source,
         "router_hidden_size": args.router_hidden_size,
         "router_input": args.router_input,
+        "pairwise_cost_parameterization": args.pairwise_cost_parameterization,
         "router_target": args.router_target,
         "post_router_target": args.post_router_target,
         "router_target_temperature": args.router_target_temperature,
@@ -2950,6 +3002,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "router_refit_steps": args.router_refit_steps,
         "router_refit_rounds": args.router_refit_rounds,
         "router_refit_learning_rate": args.router_refit_learning_rate,
+        "router_refit_target": args.router_refit_target,
         "hard_route_scale": args.hard_route_scale,
         "hard_route_scale_schedule": hard_route_scale_schedule,
         "child_internal_norm": (
@@ -3115,6 +3168,12 @@ def main() -> None:
         help="features provided to the learned subset router",
     )
     parser.add_argument(
+        "--pairwise-cost-parameterization",
+        choices=("components", "centered-basis"),
+        default="components",
+        help="coordinates used by the pairwise cost-router output head",
+    )
+    parser.add_argument(
         "--hard-route-scale", type=float, default=None,
         help="override the sparse hard-route output scale (default E/K)",
     )
@@ -3173,6 +3232,12 @@ def main() -> None:
     parser.add_argument(
         "--router-refit-learning-rate", type=float, default=1e-4,
         help="learning rate for final router refit/aggregation",
+    )
+    parser.add_argument(
+        "--router-refit-target",
+        choices=("pairwise-regret", "pairwise-regret-tail"),
+        default="pairwise-regret",
+        help="objective used by the final pairwise-router refit",
     )
     parser.add_argument(
         "--router-target",

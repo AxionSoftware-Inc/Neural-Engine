@@ -293,6 +293,28 @@ practical decision is to keep static final-target router refit as the current
 K4 recipe, reject iterative aggregation for now, and not expand this
 aggregation scheme to eight layers.
 
+## Third-seed and coordinate/tail controls
+
+The leading static recipe was then validated on seed 2028. It failed the
+learned quality gate at `+0.05705`, while paired oracle routing remained good
+at `+0.02749`. The oracle/learned split persists, so the cells still have
+useful subsets but the router is not yet stable across seeds.
+
+Two targeted controls were run on the same seed:
+
+| control | learned CE delta | paired oracle CE delta | decision |
+|---|---:|---:|---|
+| ordinary static final-target refit | `+0.05705` | `+0.02749` | fail |
+| top-25% tail-regret refit | `+0.05574` | `+0.02745` | fail; small gain |
+| 27-D centered-basis refit | `+0.05366` | `+0.03177` | fail; best, still over gate |
+
+The centered basis removes the eight-dimensional nullspace in the 36
+single/pair coordinates and helps this seed by about `0.0034`, but it does not
+solve the generalization problem. The tail objective helps by only `0.0013`.
+Mean and p95 local regrets improve, yet final multi-layer CE remains above the
+gate. Pairwise cost routing is therefore retained as a useful research
+diagnostic, not a stable architecture or a reason to scale to eight layers.
+
 K=6 remains the higher-margin quality reference, while K5 is now the best
 active-budget result. The valid K6 token-loop rerun preserves quality but is
 slightly slower (`2.129x` versus grouped `2.082x`), so it provides no runtime
@@ -348,15 +370,14 @@ deployment claim for 700M/1B.
 
 The direct-hard eight-layer K=6 reference is stable across two seeds, and the
 matched-scale K5 result is also stable across two seeds at a lower active
-budget. The original K4 router gap is reduced by a final-target static refit:
-the pairwise cost-router plus normalized regret now passes four layers on both
-seeds (`+0.04712` and `+0.04120`). Iterative aggregation also passes, but is
-not better than static by the proposed margin and does not achieve the 20%
-regret-reduction target. The optimal-scalar diagnostic is complete and
-negative. Therefore static final-target refit is the current K4 research
-recipe; aggregation is closed for now and neither route should be expanded to
-eight layers before a tail-focused or independent-seed validation. K5 remains
-the best active-budget operating point and K6 the higher-margin reference.
+budget. The pairwise K4 recipe passes two seeds after static final-target
+refit, but fails seed 2028; aggregation, tail loss, and centered coordinates
+do not repair that failure. The optimal-scalar diagnostic is complete and
+negative. Therefore K4 remains a research diagnostic, not a stable scaling
+claim; do not expand it to eight layers yet. K5 remains the best active-budget
+operating point and K6 the higher-margin reference. The next useful work is an
+independent-corpus or task-level routing diagnostic, not another capacity
+increase.
 Runtime optimization is separate; do not interpret the current 1.32–2.13x
 timing as a deployment result.
 

@@ -61,8 +61,13 @@ marginal two-layer result with normalized regret (`+0.04996`, paired oracle
 The proposed three-round cascade aggregation also passes (`+0.04781`,
 `+0.04220`) but is not better than static by `0.005`, and mean regret falls
 only about 3.6–5.8%, not the proposed 20%. Therefore static refit is retained
-as the current K4 recipe; aggregation is closed for now and neither is scaled
-to eight layers. See `V0_174_CORRECTED_ROUTING_AND_EXPERT_AUDIT.md`.
+as the leading K4 research recipe; aggregation is closed for now and neither
+is scaled to eight layers. A third-seed static check then failed at `+0.05705`
+(oracle `+0.02749`). Tail-regret refit reached `+0.05574`, and a 27-D
+centered-basis parameterization reached `+0.05366`; neither passed. The
+oracle/learned split remains, so this is router/cascade generalization rather
+than missing subset capacity. See
+`V0_174_CORRECTED_ROUTING_AND_EXPERT_AUDIT.md`.
 For a shareable experiment-by-experiment handoff to the proposal author, see
 `EXPERT_FEEDBACK_PAIRWISE_COST_ROUTER.md`.
 

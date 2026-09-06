@@ -90,6 +90,26 @@ on seed 2026. The evidence supports static final-target refit as a useful
 protocol correction, but does not justify the extra iterative aggregation or
 expansion to eight layers.
 
+## Third-seed and parameterization follow-up
+
+The static recipe was then checked on seed 2028. It reached learned
+`+0.05705` while the paired oracle remained good at `+0.02749`, so the
+two-seed pass is not yet stable. Two targeted variants were also tested on the
+same seed:
+
+| variant | learned CE delta | oracle CE delta | decision |
+|---|---:|---:|---|
+| ordinary static final refit | `+0.05705` | `+0.02749` | fail |
+| top-25% tail-regret refit | `+0.05574` | `+0.02745` | fail; small gain |
+| 27-D centered-basis refit | `+0.05366` | `+0.03177` | fail; best of these, still over gate |
+
+The centered basis removes the eight-dimensional non-identifiability in the
+36 component coordinates and improves this seed by about `0.0034`, but does
+not restore the quality gate. Tail-aware regret improves the result by only
+about `0.0013`. In all cases the oracle remains substantially better, so the
+remaining issue is learned route/cascade generalization rather than missing
+subset capacity.
+
 ## Related scale controls
 
 The scale question was also corrected before evaluating the router. The sparse
