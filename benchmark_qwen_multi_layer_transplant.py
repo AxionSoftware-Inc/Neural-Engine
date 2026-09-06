@@ -403,11 +403,11 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self.partition_mode = partition_mode
         if route_source not in {
             "router", "subset-router", "oracle-dot", "oracle-energy",
-            "oracle-subset",
+            "oracle-subset", "pairwise-cost-router",
         }:
             raise ValueError(
                 "route_source must be router, subset-router, oracle-dot, "
-                "oracle-energy, or oracle-subset"
+                "oracle-energy, oracle-subset, or pairwise-cost-router"
             )
         self.route_source = route_source
         if router_hidden_size < 1:
@@ -500,26 +500,58 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             torch.stack([expert.output_projection.weight for expert in self.experts]),
             persistent=False,
         )
-        if route_source in {"subset-router", "oracle-subset"}:
+        if route_source in {
+            "subset-router", "oracle-subset", "pairwise-cost-router",
+        }:
             subset_ids = torch.tensor(
                 list(combinations(range(num_experts), active_experts)),
                 device=parent.gate_proj.weight.device, dtype=torch.long,
             )
+            subset_membership = F.one_hot(
+                subset_ids, num_classes=num_experts,
+            ).sum(dim=1).float()
             self.register_buffer(
                 "subset_membership",
-                F.one_hot(subset_ids, num_classes=num_experts).sum(dim=1).float(),
+                subset_membership,
                 persistent=False,
             )
             router_input_size = (
                 hidden_size if router_input == "hidden" else num_experts
             )
-            self.subset_router = torch.nn.Sequential(
-                torch.nn.Linear(router_input_size, self.router_hidden_size),
-                torch.nn.SiLU(),
-                torch.nn.Linear(self.router_hidden_size, subset_ids.shape[0]),
-            )
-            torch.nn.init.zeros_(self.subset_router[-1].weight)
-            torch.nn.init.zeros_(self.subset_router[-1].bias)
+            if route_source == "pairwise-cost-router":
+                pair_ids = torch.tensor(
+                    list(combinations(range(num_experts), 2)),
+                    device=parent.gate_proj.weight.device, dtype=torch.long,
+                )
+                pair_membership = F.one_hot(
+                    pair_ids, num_classes=num_experts,
+                ).sum(dim=1).float()
+                subset_pair_membership = (
+                    subset_membership @ pair_membership.transpose(0, 1)
+                ).eq(2).float()
+                self.register_buffer(
+                    "subset_pair_membership",
+                    subset_pair_membership,
+                    persistent=False,
+                )
+                self.pairwise_cost_router = torch.nn.Sequential(
+                    torch.nn.Linear(router_input_size, self.router_hidden_size),
+                    torch.nn.SiLU(),
+                    torch.nn.Linear(
+                        self.router_hidden_size,
+                        num_experts + pair_ids.shape[0],
+                    ),
+                )
+                torch.nn.init.zeros_(self.pairwise_cost_router[-1].weight)
+                torch.nn.init.zeros_(self.pairwise_cost_router[-1].bias)
+            else:
+                self.subset_router = torch.nn.Sequential(
+                    torch.nn.Linear(router_input_size, self.router_hidden_size),
+                    torch.nn.SiLU(),
+                    torch.nn.Linear(self.router_hidden_size, subset_ids.shape[0]),
+                )
+                torch.nn.init.zeros_(self.subset_router[-1].weight)
+                torch.nn.init.zeros_(self.subset_router[-1].bias)
         else:
             self.router = torch.nn.Sequential(
                 torch.nn.Linear(hidden_size, self.router_hidden_size),
@@ -550,6 +582,28 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         features = torch.log1p(energy * output_scale.unsqueeze(0))
         return features.reshape(*hidden_states.shape[:-1], self.num_experts).to(
             dtype=hidden_states.dtype,
+        )
+
+    def _subset_scores(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        """Return subset logits; pairwise cost routers return negative costs."""
+        features = self._router_features(hidden_states)
+        if self.route_source == "pairwise-cost-router":
+            components = self.pairwise_cost_router(features)
+            singles = components[..., :self.num_experts]
+            pairs = components[..., self.num_experts:]
+            costs = (
+                singles @ self.subset_membership.transpose(0, 1)
+                + pairs @ self.subset_pair_membership.transpose(0, 1)
+            )
+            return -costs
+        if hasattr(self, "subset_router"):
+            return self.subset_router(features)
+        # During paired exact-oracle evaluation a pairwise router is temporarily
+        # relabeled as oracle-subset.  The exact oracle replaces these scores
+        # later in forward, so a zero placeholder is sufficient here.
+        return torch.zeros(
+            *hidden_states.shape[:-1], self.subset_membership.shape[0],
+            device=hidden_states.device, dtype=hidden_states.dtype,
         )
 
     def _forward_grouped(
@@ -625,8 +679,10 @@ class TransferredRoutedQwenChild(torch.nn.Module):
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         soft_output = None
         hard_blend = 1.0
-        if self.route_source in {"subset-router", "oracle-subset"}:
-            subset_scores = self.subset_router(self._router_features(hidden_states))
+        if self.route_source in {
+            "subset-router", "oracle-subset", "pairwise-cost-router",
+        }:
+            subset_scores = self._subset_scores(hidden_states)
             if self.training:
                 hard_blend = float(self.hard_train_blend)
             if self.training and (not self.hard_train or hard_blend < 1.0):
@@ -716,7 +772,9 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         if (
             self.training
             and not self.hard_train
-            and self.route_source not in {"subset-router", "oracle-subset"}
+            and self.route_source not in {
+                "subset-router", "oracle-subset", "pairwise-cost-router",
+            }
         ):
             outputs = torch.stack([
                 expert(hidden_states) for expert in self.experts
@@ -1494,10 +1552,20 @@ def train_importance_router(
     previous_requires_grad = [parameter.requires_grad for parameter in all_parameters]
     for parameter in all_parameters:
         parameter.requires_grad_(False)
-    if base.route_source in {"subset-router", "oracle-subset"}:
-        if target_mode not in {"subset", "subset-soft", "final-subset-soft"}:
-            raise ValueError("subset-router requires subset router supervision")
-        router_parameters = list(base.subset_router.parameters())
+    if base.route_source in {
+        "subset-router", "oracle-subset", "pairwise-cost-router",
+    }:
+        if target_mode not in {
+            "subset", "subset-soft", "final-subset-soft", "pairwise-regret",
+        }:
+            raise ValueError("subset router requires subset or regret supervision")
+        router_parameters = list(
+            (
+                base.pairwise_cost_router
+                if base.route_source == "pairwise-cost-router"
+                else base.subset_router
+            ).parameters()
+        )
     else:
         router_parameters = list(base.router.parameters())
     for parameter in router_parameters:
@@ -1510,10 +1578,14 @@ def train_importance_router(
             batch = io_batches[(step - 1) % len(io_batches)]
             inputs = batch["input"].to(device=device, dtype=dtype)
             subset_target = None
+            subset_regrets = None
             with torch.no_grad():
-                outputs = torch.stack([
-                    expert(inputs) for expert in base.experts
-                ], dim=-2).float()
+                if base.route_source == "pairwise-cost-router":
+                    _, outputs = routing_group_outputs(child, inputs)
+                else:
+                    outputs = torch.stack([
+                        expert(inputs) for expert in base.experts
+                    ], dim=-2).float()
                 if target_mode == "dot":
                     full_output = outputs.sum(dim=-2)
                     importance = (
@@ -1527,8 +1599,12 @@ def train_importance_router(
                     )
                 elif target_mode in {
                     "subset", "subset-soft", "final-subset-soft",
+                    "pairwise-regret",
                 }:
-                    if target_mode == "final-subset-soft":
+                    if (
+                        target_mode == "final-subset-soft"
+                        and base.route_source != "pairwise-cost-router"
+                    ):
                         if not isinstance(child, CrossGroupOutputMixRoutedQwenChild):
                             raise ValueError(
                                 "final-subset-soft requires cross-group child"
@@ -1584,6 +1660,11 @@ def train_importance_router(
                         if target_temperature <= 0:
                             raise ValueError("router target temperature must be positive")
                         centered_errors = errors - errors.min(dim=-1, keepdim=True).values
+                        subset_regrets = (
+                            centered_errors / max(outputs.shape[-1], 1)
+                            if target_mode == "pairwise-regret"
+                            else centered_errors
+                        )
                         subset_target = F.softmax(
                             -centered_errors / target_temperature, dim=-1,
                         )
@@ -1591,15 +1672,43 @@ def train_importance_router(
                 else:
                     raise ValueError(
                         "router target must be energy, dot, subset, subset-soft, "
-                        "or final-subset-soft"
+                        "final-subset-soft, or pairwise-regret"
                     )
             scores = (
-                base.subset_router(base._router_features(inputs)).float()
-                if base.route_source in {"subset-router", "oracle-subset"}
+                base._subset_scores(inputs).float()
+                if base.route_source in {
+                    "subset-router", "oracle-subset", "pairwise-cost-router",
+                }
                 else base.router(inputs).float()
             )
-            if target_mode in {"subset", "subset-soft", "final-subset-soft"}:
-                if base.route_source in {"subset-router", "oracle-subset"}:
+            if target_mode == "pairwise-regret":
+                if base.route_source != "pairwise-cost-router":
+                    raise ValueError(
+                        "pairwise-regret requires pairwise-cost-router"
+                    )
+                if subset_regrets is None:
+                    raise RuntimeError("pairwise regrets were not computed")
+                if target_temperature <= 0:
+                    raise ValueError("router target temperature must be positive")
+                flat_scores = scores.reshape(-1, scores.shape[-1])
+                predicted_probabilities = F.softmax(
+                    flat_scores / target_temperature, dim=-1,
+                )
+                regret_loss = (
+                    predicted_probabilities * subset_regrets
+                ).sum(dim=-1).mean()
+                soft_target = F.softmax(
+                    -subset_regrets / target_temperature, dim=-1,
+                )
+                auxiliary_loss = -(
+                    soft_target
+                    * F.log_softmax(flat_scores, dim=-1)
+                ).sum(dim=-1).mean()
+                loss = regret_loss + 0.1 * auxiliary_loss
+            elif target_mode in {"subset", "subset-soft", "final-subset-soft"}:
+                if base.route_source in {
+                    "subset-router", "oracle-subset", "pairwise-cost-router",
+                }:
                     if subset_target is None:
                         raise RuntimeError("subset target was not computed")
                     if target_mode == "subset":
@@ -1679,7 +1788,9 @@ def routing_diagnostics(
         nested for nested in child.modules()
         if isinstance(nested, TransferredRoutedQwenChild)
     )
-    if base.route_source not in {"subset-router", "oracle-subset"}:
+    if base.route_source not in {
+        "subset-router", "oracle-subset", "pairwise-cost-router",
+    }:
         return {}
     exact_matches = 0
     total_tokens = 0
@@ -1717,10 +1828,8 @@ def routing_diagnostics(
         )
         best_subset_index = errors.argmin(dim=-1)
         best_membership = membership[best_subset_index]
-        if base.route_source == "subset-router":
-            predicted_subset_index = base.subset_router(
-                base._router_features(inputs),
-            ).argmax(dim=-1)
+        if base.route_source in {"subset-router", "pairwise-cost-router"}:
+            predicted_subset_index = base._subset_scores(inputs).argmax(dim=-1)
             predicted_subset_index = predicted_subset_index.reshape(-1)
         else:
             predicted_subset_index = best_subset_index
@@ -2358,12 +2467,19 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 args.router_target_temperature,
             ))
             frozen_subset_router = []
-            if args.route_source in {"subset-router", "oracle-subset"}:
+            if args.route_source in {
+                "subset-router", "oracle-subset", "pairwise-cost-router",
+            }:
                 route_base = next(
                     nested for nested in child.modules()
                     if isinstance(nested, TransferredRoutedQwenChild)
                 )
-                for parameter in route_base.subset_router.parameters():
+                router_module = (
+                    route_base.pairwise_cost_router
+                    if args.route_source == "pairwise-cost-router"
+                    else route_base.subset_router
+                )
+                for parameter in router_module.parameters():
                     frozen_subset_router.append(
                         (parameter, bool(parameter.requires_grad))
                     )
@@ -2391,7 +2507,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 contract.fit(train_io, device)
             if (
                 args.post_router_supervision_steps > 0
-                and args.route_source in {"subset-router", "oracle-subset"}
+                and args.route_source in {
+                    "subset-router", "oracle-subset", "pairwise-cost-router",
+                }
             ):
                 # The child correction is now fixed.  Recompute exact
                 # best-subset labels against the final copied/corrected child
@@ -2540,7 +2658,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 nested for nested in child.modules()
                 if isinstance(nested, TransferredRoutedQwenChild)
             )
-            if route_base.route_source not in {"subset-router", "oracle-subset"}:
+            if route_base.route_source not in {
+                "subset-router", "oracle-subset", "pairwise-cost-router",
+            }:
                 raise ValueError(
                     "paired oracle routing requires subset-router children"
                 )
@@ -2553,7 +2673,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "paired_oracle_routing_alpha_0",
         ))
         for route_base in route_bases:
-            route_base.route_source = "subset-router"
+            route_base.route_source = args.route_source
         for layer, parent in zip(layers, parents):
             layer.mlp = parent
 
@@ -2799,7 +2919,7 @@ def main() -> None:
         "--route-source",
         choices=(
             "router", "subset-router", "oracle-dot", "oracle-energy",
-            "oracle-subset",
+            "oracle-subset", "pairwise-cost-router",
         ), default="router",
         help="learned router or diagnostic parent-contribution oracle at eval",
     )
@@ -2859,12 +2979,15 @@ def main() -> None:
         "--router-target",
         choices=(
             "energy", "dot", "subset", "subset-soft", "final-subset-soft",
+            "pairwise-regret",
         ), default="energy",
         help="calibration target for group router supervision",
     )
     parser.add_argument(
         "--post-router-target",
-        choices=("subset", "subset-soft", "final-subset-soft"),
+        choices=(
+            "subset", "subset-soft", "final-subset-soft", "pairwise-regret",
+        ),
         default=None,
         help="optional target override for post-child router supervision",
     )

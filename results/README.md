@@ -51,6 +51,17 @@ An exploratory K=5 rank-128 correction run was stopped after more than twenty
 minutes without a metric, so it is not treated as evidence; higher-rank
 correction needs a more efficient implementation first.
 
+The expert-proposed pairwise cost-router was then tested with frozen child
+cells. Its 36-output structured cost head gives a marginal two-layer result
+with normalized regret (`+0.04996`, paired oracle `+0.03033`), but the same
+method fails at four layers (`+0.05206`, oracle `+0.02904`). The old
+subset-soft loss gives no improvement at two layers (`+0.05427`). Thus the
+pairwise interaction hypothesis is useful diagnostically but is not promoted
+as the current architecture; it was not scaled to eight layers. The next
+route experiment should follow the learned cascade distribution and aggregate
+new teacher-cost data rather than add more width or correction scale. See
+`V0_174_CORRECTED_ROUTING_AND_EXPERT_AUDIT.md`.
+
 V0.173 fixes a real full-active routing bug: when `K=E`, the hard path must
 use scale `E`, not `E/K`, to reconstruct the parent sum. The corrected child is
 exact at float32 noise, but the clean `8,8,8,8,4,4,4,4` depth control still

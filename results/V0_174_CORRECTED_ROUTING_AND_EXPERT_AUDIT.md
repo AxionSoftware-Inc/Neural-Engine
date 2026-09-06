@@ -235,6 +235,30 @@ subset-selection/router generalization problem. A learned scale head would
 add inference work without addressing the measured regret, so it is not
 promoted to the architecture.
 
+## Pairwise cost-router control
+
+The expert's next hypothesis was tested with the same frozen child cells. The
+70 direct subset logits were replaced by 36 structured outputs: eight
+per-group costs and 28 pairwise costs. Each K4 subset cost is reconstructed as
+the sum of its four singles and six within-subset pair terms, so the router
+still evaluates only one selected four-group execution at inference. Targets
+were built from the final corrected group outputs, not from the uncorrected
+copied slices.
+
+| depth | router objective | learned CE delta | paired exact-oracle CE delta | timing / parent | decision |
+|---|---|---:|---:|---:|---|
+| 2 layers | pairwise cost + old subset-soft | `+0.05427` | `+0.02871` | `1.166x` | no improvement |
+| 2 layers | pairwise cost + normalized regret | `+0.04996` | `+0.03033` | `1.163x` | marginal pass |
+| 4 layers | pairwise cost + normalized regret | `+0.05206` | `+0.02904` | `1.328x` | fail |
+
+The direct regret objective helps the two-layer control slightly, but the
+effect does not survive the four-layer cascade: the exact oracle remains good
+while learned routing misses the gate. An earlier unnormalized-regret run was
+unstable and is superseded by the normalized per-dimension regret above. The
+pairwise architecture is therefore a credible diagnostic, not a promoted
+solution for the current recipe. It was intentionally not expanded to eight
+layers. The implementation remains available as an optional research path.
+
 K=6 remains the higher-margin quality reference, while K5 is now the best
 active-budget result. The valid K6 token-loop rerun preserves quality but is
 slightly slower (`2.129x` versus grouped `2.082x`), so it provides no runtime
@@ -291,10 +315,13 @@ deployment claim for 700M/1B.
 The direct-hard eight-layer K=6 reference is stable across two seeds, and the
 matched-scale K5 result is also stable across two seeds at a lower active
 budget. K4 still has a router gap: its paired oracle passes but learned
-routing fails. The optimal-scalar diagnostic is now complete and negative. The
-next research step is a route-selection/cascade mechanism that reduces subset
-regret while preserving the matched scale rule; K5 is the current best
-active-budget operating point and K6 remains the higher-margin reference.
+ routing fails. The optimal-scalar diagnostic is now complete and negative.
+The pairwise cost-router gives only a marginal two-layer improvement and fails
+at four layers, so it is not the current architecture. The next research step
+is iterative router/data aggregation over the learned cascade, or another
+route-selection mechanism that reduces subset regret while preserving the
+matched scale rule; K5 is the current best active-budget operating point and
+K6 remains the higher-margin reference.
 Runtime optimization is separate; do not interpret the current 1.32–2.13x
 timing as a deployment result.
 
