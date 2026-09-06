@@ -80,7 +80,9 @@ def test_credit_updates_router_keys_not_query() -> None:
     assert query.grad is None
     assert model.router.keys.grad is not None
     touched = model.router.keys.grad.detach().norm(dim=1).gt(0)
-    assert touched[0] and touched[1] and touched[2] and touched[3]
+    # The common member of each current/alternative pair cancels out.  Only
+    # the replaced rows should receive the pair-ranking gradient.
+    assert not touched[0] and touched[1] and not touched[2] and touched[3]
     assert touched[4] and touched[5]
     assert not touched[6] and not touched[7]
 
