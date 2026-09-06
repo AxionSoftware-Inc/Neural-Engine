@@ -156,6 +156,22 @@ remaining limitation is efficiency: K=6 leaves 75% of groups active, yet the
 current Python/PyTorch grouped bank is about 2.1x slower end-to-end because
 dispatch and bank overhead dominate the saved expert work.
 
+## Eight-layer K=4 active-budget control
+
+The same direct-hard recipe was tested with four of eight groups active at all
+eight layers, reducing the expert active fraction to 50%.
+
+| seed | learned CE delta | paired exact-oracle CE delta | child local MSE range | timing / parent |
+|---|---:|---:|---:|---:|
+| 2026 | `+0.06462` | `+0.01607` | `0.384–0.623` | `1.663x` |
+| 2027 | `+0.06165` | `+0.01227` | `0.382–0.606` | `1.664x` |
+
+Both learned-router runs fail the `+0.05` gate, but the paired oracle passes
+on both seeds. The repeated oracle/learned split is decisive: K=4 does not
+currently lack representational capacity; the learned subset router is losing
+too much quality across eight layers. The next control is a post-child router
+refit against the final corrected children, not a larger child or model.
+
 ## Causal controls and oracle headroom
 
 Single-layer corrected runs pass comfortably:
@@ -197,12 +213,13 @@ quality result, but K=4 remains unstable and the runtime is still worse than
 the dense parent. Therefore this is not yet a general scaling law or a
 deployment claim for 700M/1B.
 
-The direct-hard eight-layer K=6 reference is now stable across two seeds,
-while the runtime is still worse than the dense parent. The next quality
-experiment is eight-layer direct-hard K=4, which tests the intended 50%-active
-operating point under the corrected training operator. Runtime optimization is
-a separate workstream; do not interpret the current 2.1x timing as a
-deployment result.
+The direct-hard eight-layer K=6 reference is stable across two seeds, while
+the 50%-active K=4 reference has a stable learned-router failure but a passing
+oracle. The next quality experiment is post-child router refit at K=4. If it
+does not close the oracle gap, keep K=6 as the quality baseline and focus on a
+better route target/temporal router before scaling model size. Runtime
+optimization is a separate workstream; do not interpret the current 1.66–2.13x
+timing as a deployment result.
 
 The JSON artifacts for the runs above are kept under `results/runs/` locally;
 that directory remains ignored by the repository, while this report records

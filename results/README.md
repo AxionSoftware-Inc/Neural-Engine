@@ -21,7 +21,10 @@ direct-hard K=6 control also passes on both seeds (`+0.01103` and `+0.02117`)
 with paired-oracle deltas `-0.00649` and `-0.00088`; timing is 2.08–2.13x at
 75% active. Next is the 50%-active K=4 depth control. A 256-wide router is
 unstable (`+0.08855`), and an independent energy router fails at `+0.08221`.
-See
+The K=4 direct-hard eight-layer control fails learned routing on both seeds
+(`+0.06462` and `+0.06165`) while paired-oracle routing passes
+(`+0.01607` and `+0.01227`), confirming a router-gap rather than a capacity
+failure. Next is post-child router refit at K=4. See
 `V0_174_CORRECTED_ROUTING_AND_EXPERT_AUDIT.md`.
 
 V0.173 fixes a real full-active routing bug: when `K=E`, the hard path must
