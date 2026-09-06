@@ -198,7 +198,7 @@ saqlang.
 #### Dalil
 
 CoupledProbeRouter old routerga qaraganda o‘rtacha CE'ni `0.05357` ga
-yaxshiladi, lekin hard accuracy faqat `+0.169 pp` bo‘ldi. Ba’zi rejimlarda CE
+yaxshildi, lekin hard accuracy faqat `+0.169 pp` bo‘ldi. Ba’zi rejimlarda CE
 kamayib, accuracy pasaydi.
 
 #### Muammo ta’rifi
@@ -421,3 +421,11 @@ va nima sabab ishlamaganini ko‘rsating.
 **Muammo:** P-004
 **Natija:** seed17/18 held-out accuracy mean delta `-0.625 pp`, held-out CE delta `-0.00006`, mean regret reduction `-6.83%`, p95 regret reduction `-19.08%`, training overhead `1.291x`. Pre-registered gate bajarilmadi; P-004 `ACTIVE` qoladi.
 **Batafsil:** `results/P004_CASCADE_CREDIT_SEED17_18.md` va `results/P004_CASCADE_CREDIT_SEED17_18.json`.
+
+### C-P001-STRIDED-001 — Strided M=8 candidate schedule
+
+**Status:** `REJECTED FOR ADOPTION`  
+**Muammo:** P-001  
+**Patch:** mavjud `routing_windows` kontrakti orqali M=8 candidate budgetini 4×2 bank windowga yoyadigan runtime-only opt-in schedule; key-score selector, circuit body, correction, recurrent update va default model o‘zgarmaydi. Yangi trainable parametr va training probe yo‘q.  
+**Qaror sababi:** mavjud M=16/24 diagnostic retrievalni selectiondan ajratib berdi, lekin yangi strided M=8 patch uchun talab qilingan seed17/18 checkpointlar branch/release/Actions artifact sifatida mavjud emas. Shu sabab patchning hard accuracy, CE, p95 retrieval/selection regret, dead-circuit va latency gate'lari ushbu handoffda isbotlanmadi. Fail-closed acceptance bo‘yicha promotion rad qilindi; bu hypothesis ilmiy rad etildi degani emas. P-001 `ACTIVE` qoladi.  
+**Batafsil:** `results/P001_STRIDED_RETRIEVAL_PATCH.md`; benchmark: `benchmark_p001_strided_retrieval.py`.
