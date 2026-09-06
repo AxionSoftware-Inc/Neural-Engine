@@ -88,8 +88,9 @@ def test_selector_gradient_touches_only_retrieved_signature_rows() -> None:
 
 def test_candidate_teacher_ignores_out_of_pool_real_circuit_rows() -> None:
     model = _model()
-    inputs = _inputs(batch=4)
-    targets = torch.tensor([1, 2, 3, 4], dtype=torch.long)
+    # One example exposes at most M=4 rows, so an out-of-pool row is guaranteed.
+    inputs = _inputs(batch=1)
+    targets = torch.tensor([1], dtype=torch.long)
     encoded = model.encode(inputs)
     _, stats = model(inputs, adaptive=False)
     step = 0
