@@ -13,6 +13,35 @@ def test_router_returns_local_structured_selection():
     assert int(selected.max()) < 128
 
 
+def test_soft_training_route_uses_candidate_pool_but_eval_returns_topk():
+    router = HierarchicalRouter(32, num_circuits=128, branch=4, depth=3,
+                                candidate_pool=16, active_circuits=4,
+                                soft_routing_temperature=0.5)
+    router.train()
+    selected, weights, stats = router(torch.randn(7, 32))
+    assert selected.shape == (7, 16)
+    assert weights.shape == (7, 16)
+    assert torch.allclose(weights.sum(-1), torch.ones(7), atol=1e-5)
+    assert bool(stats["soft_route"])
+
+    router.eval()
+    selected, weights, stats = router(torch.randn(7, 32))
+    assert selected.shape == (7, 4)
+    assert weights.shape == (7, 4)
+    assert not bool(stats["soft_route"])
+
+
+def test_router_target_supervision_reaches_tree_and_keys():
+    router = HierarchicalRouter(32, num_circuits=32, branch=4, depth=3,
+                                candidate_pool=8, active_circuits=2)
+    state = torch.randn(7, 32)
+    _, _, stats = router(state, target_bases=torch.tensor([0, 2, 4, 6, 8, 10, 12]))
+    assert torch.isfinite(stats["routing_target_loss"])
+    stats["routing_target_loss"].backward()
+    assert router.level_projections.grad is not None
+    assert router.keys.grad is not None
+
+
 def test_multi_address_router_keeps_total_candidate_budget_structured():
     router = HierarchicalRouter(32, num_circuits=128, branch=4, depth=3,
                                 candidate_pool=16, active_circuits=4, num_addresses=2)

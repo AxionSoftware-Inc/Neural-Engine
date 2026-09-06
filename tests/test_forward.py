@@ -2,6 +2,7 @@ import torch
 
 from data.generator import SyntheticTaskGenerator
 from neural_engine.model import NeuralEngineV0
+from neural_engine.router import StableFamilyRouter
 
 
 def test_neural_engine_forward_and_gradients():
@@ -137,3 +138,39 @@ def test_forced_route_replay_preserves_recorded_circuit_path():
         )
     assert replayed.shape == (4, 64)
     assert torch.equal(replay_stats["selected_ids"], original["selected_ids"])
+
+
+def test_family_local_router_uses_semantic_task_family():
+    model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
+                           num_circuits=16, circuit_rank=4, router_branch=2, router_depth=2,
+                           candidate_pool=4, active_circuits=2, internal_steps=3,
+                           router_variant="family_local", family_count=2)
+    batch = SyntheticTaskGenerator(seed=14).batch(4)
+    with torch.no_grad():
+        logits, stats = model(batch.inputs)
+    assert logits.shape == (4, 64)
+    assert stats["selected_ids"].shape == (4, 3, 2)
+    assert isinstance(model.router, StableFamilyRouter)
+
+
+def test_family_conditioned_router_keeps_global_bank():
+    model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
+                           num_circuits=16, circuit_rank=4, router_branch=2, router_depth=2,
+                           candidate_pool=4, active_circuits=2, internal_steps=3,
+                           router_variant="family_conditioned", family_count=2)
+    batch = SyntheticTaskGenerator(seed=15).batch(4)
+    with torch.no_grad():
+        logits, stats = model(batch.inputs)
+    assert logits.shape == (4, 64)
+    assert stats["selected_ids"].shape == (4, 3, 2)
+    assert model.router.num_circuits == 16
+
+
+def test_semantic_family_mapping_splits_four_domains():
+    model = NeuralEngineV0(num_circuits=32, state_dim=16, d_model=16,
+                           circuit_rank=2, router_branch=2, router_depth=2,
+                           candidate_pool=4, active_circuits=2, internal_steps=1,
+                           family_count=4, router_variant="family_local")
+    inputs = torch.zeros(4, 32, dtype=torch.long)
+    inputs[:, 0] = torch.tensor([1, 4, 7, 10])
+    assert torch.equal(model.semantic_family_ids(inputs), torch.tensor([0, 1, 2, 3]))

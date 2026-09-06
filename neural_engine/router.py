@@ -12,7 +12,8 @@ class HierarchicalRouter(nn.Module):
 
     def __init__(self, state_dim: int, num_circuits: int, branch: int = 8, depth: int = 4,
                  candidate_pool: int = 32, active_circuits: int = 8, num_addresses: int = 1,
-                 routing_capacity: int | None = None, routing_depth: int | None = None):
+                 routing_capacity: int | None = None, routing_depth: int | None = None,
+                 soft_routing_temperature: float = 0.0):
         super().__init__()
         if active_circuits > candidate_pool:
             raise ValueError("active_circuits cannot exceed candidate_pool")
@@ -25,6 +26,9 @@ class HierarchicalRouter(nn.Module):
         self.active_circuits = active_circuits
         self.num_addresses = num_addresses
         self.candidates_per_address = candidate_pool // num_addresses
+        if soft_routing_temperature < 0.0:
+            raise ValueError("soft_routing_temperature must be non-negative")
+        self.soft_routing_temperature = soft_routing_temperature
         self.routing_capacity = num_circuits if routing_capacity is None else int(routing_capacity)
         self.active_depth = depth if routing_depth is None else int(routing_depth)
         if not 0 < self.routing_capacity <= num_circuits:
@@ -86,7 +90,8 @@ class HierarchicalRouter(nn.Module):
                 exploration_prob: float = 0.0,
                 routing_offset: int | torch.Tensor = 0,
                 routing_capacity: int | None = None,
-                routing_windows: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
+                routing_windows: torch.Tensor | None = None,
+                target_bases: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
         if coverage_temperature <= 0:
             raise ValueError("coverage_temperature must be positive")
         if not 0.0 <= exploration_prob <= 1.0:
@@ -122,6 +127,17 @@ class HierarchicalRouter(nn.Module):
         entropies = []
         path_scores = []
         coverage_distributions = []
+        target_path_losses = []
+        target_leaf = None
+        if target_bases is not None:
+            if routing_windows is not None or not isinstance(routing_offset, int) or routing_offset != 0:
+                raise ValueError("target_bases requires the standard full-bank routing window")
+            if target_bases.ndim != 1 or target_bases.shape[0] != batch:
+                raise ValueError("target_bases must have one value per batch item")
+            target_bases = target_bases.to(device=state.device, dtype=torch.long)
+            if (target_bases < 0).any() or (target_bases + self.active_circuits > local_capacity).any():
+                raise ValueError("target_bases must identify valid active circuit groups")
+            target_leaf = target_bases.remainder(self.branch ** self.active_depth)
         for address in range(self.num_addresses):
             address_leaf = leaf[:, address]
             address_score = torch.zeros(batch, device=state.device)
@@ -129,6 +145,10 @@ class HierarchicalRouter(nn.Module):
             coverage_level_probs = []
             for level in range(self.active_depth):
                 logits = state @ self.level_projections[address, level] + self.level_bias[address, level]
+                if target_leaf is not None:
+                    shift = self.branch ** (self.active_depth - level - 1)
+                    target_child = target_leaf.div(shift, rounding_mode="floor").remainder(self.branch)
+                    target_path_losses.append(F.cross_entropy(logits, target_child, reduction="none"))
                 probs = F.softmax(logits, dim=-1)
                 level_probs.append(probs)
                 if coverage:
@@ -163,20 +183,40 @@ class HierarchicalRouter(nn.Module):
         candidate_ids = candidate_ids.reshape(batch, self.candidate_pool)
         candidate_keys = self.keys[candidate_ids]
         candidate_logits = torch.einsum("bd,bkd->bk", state, candidate_keys) / math.sqrt(state.shape[-1])
-        top_values, top_positions = candidate_logits.topk(self.active_circuits, dim=-1)
-        selected_ids = candidate_ids.gather(1, top_positions)
+        target_loss = None
+        if target_bases is not None:
+            target_offsets = torch.arange(self.active_circuits, device=state.device).view(1, -1)
+            target_ids = target_bases.view(-1, 1) + target_offsets
+            target_logits = torch.einsum("bd,bkd->bk", state, self.keys[target_ids]) / math.sqrt(state.shape[-1])
+            target_score = target_logits.mean(dim=-1)
+            key_loss = F.softplus(torch.logsumexp(candidate_logits, dim=-1) - target_score)
+            tree_loss = torch.stack(target_path_losses, dim=-1).mean(dim=-1)
+            target_loss = (tree_loss + key_loss).mean()
+        use_soft_route = self.training and self.soft_routing_temperature > 0.0
+        if use_soft_route:
+            # Training-only dense candidate mixture. It sends task-loss
+            # gradient to every row in the local pool; eval returns to hard
+            # top-k so active inference remains sparse.
+            selected_ids = candidate_ids
+            weights = F.softmax(candidate_logits / self.soft_routing_temperature, dim=-1)
+        else:
+            top_values, top_positions = candidate_logits.topk(self.active_circuits, dim=-1)
+            selected_ids = candidate_ids.gather(1, top_positions)
+            weights = F.softmax(top_values, dim=-1)
         # The address is hard/structured for execution, but this small gain
         # keeps the chosen tree path connected to the task loss for learning.
         path_score = torch.stack(path_scores, dim=-1).mean(dim=-1)
         route_gain = 1.0 + 0.05 * torch.tanh(path_score)
-        weights = F.softmax(top_values, dim=-1)
         stats = {
             "router_entropy": torch.stack(entropies, dim=-1).mean(),
             "router_decisions": torch.tensor(self.active_depth * self.num_addresses, device=state.device),
             "route_gain": route_gain,
             "candidate_ids": candidate_ids,
             "selected_ids": selected_ids,
+            "soft_route": torch.tensor(use_soft_route, device=state.device),
         }
+        if target_loss is not None:
+            stats["routing_target_loss"] = target_loss
         if coverage:
             distribution = torch.stack(coverage_distributions, dim=0).mean(dim=0)
             stats["routing_coverage_loss"] = (

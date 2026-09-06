@@ -61,10 +61,16 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["route_exploration_prob"] = config.get("route_exploration_prob", 0.0)
     model_kwargs["routing_capacity"] = config.get("routing_capacity")
     model_kwargs["routing_depth"] = config.get("routing_depth")
+    model_kwargs["router_variant"] = config.get("router_variant", "global")
+    model_kwargs["family_count"] = config.get("family_count", 2)
+    model_kwargs["shared_fraction"] = config.get("shared_fraction", 0.125)
+    model_kwargs["soft_routing_temperature"] = config.get("soft_routing_temperature", 0.0)
+    model_kwargs["route_target_supervision"] = config.get("route_target_supervision", False)
     if config.get("architecture") == "typed_register":
         for key in ("task_context", "task_context_update", "adaptive_halting",
                     "halt_threshold", "routing_coverage_temperature",
-                    "input_reinjection", "memory_write_mode"):
+                    "input_reinjection", "memory_write_mode", "router_variant",
+                    "soft_routing_temperature", "route_target_supervision"):
             model_kwargs.pop(key, None)
         model_kwargs["readout_mode"] = config.get("readout_mode", "routed")
         model_kwargs["route_query_mode"] = config.get("route_query_mode", "value_and_type")
@@ -209,6 +215,16 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         config["num_circuits"] = args.num_circuits
     if args.active_circuits is not None:
         config["active_circuits"] = args.active_circuits
+    if args.family_count is not None:
+        config["family_count"] = args.family_count
+    if args.soft_routing_temperature is not None:
+        config["soft_routing_temperature"] = args.soft_routing_temperature
+    if args.soft_routing_steps is not None:
+        config["soft_routing_steps"] = args.soft_routing_steps
+    if args.route_target_supervision:
+        config["route_target_supervision"] = True
+    if args.route_target_weight is not None:
+        config["route_target_weight"] = args.route_target_weight
     if args.routing_mode is not None:
         config["routing_mode"] = args.routing_mode
     if args.seed is not None:
@@ -253,6 +269,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     coverage_weight = float(config.get("routing_coverage_weight", 0.0))
     coverage_enabled = isinstance(model, NeuralEngineV0) and coverage_weight > 0.0
     routing_warmup_steps = int(config.get("routing_warmup_steps", 0))
+    soft_routing_temperature = float(config.get("soft_routing_temperature", 0.0))
+    soft_routing_steps = int(config.get("soft_routing_steps", 0))
     for step in range(1, steps + 1):
         if (isinstance(model, NeuralEngineV0) and routing_warmup_steps
                 and step == routing_warmup_steps + 1):
@@ -263,6 +281,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         batch = train_source.batch()
         optimizer.zero_grad(set_to_none=True)
         if isinstance(model, NeuralEngineV0):
+            if hasattr(model.router, "soft_routing_temperature"):
+                model.router.soft_routing_temperature = (
+                    soft_routing_temperature
+                    if soft_routing_temperature > 0.0 and (soft_routing_steps <= 0 or step <= soft_routing_steps)
+                    else 0.0)
             forced_ids = None
             if model.routing_mode == "controlled_task":
                 forced_ids = controlled_task_route_ids(
@@ -312,6 +335,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             loss = loss - 0.0001 * route_stats["router_entropy"]
         if coverage_enabled and "routing_coverage_loss" in route_stats:
             loss = loss + coverage_weight * route_stats["routing_coverage_loss"]
+        route_target_weight = float(config.get("route_target_weight", 0.0))
+        if route_target_weight and "routing_target_loss" in route_stats:
+            loss = loss + route_target_weight * route_stats["routing_target_loss"]
         loss.backward()
         nn.utils.clip_grad_norm_(model.parameters(), config["grad_clip"])
         optimizer.step()
@@ -346,6 +372,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "routing_coverage_temperature": float(config.get("routing_coverage_temperature", 0.25)),
         "routing_warmup_steps": routing_warmup_steps,
         "routing_mode": str(config.get("routing_mode", "learned")),
+        "soft_routing_temperature": float(config.get("soft_routing_temperature", 0.0)),
+        "soft_routing_steps": soft_routing_steps,
+        "route_target_weight": float(config.get("route_target_weight", 0.0)),
         "input_reinjection": float(config.get("input_reinjection", 1.0)),
         "memory_write_mode": str(config.get("memory_write_mode", "none")),
         "optimizer": str(config.get("optimizer", "adamw")),
@@ -359,8 +388,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         report.update(model.parameter_report())
         report.update({"active_circuits": model.active_circuits, "internal_steps": model.internal_steps,
                        "circuit_mode": model.circuit_mode, "task_context": model.use_task_context,
+                       "router_variant": model.router_variant,
+                       "family_count": model.family_count,
                        "adaptive_halting": model.adaptive_halting,
-                       "router_type": f"hierarchical-tree-{model.router.num_addresses}-address-local-pool",
+                       "router_type": type(model.router).__name__,
                        "routing_capacity": model.router.routing_capacity,
                        "routing_depth": model.router.active_depth,
                        "router_entropy": float(model._last_route["router_entropy"].detach().cpu())})
@@ -416,6 +447,16 @@ def main() -> None:
                         help="Override the config circuit-bank size for scaling controls")
     parser.add_argument("--active-circuits", type=int, default=None,
                         help="Override the active circuit budget for scaling controls")
+    parser.add_argument("--family-count", type=int, default=None,
+                        help="Override semantic family count for structured routing")
+    parser.add_argument("--soft-routing-temperature", type=float, default=None,
+                        help="Training-only soft candidate mixture temperature; eval remains hard top-k")
+    parser.add_argument("--soft-routing-steps", type=int, default=None,
+                        help="Number of initial training steps using soft routing before hard top-k")
+    parser.add_argument("--route-target-supervision", action="store_true",
+                        help="Train the hierarchical router toward task-derived circuit-group targets")
+    parser.add_argument("--route-target-weight", type=float, default=None,
+                        help="Auxiliary route-target loss weight")
     parser.add_argument("--routing-mode", choices=("learned", "controlled_task"), default=None,
                         help="Use learned routing or fixed task-to-circuit allocation")
     parser.add_argument("--seed", type=int, default=None,

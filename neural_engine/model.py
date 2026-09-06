@@ -7,7 +7,7 @@ from .circuits import MicroCircuitBank
 from .encoding import (VALUE_HARMONICS, VALUE_MODULUS, VALUE_TOKEN_OFFSET,
                        encode_tokens)
 from .instrumentation import count_parameters
-from .router import HierarchicalRouter
+from .router import HierarchicalRouter, StableFamilyRouter
 from .state import PersistentState
 
 
@@ -24,7 +24,11 @@ class NeuralEngineV0(nn.Module):
                  halt_threshold: float = 0.5, routing_coverage_temperature: float = 0.25,
                  input_reinjection: float = 1.0, memory_write_mode: str = "none",
                  route_exploration_prob: float = 0.0,
-                 routing_capacity: int | None = None, routing_depth: int | None = None):
+                 routing_capacity: int | None = None, routing_depth: int | None = None,
+                 router_variant: str = "global", family_count: int = 2,
+                 shared_fraction: float = 0.125,
+                 soft_routing_temperature: float = 0.0,
+                 route_target_supervision: bool = False):
         super().__init__()
         if circuit_mode not in {"parallel", "serial"}:
             raise ValueError("circuit_mode must be 'parallel' or 'serial'")
@@ -49,6 +53,14 @@ class NeuralEngineV0(nn.Module):
         self.route_exploration_prob = route_exploration_prob
         self.input_reinjection = input_reinjection
         self.memory_write_mode = memory_write_mode
+        if router_variant not in {"global", "family_local", "family_conditioned"}:
+            raise ValueError("router_variant must be 'global', 'family_local', or 'family_conditioned'")
+        if router_variant in {"family_local", "family_conditioned"} and family_count < 2:
+            raise ValueError("NeuralEngineV0 semantic family routing requires at least two families")
+        self.router_variant = router_variant
+        self.family_count = family_count
+        self.shared_fraction = shared_fraction
+        self.route_target_supervision = route_target_supervision
         embedding_vocab = 16 if numeric_value_encoding else vocab_size
         self.token_embedding = nn.Embedding(embedding_vocab, d_model, padding_idx=0)
         self.value_encoder = nn.Linear(1 + 2 * len(VALUE_HARMONICS), d_model) if numeric_value_encoding else None
@@ -65,10 +77,23 @@ class NeuralEngineV0(nn.Module):
         self.step_embedding = nn.Parameter(torch.zeros(internal_steps, state_dim))
         self.task_context_embedding = nn.Embedding(16, state_dim) if task_context else None
         self.halt_head = nn.Linear(state_dim, 1) if adaptive_halting else None
-        self.router = HierarchicalRouter(state_dim, num_circuits, router_branch, router_depth,
-                                         candidate_pool, active_circuits, router_addresses,
-                                         routing_capacity=routing_capacity,
-                                         routing_depth=routing_depth)
+        self.family_embeddings = None
+        if router_variant == "family_local":
+            self.router = StableFamilyRouter(
+                state_dim, num_circuits, router_branch, router_depth,
+                candidate_pool, active_circuits, router_addresses,
+                routing_capacity=routing_capacity, routing_depth=routing_depth,
+                family_count=family_count, shared_fraction=shared_fraction,
+            )
+        else:
+            self.router = HierarchicalRouter(
+                state_dim, num_circuits, router_branch, router_depth,
+                candidate_pool, active_circuits, router_addresses,
+                routing_capacity=routing_capacity, routing_depth=routing_depth,
+                soft_routing_temperature=soft_routing_temperature)
+            if router_variant == "family_conditioned":
+                self.family_embeddings = nn.Parameter(torch.empty(family_count, state_dim))
+                nn.init.normal_(self.family_embeddings, std=0.02)
         self.circuits = MicroCircuitBank(num_circuits, state_dim, circuit_rank)
         self.output = nn.Sequential(nn.LayerNorm(state_dim), nn.Linear(state_dim, num_classes))
         nn.init.normal_(self.position_embedding, std=0.02)
@@ -98,6 +123,17 @@ class NeuralEngineV0(nn.Module):
             encoded_input = tokens.sum(dim=1) / mask.sum(dim=1).clamp_min(1)
         return self.encoder(encoded_input)
 
+    def semantic_family_ids(self, inputs: torch.Tensor) -> torch.Tensor:
+        """Return stable task-domain families without selecting a circuit ID."""
+        task_ids = (inputs[:, 0] - 1).clamp(0, 14)
+        if self.family_count == 2:
+            return task_ids.ge(9).long()
+        if self.family_count == 4:
+            return torch.where(task_ids < 3, 0,
+                               torch.where(task_ids < 6, 1,
+                                           torch.where(task_ids < 9, 2, 3)))
+        return task_ids.remainder(self.family_count)
+
     def forward(self, inputs: torch.Tensor, adaptive: bool | None = None,
                 forced_selected_ids: torch.Tensor | None = None,
                 forced_selected_weights: torch.Tensor | None = None,
@@ -124,7 +160,12 @@ class NeuralEngineV0(nn.Module):
         num_classes = self.output[-1].out_features
         selected_steps = []
         coverage_losses = []
-        selected_weights = torch.zeros(batch_size, self.internal_steps, self.active_circuits,
+        routing_target_losses = []
+        soft_route = (self.training and getattr(self.router, "soft_routing_temperature", 0.0) > 0.0
+                      and self.router_variant in {"global", "family_conditioned"}
+                      and getattr(self, "routing_mode", "learned") != "controlled_task")
+        route_width = self.router.candidate_pool if soft_route else self.active_circuits
+        selected_weights = torch.zeros(batch_size, self.internal_steps, route_width,
                                        device=inputs.device)
         route_gains = torch.ones(batch_size, self.internal_steps, device=inputs.device)
         step_entropies = torch.zeros(batch_size, self.internal_steps, device=inputs.device)
@@ -150,7 +191,7 @@ class NeuralEngineV0(nn.Module):
                 forced_route_gains = forced_route_gains.to(device=inputs.device)
         for step in range(self.internal_steps):
             active_indices = active.nonzero(as_tuple=False).squeeze(-1)
-            selected_step = torch.full((batch_size, self.active_circuits), -1,
+            selected_step = torch.full((batch_size, route_width), -1,
                                        dtype=torch.long, device=inputs.device)
             if active_indices.numel() == 0:
                 selected_steps.append(selected_step)
@@ -162,13 +203,36 @@ class NeuralEngineV0(nn.Module):
             step_query = active_state + self.step_embedding[step]
             if task_context is not None:
                 step_query = step_query + task_context[active_indices]
-            selected, weights, route_stats = self.router(
-                step_query, coverage=coverage,
-                coverage_temperature=self.routing_coverage_temperature,
-                exploration_prob=(self.route_exploration_prob if self.training else 0.0))
+            router_kwargs = {
+                "coverage": coverage,
+                "coverage_temperature": self.routing_coverage_temperature,
+                "exploration_prob": (self.route_exploration_prob if self.training else 0.0),
+            }
+            if self.route_target_supervision and self.router_variant in {"global", "family_conditioned"}:
+                group_count = max(1, self.router.num_circuits // self.active_circuits)
+                task_ids = (inputs[:, 0] - 1).clamp(0, 14)
+                target_bases = (task_ids.remainder(group_count) * self.active_circuits)[active_indices]
+                router_kwargs["target_bases"] = target_bases
+            family_ids = None
+            if self.router_variant in {"family_local", "family_conditioned"}:
+                family_ids = self.semantic_family_ids(inputs)[active_indices]
+            if self.router_variant == "family_conditioned":
+                router_query = step_query + self.family_embeddings[family_ids]
+            else:
+                router_query = step_query
+            if self.router_variant == "family_local":
+                if coverage:
+                    raise ValueError("family_local router does not support coverage regularization")
+                selected, weights, route_stats = self.router(
+                    router_query, family_ids,
+                    **router_kwargs)
+            else:
+                selected, weights, route_stats = self.router(router_query, **router_kwargs)
             route_gain = route_stats["route_gain"]
             if "routing_coverage_loss" in route_stats:
                 coverage_losses.append(route_stats["routing_coverage_loss"])
+            if "routing_target_loss" in route_stats:
+                routing_target_losses.append(route_stats["routing_target_loss"])
             if forced_selected_ids is not None:
                 selected = forced_selected_ids[active_indices, step].to(device=inputs.device)
                 if forced_selected_weights is None:
@@ -240,6 +304,8 @@ class NeuralEngineV0(nn.Module):
         }
         if coverage_losses:
             stats["routing_coverage_loss"] = torch.stack(coverage_losses).mean()
+        if routing_target_losses:
+            stats["routing_target_loss"] = torch.stack(routing_target_losses).mean()
         self._last_route = stats
         return last_logits, stats
 
@@ -251,6 +317,10 @@ class NeuralEngineV0(nn.Module):
         shared += self.position_scale.numel() + self.position_bias.numel() + count_parameters(self.encoder)
         shared += count_parameters(self.state) + self.step_embedding.numel()
         shared += self.router.level_projections.numel() + self.router.level_bias.numel()
+        if self.router_variant == "family_local":
+            shared += self.router.family_embeddings.numel()
+        elif self.router_variant == "family_conditioned":
+            shared += self.family_embeddings.numel()
         shared += count_parameters(self.output)
         if self.task_context_embedding is not None:
             shared += count_parameters(self.task_context_embedding)

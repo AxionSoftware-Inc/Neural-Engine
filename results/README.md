@@ -3,6 +3,8 @@
 ## Current capacity-signal experiment
 
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
+- [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
+- [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
 
 V0.174 follows the expert audit in `KEYINGI_YOL_2026-09-06.md` and fixes the
 hard-training/grouped-inference scale mismatch plus stale copied-expert
@@ -1078,3 +1080,8 @@ which is a strong localization signal but not a learned-generalization claim:
 the control is given the mod-64 algebra. The next accepted experiment is a
 trainable equivariant template bank without a dense transition table. See
 `V0_53_MODULAR_PRIOR_PILOT.md` and the proposal `taklif7.md`.
+
+V0.177 tests task-aware routing. A task-context query gives a small two-seed
+gain at 32 circuits, but the full 8/16/32 screen is non-monotonic; route-target
+auxiliary supervision is rejected because it collapses router entropy without
+improving held-out hard selection. See `V0_177_TASK_AWARE_ROUTING.md`.
