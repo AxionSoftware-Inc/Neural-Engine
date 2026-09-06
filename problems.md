@@ -237,6 +237,107 @@ Model body yoki router sifatini o‘zgartirmasdan parameter/cost instrumentation
 patchini yozing. Eski testlarni saqlang va oldingi benchmark natijalari bilan
 backward-compatible hisobot chiqaring.
 
+## Expert uchun navbatdagi katta ishlar — to‘liq handoff
+
+Quyidagi navbat expertga ishni qismlarga bo‘lib topshirish uchun yozildi. Har
+bir topshiriq alohida branch yoki alohida opt-in experiment bo‘lsin. Bir nechta
+aktiv problemni bir patchda aralashtirmang. Expert tayyorlagan kodni Codex
+mustaqil test qiladi; benchmark gate bajarilmaguncha hech bir variant defaultga
+aylantirilmaydi.
+
+### Handoff A — P-001 candidate retrieval diagnostikasi va minimal tuzatish
+
+Bu hozirgi eng katta va eng shoshilinch ish. Avval yangi router yozishdan ko‘ra,
+candidate pool ichida kerakli circuitlar yo‘qolayotganini aniq ajrating.
+
+#### O‘qilishi kerak bo‘lgan dalillar
+
+- `results/runs/capacity_route_oracle_audit_s17_s18.json` va unga mos
+  `results/` hisobotlari: learned route, candidate-pool oracle va full-bank
+  oracle orasidagi headroom.
+- `results/V0_179_FLAT_ROUTER_SCREEN.md`: barcha keylarni score qilishning o‘zi
+  sifat bermaganini ko‘rsatuvchi negative control.
+- `results/V0_180_PROBEROUTE2_FROZEN_BANK.md`: retrieval-only va
+  selection-only o‘zgarishlari barqaror foyda bermagan.
+- `results/COUPLED_PROBE_ROUTER_AUDIT.md`: router parametrlari kamaygan, CE
+  yaxshilangan, lekin candidate recall tushgan va hard accuracy deyarli
+  o‘zgarmagan.
+- `results/P004_CASCADE_CREDIT_SEED17_18.md`: cascade-consistent credit CE va
+  regretning ayrim komponentlarini yaxshilagan bo‘lsa-da, accuracy gate'larini
+  bajarmagan.
+
+#### Birinchi diagnostika talabi
+
+Mavjud frozen checkpoint/bank va bir xil held-out inputlar ustida route
+qarorlarini qayta ko‘rsating. Kamida quyidagi narsalar alohida o‘lchansin:
+
+1. candidate poolga target/full-oracle pairning ikkala circuiti kirgan-kirmagani;
+2. pair retrieval regreti — eng yaxshi full-bank pair candidate poolda yo‘q
+   bo‘lgani uchun yo‘qotilgan qiymat;
+3. candidate ichida eng yaxshi pairni tanlash regreti — yaxshi pair poolda bor,
+   lekin selector noto‘g‘ri tanlagan holat;
+4. har bir internal step va prefix/suffix cascade holati bo‘yicha ushbu ikki
+   xatoning taqsimoti;
+5. candidate size M o‘zgarganda (kamida M=8 va M=16, bank=32) recall va
+   regretning qanday o‘zgarishi.
+
+Bu audit “router yomon” degan umumiy xulosani representation, candidate size,
+loss/target yoki cascade distribution muammolaridan biriga ajratishi kerak.
+Counterfactual oracle hisobida final corrected output ta’rifi bir xil bo‘lsin;
+native, fixed-learned, candidate oracle va full oracle raqamlarini aralashtirmang.
+
+#### Patch faqat diagnostika sababini tasdiqlasa yozilsin
+
+Minimal patchlardan faqat bittasini tanlang: candidate scoring signalini
+to‘g‘rilash, candidate-pool size/schedule'ni o‘zgartirish yoki retrieval loss
+targetini tuzatish. Pair selector, circuit body, correction weights va recurrent
+state update'ni birinchi patchda birga o‘zgartirmang. Attention/Transformer
+qo‘shmang; Neural Engine'ning sparse-circuit maqsadi saqlansin.
+
+#### P-001 acceptance gate
+
+- E=32, active=2, M=8, T=3, seed17/18 protocol eski benchmark bilan bir xil;
+- candidate recall eski routerdan pasaymasin;
+- p95 selection/retrieval regret kamida 10% yaxshilansin;
+- held-out hard accuracy o‘rtacha kamida +2 pp;
+- dead circuits `<=3/32`, inference latency `<=1.25x`;
+- total, touched/active parameter va probe cost alohida ko‘rsatilsin;
+- 5000-step full run bo‘lmasa, natijani final improvement deb yozmang.
+
+Deliverable: kod, unit test, kichik smoke benchmark, seed17/18 full benchmark,
+JSON/Markdown audit, exact reproduction command va `problems.md`dagi qaror.
+Gate bajarilmasa `REJECTED` tarixiga natija, sabab va keyingi qaror yozilsin.
+
+### Handoff B — P-005 CE–accuracy/regret objective diagnostikasi
+
+P-001 retrieval mexanizmi aniqlanmaguncha katta loss rewrite qilmang. Keyin
+P-005 uchun bir xil frozen route/circuit bank ustida mean CE, hard accuracy,
+mean/p95 regret va exact pair oracle'ni birga hisoblang. CE-only improvementni
+qabul qilmang. Agar loss patch sinalsa, eski loss bilan yangi lossni seed17/18
+paired benchmarkda 2x2 qilib solishtiring; hard-selection va on-policy
+trajectory alohida hisobot bo‘lsin. Target final corrected outputga mosligini
+gradient/test bilan tekshiring. Minimal patch, opt-in, default o‘zgarmaydi.
+
+### Handoff C — P-006 active-parameter va routing-cost instrumentation
+
+Bu sifat eksperimenti emas. `parameter_report()` va benchmark hisobotlarini
+model body, router projection, key-table read, candidate scoring, selector,
+circuit body, recurrent step hamda correction bo‘yicha touched bound bilan
+to‘ldiring. Training probe cost va inference routing costni ajrating. Formula
+uchun unit test va eski benchmark JSONlariga backward-compatible maydonlar
+qo‘shing. Instrumentation patchi quality modelini o‘zgartirmasin.
+
+### Expertga yuboriladigan ish tartibi
+
+1. Avval faqat Handoff A diagnostikasini bajaring.
+2. Diagnostic natijasi P-001 sababini ko‘rsatmasa, patch yozmang; failure report
+   qoldiring va nimani o‘lchash yetishmaganini ayting.
+3. Sabab aniq bo‘lsa, bitta minimal opt-in patch va paired benchmark yozing.
+4. P-001 gate'lari bajarilmasa, uni `REJECTED` deb belgilang; P-005 yoki P-006ga
+   faqat alohida branch/commitda o‘ting.
+5. Har bir natijada “quality”, “retrieval”, “active cost” va “training cost”ni
+   alohida jadvalda bering. Bitta CE raqami bilan yechimni tasdiqlamang.
+
 ## Yopilgan yoki rad qilingan yo‘llar
 
 Bu bo‘lim aktiv muammolarni to‘ldiradi; muvaffaqiyatsiz tajribalar o‘chirilmaydi.
