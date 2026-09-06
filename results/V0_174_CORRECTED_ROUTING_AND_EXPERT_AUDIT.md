@@ -57,6 +57,8 @@ development text.
 | subset-soft, temperature 0.50 | — | `+0.05229` | reject for now |
 | subset-soft, temperature 0.10 | — | `+0.05399` | reject for now |
 | subset-soft, router hidden 64 | — | `+0.05490` | reject; width alone is not the fix |
+| subset-soft, router hidden 256 | — | `+0.08855` | reject; unstable child-2 training |
+| independent energy router | `+0.08221` | — | reject |
 
 The block objective did not repair the handoff by itself. The soft cost-aware
 router is a real but small improvement; it must not yet be called the final
@@ -67,7 +69,8 @@ calibration batches from the broader repository README instead of the matched
 Qwen calibration text worsened seed 2026 to `+0.08689` (paired oracle
 `+0.04375`), so more distribution-shifted text is not automatically useful.
 Reducing the router hidden width from 128 to 64 worsened seed 2027 to
-`+0.05490`.
+`+0.05490`; increasing it to 256 made child-2 local MSE `4.57` and final
+delta `+0.08855`. Router width is therefore not the current solution.
 
 ## Causal controls and oracle headroom
 
@@ -92,6 +95,10 @@ best-subset routing.
 
 This is the clearest positive signal so far. The sparse decomposition contains
 useful subsets; the deployable learned router is leaving quality on the table.
+
+Replacing the 70-class subset predictor with eight independent energy scores
+and top-4 selection worsened the corrected seed-2026 run to `+0.08221`. The
+problem is therefore not solved by simply changing the router output format.
 
 For seed 2026 hard-label routing, held-out exact-subset match was 38.99% on
 layer 25 and 54.15% on layer 26. The corresponding reconstruction subset
