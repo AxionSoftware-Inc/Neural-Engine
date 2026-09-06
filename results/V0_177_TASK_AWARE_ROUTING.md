@@ -63,6 +63,11 @@ yo‘qoladi va 32-bankda faqat qisman qaytadi. Shu sabab bu yechim routing
 signalining yetishmasligini ko‘rsatadi, ammo fundamental capacity muammosini
 hal qilmaydi.
 
+64-bankda qo‘shimcha 1000-step pilot ham o‘tkazildi: held-out `26.77%` va
+dead-circuit fraction `18.75%` bo‘ldi (32-bank task-context pilotida `26.51%`).
+Bu kengayish qo‘shimcha sig‘imni ishlatishga aylantirmadi, shuning uchun 64-bank
+uchun 5000-step screen ham boshlanmadi.
+
 ## Texnik o‘zgarishlar
 
 - `NeuralEngineV0` task-aware query uchun mavjud `task_context` yo‘lidan
