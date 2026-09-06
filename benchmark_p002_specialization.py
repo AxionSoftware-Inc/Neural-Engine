@@ -18,19 +18,47 @@ from neural_engine.p002_credit import CounterfactualCircuitCredit
 from train import BatchSource, load_config, make_model, make_optimizer, seed_everything
 
 
-def make_source(config: dict[str, Any], device: torch.device, train: bool) -> BatchSource:
-    prefix = "train" if train else "eval"
+def make_source(
+    config: dict[str, Any], device: torch.device, split: str
+) -> BatchSource:
+    if split not in {"train", "eval", "heldout"}:
+        raise ValueError("split must be train, eval or heldout")
+    if split == "train":
+        prefix, seed_offset, batch_size, task_balanced = (
+            "train", 1, int(config["batch_size"]), True
+        )
+    elif split == "eval":
+        prefix, seed_offset, batch_size, task_balanced = "eval", 2, 256, False
+    else:
+        prefix, seed_offset, batch_size, task_balanced = "heldout", 3, 256, False
+    fallback_prefix = "eval" if split == "heldout" else prefix
     generator = SyntheticTaskGenerator(
-        config["seq_len"], int(config["seed"]) + (1 if train else 2),
-        value_min=int(config.get(f"{prefix}_value_min", 0)),
-        value_max=int(config.get(f"{prefix}_value_max", 63)),
-        split=str(config.get(f"{prefix}_split", "all")),
+        config["seq_len"],
+        int(config["seed"]) + seed_offset,
+        value_min=int(
+            config.get(
+                f"{prefix}_value_min",
+                config.get(f"{fallback_prefix}_value_min", 0),
+            )
+        ),
+        value_max=int(
+            config.get(
+                f"{prefix}_value_max",
+                config.get(f"{fallback_prefix}_value_max", 63),
+            )
+        ),
+        split=str(
+            config.get(
+                f"{prefix}_split",
+                config.get(f"{fallback_prefix}_split", "all"),
+            )
+        ),
     )
     return BatchSource(
         generator,
-        int(config["batch_size"] if train else 256),
+        batch_size,
         device,
-        task_balanced=train,
+        task_balanced=task_balanced,
     )
 
 
@@ -271,7 +299,7 @@ def train_arm(
     optimizer = make_optimizer(model, config)
     if optimizer.__class__.__name__.lower().startswith("lazy"):
         raise ValueError("row-local auxiliary credit requires standard AdamW")
-    source = make_source(config, device, True)
+    source = make_source(config, device, "train")
     credit = (
         CounterfactualCircuitCredit(
             model.router.num_circuits,
@@ -448,13 +476,19 @@ def run_seed(
         )
         evaluation = evaluate_specialization(
             model,
-            make_source(config, device, False),
+            make_source(config, device, "eval"),
+            args.eval_batches,
+            args.examples_per_task,
+        )
+        heldout = evaluate_specialization(
+            model,
+            make_source(config, device, "heldout"),
             args.eval_batches,
             args.examples_per_task,
         )
         functional = evaluate_counterfactual_bank(
             model,
-            make_source(config, device, False),
+            make_source(config, device, "heldout"),
             args.cf_batches,
             args.cf_examples_per_task,
             args.credit_min_advantage,
@@ -462,6 +496,7 @@ def run_seed(
         result[name] = {
             "training": training,
             "evaluation": evaluation,
+            "heldout": heldout,
             "counterfactual_bank": functional,
         }
         if args.checkpoint_dir:
@@ -472,6 +507,7 @@ def run_seed(
                     "model_state": model.state_dict(),
                     "config": config,
                     "evaluation": evaluation,
+                    "heldout": heldout,
                     "counterfactual_bank": functional,
                 },
                 path / f"p002_crca_seed{seed}_{name}.pt",
@@ -482,20 +518,24 @@ def run_seed(
 
     c = result["control"]["evaluation"]
     t = result["crca"]["evaluation"]
+    h_c = result["control"]["heldout"]
+    h_t = result["crca"]["heldout"]
     cf_c = result["control"]["counterfactual_bank"]
     cf_t = result["crca"]["counterfactual_bank"]
     result["delta"] = {
-        "accuracy_pp": 100.0 * (t["accuracy"] - c["accuracy"]),
-        "loss": t["loss"] - c["loss"],
+        "accuracy_pp": 100.0 * (h_t["accuracy"] - h_c["accuracy"]),
+        "heldout_loss": h_t["loss"] - h_c["loss"],
+        "in_domain_accuracy_pp": 100.0 * (t["accuracy"] - c["accuracy"]),
+        "in_domain_loss": t["loss"] - c["loss"],
         "route_task_circuit_nmi": (
-            t["task_circuit_nmi"] - c["task_circuit_nmi"]
+            h_t["task_circuit_nmi"] - h_c["task_circuit_nmi"]
         ),
         "route_usage_weighted_specialization": (
-            t["usage_weighted_specialization"]
-            - c["usage_weighted_specialization"]
+            h_t["usage_weighted_specialization"]
+            - h_c["usage_weighted_specialization"]
         ),
         "dead_circuit_fraction": (
-            t["dead_circuit_fraction"] - c["dead_circuit_fraction"]
+            h_t["dead_circuit_fraction"] - h_c["dead_circuit_fraction"]
         ),
         "cf_task_circuit_nmi": (
             cf_t["task_circuit_nmi"] - cf_c["task_circuit_nmi"]
@@ -557,7 +597,7 @@ def decide(seeds: list[dict[str, Any]]) -> dict[str, Any]:
         "per_seed_accuracy_delta_pp": acc,
         "per_seed_cf_positive_advantage_delta": cf_adv,
         "criteria": {
-            "accuracy": "mean >= +2.0 pp and no seed worse than -1.0 pp",
+            "accuracy": "held-out mean >= +2.0 pp and no seed worse than -1.0 pp",
             "functional_specialization": (
                 "held-out counterfactual NMI >= +0.05, specialization >= +0.05, "
                 "mean positive final-CE advantage >= +0.01, no seed advantage "
@@ -573,26 +613,29 @@ def write_markdown(report: dict[str, Any], path: Path) -> None:
         "",
         f"**Decision:** `{report['decision']['decision']}`",
         "",
-        "| Seed | Arm | Accuracy | Route NMI | CF NMI | CF specialization | CF +adv | Dead | Train s |",
-        "|---:|---|---:|---:|---:|---:|---:|---:|---:|",
+        "| Seed | Arm | Held-out acc | In-domain acc | Held-out route NMI | CF NMI | CF specialization | CF +adv | Dead | Train s |",
+        "|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for seed in report["seeds"]:
         for arm in ("control", "crca"):
             evaluation = seed[arm]["evaluation"]
+            heldout = seed[arm]["heldout"]
             functional = seed[arm]["counterfactual_bank"]
             training = seed[arm]["training"]
             lines.append(
-                f"| {seed['seed']} | {arm} | {evaluation['accuracy']*100:.2f}% | "
-                f"{evaluation['task_circuit_nmi']:.4f} | "
+                f"| {seed['seed']} | {arm} | {heldout['accuracy']*100:.2f}% | "
+                f"{evaluation['accuracy']*100:.2f}% | "
+                f"{heldout['task_circuit_nmi']:.4f} | "
                 f"{functional['task_circuit_nmi']:.4f} | "
                 f"{functional['usage_weighted_specialization']:.4f} | "
                 f"{functional['mean_positive_advantage']:.4f} | "
-                f"{evaluation['dead_circuit_fraction']*32:.0f}/32 | "
+                f"{heldout['dead_circuit_fraction']*32:.0f}/32 | "
                 f"{training['seconds']:.1f} |"
             )
         delta = seed["delta"]
         lines.append(
             f"| {seed['seed']} | **delta** | **{delta['accuracy_pp']:+.2f} pp** | "
+            f"**{delta['in_domain_accuracy_pp']:+.2f} pp** | "
             f"**{delta['route_task_circuit_nmi']:+.4f}** | "
             f"**{delta['cf_task_circuit_nmi']:+.4f}** | "
             f"**{delta['cf_usage_weighted_specialization']:+.4f}** | "
@@ -638,7 +681,7 @@ def append_rejection(report: dict[str, Any], path: Path) -> None:
         f"\n\n{marker}\n\n"
         "**Status:** `REJECTED`  \n"
         "**Muammo:** P-002  \n"
-        f"**Natija:** seed17/18 mean accuracy delta "
+        f"**Natija:** seed17/18 held-out mean accuracy delta "
         f"`{decision['mean_accuracy_delta_pp']:+.3f} pp`, held-out "
         f"counterfactual NMI delta "
         f"`{decision['mean_cf_task_circuit_nmi_delta']:+.5f}`, specialization "
@@ -735,6 +778,8 @@ def main() -> None:
             ),
         },
         "counterfactual_audit": {
+            "split": "heldout",
+            "seed_offset": 3,
             "batches": args.cf_batches,
             "examples_per_task": args.cf_examples_per_task,
             "roles_rotate_over_all_step_slot_pairs": True,
