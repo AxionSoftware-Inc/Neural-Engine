@@ -16,9 +16,12 @@ still 1.28x slower than the dense parent at 75% active. Do not scale to
 `+0.01794`), but direct-hard training (`300/300`) now passes on both seeds
 (`+0.01731` and `+0.01535`) with paired-oracle deltas `+0.00486` and
 `+0.00378`; timing remains 1.56x. The immediate issue was soft-to-hard
-training-operator mismatch, not missing capacity.
-A 256-wide router is unstable (`+0.08855`), and an independent energy router
-fails at `+0.08221`. See
+training-operator mismatch, not missing capacity. The full eight-layer
+direct-hard K=6 control also passes on both seeds (`+0.01103` and `+0.02117`)
+with paired-oracle deltas `-0.00649` and `-0.00088`; timing is 2.08–2.13x at
+75% active. Next is the 50%-active K=4 depth control. A 256-wide router is
+unstable (`+0.08855`), and an independent energy router fails at `+0.08221`.
+See
 `V0_174_CORRECTED_ROUTING_AND_EXPERT_AUDIT.md`.
 
 V0.173 fixes a real full-active routing bug: when `K=E`, the hard path must

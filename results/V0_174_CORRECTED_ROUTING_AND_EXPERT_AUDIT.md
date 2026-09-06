@@ -139,6 +139,23 @@ composition. The direct-hard recipe is a training control, not yet a runtime
 win; grouped sparse execution remains about 1.56x slower than the dense
 parent.
 
+## Eight-layer K=6 depth control
+
+The direct-hard recipe was extended to the full adjacent Qwen3-0.6B depth
+control, layers 19–26, with six of eight groups active at every layer.
+
+| seed | learned CE delta | paired exact-oracle CE delta | child local MSE range | timing / parent |
+|---|---:|---:|---:|---:|
+| 2026 | `+0.01103` | `-0.00649` | `0.181–0.307` | `2.082x` |
+| 2027 | `+0.02117` | `-0.00088` | `0.179–0.317` | `2.129x` |
+
+Both seeds pass the `+0.05` gate. This is the strongest depth result so far:
+the attention-free sparse FFN replacements compose across eight consecutive
+layers, and paired oracle routing is essentially at parent quality. The
+remaining limitation is efficiency: K=6 leaves 75% of groups active, yet the
+current Python/PyTorch grouped bank is about 2.1x slower end-to-end because
+dispatch and bank overhead dominate the saved expert work.
+
 ## Causal controls and oracle headroom
 
 Single-layer corrected runs pass comfortably:
@@ -180,11 +197,12 @@ quality result, but K=4 remains unstable and the runtime is still worse than
 the dense parent. Therefore this is not yet a general scaling law or a
 deployment claim for 700M/1B.
 
-The direct-hard four-layer K=6 reference is now stable across two seeds, while
-the runtime is still worse than the dense parent. The next experiment is an
-eight-layer direct-hard K=6 depth test with the same protocol. If that passes,
-the next gate is a larger model; if depth fails while paired oracle remains
-good, focus on multi-layer router generalization before scaling capacity.
+The direct-hard eight-layer K=6 reference is now stable across two seeds,
+while the runtime is still worse than the dense parent. The next quality
+experiment is eight-layer direct-hard K=4, which tests the intended 50%-active
+operating point under the corrected training operator. Runtime optimization is
+a separate workstream; do not interpret the current 2.1x timing as a
+deployment result.
 
 The JSON artifacts for the runs above are kept under `results/runs/` locally;
 that directory remains ignored by the repository, while this report records
