@@ -315,6 +315,18 @@ Mean and p95 local regrets improve, yet final multi-layer CE remains above the
 gate. Pairwise cost routing is therefore retained as a useful research
 diagnostic, not a stable architecture or a reason to scale to eight layers.
 
+## Corpus-swap diagnostic
+
+The calibration and evaluation texts were swapped for seed 2028 as a data
+shift screen. Static pairwise refit reached learned `+0.05273`, while the
+paired oracle remained at `+0.02754`. The route gap therefore persists when
+the text distribution changes, and the swapped run has larger layer regret
+and p95 values than the original held-out screen. This is evidence for a
+distribution-shift contribution, but not a pure router-only result because
+the child/correction training corpus was also swapped. A proper next control
+needs one corpus for child training, a mixed route-calibration corpus, and a
+third held-out corpus for final CE.
+
 K=6 remains the higher-margin quality reference, while K5 is now the best
 active-budget result. The valid K6 token-loop rerun preserves quality but is
 slightly slower (`2.129x` versus grouped `2.082x`), so it provides no runtime

@@ -68,6 +68,10 @@ centered-basis parameterization reached `+0.05366`; neither passed. The
 oracle/learned split remains, so this is router/cascade generalization rather
 than missing subset capacity. See
 `V0_174_CORRECTED_ROUTING_AND_EXPERT_AUDIT.md`.
+The calibration/eval corpus-swap screen also failed learned CE at `+0.05273`
+with oracle `+0.02754`, supporting distribution shift as a contributor but
+not isolating it because child training was swapped too. The next clean test
+needs mixed route calibration and a third held-out corpus.
 For a shareable experiment-by-experiment handoff to the proposal author, see
 `EXPERT_FEEDBACK_PAIRWISE_COST_ROUTER.md`.
 

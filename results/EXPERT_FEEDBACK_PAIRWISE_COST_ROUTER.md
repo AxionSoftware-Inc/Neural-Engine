@@ -110,6 +110,21 @@ about `0.0013`. In all cases the oracle remains substantially better, so the
 remaining issue is learned route/cascade generalization rather than missing
 subset capacity.
 
+## Corpus-swap diagnostic
+
+As a data-shift screen, the calibration and evaluation texts were swapped for
+seed 2028 while keeping the static pairwise refit recipe. The learned result
+was `+0.05273` and the paired oracle was `+0.02754`, so the learned route again
+missed the gate while useful subsets remained. Layer mean regrets were
+`0.16684, 0.12250, 0.11807, 0.08564`, with p95 values
+`0.71237, 0.54341, 0.48459, 0.32448`.
+
+This supports a distribution-shift contribution to the router failure, but it
+is not a pure router-only causal control because child/correction training was
+also performed on the swapped calibration text. A proper next control would
+train children on one corpus, fit the router on a mixed route-calibration
+corpus, and evaluate on a third held-out corpus.
+
 ## Related scale controls
 
 The scale question was also corrected before evaluating the router. The sparse
