@@ -41,8 +41,9 @@ current recipe. The earlier K=5 controls were incorrectly scaled; their
 `scale/K=1`. With matched `scale=5`, K5 passes on two seeds (`+0.04101` and
 `+0.04186`; paired oracle `+0.00512` and `+0.00055`) at `62.5%` active and
 about `1.91x` timing. K6 remains the higher-margin reference. The earlier K6
-token-loop run also used the wrong scale and must be rerun before judging
-dispatch speed.
+token-loop run used the wrong scale and is superseded; the valid scale=6
+rerun passes (`+0.01035`, oracle `-0.00554`) but is slightly slower at `2.129x`
+versus grouped `2.082x`.
 The optimal-scalar diagnostic is small on both budgets: local MSE gain is
 `0.00222` for K4 and `0.00158` for K5, with mean `g*≈0.992`; therefore a scale
 predictor is not promoted and the remaining target is router/subset regret.

@@ -202,6 +202,7 @@ the router representation:
 | K=5, scale `5` | 2026 | `+0.04101` | `+0.00512` | `1.910x` | pass |
 | K=5, scale `5` | 2027 | `+0.04186` | `+0.00055` | `1.908x` | pass |
 | K=6 with Python token-loop, scale `1.333` | 2026 | `+0.13244` | `+0.10378` | `2.124x` | invalid scale comparison; superseded |
+| K=6 with Python token-loop, scale `6` | 2026 | `+0.01035` | `-0.00554` | `2.129x` | pass; no speedup |
 
 As a different architecture control, `group-energy` replaced the hidden state
 input to the 70-class subset router with cheap per-group SwiGLU activation
@@ -235,11 +236,10 @@ add inference work without addressing the measured regret, so it is not
 promoted to the architecture.
 
 K=6 remains the higher-margin quality reference, while K5 is now the best
-active-budget result. The earlier K6 token-loop run also used the wrong scale
-`1.333`, so it cannot support a runtime or quality conclusion. A token-loop
-benchmark must be rerun with scale `6` before judging dispatch performance.
-A real deployment speedup still likely requires a fused selected-expert kernel
-(CUDA, Triton, or an equivalent compiled backend).
+active-budget result. The valid K6 token-loop rerun preserves quality but is
+slightly slower (`2.129x` versus grouped `2.082x`), so it provides no runtime
+escape hatch. A real deployment speedup still requires a fused selected-expert
+kernel (CUDA, Triton, or an equivalent compiled backend).
 
 A K=5 rank-128 cross-group correction attempt was also started as a capacity
 control. It was stopped after more than twenty minutes without reaching a
