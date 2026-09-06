@@ -36,7 +36,9 @@ the eight-layer result (`+0.06981`). A group-energy subset-router input is
 also rejected (`+0.07236`, paired oracle `+0.04523`), worse than the hidden
 router control. Hard subset labels (`+0.06744`) and a 1000-step final-child
 refit (`+0.07404`) also fail the eight-layer gate. K=4 is closed for the
-current recipe; K=6 remains the quality baseline.
+current recipe. The intermediate K=5 (`62.5%` active) control also fails
+(`+0.08358`, exact oracle `+0.04649`); lowering its route scale to `1.333`
+worsens it to `+0.11902`. K=6 remains the quality baseline.
 
 V0.173 fixes a real full-active routing bug: when `K=E`, the hard path must
 use scale `E`, not `E/K`, to reconstruct the parent sum. The corrected child is
