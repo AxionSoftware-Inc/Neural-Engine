@@ -172,6 +172,18 @@ currently lack representational capacity; the learned subset router is losing
 too much quality across eight layers. The next control is a post-child router
 refit against the final corrected children, not a larger child or model.
 
+Two post-child refit variants were then rejected on seed 2026:
+
+| post-refit target | learned CE delta | paired exact-oracle CE delta | decision |
+|---|---:|---:|---|
+| copied-group subset-soft | `+0.07558` | `+0.01659` | reject; worse than direct-hard |
+| final corrected subset-soft | `+0.07741` | `+0.01675` | reject; target alignment alone is insufficient |
+
+The final-corrected target correctly evaluates each subset after the rank-64
+cross-group correction, but it does not improve held-out route selection. The
+K=4 router gap therefore needs a different generalization mechanism, not just
+more post-training steps or a more local reconstruction target.
+
 ## Causal controls and oracle headroom
 
 Single-layer corrected runs pass comfortably:
@@ -215,11 +227,11 @@ deployment claim for 700M/1B.
 
 The direct-hard eight-layer K=6 reference is stable across two seeds, while
 the 50%-active K=4 reference has a stable learned-router failure but a passing
-oracle. The next quality experiment is post-child router refit at K=4. If it
-does not close the oracle gap, keep K=6 as the quality baseline and focus on a
-better route target/temporal router before scaling model size. Runtime
-optimization is a separate workstream; do not interpret the current 1.66–2.13x
-timing as a deployment result.
+oracle. Post-child refit and final-corrected subset targets do not close that
+gap, so K=6 is the current quality baseline. The next step is a small larger-
+model smoke using the direct-hard K=6 recipe; K=4 routing remains a separate
+research track. Runtime optimization is also separate; do not interpret the
+current 1.66–2.13x timing as a deployment result.
 
 The JSON artifacts for the runs above are kept under `results/runs/` locally;
 that directory remains ignored by the repository, while this report records

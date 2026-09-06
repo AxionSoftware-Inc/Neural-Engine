@@ -24,7 +24,9 @@ unstable (`+0.08855`), and an independent energy router fails at `+0.08221`.
 The K=4 direct-hard eight-layer control fails learned routing on both seeds
 (`+0.06462` and `+0.06165`) while paired-oracle routing passes
 (`+0.01607` and `+0.01227`), confirming a router-gap rather than a capacity
-failure. Next is post-child router refit at K=4. See
+failure. Post-child copied-target and final-corrected-target refits also fail
+(`+0.07558` and `+0.07741`), so K=6 is the current quality baseline and K=4
+router generalization remains open. See
 `V0_174_CORRECTED_ROUTING_AND_EXPERT_AUDIT.md`.
 
 V0.173 fixes a real full-active routing bug: when `K=E`, the hard path must
