@@ -377,6 +377,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         route_source: str,
         hard_route_scale: float | None,
         partition_indices: list[torch.Tensor] | None = None,
+        router_hidden_size: int = 128,
     ) -> None:
         super().__init__()
         if not 1 <= active_experts <= num_experts:
@@ -407,6 +408,9 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 "oracle-energy, or oracle-subset"
             )
         self.route_source = route_source
+        if router_hidden_size < 1:
+            raise ValueError("router hidden size must be positive")
+        self.router_hidden_size = int(router_hidden_size)
         self.hard_route_scale = (
             (
                 self.num_experts
@@ -502,17 +506,17 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 persistent=False,
             )
             self.subset_router = torch.nn.Sequential(
-                torch.nn.Linear(hidden_size, 128),
+                torch.nn.Linear(hidden_size, self.router_hidden_size),
                 torch.nn.SiLU(),
-                torch.nn.Linear(128, subset_ids.shape[0]),
+                torch.nn.Linear(self.router_hidden_size, subset_ids.shape[0]),
             )
             torch.nn.init.zeros_(self.subset_router[-1].weight)
             torch.nn.init.zeros_(self.subset_router[-1].bias)
         else:
             self.router = torch.nn.Sequential(
-                torch.nn.Linear(hidden_size, 128),
+                torch.nn.Linear(hidden_size, self.router_hidden_size),
                 torch.nn.SiLU(),
-                torch.nn.Linear(128, num_experts),
+                torch.nn.Linear(self.router_hidden_size, num_experts),
             )
             torch.nn.init.zeros_(self.router[-1].weight)
             torch.nn.init.zeros_(self.router[-1].bias)
@@ -1285,6 +1289,7 @@ def make_transferred_routed_qwen_child(
     device: torch.device,
     dtype: torch.dtype,
     partition_io: list[dict[str, torch.Tensor]] | None = None,
+    router_hidden_size: int = 128,
 ) -> torch.nn.Module:
     partition_indices = None
     if partition_mode == "activation-balanced":
@@ -1311,6 +1316,7 @@ def make_transferred_routed_qwen_child(
         parent, num_experts, active_experts, routing_temperature, dispatch_mode,
         partition_mode, route_source, hard_route_scale,
         partition_indices,
+        router_hidden_size,
     ).to(device=device, dtype=dtype)
     if calibration_rank > 0:
         if calibration_mode == "shared-basis":
@@ -1507,7 +1513,9 @@ def train_importance_router(
                         )
                         target = None
                 else:
-                    raise ValueError("router target must be energy, dot, or subset")
+                    raise ValueError(
+                        "router target must be energy, dot, subset, or subset-soft"
+                    )
             scores = (
                 base.subset_router(inputs).float()
                 if base.route_source in {"subset-router", "oracle-subset"}
@@ -2184,6 +2192,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 args.partition_mode, args.route_source,
                 hard_route_scale_schedule[child_index], device, dtype,
                 partition_io=train_io,
+                router_hidden_size=args.router_hidden_size,
             )
             if args.calibration_mode == "teacher-group-decoder":
                 initialize_teacher_group_decoders(
@@ -2480,6 +2489,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "dispatch_mode": args.dispatch_mode,
         "partition_mode": args.partition_mode,
         "route_source": args.route_source,
+        "router_hidden_size": args.router_hidden_size,
+        "router_target": args.router_target,
+        "router_target_temperature": args.router_target_temperature,
         "hard_route_scale": args.hard_route_scale,
         "hard_route_scale_schedule": hard_route_scale_schedule,
         "child_internal_norm": (
@@ -2630,6 +2642,10 @@ def main() -> None:
             "oracle-subset",
         ), default="router",
         help="learned router or diagnostic parent-contribution oracle at eval",
+    )
+    parser.add_argument(
+        "--router-hidden-size", type=int, default=128,
+        help="hidden width of the learned group/subset router",
     )
     parser.add_argument(
         "--hard-route-scale", type=float, default=None,

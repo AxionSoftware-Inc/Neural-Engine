@@ -7,8 +7,9 @@ refinement. The corrected two-layer learned router is still borderline
 the same children passes strongly (`+0.03282`/`+0.03004`). This proves useful
 sparse subsets exist; the remaining bottleneck is router generalization and
 subset regret. Cost-aware soft subset supervision improves seed 2026 to
-`+0.04874` but is not yet a two-seed pass. Do not scale to 700M/1B until the
-corrected two-layer reference is stable. See
+`+0.04874` but is not yet a two-seed pass; README-domain calibration worsens
+to `+0.08689`, and a 64-wide router worsens seed 2027 to `+0.05490`. Do not
+scale to 700M/1B until the corrected two-layer reference is stable. See
 `V0_174_CORRECTED_ROUTING_AND_EXPERT_AUDIT.md`.
 
 V0.173 fixes a real full-active routing bug: when `K=E`, the hard path must

@@ -56,10 +56,18 @@ development text.
 | subset-soft, temperature 0.25 | `+0.04874` | `+0.05079` | promising but not a two-seed pass |
 | subset-soft, temperature 0.50 | — | `+0.05229` | reject for now |
 | subset-soft, temperature 0.10 | — | `+0.05399` | reject for now |
+| subset-soft, router hidden 64 | — | `+0.05490` | reject; width alone is not the fix |
 
 The block objective did not repair the handoff by itself. The soft cost-aware
 router is a real but small improvement; it must not yet be called the final
 solution.
+
+Two additional controls reject simple data/width explanations. Using 12
+calibration batches from the broader repository README instead of the matched
+Qwen calibration text worsened seed 2026 to `+0.08689` (paired oracle
+`+0.04375`), so more distribution-shifted text is not automatically useful.
+Reducing the router hidden width from 128 to 64 worsened seed 2027 to
+`+0.05490`.
 
 ## Causal controls and oracle headroom
 
