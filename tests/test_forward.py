@@ -140,6 +140,20 @@ def test_forced_route_replay_preserves_recorded_circuit_path():
     assert torch.equal(replay_stats["selected_ids"], original["selected_ids"])
 
 
+def test_forced_route_replay_allows_per_step_no_override_sentinel():
+    model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
+                           num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,
+                           candidate_pool=4, active_circuits=2, internal_steps=2)
+    batch = SyntheticTaskGenerator(seed=131).batch(4)
+    with torch.no_grad():
+        _, original = model(batch.inputs, adaptive=False)
+        partial_ids = original["selected_ids"].clone()
+        partial_ids[:, 0] = -1
+        _, partial = model(batch.inputs, adaptive=False, forced_selected_ids=partial_ids)
+    assert torch.equal(partial["selected_ids"][:, 1], original["selected_ids"][:, 1])
+    assert bool(partial["selected_ids"][:, 0].ge(0).all())
+
+
 def test_family_local_router_uses_semantic_task_family():
     model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
                            num_circuits=16, circuit_rank=4, router_branch=2, router_depth=2,

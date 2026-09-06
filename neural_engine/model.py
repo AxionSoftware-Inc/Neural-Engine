@@ -7,7 +7,7 @@ from .circuits import MicroCircuitBank
 from .encoding import (VALUE_HARMONICS, VALUE_MODULUS, VALUE_TOKEN_OFFSET,
                        encode_tokens)
 from .instrumentation import count_parameters
-from .router import HierarchicalRouter, StableFamilyRouter
+from .router import FlatRouter, HierarchicalRouter, StableFamilyRouter
 from .state import PersistentState
 
 
@@ -53,8 +53,8 @@ class NeuralEngineV0(nn.Module):
         self.route_exploration_prob = route_exploration_prob
         self.input_reinjection = input_reinjection
         self.memory_write_mode = memory_write_mode
-        if router_variant not in {"global", "family_local", "family_conditioned"}:
-            raise ValueError("router_variant must be 'global', 'family_local', or 'family_conditioned'")
+        if router_variant not in {"global", "flat", "family_local", "family_conditioned"}:
+            raise ValueError("router_variant must be 'global', 'flat', 'family_local', or 'family_conditioned'")
         if router_variant in {"family_local", "family_conditioned"} and family_count < 2:
             raise ValueError("NeuralEngineV0 semantic family routing requires at least two families")
         self.router_variant = router_variant
@@ -85,6 +85,12 @@ class NeuralEngineV0(nn.Module):
                 routing_capacity=routing_capacity, routing_depth=routing_depth,
                 family_count=family_count, shared_fraction=shared_fraction,
             )
+        elif router_variant == "flat":
+            self.router = FlatRouter(
+                state_dim, num_circuits, router_branch, router_depth,
+                candidate_pool, active_circuits, router_addresses,
+                routing_capacity=routing_capacity, routing_depth=routing_depth,
+                soft_routing_temperature=soft_routing_temperature)
         else:
             self.router = HierarchicalRouter(
                 state_dim, num_circuits, router_branch, router_depth,
@@ -159,6 +165,7 @@ class NeuralEngineV0(nn.Module):
         batch_size = inputs.shape[0]
         num_classes = self.output[-1].out_features
         selected_steps = []
+        candidate_steps = []
         coverage_losses = []
         routing_target_losses = []
         soft_route = (self.training and getattr(self.router, "soft_routing_temperature", 0.0) > 0.0
@@ -178,8 +185,8 @@ class NeuralEngineV0(nn.Module):
             expected_shape = (batch_size, self.internal_steps, self.active_circuits)
             if tuple(forced_selected_ids.shape) != expected_shape:
                 raise ValueError(f"forced_selected_ids must have shape {expected_shape}")
-            if (forced_selected_ids < 0).any():
-                raise ValueError("forced_selected_ids must contain valid circuit IDs for every step")
+            if (forced_selected_ids < -1).any():
+                raise ValueError("forced_selected_ids may use -1 only as a no-override sentinel")
             if forced_selected_weights is not None and tuple(forced_selected_weights.shape) != expected_shape:
                 raise ValueError(f"forced_selected_weights must have shape {expected_shape}")
             if forced_route_gains is not None and tuple(forced_route_gains.shape) != (batch_size, self.internal_steps):
@@ -193,8 +200,11 @@ class NeuralEngineV0(nn.Module):
             active_indices = active.nonzero(as_tuple=False).squeeze(-1)
             selected_step = torch.full((batch_size, route_width), -1,
                                        dtype=torch.long, device=inputs.device)
+            candidate_step = torch.full((batch_size, self.router.candidate_pool), -1,
+                                        dtype=torch.long, device=inputs.device)
             if active_indices.numel() == 0:
                 selected_steps.append(selected_step)
+                candidate_steps.append(candidate_step)
                 step_logits[:, step] = last_logits
                 continue
             active_state = state[active_indices]
@@ -229,20 +239,32 @@ class NeuralEngineV0(nn.Module):
             else:
                 selected, weights, route_stats = self.router(router_query, **router_kwargs)
             route_gain = route_stats["route_gain"]
+            route_candidates = route_stats.get("candidate_ids")
+            if route_candidates is not None and route_candidates.shape[-1] == self.router.candidate_pool:
+                candidate_step[active_indices] = route_candidates
             if "routing_coverage_loss" in route_stats:
                 coverage_losses.append(route_stats["routing_coverage_loss"])
             if "routing_target_loss" in route_stats:
                 routing_target_losses.append(route_stats["routing_target_loss"])
             if forced_selected_ids is not None:
-                selected = forced_selected_ids[active_indices, step].to(device=inputs.device)
-                if forced_selected_weights is None:
-                    weights = torch.full((active_indices.numel(), self.active_circuits),
-                                         1.0 / self.active_circuits, device=inputs.device)
-                else:
-                    weights = forced_selected_weights[active_indices, step].to(device=inputs.device)
-                route_gain = (torch.ones_like(route_gain)
-                              if forced_route_gains is None
-                              else forced_route_gains[active_indices, step].to(device=inputs.device))
+                forced_ids = forced_selected_ids[active_indices, step].to(device=inputs.device)
+                override = forced_ids[:, 0].ge(0)
+                if override.any():
+                    selected = torch.where(override.unsqueeze(-1), forced_ids, selected)
+                    if forced_selected_weights is None:
+                        override_weights = torch.full(
+                            (active_indices.numel(), self.active_circuits),
+                            1.0 / self.active_circuits, device=inputs.device)
+                    else:
+                        override_weights = forced_selected_weights[active_indices, step].to(
+                            device=inputs.device)
+                    weights = torch.where(override.unsqueeze(-1), override_weights, weights)
+                    if forced_route_gains is None:
+                        override_gains = torch.ones_like(route_gain)
+                    else:
+                        override_gains = forced_route_gains[active_indices, step].to(
+                            device=inputs.device)
+                    route_gain = torch.where(override, override_gains, route_gain)
                 if self.circuit_mode == "serial":
                     circuit_delta = self.circuits.forward_serial(step_query, selected, weights)
                 else:
@@ -271,6 +293,7 @@ class NeuralEngineV0(nn.Module):
                 state = next_state
             selected_step[active_indices] = selected
             selected_steps.append(selected_step)
+            candidate_steps.append(candidate_step)
             selected_weights[active_indices, step] = weights
             route_gains[active_indices, step] = route_gain
             executed_mask[active_indices, step] = True
@@ -295,6 +318,7 @@ class NeuralEngineV0(nn.Module):
             "internal_steps": torch.tensor(self.internal_steps, device=inputs.device),
             "router_entropy": step_entropies.sum() / executed_mask.sum().clamp_min(1),
             "selected_ids": torch.stack(selected_steps, dim=1),
+            "candidate_ids": torch.stack(candidate_steps, dim=1),
             "selected_weights": selected_weights,
             "route_gains": route_gains,
             "step_logits": step_logits,
@@ -316,7 +340,8 @@ class NeuralEngineV0(nn.Module):
             shared += count_parameters(self.value_encoder)
         shared += self.position_scale.numel() + self.position_bias.numel() + count_parameters(self.encoder)
         shared += count_parameters(self.state) + self.step_embedding.numel()
-        shared += self.router.level_projections.numel() + self.router.level_bias.numel()
+        if hasattr(self.router, "level_projections"):
+            shared += self.router.level_projections.numel() + self.router.level_bias.numel()
         if self.router_variant == "family_local":
             shared += self.router.family_embeddings.numel()
         elif self.router_variant == "family_conditioned":

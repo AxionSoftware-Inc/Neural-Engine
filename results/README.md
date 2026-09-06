@@ -5,6 +5,8 @@
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
+- [V0.178 — Route retrieval vs selection audit](V0_178_ROUTE_RETRIEVAL_SELECTION_AUDIT.md)
+- [V0.179 — Flat full-bank router screen](V0_179_FLAT_ROUTER_SCREEN.md)
 
 V0.174 follows the expert audit in `KEYINGI_YOL_2026-09-06.md` and fixes the
 hard-training/grouped-inference scale mismatch plus stale copied-expert

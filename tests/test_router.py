@@ -1,6 +1,6 @@
 import torch
 
-from neural_engine.router import HierarchicalRouter
+from neural_engine.router import FlatRouter, HierarchicalRouter
 
 
 def test_router_returns_local_structured_selection():
@@ -39,6 +39,19 @@ def test_router_target_supervision_reaches_tree_and_keys():
     assert torch.isfinite(stats["routing_target_loss"])
     stats["routing_target_loss"].backward()
     assert router.level_projections.grad is not None
+    assert router.keys.grad is not None
+
+
+def test_flat_router_scores_full_bank_but_executes_topk():
+    router = FlatRouter(32, num_circuits=32, candidate_pool=8, active_circuits=2)
+    state = torch.randn(7, 32)
+    selected, weights, stats = router(state)
+    assert selected.shape == (7, 2)
+    assert weights.shape == (7, 2)
+    assert stats["candidate_ids"].shape == (7, 8)
+    assert int(stats["candidate_ids"].max()) < 32
+    loss = selected.float().mean() * 0.0 + weights.square().mean()
+    loss.backward()
     assert router.keys.grad is not None
 
 

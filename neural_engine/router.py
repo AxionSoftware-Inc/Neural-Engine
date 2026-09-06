@@ -225,6 +225,114 @@ class HierarchicalRouter(nn.Module):
         return selected_ids, weights, stats
 
 
+class FlatRouter(nn.Module):
+    """Score every reachable circuit key, then execute only the top-k rows.
+
+    This removes hierarchical candidate retrieval while keeping sparse circuit
+    execution.  The full-bank key score is intentionally explicit so its
+    routing cost can be measured separately from circuit-body cost.
+    """
+
+    def __init__(self, state_dim: int, num_circuits: int, branch: int = 8,
+                 depth: int = 4, candidate_pool: int = 32,
+                 active_circuits: int = 8, num_addresses: int = 1,
+                 routing_capacity: int | None = None, routing_depth: int | None = None,
+                 soft_routing_temperature: float = 0.0):
+        super().__init__()
+        if num_addresses != 1:
+            raise ValueError("FlatRouter currently supports one address")
+        if active_circuits > candidate_pool:
+            raise ValueError("active_circuits cannot exceed candidate_pool")
+        if soft_routing_temperature < 0.0:
+            raise ValueError("soft_routing_temperature must be non-negative")
+        self.num_circuits = num_circuits
+        self.branch = branch
+        self.depth = depth
+        self.candidate_pool = candidate_pool
+        self.active_circuits = active_circuits
+        self.num_addresses = num_addresses
+        self.soft_routing_temperature = soft_routing_temperature
+        self.routing_capacity = num_circuits if routing_capacity is None else int(routing_capacity)
+        self.active_depth = 1 if routing_depth is None else int(routing_depth)
+        if not 0 < self.routing_capacity <= num_circuits:
+            raise ValueError("routing_capacity must be between 1 and num_circuits")
+        if self.routing_capacity < candidate_pool:
+            raise ValueError("routing_capacity must be at least candidate_pool")
+        if self.active_depth != 1:
+            raise ValueError("FlatRouter has one routing decision depth")
+        self.keys = nn.Parameter(torch.empty(num_circuits, state_dim))
+        nn.init.normal_(self.keys, std=0.02)
+
+    def set_routing_state(self, *, capacity: int | None = None,
+                          depth: int | None = None) -> None:
+        next_capacity = self.routing_capacity if capacity is None else int(capacity)
+        if not 0 < next_capacity <= self.num_circuits:
+            raise ValueError("routing capacity must be between 1 and num_circuits")
+        if next_capacity < self.candidate_pool:
+            raise ValueError("routing capacity must be at least candidate_pool")
+        if depth is not None and int(depth) != 1:
+            raise ValueError("FlatRouter has one routing decision depth")
+        self.routing_capacity = next_capacity
+        self.active_depth = 1
+
+    def forward(self, state: torch.Tensor, coverage: bool = False,
+                coverage_temperature: float = 0.25,
+                exploration_prob: float = 0.0,
+                routing_offset: int | torch.Tensor = 0,
+                routing_capacity: int | None = None,
+                routing_windows: torch.Tensor | None = None,
+                target_bases: torch.Tensor | None = None,
+                ) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
+        if coverage_temperature <= 0:
+            raise ValueError("coverage_temperature must be positive")
+        if not 0.0 <= exploration_prob <= 1.0:
+            raise ValueError("exploration_prob must be between 0 and 1")
+        if routing_windows is not None or (
+                isinstance(routing_offset, int) and routing_offset != 0):
+            raise ValueError("FlatRouter does not support bank windows")
+        if not isinstance(routing_offset, int):
+            raise ValueError("FlatRouter does not support tensor routing offsets")
+        if target_bases is not None:
+            raise NotImplementedError("FlatRouter has no hierarchical target path")
+        local_capacity = self.routing_capacity if routing_capacity is None else int(routing_capacity)
+        if not 0 < local_capacity <= self.routing_capacity:
+            raise ValueError("routing_capacity must be between 1 and the configured routing capacity")
+        logits = torch.einsum("bd,cd->bc", state, self.keys[:local_capacity])
+        logits = logits / math.sqrt(state.shape[-1])
+        probabilities = F.softmax(logits, dim=-1)
+        entropy = -(probabilities * probabilities.clamp_min(1e-8).log()).sum(dim=-1)
+        pool = min(self.candidate_pool, local_capacity)
+        pool_values, pool_positions = logits.topk(pool, dim=-1)
+        use_soft_route = self.training and self.soft_routing_temperature > 0.0
+        if use_soft_route:
+            selected_ids = pool_positions
+            weights = F.softmax(pool_values / self.soft_routing_temperature, dim=-1)
+        else:
+            selected_values, selected_positions = pool_values.topk(self.active_circuits, dim=-1)
+            selected_ids = pool_positions.gather(1, selected_positions)
+            weights = F.softmax(selected_values, dim=-1)
+        if exploration_prob and self.training:
+            explore = torch.rand(state.shape[0], device=state.device) < exploration_prob
+            random_ids = torch.randint(local_capacity, selected_ids.shape, device=state.device)
+            selected_ids = torch.where(explore.unsqueeze(-1), random_ids, selected_ids)
+            random_weights = torch.full_like(weights, 1.0 / self.active_circuits)
+            weights = torch.where(explore.unsqueeze(-1), random_weights, weights)
+        stats = {
+            "router_entropy": entropy.mean(),
+            "router_decisions": torch.tensor(1, device=state.device),
+            "route_gain": torch.ones(state.shape[0], device=state.device),
+            "candidate_ids": pool_positions,
+            "selected_ids": selected_ids,
+            "soft_route": torch.tensor(use_soft_route, device=state.device),
+        }
+        if coverage:
+            distribution = probabilities.mean(dim=0)
+            stats["routing_coverage_loss"] = (
+                distribution * (distribution.clamp_min(1e-8).log() + math.log(self.num_circuits))
+            ).sum()
+        return selected_ids, weights, stats
+
+
 class StableFamilyRouter(nn.Module):
     """Route within a stable operator/stage family plus a shared fallback.
 
