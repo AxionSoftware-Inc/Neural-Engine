@@ -404,6 +404,18 @@ muammoni hal qilmadi. Batafsil: `results/V0_179_FLAT_ROUTER_SCREEN.md`.
 har ikki seedda `−8.33 pp` bo‘ldi. Batafsil:
 `results/COUPLED_PROBE_ROUTER_AUDIT.md`.
 
+### C-004 — P-001 strided M=8 candidate schedule
+
+**Status:** `REJECTED FOR ADOPTION`
+**Muammo:** P-001
+**Natija:** GPT-5.6-sol expert patchi local 5000-step seed17/18 checkpointlarda
+candidate poolni to‘rtta uzoq windowga bo‘ldi, lekin hard accuracy o‘rtacha
+`−5.69 pp` tushdi (`−6.82/−4.56 pp`), CE ikkala seedda yomonlashdi
+(`+0.4226/+0.1401`), candidate recall ham `−5.69/−7.78 pp` pasaydi. P-001
+gate'laridan faqat protocol, dead-circuit, latency va active-cost guardlar
+o‘tdi; quality/retrieval gate'lari bajarilmadi. Default o‘zgartirilmaydi.
+**Batafsil:** `results/P001_STRIDED_RETRIEVAL_S17_S18_LOCAL.md`.
+
 ## Expertga yuborish uchun qisqa format
 
 ```text
