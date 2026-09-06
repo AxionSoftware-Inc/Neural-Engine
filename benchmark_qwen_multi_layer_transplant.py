@@ -1468,7 +1468,7 @@ def train_importance_router(
     for parameter in all_parameters:
         parameter.requires_grad_(False)
     if base.route_source in {"subset-router", "oracle-subset"}:
-        if target_mode not in {"subset", "subset-soft"}:
+        if target_mode not in {"subset", "subset-soft", "final-subset-soft"}:
             raise ValueError("subset-router requires subset router supervision")
         router_parameters = list(base.subset_router.parameters())
     else:
@@ -1498,7 +1498,21 @@ def train_importance_router(
                     target = F.softmax(
                         torch.log(importance + 1e-8), dim=-1,
                     )
-                elif target_mode in {"subset", "subset-soft"}:
+                elif target_mode in {
+                    "subset", "subset-soft", "final-subset-soft",
+                }:
+                    if target_mode == "final-subset-soft":
+                        if not isinstance(child, CrossGroupOutputMixRoutedQwenChild):
+                            raise ValueError(
+                                "final-subset-soft requires cross-group child"
+                            )
+                        latent = torch.einsum(
+                            "...eh,erh->...er", outputs, child.mix_in,
+                        )
+                        corrections = torch.einsum(
+                            "...er,ehr->...eh", latent, child.mix_out,
+                        )
+                        outputs = outputs + corrections
                     flat_outputs = outputs.reshape(
                         -1, base.num_experts, outputs.shape[-1],
                     )
@@ -1549,14 +1563,15 @@ def train_importance_router(
                         target = None
                 else:
                     raise ValueError(
-                        "router target must be energy, dot, subset, or subset-soft"
+                        "router target must be energy, dot, subset, subset-soft, "
+                        "or final-subset-soft"
                     )
             scores = (
                 base.subset_router(inputs).float()
                 if base.route_source in {"subset-router", "oracle-subset"}
                 else base.router(inputs).float()
             )
-            if target_mode in {"subset", "subset-soft"}:
+            if target_mode in {"subset", "subset-soft", "final-subset-soft"}:
                 if base.route_source in {"subset-router", "oracle-subset"}:
                     if subset_target is None:
                         raise RuntimeError("subset target was not computed")
@@ -2287,7 +2302,11 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                     child, train_io, device, dtype,
                     args.post_router_supervision_steps,
                     args.learning_rate, args.max_grad_norm, args.log_every,
-                    args.router_target,
+                    (
+                        args.post_router_target
+                        if args.post_router_target is not None
+                        else args.router_target
+                    ),
                     args.router_target_temperature,
                 ))
             else:
@@ -2530,6 +2549,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "route_source": args.route_source,
         "router_hidden_size": args.router_hidden_size,
         "router_target": args.router_target,
+        "post_router_target": args.post_router_target,
         "router_target_temperature": args.router_target_temperature,
         "hard_route_scale": args.hard_route_scale,
         "hard_route_scale_schedule": hard_route_scale_schedule,
@@ -2731,8 +2751,16 @@ def main() -> None:
     )
     parser.add_argument(
         "--router-target",
-        choices=("energy", "dot", "subset", "subset-soft"), default="energy",
+        choices=(
+            "energy", "dot", "subset", "subset-soft", "final-subset-soft",
+        ), default="energy",
         help="calibration target for group router supervision",
+    )
+    parser.add_argument(
+        "--post-router-target",
+        choices=("subset", "subset-soft", "final-subset-soft"),
+        default=None,
+        help="optional target override for post-child router supervision",
     )
     parser.add_argument(
         "--router-target-temperature", type=float, default=1.0,
