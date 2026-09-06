@@ -198,7 +198,7 @@ saqlang.
 #### Dalil
 
 CoupledProbeRouter old routerga qaraganda o‘rtacha CE'ni `0.05357` ga
-yaxshildi, lekin hard accuracy faqat `+0.169 pp` bo‘ldi. Ba’zi rejimlarda CE
+yaxshiladi, lekin hard accuracy faqat `+0.169 pp` bo‘ldi. Ba’zi rejimlarda CE
 kamayib, accuracy pasaydi.
 
 #### Muammo ta’rifi
