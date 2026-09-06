@@ -120,6 +120,8 @@ Current routing experiments and rejected hypotheses are recorded in
 [`results/V0_180_PROBEROUTE2_FROZEN_BANK.md`](results/V0_180_PROBEROUTE2_FROZEN_BANK.md).
 The latest ProbeRoute-2 test uses a full-bank retriever, pairwise selector, and
 training-only probe-cost supervision while keeping inference execution sparse.
+Active architecture problems and their acceptance gates are tracked in
+[`problems.md`](problems.md).
 
 Conceptually:
 
