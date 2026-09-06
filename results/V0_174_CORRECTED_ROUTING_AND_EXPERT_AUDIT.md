@@ -93,6 +93,24 @@ a deployment win: the current grouped sparse-bank implementation is about
 are removed. This is evidence that the capacity problem is partly active-budget
 related, not proof that arbitrary scale-up will continue improving quality.
 
+## Four-layer K=6 depth control
+
+The two-layer K=6 setting was then extended to four consecutive layers with
+the same training and routing protocol.
+
+| seed | learned CE delta | paired exact-oracle CE delta | quality gate | timing / parent |
+|---|---:|---:|---|---:|
+| 2026 | `+0.05391` | `+0.04257` | learned fail, oracle pass | `1.566x` |
+| 2027 | `+0.01794` | `+0.00801` | pass | `1.567x` |
+
+This is a mixed result, not a clean four-layer pass. The oracle passes on both
+seeds, so the sparse cells still compose usefully at this depth. The main
+seed-dependent failure is child optimization: the layer-26 local evaluation
+MSE is `3.20` for seed 2026 versus `0.46` for seed 2027. Routing regret is
+present, but it is not sufficient to explain that large difference. The next
+control therefore reduces the hard-phase learning rate before changing the
+architecture or increasing model size.
+
 ## Causal controls and oracle headroom
 
 Single-layer corrected runs pass comfortably:
@@ -134,11 +152,12 @@ quality result, but K=4 remains unstable and the runtime is still worse than
 the dense parent. Therefore this is not yet a general scaling law or a
 deployment claim for 700M/1B.
 
-The next experiment is the corrected four-layer K=6 reference using the same
-calibration/evaluation protocol. If it passes, repeat it on the second seed.
-If the oracle remains good but learned regret rises, focus on router
-generalization and multi-subset supervision; do not add another correction
-cell or jump to 700M/1B first.
+The four-layer K=6 reference is promising but not yet stable across seeds.
+The next experiment holds the architecture fixed and retries the unstable
+seed with a lower hard-phase learning rate. If that removes the child-local
+blow-up, make the schedule part of the controlled recipe and repeat both
+seeds. If it does not, focus on the child interface and router
+generalization; do not add another correction cell or jump to 700M/1B first.
 
 The JSON artifacts for the runs above are kept under `results/runs/` locally;
 that directory remains ignored by the repository, while this report records
