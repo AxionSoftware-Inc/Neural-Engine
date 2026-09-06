@@ -36,8 +36,8 @@ PROMPT_PARITY_TEXTS = (
 
 def parse_layers(value: str) -> list[int]:
     layers = [int(item.strip()) for item in value.split(",") if item.strip()]
-    if len(layers) < 2 or len(set(layers)) != len(layers):
-        raise ValueError("layers must contain at least two distinct indices")
+    if not layers or len(set(layers)) != len(layers):
+        raise ValueError("layers must contain at least one distinct index")
     return layers
 
 
@@ -491,7 +491,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             torch.stack([expert.output_projection.weight for expert in self.experts]),
             persistent=False,
         )
-        if route_source == "subset-router":
+        if route_source in {"subset-router", "oracle-subset"}:
             subset_ids = torch.tensor(
                 list(combinations(range(num_experts), active_experts)),
                 device=parent.gate_proj.weight.device, dtype=torch.long,
@@ -593,7 +593,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         )
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
-        if self.route_source == "subset-router":
+        if self.route_source in {"subset-router", "oracle-subset"}:
             subset_scores = self.subset_router(hidden_states)
             if self.training and not self.hard_train:
                 scores = subset_scores @ self.subset_membership
@@ -710,12 +710,11 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self.last_active_expert_fraction = selected_pairs / max(
             flat_hidden.shape[0] * self.num_experts, 1
         )
-        # Top-k weights are normalized over the selected groups; rescale to
-        # estimate the full intermediate-neuron sum from the active subset.
-        return (
-            self.num_experts / self.active_experts
-            * flat_output.reshape_as(hidden_states)
-        )
+        # Keep token-loop hard training numerically identical to grouped
+        # inference.  The scale is an explicit experiment parameter; using a
+        # second implicit E/K rule here makes the correction learn one
+        # operator and evaluation execute another.
+        return self.hard_route_scale * flat_output.reshape_as(hidden_states)
 
 
 class TransferredRoutedQwenNeuronChild(torch.nn.Module):
@@ -1411,6 +1410,7 @@ def train_importance_router(
     max_grad_norm: float,
     log_every: int,
     target_mode: str = "energy",
+    target_temperature: float = 1.0,
 ) -> list[dict[str, float]]:
     """Distill group importance or exact best-subset labels into the router."""
     base = next(
@@ -1426,8 +1426,8 @@ def train_importance_router(
     previous_requires_grad = [parameter.requires_grad for parameter in all_parameters]
     for parameter in all_parameters:
         parameter.requires_grad_(False)
-    if base.route_source == "subset-router":
-        if target_mode != "subset":
+    if base.route_source in {"subset-router", "oracle-subset"}:
+        if target_mode not in {"subset", "subset-soft"}:
             raise ValueError("subset-router requires subset router supervision")
         router_parameters = list(base.subset_router.parameters())
     else:
@@ -1457,7 +1457,7 @@ def train_importance_router(
                     target = F.softmax(
                         torch.log(importance + 1e-8), dim=-1,
                     )
-                elif target_mode == "subset":
+                elif target_mode in {"subset", "subset-soft"}:
                     flat_outputs = outputs.reshape(
                         -1, base.num_experts, outputs.shape[-1],
                     )
@@ -1491,29 +1491,46 @@ def train_importance_router(
                     )
                     best_subset_index = errors.argmin(dim=-1)
                     best_subset = subset_ids[best_subset_index]
-                    subset_target = best_subset_index
-                    target = F.one_hot(
-                        best_subset, num_classes=base.num_experts,
-                    ).sum(dim=1).float().reshape(
-                        *inputs.shape[:-1], base.num_experts,
-                    )
+                    if target_mode == "subset":
+                        subset_target = best_subset_index
+                        target = F.one_hot(
+                            best_subset, num_classes=base.num_experts,
+                        ).sum(dim=1).float().reshape(
+                            *inputs.shape[:-1], base.num_experts,
+                        )
+                    else:
+                        if target_temperature <= 0:
+                            raise ValueError("router target temperature must be positive")
+                        centered_errors = errors - errors.min(dim=-1, keepdim=True).values
+                        subset_target = F.softmax(
+                            -centered_errors / target_temperature, dim=-1,
+                        )
+                        target = None
                 else:
                     raise ValueError("router target must be energy, dot, or subset")
             scores = (
                 base.subset_router(inputs).float()
-                if base.route_source == "subset-router"
+                if base.route_source in {"subset-router", "oracle-subset"}
                 else base.router(inputs).float()
             )
-            if target_mode == "subset":
-                if base.route_source == "subset-router":
+            if target_mode in {"subset", "subset-soft"}:
+                if base.route_source in {"subset-router", "oracle-subset"}:
                     if subset_target is None:
                         raise RuntimeError("subset target was not computed")
-                    loss = F.cross_entropy(
-                        scores.reshape(-1, scores.shape[-1]),
-                        subset_target.reshape(-1),
-                    )
+                    if target_mode == "subset":
+                        loss = F.cross_entropy(
+                            scores.reshape(-1, scores.shape[-1]),
+                            subset_target.reshape(-1),
+                        )
+                    else:
+                        loss = -(
+                            subset_target
+                            * F.log_softmax(scores.reshape(-1, scores.shape[-1]), dim=-1)
+                        ).sum(dim=-1).mean()
                 else:
-                    loss = F.binary_cross_entropy_with_logits(scores, target)
+                    raise ValueError(
+                        "subset supervision requires a subset-router child"
+                    )
             else:
                 loss = F.kl_div(
                     F.log_softmax(scores, dim=-1), target, reduction="batchmean",
@@ -1532,6 +1549,87 @@ def train_importance_router(
         for parameter, previous in zip(all_parameters, previous_requires_grad):
             parameter.requires_grad_(previous)
     return history
+
+
+@torch.no_grad()
+def routing_diagnostics(
+    child: torch.nn.Module,
+    io_batches: list[dict[str, torch.Tensor]],
+    device: torch.device,
+    dtype: torch.dtype,
+) -> dict[str, float]:
+    """Measure learned-vs-best-subset routing on held-out child inputs."""
+    base = next(
+        nested for nested in child.modules()
+        if isinstance(nested, TransferredRoutedQwenChild)
+    )
+    if base.route_source not in {"subset-router", "oracle-subset"}:
+        return {}
+    exact_matches = 0
+    total_tokens = 0
+    learned_mse = 0.0
+    oracle_mse = 0.0
+    for batch in io_batches:
+        inputs = batch["input"].to(device=device, dtype=dtype)
+        target = batch["output"].to(device=device, dtype=torch.float32)
+        outputs = torch.stack([
+            expert(inputs) for expert in base.experts
+        ], dim=-2).float()
+        flat_outputs = outputs.reshape(-1, base.num_experts, outputs.shape[-1])
+        flat_target = target.reshape(-1, outputs.shape[-1])
+        gram = torch.einsum("neh,nfh->nef", flat_outputs, flat_outputs)
+        cross = torch.einsum("neh,nh->ne", flat_outputs, flat_target)
+        subset_ids = torch.tensor(
+            list(combinations(
+                range(base.num_experts), base.active_experts,
+            )), device=device, dtype=torch.long,
+        )
+        membership = F.one_hot(
+            subset_ids, num_classes=base.num_experts,
+        ).sum(dim=1).float()
+        pair_energy = torch.einsum(
+            "ce,nef,cf->nc", membership, gram, membership,
+        )
+        cross_energy = cross @ membership.transpose(0, 1)
+        coefficient = base.hard_route_scale / base.active_experts
+        errors = (
+            coefficient * coefficient * pair_energy
+            - 2.0 * coefficient * cross_energy
+            + flat_target.square().sum(dim=-1, keepdim=True)
+        )
+        best_subset_index = errors.argmin(dim=-1)
+        best_membership = membership[best_subset_index]
+        if base.route_source == "subset-router":
+            predicted_subset_index = base.subset_router(inputs).argmax(dim=-1)
+            predicted_subset_index = predicted_subset_index.reshape(-1)
+        else:
+            predicted_subset_index = best_subset_index
+        predicted_membership = membership[predicted_subset_index]
+        learned_output = coefficient * (
+            flat_outputs * predicted_membership.unsqueeze(-1)
+        ).sum(dim=1)
+        oracle_output = coefficient * (
+            flat_outputs * best_membership.unsqueeze(-1)
+        ).sum(dim=1)
+        exact_matches += int(
+            (predicted_subset_index == best_subset_index).sum().item()
+        )
+        total_tokens += int(best_subset_index.numel())
+        learned_mse += float(
+            F.mse_loss(learned_output, flat_target, reduction="sum").item()
+        )
+        oracle_mse += float(
+            F.mse_loss(oracle_output, flat_target, reduction="sum").item()
+        )
+    denominator = max(total_tokens * int(base.group_gate_weight.shape[-1]), 1)
+    learned_mse /= denominator
+    oracle_mse /= denominator
+    return {
+        "exact_subset_match": exact_matches / max(total_tokens, 1),
+        "learned_mse": learned_mse,
+        "oracle_mse": oracle_mse,
+        "subset_regret": learned_mse - oracle_mse,
+    }
 
 
 def train_neuron_importance_router(
@@ -1592,6 +1690,168 @@ def train_neuron_importance_router(
     return history
 
 
+def _freeze_sparse_copied_and_router_parameters(
+    module: torch.nn.Module,
+) -> None:
+    """Keep transferred cells and route decisions fixed during refinement."""
+    for nested in module.modules():
+        if isinstance(nested, TransferredRoutedQwenChild):
+            for parameter in nested.experts.parameters():
+                parameter.requires_grad_(False)
+            router = getattr(nested, "subset_router", None)
+            if router is None:
+                router = getattr(nested, "router", None)
+            if router is not None:
+                for parameter in router.parameters():
+                    parameter.requires_grad_(False)
+        elif isinstance(nested, TransferredRoutedQwenNeuronChild):
+            for parameter in nested.router.parameters():
+                parameter.requires_grad_(False)
+
+
+def capture_layer_outputs(
+    model: torch.nn.Module,
+    input_batches: list[torch.Tensor],
+    layer: torch.nn.Module,
+) -> list[torch.Tensor]:
+    """Capture a layer's post-block hidden state without changing the model."""
+    outputs = []
+    for ids in input_batches:
+        captured: dict[str, torch.Tensor] = {}
+
+        def hook(
+            _module: torch.nn.Module,
+            _inputs: tuple[torch.Tensor, ...],
+            output: torch.Tensor | tuple[torch.Tensor, ...],
+        ) -> None:
+            value = output[0] if isinstance(output, tuple) else output
+            captured["output"] = value.detach()
+
+        handle = layer.register_forward_hook(hook)
+        try:
+            with torch.no_grad():
+                model(input_ids=ids, use_cache=False)
+        finally:
+            handle.remove()
+        if "output" not in captured:
+            raise RuntimeError("layer output hook did not capture a value")
+        outputs.append(captured["output"].to(device="cpu", dtype=torch.float16))
+    return outputs
+
+
+def run_with_layer_output(
+    model: torch.nn.Module,
+    ids: torch.Tensor,
+    layer: torch.nn.Module,
+) -> torch.Tensor:
+    """Run a differentiable model forward and return one layer's output."""
+    captured: dict[str, torch.Tensor] = {}
+
+    def hook(
+        _module: torch.nn.Module,
+        _inputs: tuple[torch.Tensor, ...],
+        output: torch.Tensor | tuple[torch.Tensor, ...],
+    ) -> None:
+        captured["output"] = output[0] if isinstance(output, tuple) else output
+
+    handle = layer.register_forward_hook(hook)
+    try:
+        model(input_ids=ids, use_cache=False)
+    finally:
+        handle.remove()
+    if "output" not in captured:
+        raise RuntimeError("layer output hook did not capture a value")
+    return captured["output"]
+
+
+def hard_route_block_refine(
+    model: torch.nn.Module,
+    layers: list[torch.nn.Module],
+    children: list[torch.nn.Module],
+    local_io_batches: list[list[dict[str, torch.Tensor]]],
+    input_batches: list[torch.Tensor],
+    teacher_block_outputs: list[torch.Tensor],
+    device: torch.device,
+    steps: int,
+    learning_rate: float,
+    local_weight: float,
+    block_weight: float,
+    max_grad_norm: float,
+    log_every: int,
+) -> list[dict[str, float]]:
+    """Train a hard two-layer block while retaining local child fidelity."""
+    if len(layers) != 2 or len(children) != 2:
+        raise ValueError("hard-route block refinement currently requires two layers")
+    if len(input_batches) != len(teacher_block_outputs):
+        raise ValueError("block inputs and teacher outputs must have equal length")
+    for layer, child in zip(layers, children):
+        layer.mlp = child
+    model_parameters = list(model.parameters())
+    previous_requires_grad = [parameter.requires_grad for parameter in model_parameters]
+    for parameter in model_parameters:
+        parameter.requires_grad_(False)
+    for child in children:
+        for parameter in child.parameters():
+            parameter.requires_grad_(True)
+        _freeze_sparse_copied_and_router_parameters(child)
+    trainable_parameters = [
+        parameter for child in children for parameter in child.parameters()
+        if parameter.requires_grad
+    ]
+    if not trainable_parameters:
+        raise ValueError("hard-route block has no trainable correction parameters")
+    previous_hard_train = []
+    for child in children:
+        previous_hard_train.extend(_set_hard_train_modules(child, True))
+        child.train()
+    optimizer = torch.optim.AdamW(trainable_parameters, lr=learning_rate)
+    history = []
+    try:
+        for step in range(1, steps + 1):
+            index = (step - 1) % len(input_batches)
+            ids = input_batches[index]
+            student_block = run_with_layer_output(model, ids, layers[-1]).float()
+            teacher_block = teacher_block_outputs[index].to(
+                device=device, dtype=torch.float32,
+            )
+            block_scale = teacher_block.square().mean().clamp_min(1e-6)
+            block_loss = F.mse_loss(student_block, teacher_block) / block_scale
+            local_loss = torch.zeros((), device=device, dtype=torch.float32)
+            for child, child_batches in zip(children, local_io_batches):
+                local_batch = child_batches[index]
+                local_input = local_batch["input"].to(device=device, dtype=student_block.dtype)
+                local_target = local_batch["output"].to(device=device, dtype=torch.float32)
+                local_prediction = child(local_input).float()
+                local_scale = local_target.square().mean().clamp_min(1e-6)
+                local_loss = local_loss + (
+                    F.mse_loss(local_prediction, local_target) / local_scale
+                )
+            loss = local_weight * local_loss + block_weight * block_loss
+            if not torch.isfinite(loss):
+                raise FloatingPointError(
+                    f"non-finite block loss at step {step}"
+                )
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(trainable_parameters, max_grad_norm)
+            optimizer.step()
+            if step == 1 or step % log_every == 0 or step == steps:
+                history.append({
+                    "step": step,
+                    "loss": float(loss.detach().cpu()),
+                    "local_loss": float(local_loss.detach().cpu()),
+                    "block_loss": float(block_loss.detach().cpu()),
+                })
+    finally:
+        for parameter, previous in zip(model_parameters, previous_requires_grad):
+            parameter.requires_grad_(previous)
+        for nested, previous in previous_hard_train:
+            nested.hard_train = previous
+    for child in children:
+        child.eval()
+    return history
+
+
 def joint_logit_refine_many(
     model: torch.nn.Module,
     layers: list[torch.nn.Module],
@@ -1609,15 +1869,24 @@ def joint_logit_refine_many(
     for layer, child in zip(layers, children):
         layer.mlp = child
     model_parameters = list(model.parameters())
-    child_parameters = [parameter for child in children for parameter in child.parameters()]
     previous_requires_grad = [parameter.requires_grad for parameter in model_parameters]
     previous_hard_train = []
     for child in children:
         previous_hard_train.extend(_set_hard_train_modules(child, True))
     for parameter in model_parameters:
         parameter.requires_grad_(False)
-    for parameter in child_parameters:
-        parameter.requires_grad_(True)
+    for child in children:
+        for parameter in child.parameters():
+            parameter.requires_grad_(True)
+        _freeze_sparse_copied_and_router_parameters(child)
+    child_parameters = [
+        parameter for child in children for parameter in child.parameters()
+        if parameter.requires_grad
+    ]
+    if not child_parameters:
+        for child in children:
+            child.eval()
+        return []
     optimizer = torch.optim.AdamW(child_parameters, lr=learning_rate)
     history = []
     for child in children:
@@ -1696,9 +1965,17 @@ def layerwise_logit_refine_many(
                 later_layer.mlp = later_parent
             for parameter in model_parameters:
                 parameter.requires_grad_(False)
-            child_parameters = list(child.parameters())
-            for parameter in child_parameters:
+            for parameter in child.parameters():
                 parameter.requires_grad_(True)
+            _freeze_sparse_copied_and_router_parameters(child)
+            child_parameters = [
+                parameter for parameter in child.parameters()
+                if parameter.requires_grad
+            ]
+            if not child_parameters:
+                child.eval()
+                history.append([])
+                continue
             previous_hard_train = _set_hard_train_modules(child, True)
             optimizer = torch.optim.AdamW(child_parameters, lr=learning_rate)
             child_history: list[dict[str, float]] = []
@@ -1861,11 +2138,23 @@ def run(args: argparse.Namespace) -> dict[str, object]:
 
     layers = [model.model.layers[index] for index in layer_indices]
     parents = [layer.mlp for layer in layers]
+    block_teacher_outputs = []
+    if args.block_distill_steps > 0:
+        if len(layer_indices) != 2 or layer_indices[1] != layer_indices[0] + 1:
+            raise ValueError(
+                "block distillation currently requires two consecutive layers"
+            )
+        block_teacher_outputs = capture_layer_outputs(
+            model, list(train_ids), layers[-1],
+        )
     hidden_size = int(model.config.hidden_size)
     children = []
     histories = []
     router_histories = []
+    post_router_histories = []
+    routing_metrics = []
     local_eval_mse = []
+    child_train_io = []
 
     for layer_index, layer in zip(layer_indices, layers):
         train_io = capture_batches(
@@ -1876,12 +2165,14 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             model, tokenizer, eval_text, args.batch_size,
             args.sequence_length, args.eval_batches, device, layer_index,
         )
+        child_train_io.append(train_io)
         if args.child_kind == "qwen-transfer":
             child = make_transferred_qwen_child(
                 parents[len(children)], args.calibration_rank, device, dtype,
             )
             histories.append([])
             router_histories.append([])
+            post_router_histories.append([])
         elif args.child_kind == "qwen-transfer-sparse":
             child_index = len(children)
             child = make_transferred_routed_qwen_child(
@@ -1906,9 +2197,10 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 child, train_io, device, dtype, args.router_supervision_steps,
                 args.learning_rate, args.max_grad_norm, args.log_every,
                 args.router_target,
+                args.router_target_temperature,
             ))
             frozen_subset_router = []
-            if args.route_source == "subset-router":
+            if args.route_source in {"subset-router", "oracle-subset"}:
                 route_base = next(
                     nested for nested in child.modules()
                     if isinstance(nested, TransferredRoutedQwenChild)
@@ -1938,6 +2230,23 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                     if isinstance(nested, OutputContractRoutedQwenChild)
                 )
                 contract.fit(train_io, device)
+            if (
+                args.post_router_supervision_steps > 0
+                and args.route_source in {"subset-router", "oracle-subset"}
+            ):
+                # The child correction is now fixed.  Recompute exact
+                # best-subset labels against the final copied/corrected child
+                # before the last router fit; pre-training labels can become
+                # stale after hard child optimization.
+                post_router_histories.append(train_importance_router(
+                    child, train_io, device, dtype,
+                    args.post_router_supervision_steps,
+                    args.learning_rate, args.max_grad_norm, args.log_every,
+                    args.router_target,
+                    args.router_target_temperature,
+                ))
+            else:
+                post_router_histories.append([])
         elif args.child_kind == "qwen-transfer-neuron-sparse":
             child = make_transferred_routed_qwen_neuron_child(
                 parents[len(children)], args.active_neurons,
@@ -1955,6 +2264,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 args.hard_train_steps,
                 args.hard_learning_rate,
             ))
+            post_router_histories.append([])
         elif args.child_kind == "qwen-latent-basis":
             child_index = len(children)
             child = make_learned_latent_basis_qwen_child(
@@ -1970,6 +2280,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 args.hard_learning_rate,
             ))
             router_histories.append([])
+            post_router_histories.append([])
         else:
             child = make_child(
                 hidden_size, args.inner_size, args.child_kind,
@@ -1984,6 +2295,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 args.hard_learning_rate,
             ))
             router_histories.append([])
+            post_router_histories.append([])
         with torch.no_grad():
             mse = sum(
                 F.mse_loss(
@@ -1993,11 +2305,24 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 for batch in eval_io
             ) / len(eval_io)
         local_eval_mse.append(mse)
+        routing_metrics.append(routing_diagnostics(child, eval_io, device, dtype))
         children.append(child)
         # The next child is calibrated on the representation produced by all
         # previously trained children, matching the eventual cascade.
         layer.mlp = child
 
+    block_history = []
+    if args.block_distill_steps > 0:
+        if args.child_kind != "qwen-transfer-sparse":
+            raise ValueError(
+                "block distillation currently requires qwen-transfer-sparse"
+            )
+        block_history = hard_route_block_refine(
+            model, layers, children, child_train_io, list(train_ids),
+            block_teacher_outputs, device, args.block_distill_steps,
+            args.block_distill_learning_rate, args.block_local_weight,
+            args.block_distill_weight, args.max_grad_norm, args.log_every,
+        )
     joint_history = []
     layerwise_history = []
     if args.layerwise_steps > 0:
@@ -2024,6 +2349,47 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         ))
     for layer, parent in zip(layers, parents):
         layer.mlp = parent
+
+    leave_one_child_variants = []
+    if args.leave_one_child_ablation and len(children) > 1:
+        for ablated_index, (ablated_layer, ablated_parent) in enumerate(
+            zip(layers, parents)
+        ):
+            for index, (layer, parent, child) in enumerate(
+                zip(layers, parents, children)
+            ):
+                layer.mlp = parent if index == ablated_index else child
+            leave_one_child_variants.append(evaluate_current(
+                model, list(eval_ids), teacher_logits, teacher_ce,
+                f"leave_out_layer_{layer_indices[ablated_index]}",
+            ))
+        for layer, parent in zip(layers, parents):
+            layer.mlp = parent
+
+    paired_oracle_variants = []
+    if args.paired_oracle_routing:
+        route_bases = []
+        for child in children:
+            route_base = next(
+                nested for nested in child.modules()
+                if isinstance(nested, TransferredRoutedQwenChild)
+            )
+            if route_base.route_source not in {"subset-router", "oracle-subset"}:
+                raise ValueError(
+                    "paired oracle routing requires subset-router children"
+                )
+            route_bases.append(route_base)
+            route_base.route_source = "oracle-subset"
+        for layer, child in zip(layers, children):
+            layer.mlp = child
+        paired_oracle_variants.append(evaluate_current(
+            model, list(eval_ids), teacher_logits, teacher_ce,
+            "paired_oracle_routing_alpha_0",
+        ))
+        for route_base in route_bases:
+            route_base.route_source = "subset-router"
+        for layer, parent in zip(layers, parents):
+            layer.mlp = parent
 
     prompt_results = []
     if args.prompt_parity:
@@ -2132,18 +2498,26 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "hard_train_steps_per_child": args.hard_train_steps,
         "hard_learning_rate": args.hard_learning_rate,
         "router_supervision_steps_per_child": args.router_supervision_steps,
+        "post_router_supervision_steps_per_child": args.post_router_supervision_steps,
         "joint_distillation_steps": args.joint_steps,
         "joint_training_corpus": "calibration" if args.joint_steps > 0 else None,
         "joint_calibration_batches": args.joint_calibration_batches,
         "joint_batch_size": args.joint_batch_size,
         "joint_learning_rate": args.joint_learning_rate,
         "joint_temperature": args.joint_temperature,
+        "block_distillation_steps": args.block_distill_steps,
+        "block_distillation_learning_rate": args.block_distill_learning_rate,
+        "block_local_weight": args.block_local_weight,
+        "block_distillation_weight": args.block_distill_weight,
+        "block_train_history": block_history,
         "layerwise_distillation_steps": args.layerwise_steps,
         "layerwise_learning_rate": args.layerwise_learning_rate,
         "layerwise_train_history": layerwise_history,
         "teacher_ce": teacher_ce,
         "child_train_history": histories,
         "router_train_history": router_histories,
+        "post_router_train_history": post_router_histories,
+        "routing_metrics": routing_metrics,
         "joint_train_history": joint_history,
         "prompt_parity": prompt_results,
         "child_local_eval_mse": local_eval_mse,
@@ -2162,6 +2536,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             )
         ],
         "variants": variants,
+        "leave_one_child_variants": leave_one_child_variants,
+        "paired_oracle_variants": paired_oracle_variants,
         "timing": {
             "parent": parent_timing,
             "sparse_bank": sparse_timing,
@@ -2290,8 +2666,17 @@ def main() -> None:
         help="steps distilling frozen expert contribution importance into the router",
     )
     parser.add_argument(
-        "--router-target", choices=("energy", "dot", "subset"), default="energy",
+        "--post-router-supervision-steps", type=int, default=0,
+        help="extra exact-subset router steps after child correction training",
+    )
+    parser.add_argument(
+        "--router-target",
+        choices=("energy", "dot", "subset", "subset-soft"), default="energy",
         help="calibration target for group router supervision",
+    )
+    parser.add_argument(
+        "--router-target-temperature", type=float, default=1.0,
+        help="temperature for cost-aware subset-soft router supervision",
     )
     parser.add_argument("--joint-steps", type=int, default=0)
     parser.add_argument(
@@ -2304,6 +2689,22 @@ def main() -> None:
     )
     parser.add_argument("--joint-learning-rate", type=float, default=1e-4)
     parser.add_argument("--joint-temperature", type=float, default=2.0)
+    parser.add_argument(
+        "--block-distill-steps", type=int, default=0,
+        help="hard two-layer block refinement steps",
+    )
+    parser.add_argument(
+        "--block-distill-learning-rate", type=float, default=1e-5,
+        help="learning rate for hard two-layer block refinement",
+    )
+    parser.add_argument(
+        "--block-local-weight", type=float, default=1.0,
+        help="normalized local child-loss weight during block refinement",
+    )
+    parser.add_argument(
+        "--block-distill-weight", type=float, default=1.0,
+        help="normalized two-layer block-loss weight during block refinement",
+    )
     parser.add_argument(
         "--layerwise-steps", type=int, default=0,
         help="task-loss refinement steps for each sparse child in cascade order",
@@ -2319,6 +2720,14 @@ def main() -> None:
     parser.add_argument("--log-every", type=int, default=100)
     parser.add_argument("--max-ce-delta", type=float, default=0.05)
     parser.add_argument("--alphas", type=float, nargs="+", default=[1.0, 0.75, 0.5, 0.25, 0.0])
+    parser.add_argument(
+        "--leave-one-child-ablation", action="store_true",
+        help="evaluate each replaced layer with its original parent restored",
+    )
+    parser.add_argument(
+        "--paired-oracle-routing", action="store_true",
+        help="re-evaluate the same trained children with exact best-subset routing",
+    )
     parser.add_argument("--timing-warmup", type=int, default=10)
     parser.add_argument("--timing-iterations", type=int, default=30)
     parser.add_argument("--seed", type=int, default=2026)
