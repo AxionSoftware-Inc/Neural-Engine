@@ -21,10 +21,13 @@ head for `E=8`, `K=4`:
 - a direct expected-regret objective was added, with normalized regret
   (`MSE / hidden_size`) plus a small auxiliary soft-target cross-entropy term.
 
-The child experts and cross-group correction were frozen during router tests.
-The controls used Qwen3-0.6B, float32 CUDA, rank-64 cross-group correction,
-matched K4 scale (`scale=4`), direct-hard routing with 300 router steps, and
-the same held-out benchmark used by the preceding routing audit.
+The prior pairwise run was not a final-checkpoint router-only test. Its actual
+order was 100 router-supervision steps, then 300 child/correction hard-training
+steps while the router was frozen, followed by zero post-router refit steps.
+The copied experts were fixed, but the low-rank cross-group correction changed
+after the initial router fit. The controls used Qwen3-0.6B, float32 CUDA,
+rank-64 cross-group correction, matched K4 scale (`scale=4`), and the same
+held-out benchmark used by the preceding routing audit.
 
 ## Results
 

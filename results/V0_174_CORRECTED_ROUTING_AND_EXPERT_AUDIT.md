@@ -237,8 +237,11 @@ promoted to the architecture.
 
 ## Pairwise cost-router control
 
-The expert's next hypothesis was tested with the same frozen child cells. The
-70 direct subset logits were replaced by 36 structured outputs: eight
+The expert's next hypothesis was tested with a 36-output structured head. The
+original run was not a final-checkpoint router-only A/B: it used 100 initial
+router-supervision steps, then 300 child/correction hard-training steps with
+the router frozen, and zero post-router refit steps. The 70 direct subset
+logits were replaced by 36 structured outputs: eight
 per-group costs and 28 pairwise costs. Each K4 subset cost is reconstructed as
 the sum of its four singles and six within-subset pair terms, so the router
 still evaluates only one selected four-group execution at inference. Targets
@@ -256,8 +259,11 @@ effect does not survive the four-layer cascade: the exact oracle remains good
 while learned routing misses the gate. An earlier unnormalized-regret run was
 unstable and is superseded by the normalized per-dimension regret above. The
 pairwise architecture is therefore a credible diagnostic, not a promoted
-solution for the current recipe. It was intentionally not expanded to eight
-layers. The implementation remains available as an optional research path.
+solution for the current recipe. Because the prior run changed correction
+weights after the first router fit, it is not a clean rejection: a static
+final-target refit versus iterative cascade data aggregation is the required
+control. It was intentionally not expanded to eight layers. The
+implementation remains available as an optional research path.
 
 K=6 remains the higher-margin quality reference, while K5 is now the best
 active-budget result. The valid K6 token-loop rerun preserves quality but is

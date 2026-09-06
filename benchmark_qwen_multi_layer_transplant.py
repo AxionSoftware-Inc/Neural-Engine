@@ -1537,6 +1537,7 @@ def train_importance_router(
     log_every: int,
     target_mode: str = "energy",
     target_temperature: float = 1.0,
+    optimizer: torch.optim.Optimizer | None = None,
 ) -> list[dict[str, float]]:
     """Distill group importance or exact best-subset labels into the router."""
     base = next(
@@ -1570,7 +1571,8 @@ def train_importance_router(
         router_parameters = list(base.router.parameters())
     for parameter in router_parameters:
         parameter.requires_grad_(True)
-    optimizer = torch.optim.AdamW(router_parameters, lr=learning_rate)
+    if optimizer is None:
+        optimizer = torch.optim.AdamW(router_parameters, lr=learning_rate)
     history = []
     base.eval()
     try:
@@ -1774,6 +1776,139 @@ def routing_group_outputs(
         )
         outputs = corrections if mixer.replace_base_output else outputs + corrections
     return base, outputs
+
+
+def capture_cascade_router_batches(
+    model: torch.nn.Module,
+    tokenizer,
+    calibration_text: str,
+    batch_size: int,
+    sequence_length: int,
+    train_batches: int,
+    device: torch.device,
+    layer_indices: list[int],
+    layers: list[torch.nn.Module],
+    parents: list[torch.nn.Module],
+) -> list[list[dict[str, torch.Tensor]]]:
+    """Capture current-cascade inputs with the original parent as each target.
+
+    Previous sparse layers remain active while one layer is temporarily
+    restored to its dense parent.  This gives the router the hidden states
+    produced by the current learned cascade while preserving the dense FFN
+    target for that exact input.
+    """
+    captured = []
+    for layer_index, layer, parent in zip(layer_indices, layers, parents):
+        previous_mlp = layer.mlp
+        layer.mlp = parent
+        try:
+            captured.append(capture_batches(
+                model, tokenizer, calibration_text, batch_size,
+                sequence_length, train_batches, device, layer_index,
+            ))
+        finally:
+            layer.mlp = previous_mlp
+    return captured
+
+
+def _pairwise_router_parameters(
+    child: torch.nn.Module,
+) -> list[torch.nn.Parameter]:
+    base = next(
+        nested for nested in child.modules()
+        if isinstance(nested, TransferredRoutedQwenChild)
+    )
+    if base.route_source != "pairwise-cost-router":
+        raise ValueError("router refit requires pairwise-cost-router children")
+    return list(base.pairwise_cost_router.parameters())
+
+
+def refit_pairwise_router_cascade(
+    model: torch.nn.Module,
+    tokenizer,
+    calibration_text: str,
+    batch_size: int,
+    sequence_length: int,
+    train_batches: int,
+    device: torch.device,
+    dtype: torch.dtype,
+    layer_indices: list[int],
+    layers: list[torch.nn.Module],
+    parents: list[torch.nn.Module],
+    children: list[torch.nn.Module],
+    initial_io: list[list[dict[str, torch.Tensor]]],
+    mode: str,
+    steps: int,
+    rounds: int,
+    learning_rate: float,
+    max_grad_norm: float,
+    log_every: int,
+    target_temperature: float,
+) -> list[list[dict[str, float]]]:
+    """Refit pairwise routers on static or aggregated cascade inputs.
+
+    The aggregate mode preserves optimizer state between rounds.  Each new
+    rollout is mixed 50/50 with an equal-size sample from the accumulated old
+    pool, while all child and correction weights remain frozen.
+    """
+    if mode not in {"static", "aggregate"}:
+        raise ValueError("router refit mode must be static or aggregate")
+    if len(children) != len(initial_io) or len(children) != len(layers):
+        raise ValueError("router refit children, IO, and layers must align")
+    if steps < 1 or rounds < 1:
+        raise ValueError("router refit steps and rounds must be positive")
+
+    optimizers = [
+        torch.optim.AdamW(
+            _pairwise_router_parameters(child),
+            lr=learning_rate,
+        )
+        for child in children
+    ]
+    histories = [[] for _ in children]
+    if mode == "static":
+        for index, (child, io_batches, optimizer) in enumerate(
+            zip(children, initial_io, optimizers),
+        ):
+            histories[index].extend(train_importance_router(
+                child, io_batches, device, dtype, steps,
+                learning_rate, max_grad_norm, log_every,
+                "pairwise-regret", target_temperature, optimizer,
+            ))
+        return histories
+
+    old_pools = [list(io_batches) for io_batches in initial_io]
+    for round_index in range(rounds):
+        if round_index == 0:
+            round_io = initial_io
+        else:
+            new_io = capture_cascade_router_batches(
+                model, tokenizer, calibration_text, batch_size,
+                sequence_length, train_batches, device, layer_indices,
+                layers, parents,
+            )
+            round_io = []
+            for pool, new_batches in zip(old_pools, new_io):
+                if not pool or not new_batches:
+                    raise ValueError("router aggregation received empty batches")
+                old_sample = [
+                    pool[index % len(pool)]
+                    for index in range(len(new_batches))
+                ]
+                mixed = []
+                for new_batch, old_batch in zip(new_batches, old_sample):
+                    mixed.extend((new_batch, old_batch))
+                round_io.append(mixed)
+                pool.extend(new_batches)
+        for index, (child, io_batches, optimizer) in enumerate(
+            zip(children, round_io, optimizers),
+        ):
+            histories[index].extend(train_importance_router(
+                child, io_batches, device, dtype, steps,
+                learning_rate, max_grad_norm, log_every,
+                "pairwise-regret", target_temperature, optimizer,
+            ))
+    return histories
 
 
 @torch.no_grad()
@@ -2420,6 +2555,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     routing_metrics = []
     local_eval_mse = []
     child_train_io = []
+    child_eval_io = []
 
     for layer_index, layer in zip(layer_indices, layers):
         train_io = capture_batches(
@@ -2591,6 +2727,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         local_eval_mse.append(mse)
         routing_metrics.append(routing_diagnostics(child, eval_io, device, dtype))
         children.append(child)
+        child_eval_io.append(eval_io)
         # The next child is calibrated on the representation produced by all
         # previously trained children, matching the eventual cascade.
         layer.mlp = child
@@ -2622,6 +2759,31 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             args.joint_steps, args.joint_learning_rate, args.max_grad_norm,
             args.log_every, args.joint_temperature,
         )
+
+    pre_router_refit_routing_metrics = list(routing_metrics)
+    router_refit_history = []
+    if args.router_refit_mode != "none":
+        if args.child_kind != "qwen-transfer-sparse":
+            raise ValueError(
+                "router refit currently requires qwen-transfer-sparse"
+            )
+        if args.route_source != "pairwise-cost-router":
+            raise ValueError(
+                "router refit currently requires pairwise-cost-router"
+            )
+        router_refit_history = refit_pairwise_router_cascade(
+            model, tokenizer, calibration_text, args.batch_size,
+            args.sequence_length, args.train_batches, device, dtype,
+            layer_indices, layers, parents, children, child_train_io,
+            args.router_refit_mode, args.router_refit_steps,
+            args.router_refit_rounds, args.router_refit_learning_rate,
+            args.max_grad_norm, args.log_every,
+            args.router_target_temperature,
+        )
+        routing_metrics = [
+            routing_diagnostics(child, eval_io, device, dtype)
+            for child, eval_io in zip(children, child_eval_io)
+        ]
 
     variants = []
     for alpha in args.alphas:
@@ -2771,6 +2933,10 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "router_target": args.router_target,
         "post_router_target": args.post_router_target,
         "router_target_temperature": args.router_target_temperature,
+        "router_refit_mode": args.router_refit_mode,
+        "router_refit_steps": args.router_refit_steps,
+        "router_refit_rounds": args.router_refit_rounds,
+        "router_refit_learning_rate": args.router_refit_learning_rate,
         "hard_route_scale": args.hard_route_scale,
         "hard_route_scale_schedule": hard_route_scale_schedule,
         "child_internal_norm": (
@@ -2809,6 +2975,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "child_train_history": histories,
         "router_train_history": router_histories,
         "post_router_train_history": post_router_histories,
+        "pre_router_refit_routing_metrics": pre_router_refit_routing_metrics,
+        "router_refit_train_history": router_refit_history,
         "routing_metrics": routing_metrics,
         "joint_train_history": joint_history,
         "prompt_parity": prompt_results,
@@ -2974,6 +3142,24 @@ def main() -> None:
     parser.add_argument(
         "--post-router-supervision-steps", type=int, default=0,
         help="extra exact-subset router steps after child correction training",
+    )
+    parser.add_argument(
+        "--router-refit-mode",
+        choices=("none", "static", "aggregate"),
+        default="none",
+        help="final pairwise-router refit on static or current-cascade data",
+    )
+    parser.add_argument(
+        "--router-refit-steps", type=int, default=300,
+        help="steps per static refit or aggregation round",
+    )
+    parser.add_argument(
+        "--router-refit-rounds", type=int, default=3,
+        help="number of aggregation rounds; static mode uses one pass",
+    )
+    parser.add_argument(
+        "--router-refit-learning-rate", type=float, default=1e-4,
+        help="learning rate for final router refit/aggregation",
     )
     parser.add_argument(
         "--router-target",
