@@ -211,6 +211,19 @@ tiled GEMM, scatter) bitta kernelda boshqaradigan backend kerak.
 
 **Audit:** `results/V0_192_QWEN_GROUPED_FUSED_AUDIT.md`.
 
+**V0.193 correction-dispatch result (2026-09-07):** The hard rank-64
+cross-group correction no longer gathers `[tokens,K,rank,hidden]` weights.
+Expert-packed selected-token accumulation is mathematically equivalent at
+`1e-6` and passes the full V0.174 quality control on seeds 2026/2027
+(`+0.01141`/`+0.01837` CE). The comparable sparse timing falls from
+`506.60 ms` to `268.42 ms` (`2.135x` to `1.128x` dense); trained runs measure
+`0.991x` and `1.004x`. The rank-64 correction memory/dispatch bottleneck is
+therefore solved for this tested path. P-006 remains active for unified
+parameter/cost accounting, and the general K=4 router/capacity problems are
+not solved by this systems patch.
+
+**Audit:** `results/V0_193_QWEN_CORRECTION_DISPATCH_AUDIT.md`.
+
 Deep-level reuse (`routing_reuse_start_level=2`, weight `2.0`) ham alohida
 tekshirildi: all-screen controlga nisbatan faqat `+0.04 pp`, held-out active-8
 esa `−0.47 pp`, route replay sensitivity esa deyarli oshmadi. Oddiy task-reuse

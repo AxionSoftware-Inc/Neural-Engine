@@ -1784,17 +1784,41 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
             selected_outputs = self.base.last_selected_outputs
             if selected_outputs is None:
                 raise RuntimeError("hard route outputs were not populated")
-            selected_mix_in = self.mix_in[selected]
-            selected_mix_out = self.mix_out[selected]
-            latent = torch.einsum(
-                "...kh,...krh->...kr", selected_outputs, selected_mix_in,
+            # Avoid materializing mix_in[selected] and mix_out[selected] as
+            # [tokens, K, rank, hidden] tensors.  At Qwen layer width this
+            # gather can exceed a gigabyte per layer.  The expert-packed
+            # implementation computes the same two projections per selected
+            # expert and accumulates directly into the token output.
+            flat_selected_outputs = selected_outputs.reshape(
+                -1, selected_outputs.shape[-2], selected_outputs.shape[-1],
             )
-            selected_corrections = torch.einsum(
-                "...kr,...khr->...kh", latent, selected_mix_out,
+            flat_selected = selected.reshape(
+                -1, selected.shape[-1],
             )
-            correction = self.base.hard_route_scale * (
-                selected_corrections * route_weights.unsqueeze(-1)
-            ).sum(dim=-2)
+            flat_route_weights = route_weights.reshape(
+                -1, route_weights.shape[-1],
+            )
+            flat_correction = torch.zeros_like(
+                flat_selected_outputs[..., 0, :],
+            )
+            for expert_id in range(self.base.num_experts):
+                token_ids, slots = torch.where(flat_selected == expert_id)
+                if token_ids.numel() == 0:
+                    continue
+                latent = F.linear(
+                    flat_selected_outputs[token_ids, slots],
+                    self.mix_in[expert_id],
+                )
+                selected_correction = F.linear(
+                    latent, self.mix_out[expert_id],
+                )
+                contribution = selected_correction * flat_route_weights[
+                    token_ids, slots,
+                ].unsqueeze(-1)
+                flat_correction.index_add_(0, token_ids, contribution)
+            correction = self.base.hard_route_scale * flat_correction.reshape(
+                *selected_outputs.shape[:-2], selected_outputs.shape[-1],
+            )
         return correction if self.replace_base_output else base_output + correction
 
 

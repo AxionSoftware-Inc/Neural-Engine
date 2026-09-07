@@ -10,6 +10,7 @@
 - [V0.190 — Qwen FP16 selected-dispatch audit](V0_190_QWEN_FP16_DISPATCH_AUDIT.md)
 - [V0.191 — Qwen dispatch-stage profile](V0_191_QWEN_DISPATCH_STAGE_PROFILE.md)
 - [V0.192 — Qwen grouped-fused dispatch audit](V0_192_QWEN_GROUPED_FUSED_AUDIT.md)
+- [V0.193 — Qwen rank-64 correction dispatch audit](V0_193_QWEN_CORRECTION_DISPATCH_AUDIT.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
@@ -64,6 +65,16 @@ about `1.91x` timing. K6 remains the higher-margin reference. The earlier K6
 token-loop run used the wrong scale and is superseded; the valid scale=6
 rerun passes (`+0.01035`, oracle `-0.00554`) but is slightly slower at `2.129x`
 versus grouped `2.082x`.
+V0.193 removes the large hard-path rank-64 correction gather without changing
+the correction formula. The selected-token, expert-packed accumulation passes
+the original einsum reference at `1e-6`; the full eight-layer K=6 trained
+control passes two seeds at CE deltas `+0.01141` and `+0.01837`. In the
+comparable runtime smoke, sparse dispatch falls from `506.60 ms` (`2.135x`)
+to `268.42 ms` (`1.128x`) against a `237.94 ms` dense parent; the trained
+two-seed timing is `0.991x` and `1.004x` with only two timing iterations.
+This is a systems/dispatch result, not a new quality or scaling claim. See
+`V0_193_QWEN_CORRECTION_DISPATCH_AUDIT.md`.
+
 The optimal-scalar diagnostic is small on both budgets: local MSE gain is
 `0.00222` for K4 and `0.00158` for K5, with mean `g*≈0.992`; therefore a scale
 predictor is not promoted and the remaining target is router/subset regret.
