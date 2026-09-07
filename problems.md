@@ -34,6 +34,12 @@ bo‘lmagan circuitlarga sarflanishi.
 - FlatRouter barcha keylarni score qilganida ham sifat yaxshilanmadi; demak,
   faqat full-bank score qo‘shish yetarli emas.
 
+2026-09-07 counterfactual screen’da mavjud `router.keys` bilan full reachable
+bank top-8 route qilindi. 64 misol/task, ikki seedda 100M/300M/500M accuracy
+mean delta `−0.05/−0.26/−0.05 pp` bo‘ldi va CE barcha scale’da yomonlashdi.
+Shuning uchun full-bank scoring hierarchical candidate retrievalning oddiy
+yechimi emas.
+
 #### Muammo ta’rifi
 
 Retriever arzon bo‘lishi kerak, lekin yaxshi pair ichidagi circuitlarning
@@ -120,6 +126,13 @@ replay sensitivity faqat `+0.42 pp` bo‘ldi. Oddiy reuse regularizeri
 `REJECTED FOR ADOPTION`; P-002 ochiq qoladi.
 
 **Audit:** `results/P008_ROUTING_REUSE_AUDIT.md`.
+
+Deep-level reuse (`routing_reuse_start_level=2`, weight `2.0`) ham alohida
+tekshirildi: all-screen controlga nisbatan faqat `+0.04 pp`, held-out active-8
+esa `−0.47 pp`, route replay sensitivity esa deyarli oshmadi. Oddiy task-reuse
+loss oilasi adoption uchun rad qilindi.
+
+**Deep audit:** `results/P008_ROUTING_REUSE_AUDIT.md`.
 
 #### Keyingi opt-in gipoteza
 

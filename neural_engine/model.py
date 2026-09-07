@@ -25,7 +25,7 @@ class NeuralEngineV0(nn.Module):
                  halt_threshold: float = 0.5, routing_coverage_temperature: float = 0.25,
                  input_reinjection: float = 1.0, circuit_delta_scale: float = 1.0,
                  correction_gate_mode: str = "none", memory_write_mode: str = "none",
-                 routing_reuse_weight: float = 0.0,
+                 routing_reuse_weight: float = 0.0, routing_reuse_start_level: int = 0,
                  route_exploration_prob: float = 0.0,
                  routing_capacity: int | None = None, routing_depth: int | None = None,
                  router_variant: str = "global", family_count: int = 2,
@@ -61,6 +61,9 @@ class NeuralEngineV0(nn.Module):
         if routing_reuse_weight < 0.0:
             raise ValueError("routing_reuse_weight must be non-negative")
         self.routing_reuse_weight = routing_reuse_weight
+        if routing_reuse_start_level < 0:
+            raise ValueError("routing_reuse_start_level must be non-negative")
+        self.routing_reuse_start_level = routing_reuse_start_level
         if correction_gate_mode not in {"none", "route_bounded"}:
             raise ValueError("correction_gate_mode must be 'none' or 'route_bounded'")
         self.correction_gate_mode = correction_gate_mode
@@ -252,6 +255,7 @@ class NeuralEngineV0(nn.Module):
             if (self.training and self.routing_reuse_weight > 0.0
                     and self.router_variant in {"global", "family_conditioned"}):
                 router_kwargs["reuse_task_ids"] = (inputs[:, 0] - 1).clamp(0, 14)[active_indices]
+                router_kwargs["reuse_start_level"] = self.routing_reuse_start_level
             if self.route_target_supervision and self.router_variant in {"global", "family_conditioned"}:
                 group_count = max(1, self.router.num_circuits // self.active_circuits)
                 task_ids = (inputs[:, 0] - 1).clamp(0, 14)

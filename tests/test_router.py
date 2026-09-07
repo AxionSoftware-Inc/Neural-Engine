@@ -111,6 +111,17 @@ def test_task_reuse_regularizer_handles_uneven_groups():
     assert torch.isfinite(stats["routing_reuse_loss"])
 
 
+def test_task_reuse_can_skip_coarse_levels():
+    router = HierarchicalRouter(16, num_circuits=32, branch=2, depth=3,
+                                candidate_pool=4, active_circuits=2)
+    _, _, stats = router(
+        torch.randn(8, 16),
+        reuse_task_ids=torch.tensor([0, 0, 1, 1, 2, 2, 3, 3]),
+        reuse_start_level=2,
+    )
+    assert torch.isfinite(stats["routing_reuse_loss"])
+
+
 def test_router_capacity_warmup_limits_reachable_bank_and_can_expand():
     router = HierarchicalRouter(32, num_circuits=128, branch=4, depth=3,
                                 candidate_pool=16, active_circuits=4,

@@ -22,6 +22,7 @@ ortiqcha loss hisoblash ta’sir qilmaydi.
 | Control | 0 | 86.48% | 86.67% | 7,012 | 7.15% | 9.91 |
 | Reuse | 2.0 | 86.22% | 87.03% | 5,115 | 32.27% | 10.56* |
 | Reuse | 0.25 | 86.56% | 86.46% | 6,913 | 8.46% | 10.65 |
+| Deep-level reuse | 2.0, levels 3–5 | 86.69% | 86.20% | 6,943 | 8.06% | 11.59 |
 
 `*` dastlabki o‘lchovda inferencega training-only regularizer kirib qolganligi
 sababli `22.9 ms` ko‘ringan; bu bug tuzatilib, haqiqiy qiymat `10.56 ms`ga qayta
@@ -37,8 +38,10 @@ yetarli oshmadi va coverage keskin buzildi.
 **REJECTED FOR ADOPTION.** Tasklararo reuse loss’i kerakli yo‘nalishda kichik
 signal berdi, lekin hard held-out quality yaxshilanmadi. Katta weight route
 collapse qildi; kichik weight esa noise darajasida va quality regression berdi.
-Bu natija route fragmentation real ekanini qo‘llab-quvvatlaydi, ammo oddiy
-path-distribution variance uni tuzatish uchun yetarli emasligini ko‘rsatadi.
+Faqat chuqur path-level’larni regularizatsiya qilish ham held-outni `−0.47 pp`
+pasaytirdi va route sensitivityni sezilarli oshirmadi. Bu natija route
+fragmentation real ekanini qo‘llab-quvvatlaydi, ammo oddiy path-distribution
+variance uni tuzatish uchun yetarli emasligini ko‘rsatadi.
 
 Keyingi sinov task route’larini bir xil qilish emas, shared reusable primitive
 va circuit-level credit’ni saqlab qoladigan mexanizm bo‘lishi kerak.

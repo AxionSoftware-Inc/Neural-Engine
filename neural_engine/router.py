@@ -92,12 +92,15 @@ class HierarchicalRouter(nn.Module):
                 routing_capacity: int | None = None,
                 routing_windows: torch.Tensor | None = None,
                 target_bases: torch.Tensor | None = None,
-                reuse_task_ids: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
+                reuse_task_ids: torch.Tensor | None = None,
+                reuse_start_level: int = 0) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
         if coverage_temperature <= 0:
             raise ValueError("coverage_temperature must be positive")
         if not 0.0 <= exploration_prob <= 1.0:
             raise ValueError("exploration_prob must be between 0 and 1")
         batch = state.shape[0]
+        if reuse_start_level < 0 or reuse_start_level > self.active_depth:
+            raise ValueError("reuse_start_level must be between 0 and active routing depth")
         if reuse_task_ids is not None:
             if reuse_task_ids.ndim != 1 or reuse_task_ids.shape[0] != batch:
                 raise ValueError("reuse_task_ids must have one value per batch item")
@@ -157,7 +160,7 @@ class HierarchicalRouter(nn.Module):
                     target_path_losses.append(F.cross_entropy(logits, target_child, reduction="none"))
                 probs = F.softmax(logits, dim=-1)
                 level_probs.append(probs)
-                if reuse_task_ids is not None:
+                if reuse_task_ids is not None and level >= reuse_start_level:
                     reuse_level_probabilities.append(probs)
                 if coverage:
                     coverage_level_probs.append(F.softmax(logits / coverage_temperature, dim=-1))
