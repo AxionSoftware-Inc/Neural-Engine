@@ -71,8 +71,8 @@ Raw JSONlar Git’dan ignore qilingan `results/runs/` ichida:
 - `p001_sparse_output_signature_bank_init_freeze_rank8_dim16_s17_s18.json`
 - `p001_sparse_output_signature_bank_init_individual_rank8_dim16_s17_s18.json`
 
-Bank-init implementation experiment branchidagi `f2274f9`/`125f108` Handoff D
-kodiga qo‘shilgan opt-in patch sifatida saqlandi; default modelga merge
+Bank-init implementation `exp/p001-bank-initialized-signature` branchida
+`3766464` commit sifatida opt-in patch qilib saqlandi; default modelga merge
 qilinmadi. Masalan, trainable bank-init run:
 
 ```powershell
