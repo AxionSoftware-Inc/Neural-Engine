@@ -158,6 +158,16 @@ qilinmaydi.
 
 **Audit:** `results/V0_187_QWEN_SIGNED_GROUP_SKETCH_ROUTER.md`.
 
+**V0.188 dispatch audit (2026-09-07):** 8-layer Qwen E=8/K=6 runtime smoke’da
+grouped/token-loop/packed backendlar mos ravishda `2.135x/2.125x/2.134x`
+sekin chiqdi. Packedning birinchi token-wise weight gather varianti 9 GB
+qo'shimcha VRAM so'rab OOM bo'ldi; per-group batched `F.linear`ga tuzatilib,
+token-loop bilan `1e-6` parity berdi, lekin tezlashmadi. `torch.compile` esa
+Windows buildda Triton yo'q bo'lgani uchun timinggacha yetmadi. P-006 ochiq;
+haqiqiy speedup uchun fused CUDA/Triton backend kerak.
+
+**Audit:** `results/V0_188_QWEN_DISPATCH_BACKEND_AUDIT.md`.
+
 Deep-level reuse (`routing_reuse_start_level=2`, weight `2.0`) ham alohida
 tekshirildi: all-screen controlga nisbatan faqat `+0.04 pp`, held-out active-8
 esa `−0.47 pp`, route replay sensitivity esa deyarli oshmadi. Oddiy task-reuse

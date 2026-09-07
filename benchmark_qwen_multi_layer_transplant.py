@@ -634,8 +634,10 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             )
             if hard_route_scale is None else float(hard_route_scale)
         )
-        if dispatch_mode not in {"grouped", "token-loop"}:
-            raise ValueError("transferred sparse child supports grouped or token-loop")
+        if dispatch_mode not in {"grouped", "packed", "token-loop"}:
+            raise ValueError(
+                "transferred sparse child supports grouped, packed, or token-loop"
+            )
         self.dispatch_mode = dispatch_mode
         chunk = inner_size // num_experts
         norm_order = None
@@ -965,6 +967,60 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             hidden_states,
         )
 
+    def _forward_packed(
+        self,
+        hidden_states: torch.Tensor,
+        top_ids: torch.Tensor,
+        weights: torch.Tensor,
+    ) -> torch.Tensor:
+        """Run selected token/group pairs with gathered batched matmuls.
+
+        This keeps the selected-token-only contract while avoiding a massive
+        per-token weight gather. It is a PyTorch fallback for environments
+        without a fused Triton/CUDA kernel; timing is measured separately from
+        grouped dispatch because the best layout is hardware-dependent.
+        """
+        flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
+        flat_ids = top_ids.reshape(-1, self.active_experts)
+        flat_weights = weights.reshape(-1, self.active_experts)
+        selected_outputs = torch.empty(
+            flat_ids.numel(), flat_hidden.shape[-1],
+            device=flat_hidden.device, dtype=flat_hidden.dtype,
+        )
+        flat_output = torch.zeros_like(flat_hidden)
+        pair_indices = torch.arange(flat_ids.numel(), device=flat_ids.device)
+        token_ids = pair_indices // self.active_experts
+        slots = pair_indices % self.active_experts
+        expert_ids = flat_ids[token_ids, slots]
+        for expert_id in range(self.num_experts):
+            expert_token_ids = torch.where(expert_ids == expert_id)[0]
+            if expert_token_ids.numel() == 0:
+                continue
+            selected_hidden = flat_hidden[token_ids[expert_token_ids]]
+            coefficient = F.silu(F.linear(
+                selected_hidden, self.group_gate_weight[expert_id],
+            )) * F.linear(
+                selected_hidden, self.group_value_weight[expert_id],
+            )
+            selected_output = F.linear(
+                coefficient, self.group_output_weight[expert_id],
+            )
+            pair_ids = token_ids[expert_token_ids] * self.active_experts + slots[expert_token_ids]
+            selected_outputs.index_copy_(0, pair_ids, selected_output)
+            contribution = selected_output * flat_weights[
+                token_ids[expert_token_ids], slots[expert_token_ids],
+            ].unsqueeze(-1)
+            flat_output.index_add_(0, token_ids[expert_token_ids], contribution)
+        self.last_selected_outputs = selected_outputs.reshape(
+            flat_hidden.shape[0], self.active_experts, flat_hidden.shape[-1],
+        ).reshape(
+            *hidden_states.shape[:-1], self.active_experts, hidden_states.shape[-1],
+        )
+        self.last_active_expert_fraction = token_ids.numel() / max(
+            flat_hidden.shape[0] * self.num_experts, 1
+        )
+        return self.hard_route_scale * flat_output.reshape_as(hidden_states)
+
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         soft_output = None
         hard_blend = 1.0
@@ -1092,6 +1148,8 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             ).sum(dim=-2)
         if not self.training and self.dispatch_mode == "grouped":
             return self._forward_grouped(hidden_states, top_ids, weights)
+        if not self.training and self.dispatch_mode == "packed":
+            return self._forward_packed(hidden_states, top_ids, weights)
         flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
         flat_ids = top_ids.reshape(-1, self.active_experts)
         flat_weights = weights.reshape(-1, self.active_experts)
@@ -3438,14 +3496,21 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             args.generation_tokens,
         )
 
+    timing_model = model
+    if args.torch_compile:
+        if not hasattr(torch, "compile"):
+            raise RuntimeError("this PyTorch build has no torch.compile")
+        timing_model = torch.compile(
+            model, mode=args.torch_compile_mode, dynamic=False,
+        )
     parent_timing = benchmark_forward(
-        model, list(eval_ids), device,
+        timing_model, list(eval_ids), device,
         args.timing_warmup, args.timing_iterations,
     )
     for layer, child in zip(layers, children):
         layer.mlp = child
     sparse_timing = benchmark_forward(
-        model, list(eval_ids), device,
+        timing_model, list(eval_ids), device,
         args.timing_warmup, args.timing_iterations,
     )
     for layer, parent in zip(layers, parents):
@@ -3602,6 +3667,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             ),
             "warmup": args.timing_warmup,
             "iterations": args.timing_iterations,
+            "torch_compile": args.torch_compile,
+            "torch_compile_mode": args.torch_compile_mode if args.torch_compile else None,
             "note": "end-to-end Qwen forward with all selected layers replaced",
         },
         "quality_gate": {
@@ -3849,6 +3916,15 @@ def main() -> None:
     )
     parser.add_argument("--timing-warmup", type=int, default=10)
     parser.add_argument("--timing-iterations", type=int, default=30)
+    parser.add_argument(
+        "--torch-compile", action="store_true",
+        help="opt-in torch.compile timing path; compilation overhead is excluded",
+    )
+    parser.add_argument(
+        "--torch-compile-mode",
+        choices=("default", "reduce-overhead", "max-autotune"),
+        default="reduce-overhead",
+    )
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto")
     parser.add_argument("--dtype", choices=("float32", "float16", "bfloat16"), default="float32")
