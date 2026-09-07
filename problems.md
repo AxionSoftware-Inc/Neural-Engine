@@ -433,6 +433,20 @@ muammoni hal qilmadi. Batafsil: `results/V0_179_FLAT_ROUTER_SCREEN.md`.
 har ikki seedda `−8.33 pp` bo‘ldi. Batafsil:
 `results/COUPLED_PROBE_ROUTER_AUDIT.md`.
 
+### C-P001-OUTPUT-SIGNATURE-FOLLOWUP-001 — Compact output-signature capacity and bank initialization
+
+**Status:** `REJECTED FOR ADOPTION`  
+**Muammo:** P-001 / Handoff D  
+**Natija:** Random rank4/dim16 ikki-seed mean hard accuracy `−0.547 pp`,
+random rank8/dim32 `−0.026 pp`; bank-init rank8/dim16 trainingga ochiq variant
+`+0.469 pp` berdi, lekin mean/p95 selection-regret reduction faqat
+`6.77%/9.43%` bo‘ldi. Signature’ni muzlatish `−0.651 pp` berdi. Individual-
+additive target p95 regretni `12.16%`ga ko‘tardi, ammo final accuracy
+`−0.234 pp` va max latency `1.312x` bo‘ldi. Bank-init trainable variant eng
+yaxshi signal sifatida qayd qilindi, ammo `+2 pp` accuracy va `>=10%` regret
+gate’lari bajarilmadi. P-001 `ACTIVE` qoladi.
+**Batafsil:** `results/P001_SPARSE_OUTPUT_SIGNATURE_FOLLOWUP_AUDIT.md`.
+
 ### C-P004-QWEN-TRANSFER-RECHECK-001 — Exact Qwen FFN compilation
 
 **Status:** `VALIDATED CONTROL`

@@ -12,6 +12,7 @@
 - [V0.192 — Qwen grouped-fused dispatch audit](V0_192_QWEN_GROUPED_FUSED_AUDIT.md)
 - [V0.193 — Qwen rank-64 correction dispatch audit](V0_193_QWEN_CORRECTION_DISPATCH_AUDIT.md)
 - [V0.194 — Qwen K=4 on-policy pairwise-router audit](V0_194_QWEN_K4_ON_POLICY_PAIRWISE_AUDIT.md)
+- [P-001 — Sparse output-signature follow-up audit](P001_SPARSE_OUTPUT_SIGNATURE_FOLLOWUP_AUDIT.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
@@ -105,6 +106,19 @@ predictor is not promoted and the remaining target is router/subset regret.
 An exploratory K=5 rank-128 correction run was stopped after more than twenty
 minutes without a metric, so it is not treated as evidence; higher-rank
 correction needs a more efficient implementation first.
+
+The P-001 sparse output-signature follow-up also did not pass adoption. Random
+rank4/dim16 and rank8/dim32 signatures gave mean hard-accuracy deltas of
+`−0.547 pp` and `−0.026 pp`. Initializing a trainable rank8/dim16 signature
+from the frozen circuit bank was the strongest compact signal (`+0.469 pp` on
+both seeds, `0.935x/1.043x` latency), but mean/p95 regret reductions were only
+`6.77%/9.43%`; freezing that initialization regressed by `−0.651 pp`.
+Switching the teacher to individual-output-additive losses raised mean p95
+regret reduction to `12.16%`, but final accuracy fell `−0.234 pp` and max
+latency reached `1.312x`.
+Therefore bank initialization is retained as a research hypothesis, while the
+candidate-only selector remains rejected and P-001 stays open. See
+`P001_SPARSE_OUTPUT_SIGNATURE_FOLLOWUP_AUDIT.md`.
 
 The expert-proposed pairwise cost-router was then tested with a corrected
 final-target protocol. Its initial 36-output structured cost head gives a
