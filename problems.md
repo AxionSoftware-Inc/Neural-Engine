@@ -435,6 +435,19 @@ saqlanadi, defaultga ko‘chirilmaydi.
 
 **Batafsil:** `results/P003_STAGED_SCALE_300M_500M_SEED17_18.md`.
 
+### C-P003-TYPED-700M-REPLICATION-001 — Second-seed typed-register 700M validation
+
+**Status:** `VALIDATED CONTROL — NO ADDITIONAL CAPACITY GAIN`
+**Muammo:** P-003
+**Natija:** Factorized typed-register parent-growth 700M modeli seed18da
+mustaqil qayta tiklandi. Qat’iy `64^3 x 9` full-grid accuracy seed17/18da
+`99.6627% / 99.5884%`, ikki seed mean `99.6255%` bo‘ldi. 500M parent-growth
+mean `99.6622%` edi; 700M farqi `−0.0367 pp`. Demak parent-growth retsepti
+va sparse active path (~`1.79M / 25.79M`, `6.95%`) tasdiqlandi, lekin bu gate’da
+qo‘shimcha 200M virtual capacity sifatga qo‘shimcha bermadi. 1B ga faqat hajm
+uchun o‘tish rad qilindi; P-003 direct-v0 va unseen-value muammolari ochiq.
+**Batafsil:** `results/P003_TYPED_REGISTER_700M_SEED18_VALIDATION_20260907.md`.
+
 ### P-007 — Selected circuit route outputni yetarli boshqarmayapti
 
 **Status:** `ACTIVE`

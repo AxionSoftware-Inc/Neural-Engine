@@ -74,7 +74,8 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     if config.get("architecture") == "typed_register":
         for key in ("task_context", "task_context_update", "adaptive_halting",
                     "halt_threshold", "routing_coverage_temperature",
-                    "input_reinjection", "memory_write_mode", "router_variant",
+                    "input_reinjection", "circuit_delta_scale", "correction_gate_mode",
+                    "memory_write_mode", "router_variant",
                     "soft_routing_temperature", "route_target_supervision",
                     "routing_reuse_weight", "routing_reuse_start_level",
                     "input_reinjection_schedule"):

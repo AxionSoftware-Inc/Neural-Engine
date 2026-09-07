@@ -779,6 +779,12 @@ range remains difficult: training on 0–31 and evaluating on 32–63 gives only
 and structured composition, while representation/teacher transfer is the next
 generalization target.
 
+The follow-up seed-18 700M parent-growth validation reproduces the supported
+quality at 99.5884% on the same full grid, but the two-seed mean is 99.6255%
+versus 99.6622% for 500M (`−0.0367 pp`). The sparse 1.79M active-path estimate
+is preserved, so 700M is a frozen quality control rather than evidence for a
+1B capacity jump. See `P003_TYPED_REGISTER_700M_SEED18_VALIDATION_20260907.md`.
+
 The proposal history is indexed in the repository root: `taklif.md` is the
 original scale/systems proposal, `taklif1.md` records completed experiments
 and rejected variants, `taklif2.md` records family-local routing history,
