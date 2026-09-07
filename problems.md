@@ -190,6 +190,17 @@ qoladi. Keyingi speed yo‘li haqiqiy tiled/grouped GEMM.
 
 **Audit:** `results/V0_190_QWEN_FP16_DISPATCH_AUDIT.md`.
 
+**V0.191 dispatch-stage profile (2026-09-07):** To‘g‘ri `eval()` hard-path
+profileda isolated Qwen layer26 MLP dense parent `3.935 ms`, grouped bank
+`7.564 ms` (`1.92x`), packed bank `10.228 ms` (`2.60x`) chiqdi. Grouped uchta
+batched projectionning o‘zi `2.457 ms`; qolgan katta ulush sort/argsort,
+index gather/copy/add va reshape metadata’ga ketadi. Demak Python loopni yoki
+precisionni almashtirish kifoya emas: ragged token grouping + tiled grouped
+GEMM + accumulation bir kernelda birlashishi kerak. P-006 ochiq, V0.191
+quality/capacity dalili emas.
+
+**Audit:** `results/V0_191_QWEN_DISPATCH_STAGE_PROFILE.md`.
+
 Deep-level reuse (`routing_reuse_start_level=2`, weight `2.0`) ham alohida
 tekshirildi: all-screen controlga nisbatan faqat `+0.04 pp`, held-out active-8
 esa `−0.47 pp`, route replay sensitivity esa deyarli oshmadi. Oddiy task-reuse
