@@ -7,6 +7,7 @@
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
 - [V0.178 — Route retrieval vs selection audit](V0_178_ROUTE_RETRIEVAL_SELECTION_AUDIT.md)
 - [V0.179 — Flat full-bank router screen](V0_179_FLAT_ROUTER_SCREEN.md)
+- [V0.181 — Qwen contribution-space micro-group audit](V0_181_QWEN_CONTRIBUTION_CLUSTER.md)
 
 V0.174 follows the expert audit in `KEYINGI_YOL_2026-09-06.md` and fixes the
 hard-training/grouped-inference scale mismatch plus stale copied-expert
@@ -796,6 +797,12 @@ all 28 layers with no training: both layer MLP and full-model logit errors were
 0.0. This validates the no-training compilation control, not sparse quality or
 full Transformer removal; the next gate remains held-out functionally coherent
 micro-groups. See `P004_QWEN_EXACT_TRANSFER_RECHECK_20260907.md`.
+
+V0.181 clusters copied Qwen neurons by output-space contribution signatures,
+but the learned 2-layer route reaches +0.1399 CE delta and the exact best-
+subset oracle +0.1779. Since the oracle also fails, simple contribution-space
+grouping is rejected as a decomposition fix; signed overlapping reconstruction
+is the next gate. See `V0_181_QWEN_CONTRIBUTION_CLUSTER.md`.
 
 The proposal history is indexed in the repository root: `taklif.md` is the
 original scale/systems proposal, `taklif1.md` records completed experiments

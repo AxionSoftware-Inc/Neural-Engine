@@ -327,6 +327,18 @@ bloklari hali qoladi va dense transfer active compute’ni kamaytirmaydi. Sparse
 micro-group decomposition hamda held-out text quality muammosi ochiq.
 **Batafsil:** `results/P004_QWEN_EXACT_TRANSFER_RECHECK_20260907.md`.
 
+### C-P004-QWEN-CONTRIB-CLUSTER-001 — Output-space contribution clustering
+
+**Status:** `REJECTED`
+**Muammo:** Qwen sparse decomposition / P-004 transfer lane
+**Natija:** Qwen contribution signature (`activation × down_proj`) bilan
+balanced 8-group partition qilindi. 2-layer, top-4/8, rank-64 cross-group
+smoke learned routerda `alpha=0 CE +0.1399`, exact best-subset oracle’da esa
+`+0.1779` berdi; ikkalasi ham `+0.05` gate’dan o‘tdi emas. Oracle ham yomon
+bo‘lgani uchun bu variantda asosiy bottleneck router emas, group decomposition
+va missing signed contributions. 4-layer run qilinmadi.
+**Batafsil:** `results/V0_181_QWEN_CONTRIBUTION_CLUSTER.md`.
+
 ## Expertga yuborish uchun qisqa format
 
 ```text
