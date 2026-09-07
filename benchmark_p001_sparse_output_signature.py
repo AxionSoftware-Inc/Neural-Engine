@@ -91,6 +91,8 @@ def _baseline_contexts(model, batch) -> list[SparseStepContext]:
 
 
 def _make_selector(model, args: argparse.Namespace, seed: int, device: torch.device):
+    if args.freeze_signature and not args.init_from_bank:
+        raise ValueError("--freeze-signature requires --init-from-bank")
     random.seed(seed + 4107)
     torch.manual_seed(seed + 4107)
     selector = SparseOutputSignatureSelector(
@@ -101,6 +103,24 @@ def _make_selector(model, args: argparse.Namespace, seed: int, device: torch.dev
         signature_rank=args.signature_rank,
         signature_dim=args.signature_dim,
     )
+    if args.init_from_bank:
+        if args.signature_rank != int(model.circuits.down.shape[-1]):
+            raise ValueError(
+                "--init-from-bank requires signature-rank to match the source circuit rank"
+            )
+        projection_source = torch.randn(
+            int(model.state_dim), args.signature_dim, device=device
+        )
+        projection, _ = torch.linalg.qr(projection_source, mode="reduced")
+        selector.initialize_from_circuit_bank(
+            model.circuits.down,
+            model.circuits.up,
+            model.circuits.bias,
+            projection,
+        )
+        if args.freeze_signature:
+            for name in ("signature_down", "signature_up", "signature_bias"):
+                getattr(selector, name).requires_grad_(False)
     return selector.to(device)
 
 
@@ -143,9 +163,10 @@ def train_selector(
         context = contexts[(step_number - 1) % model.internal_steps]
         teacher = candidate_local_teacher(model, context, batch.targets)
         student_scores, _ = selector(context.query, context.candidate_ids)
+        teacher_target = teacher[args.teacher_target]
         loss, diagnostics = distillation_loss(
             student_scores,
-            teacher["full_local_losses"],
+            teacher_target,
             temperature=args.distill_temperature,
             hard_weight=args.hard_weight,
         )
@@ -186,6 +207,7 @@ def train_selector(
         "teacher_pair_gru_head_evaluations": teacher_pair_state_evals,
         "teacher_full_bank_real_circuit_rows_evaluated": 0,
         "teacher_scope": "candidate-only M real outputs; training only",
+        "teacher_target": args.teacher_target,
     }
 
 
@@ -604,6 +626,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--train-batch-size", type=int, default=64)
     parser.add_argument("--signature-rank", type=int, default=2)
     parser.add_argument("--signature-dim", type=int, default=8)
+    parser.add_argument("--init-from-bank", action="store_true")
+    parser.add_argument("--freeze-signature", action="store_true")
+    parser.add_argument(
+        "--teacher-target",
+        choices=("full_local_losses", "individual_additive_losses"),
+        default="full_local_losses",
+    )
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--grad-clip", type=float, default=1.0)
@@ -643,7 +672,12 @@ def main() -> None:
     command = (
         "python benchmark_p001_sparse_output_signature.py "
         + " ".join(f"--checkpoint {path}" for path in paths)
-        + f" --device {args.device} --steps {args.steps} --update-problems-on-reject"
+        + f" --device {args.device} --steps {args.steps}"
+        + f" --signature-rank {args.signature_rank} --signature-dim {args.signature_dim}"
+        + (" --init-from-bank" if args.init_from_bank else "")
+        + (" --freeze-signature" if args.freeze_signature else "")
+        + f" --teacher-target {args.teacher_target}"
+        + " --update-problems-on-reject"
     )
 
     serializable_results = copy.deepcopy(results)

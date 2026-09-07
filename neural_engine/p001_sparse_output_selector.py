@@ -82,6 +82,45 @@ class SparseOutputSignatureSelector(nn.Module):
         )
         self.register_buffer("pair_positions", positions, persistent=False)
 
+    @torch.no_grad()
+    def initialize_from_circuit_bank(
+        self,
+        down: torch.Tensor,
+        up: torch.Tensor,
+        bias: torch.Tensor,
+        projection: torch.Tensor,
+    ) -> None:
+        """Seed the surrogate with a projected copy of the frozen circuit bank.
+
+        This keeps inference candidate-only: the selector still evaluates its
+        own compact rows, not the model's full circuit bank.  When the source
+        rank matches ``signature_rank``, the initialized signature is the
+        exact source circuit output after a fixed low-dimensional projection.
+        Later training is allowed to adapt the copy to the local pair target.
+        """
+        if down.shape[0] != self.num_circuits:
+            raise ValueError("down circuit count does not match selector")
+        if up.shape[0] != self.num_circuits or bias.shape[0] != self.num_circuits:
+            raise ValueError("circuit bank count does not match selector")
+        if down.shape[-1] < self.signature_rank or up.shape[-2] < self.signature_rank:
+            raise ValueError("source circuit rank is smaller than signature rank")
+        if down.shape[1] != self.state_dim or up.shape[-1] != self.state_dim:
+            raise ValueError("circuit state dimension does not match selector")
+        if bias.shape[-1] != self.state_dim:
+            raise ValueError("circuit bias dimension does not match selector")
+        if projection.shape != (self.state_dim, self.signature_dim):
+            raise ValueError(
+                "projection must have shape "
+                f"({self.state_dim}, {self.signature_dim})"
+            )
+        source_down = down[..., : self.signature_rank]
+        source_up = up[..., : self.signature_rank, :]
+        projected_up = torch.einsum("erk,ks->ers", source_up, projection)
+        projected_bias = torch.einsum("ek,ks->es", bias, projection)
+        self.signature_down.copy_(source_down)
+        self.signature_up.copy_(projected_up)
+        self.signature_bias.copy_(projected_bias)
+
     @property
     def pair_count(self) -> int:
         return int(self.pair_positions.shape[0])
