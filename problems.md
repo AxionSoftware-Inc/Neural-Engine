@@ -180,6 +180,16 @@ cuBLAS grouped yoki Triton-capable environment), oddiy per-pair kernel emas.
 
 **Audit:** `results/V0_189_QWEN_FUSED_DISPATCH_AUDIT.md`.
 
+**V0.190 FP16 dispatch audit (2026-09-07):** Selected group GEMMlarni RTX
+3060 Tensor Core uchun FP16ga o'tkazish 1-layer timingni `269.78 → 268.25 ms`
+(`1.139x → 1.134x`) qildi. 8-layerda `494.61 ms / 238.62 ms = 2.073x`;
+packed float32 control `2.134x` edi, demak faqat kichik (~3%) runtime foyda
+bor, dense'dan hali ham sekin. Qisqa quality control alpha=0 CE `+0.0864`
+bo‘lib gate’dan o‘tmadi. `REJECTED FOR ADOPTION`; default float32 grouped
+qoladi. Keyingi speed yo‘li haqiqiy tiled/grouped GEMM.
+
+**Audit:** `results/V0_190_QWEN_FP16_DISPATCH_AUDIT.md`.
+
 Deep-level reuse (`routing_reuse_start_level=2`, weight `2.0`) ham alohida
 tekshirildi: all-screen controlga nisbatan faqat `+0.04 pp`, held-out active-8
 esa `−0.47 pp`, route replay sensitivity esa deyarli oshmadi. Oddiy task-reuse
