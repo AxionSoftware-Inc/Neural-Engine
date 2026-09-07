@@ -734,3 +734,9 @@ qo‘shish mavjud checkpoint uchun barqaror quality fix emas va training/default
 qabul qilinmadi. Opt-in API saqlandi.
 
 **Residual audit:** `results/P007_POST_CORRECTION_RESIDUAL_AUDIT.md`.
+
+### C-P002-EXPOSURE-WARMUP-001 — Initial task-stable route exposure
+
+**Status:** `REJECTED`
+**Muammo:** P-002 / P-003
+**Natija:** seed17/18 held-out mean accuracy delta `+0.768 pp`; route NMI delta `+0.01827`; route specialization delta `+0.01578`; counterfactual NMI/specialization deltas `-0.02349`/`-0.01738`. Birinchi `1000` qadamda task-stable route, undan keyin oddiy learned hard router ishladi; router va circuit body o‘zgarmadi.

@@ -15,6 +15,7 @@
 - [P-001 — Sparse output-signature follow-up audit](P001_SPARSE_OUTPUT_SIGNATURE_FOLLOWUP_AUDIT.md)
 - [P-007 — Correction-gain sweep](P007_CORRECTION_GAIN_SWEEP_AUDIT.md)
 - [P-007 — Post-GRU correction residual audit](P007_POST_CORRECTION_RESIDUAL_AUDIT.md)
+- [P-002 — Route-exposure warmup audit](P002_ROUTE_EXPOSURE_WARMUP_AUDIT.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
