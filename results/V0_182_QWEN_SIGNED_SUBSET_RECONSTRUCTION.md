@@ -37,6 +37,7 @@ batches.  The quality gate is fully active sparse-vs-teacher held-out
 | Signed subset, group-energy router, 300 steps | 25--26 | 2026 | `+0.1088` | `86.87%` | `1.304 / 1.266` | FAIL |
 | Signed subset, pairwise cost router, 300 steps | 25--26 | 2026 | `+0.0659` | `88.62%` | `1.006 / 1.093` | FAIL |
 | Signed subset, router hidden 512, 300 steps | 25--26 | 2026 | `+0.0642` | `88.53%` | `0.980 / 1.074` | FAIL |
+| Signed subset, learned route + 200 hard coefficient steps | 25--26 | 2026 | `+0.0694` | `88.92%` | `0.960 / 1.077` | FAIL |
 | Signed subset, exact cost oracle | 23--26 | 2026 | `+0.0435` | `89.55%` | `0.601 / 0.613 / 0.733 / 0.879` | PASS |
 | Signed subset, learned subset router, 100 steps | 23--26 | 2026 | `+0.0768` | `85.35%` | `0.819 / 0.760 / 0.848 / 0.956` | FAIL |
 
@@ -44,7 +45,9 @@ The exact-oracle result is reproducible, but it is not a large gain over the
 existing contiguous-group exact-oracle control.  The learned router remains
 about `+0.064--0.072` CE worse despite using the signed cost labels.  Enlarging
 the router to 512 hidden units, using group-energy features, or using the
-pairwise cost head did not close the oracle gap.
+pairwise cost head did not close the oracle gap.  A further 200-step hard
+coefficient fine-tune also remained at `+0.0694`, so the gap is not fixed by
+letting the selected route adapt its coefficients after calibration.
 
 ## Interpretation and decision
 
@@ -74,6 +77,7 @@ evidence.  No 700M/1B run is justified by this result.
 - `results/runs/qwen_signed_subset_router300_energyinput_2layers_seed2026.json`
 - `results/runs/qwen_signed_subset_pairwise_router300_2layers_seed2026.json`
 - `results/runs/qwen_signed_subset_router512_2layers_seed2026.json`
+- `results/runs/qwen_signed_subset_hardfit_router_2layers_seed2026.json`
 
 ## Reproduction
 
