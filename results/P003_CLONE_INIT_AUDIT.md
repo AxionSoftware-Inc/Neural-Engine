@@ -17,6 +17,17 @@ A 20M parent checkpoint is expanded to the same 100M target. The random arm leav
 
 The router, active budget, optimizer, training stream, target model and number of steps are unchanged. Only initialization of the newly added bank rows differs. This is an initialization test, not a claim that cloning alone solves large-bank routing.
 
+## Route-mass diagnostic
+
+On the same held-out census, the clone arm shifted a little more route mass
+back to the original 1,408 parent rows: `8.89% → 10.74%` for seed17 and
+`8.22% → 10.48%` for seed18. The number of distinct new rows used remained
+similar (`6,071/6,080` and `6,095/6,083`, clone/random), so the small quality
+gain did not come from making a substantially larger set of new rows useful.
+It is more consistent with increased reuse of old primitives, while the
+held-out route NMI and specialization both declined. This is a diagnostic
+reason to keep cloning opt-in rather than promote it as the capacity fix.
+
 ## Gate
 
 - `REJECTED` — mean held-out accuracy >= +2.0 pp and no seed below -1.0 pp.
