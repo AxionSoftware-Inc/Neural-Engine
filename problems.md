@@ -483,13 +483,15 @@ qo‘shing.
 diagnostic-heavy path bilan batch-128 `10.871 ms`, batch-1 `4.881 ms` bo‘ldi;
 dense reference mos ravishda `33.802 ms` va `3.296 ms`. `collect_stats=False`
 serving path diagnostics tensorlarini yig‘masdan batch-128ni `9.618 ms`ga,
-batch-1ni `3.737 ms`ga tushirdi va logitsni numerik teng saqladi. Bu foydali
+batch-1ni `3.737 ms`ga tushirdi va logitsni numerik teng saqladi. Keyingi
+router metadata/entropy skip qayta o‘lchovda `8.077/3.572 ms` (batch-128/1)
+berdi. Bu foydali
 overhead patchi, lekin one-token latency muammosi yopilmadi: Native hali
-dense’dan `1.134x`.
+dense’dan `1.084x`.
 
 **Status update:** stats-free serving path `ACCEPTED FOR SERVING PATH`; compiled
 decode/fused router kernel `ACTIVE`. Static CUDA Graph fixed-shape smoke logit
-error `0.0`, lekin speed ratio faqat `0.968x/0.989x` (batch-1/128) bo‘ldi va
+error `0.0`, lekin speed ratio faqat `0.959x/0.985x` (batch-1/128) bo‘ldi va
 defaultga olinmadi. Float32 `matmul_precision=high` ham batch-1da atigi
 `0.993x`, batch-128da `1.069x` bo‘ldi va max logit farqi `0.007057` chiqdi;
 bu ham defaultga olinmadi. Batafsil:

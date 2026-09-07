@@ -317,6 +317,8 @@ class NeuralEngineV0(nn.Module):
                     router_query, family_ids,
                     **router_kwargs)
             else:
+                if not collect_stats and isinstance(self.router, HierarchicalRouter):
+                    router_kwargs["collect_stats"] = False
                 selected, weights, route_stats = self.router(router_query, **router_kwargs)
             route_gain = route_stats["route_gain"]
             route_candidates = route_stats.get("candidate_ids")

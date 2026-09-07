@@ -90,10 +90,11 @@ class HierarchicalRouter(nn.Module):
                 exploration_prob: float = 0.0,
                 routing_offset: int | torch.Tensor = 0,
                 routing_capacity: int | None = None,
-                routing_windows: torch.Tensor | None = None,
-                target_bases: torch.Tensor | None = None,
-                reuse_task_ids: torch.Tensor | None = None,
-                reuse_start_level: int = 0) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
+            routing_windows: torch.Tensor | None = None,
+            target_bases: torch.Tensor | None = None,
+            reuse_task_ids: torch.Tensor | None = None,
+            reuse_start_level: int = 0,
+            collect_stats: bool = True) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
         if coverage_temperature <= 0:
             raise ValueError("coverage_temperature must be positive")
         if not 0.0 <= exploration_prob <= 1.0:
@@ -133,7 +134,7 @@ class HierarchicalRouter(nn.Module):
                 raise ValueError("tensor routing_offset must identify valid bank windows")
         leaf = torch.zeros(batch, self.num_addresses, dtype=torch.long, device=state.device)
         entropies = []
-        path_scores = []
+        path_score_total = None
         coverage_distributions = []
         reuse_level_probabilities = []
         target_path_losses = []
@@ -164,7 +165,8 @@ class HierarchicalRouter(nn.Module):
                     reuse_level_probabilities.append(probs)
                 if coverage:
                     coverage_level_probs.append(F.softmax(logits / coverage_temperature, dim=-1))
-                entropies.append(-(probs * probs.clamp_min(1e-8).log()).sum(dim=-1))
+                if collect_stats:
+                    entropies.append(-(probs * probs.clamp_min(1e-8).log()).sum(dim=-1))
                 child = logits.argmax(dim=-1)
                 if exploration_prob and self.training:
                     explore = torch.rand(batch, device=state.device) < exploration_prob
@@ -173,7 +175,8 @@ class HierarchicalRouter(nn.Module):
                 address_score = address_score + logits.gather(1, child.unsqueeze(1)).squeeze(1)
                 address_leaf = address_leaf * self.branch + child
             leaf[:, address] = address_leaf
-            path_scores.append(address_score)
+            path_score_total = (address_score if path_score_total is None
+                                else path_score_total + address_score)
             if coverage:
                 coverage_distributions.append(self._soft_coverage_distribution(coverage_level_probs))
 
@@ -216,8 +219,10 @@ class HierarchicalRouter(nn.Module):
             weights = F.softmax(top_values, dim=-1)
         # The address is hard/structured for execution, but this small gain
         # keeps the chosen tree path connected to the task loss for learning.
-        path_score = torch.stack(path_scores, dim=-1).mean(dim=-1)
+        path_score = path_score_total / self.num_addresses
         route_gain = 1.0 + 0.05 * torch.tanh(path_score)
+        if not collect_stats:
+            return selected_ids, weights, {"route_gain": route_gain}
         stats = {
             "router_entropy": torch.stack(entropies, dim=-1).mean(),
             # These are metadata, not model values. Keeping them on the host

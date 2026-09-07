@@ -25,16 +25,20 @@ statsiz logitsni `allclose` orqali tekshiradi.
 |---|---:|---:|---:|---:|---:|
 | Native, diagnostics | 128 | 100 | 10.871 ms | 11,775 | 0.322x |
 | Native, `collect_stats=False` | 128 | 100 | 9.618 ms | 13,309 | 0.284x |
+| Native, stats-free + router metadata skip | 128 | 100 | 8.077 ms | 15,848 | 0.239x |
 | Dense reference | 128 | 100 | 33.802 ms | 3,787 | 1.000x |
 | Native, diagnostics | 1 | 500 | 4.881 ms | 205 | 1.481x |
 | Native, `collect_stats=False` | 1 | 500 | 3.737 ms | 268 | 1.134x |
+| Native, stats-free + router metadata skip | 1 | 500 | 3.572 ms | 280 | 1.084x |
 | Dense reference | 1 | 500 | 3.296 ms | 303 | 1.000x |
 
-Stats-free path diagnostics-heavy baselinega nisbatan batch-128da `11.5%`,
-batch-1da `23.5%` tezroq bo'ldi. Native batch-128da dense reference'dan
-`3.51x` tezroq, lekin batch-1da hali dense'dan `13.4%` sekinroq. Shuning
-uchun bu patch overheadni kamaytirdi, ammo one-token muammoni to'liq hal
-qilmadi.
+Stats-free path diagnostics-heavy baselinega nisbatan avval batch-128da
+`11.5%`, batch-1da `23.5%` tezroq bo'ldi. Router metadata/entropy yig'ishni
+ham stats-free yo'lda cheklaganimizdan keyingi qayta o'lchov `8.077/3.572 ms`
+bo'ldi: diagnostics-heavy yo'lga nisbatan mos ravishda `25.7%/26.8%` tezroq.
+Native batch-128da dense reference'dan `4.18x` tezroq, lekin batch-1da hali
+dense'dan `8.4%` sekinroq. Bu sezilarli overhead kamayishi, ammo one-token
+muammoni to'liq yopadigan fused kernel emas.
 
 Native benchmarkdagi adaptive execution seed17 balanced batch uchun batch-128da
 o'rtacha `1.5625`, batch-1da `1.0` internal step bo'ldi. Natijalarni shu
@@ -62,11 +66,11 @@ python profile_native_runtime.py --checkpoint results/checkpoints/ne100_gate_sta
 
 Adaptive halting dynamic bo'lgani uchun CUDA Graph'ni faqat `adaptive=False`,
 stats-free, fixed-shape wrapperda tekshirdim. Logit reconstruction xatosi
-`0.0` bo'ldi. 100/200 iteration steady-state smoke'da Graph/eager ratio
-batch-1da `0.968x` (`0.761 → 0.737 ms`), batch-128da `0.989x`
-(`3.687 → 3.648 ms`) bo'ldi. Bu kichik launch foydasi, lekin asosiy
-one-token gapni yopadigan sakrash emas; dynamic adaptive path uchun defaultga
-qo'yilmadi.
+`0.0` bo'ldi. Router metadata skipdan keyingi 500/200 iteration
+steady-state smoke'da Graph/eager ratio batch-1da `0.959x`
+(`0.651 → 0.624 ms`), batch-128da `0.985x` (`3.583 → 3.529 ms`) bo'ldi.
+Bu kichik launch foydasi, lekin asosiy one-token gapni yopadigan sakrash emas;
+dynamic adaptive path uchun defaultga qo'yilmadi.
 
 `torch.cuda.make_graphed_callables` uchun `router_decisions` va `soft_route`
 metadata'lari GPU scalar emas, host metadata sifatida qaytarildi. Bu numerik
