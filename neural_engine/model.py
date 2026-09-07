@@ -230,6 +230,7 @@ class NeuralEngineV0(nn.Module):
         selected_weights = torch.zeros(batch_size, self.internal_steps, route_width,
                                        device=inputs.device)
         route_gains = torch.ones(batch_size, self.internal_steps, device=inputs.device)
+        route_delta_steps = []
         step_entropies = torch.zeros(batch_size, self.internal_steps, device=inputs.device)
         executed_mask = torch.zeros(batch_size, self.internal_steps, dtype=torch.bool, device=inputs.device)
         step_logits = torch.zeros(batch_size, self.internal_steps, num_classes, device=inputs.device)
@@ -261,6 +262,7 @@ class NeuralEngineV0(nn.Module):
                 selected_steps.append(selected_step)
                 candidate_steps.append(candidate_step)
                 query_steps.append(torch.zeros(batch_size, self.state_dim, device=inputs.device))
+                route_delta_steps.append(torch.zeros(batch_size, self.state_dim, device=inputs.device))
                 step_logits[:, step] = last_logits
                 continue
             active_state = state[active_indices]
@@ -345,6 +347,9 @@ class NeuralEngineV0(nn.Module):
                 correction_gate = torch.ones_like(route_gain)
             delta = (circuit_delta * route_gain.unsqueeze(-1)
                      * self.circuit_delta_scale * correction_gate.unsqueeze(-1))
+            route_delta_step = torch.zeros(batch_size, self.state_dim, device=inputs.device)
+            route_delta_step[active_indices] = delta
+            route_delta_steps.append(route_delta_step)
             update = (delta + self.input_reinjection_schedule[step] * encoded[active_indices]
                       + self.step_embedding[step])
             if task_context is not None and self.task_context_update:
@@ -401,6 +406,7 @@ class NeuralEngineV0(nn.Module):
             "query_states": torch.stack(query_steps, dim=1),
             "selected_weights": selected_weights,
             "route_gains": route_gains,
+            "route_deltas": torch.stack(route_delta_steps, dim=1),
             "step_logits": step_logits,
             "halt_logits": halt_logits,
             "executed_steps": executed_mask.sum(dim=1),

@@ -368,6 +368,19 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 row_indices = torch.arange(batch.inputs.shape[0], device=device)
                 exit_logits = route_stats["step_logits"][row_indices, exit_steps]
                 loss = loss + exit_loss_weight * nn.functional.cross_entropy(exit_logits, batch.targets)
+        route_final_target_weight = float(config.get("route_final_target_weight", 0.0))
+        if route_final_target_weight and isinstance(model, NeuralEngineV0):
+            route_deltas = route_stats.get("route_deltas")
+            executed_mask = route_stats.get("executed_mask")
+            if route_deltas is not None and executed_mask is not None:
+                route_losses = []
+                for stage in range(route_deltas.shape[1]):
+                    mask = executed_mask[:, stage]
+                    if mask.any():
+                        route_losses.append(nn.functional.cross_entropy(
+                            model.output(route_deltas[mask, stage]), batch.targets[mask]))
+                if route_losses:
+                    loss = loss + route_final_target_weight * torch.stack(route_losses).mean()
         if "router_entropy" in route_stats and model.routing_mode != "controlled_task":
             loss = loss - 0.0001 * route_stats["router_entropy"]
         if coverage_enabled and "routing_coverage_loss" in route_stats:
@@ -408,6 +421,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "stage_loss_weight": float(config.get("stage_loss_weight", 0.0)),
         "halt_loss_weight": float(config.get("halt_loss_weight", 0.0)),
         "exit_loss_weight": float(config.get("exit_loss_weight", 0.0)),
+        "route_final_target_weight": float(config.get("route_final_target_weight", 0.0)),
         "routing_coverage_weight": coverage_weight,
         "routing_reuse_weight": float(config.get("routing_reuse_weight", 0.0)),
         "routing_reuse_start_level": int(config.get("routing_reuse_start_level", 0)),

@@ -812,6 +812,18 @@ qabul qilinmadi. Opt-in API saqlandi.
 
 **Residual audit:** `results/P007_POST_CORRECTION_RESIDUAL_AUDIT.md`.
 
+Route-final-target auxiliary loss ham tekshirildi. Har bir bajarilgan
+circuit delta `model.output(delta)` orqali final targetga auxiliary CE bilan
+bog‘landi; inference, active budget va circuit bank o‘zgarmadi. 20M
+coverage-matched continuationda `w=0.10` ikki seedda `+0.495/+0.260 pp`
+(mean `+0.378 pp`) berdi, ammo adoption gate `+2 pp`ga yetmadi. `w=0.05`
+mean `+0.260 pp` bo‘lib seedlar orasida qarama-qarshi, `w=0.25` esa
+`−0.195 pp` bo‘ldi. Demak bu route/state interface uchun zaif signal, lekin
+muammoni yechgan ishonchli arxitektura emas; defaultga kiritilmadi va 100M ga
+scale qilinmadi.
+
+**Route-final-target audit:** `results/P007_ROUTE_FINAL_TARGET_AUDIT.md`.
+
 ### C-P002-EXPOSURE-WARMUP-001 — Initial task-stable route exposure
 
 **Status:** `REJECTED`
