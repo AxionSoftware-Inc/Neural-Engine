@@ -220,11 +220,14 @@ class HierarchicalRouter(nn.Module):
         route_gain = 1.0 + 0.05 * torch.tanh(path_score)
         stats = {
             "router_entropy": torch.stack(entropies, dim=-1).mean(),
-            "router_decisions": torch.tensor(self.active_depth * self.num_addresses, device=state.device),
+            # These are metadata, not model values. Keeping them on the host
+            # avoids an unnecessary CUDA scalar allocation in fixed-shape
+            # serving/CUDA Graph capture.
+            "router_decisions": self.active_depth * self.num_addresses,
             "route_gain": route_gain,
             "candidate_ids": candidate_ids,
             "selected_ids": selected_ids,
-            "soft_route": torch.tensor(use_soft_route, device=state.device),
+            "soft_route": use_soft_route,
         }
         if reuse_level_probabilities and reuse_task_ids is not None:
             task_groups = torch.unique(reuse_task_ids, sorted=True)

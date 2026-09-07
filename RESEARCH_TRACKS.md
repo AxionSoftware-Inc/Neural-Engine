@@ -58,7 +58,9 @@ hard-path gather measured about `2.135x` dense; the comparable smoke measured
 `1.128x`, and the trained two-seed timing was approximately `0.99x/1.00x`.
 True one-token decode is still slower (`1.371x/1.403x` for K=5/K=6), so the
 next runtime milestone is a compiled decode kernel rather than another router
-rewrite.
+rewrite. Native's stats-free serving path already removes diagnostic tensor
+overhead (`23.5%` faster at batch-1 in the first smoke); it remains opt-in
+until a production caller is wired to it.
 
 ## Problem ownership
 
