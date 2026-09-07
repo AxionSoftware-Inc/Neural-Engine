@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-from .circuits import MicroCircuitBank
+from .circuits import MicroCircuitBank, SharedResidualMicroCircuitBank
 from .encoding import (VALUE_HARMONICS, VALUE_MODULUS, VALUE_TOKEN_OFFSET,
                        encode_tokens)
 from .instrumentation import count_parameters
@@ -27,6 +27,7 @@ class NeuralEngineV0(nn.Module):
                  input_reinjection_schedule: list[float] | tuple[float, ...] | None = None,
                  correction_gate_mode: str = "none", memory_write_mode: str = "none",
                  post_correction_residual_scale: float = 0.0,
+                 circuit_bank_mode: str = "independent", shared_rank: int = 8,
                  routing_reuse_weight: float = 0.0, routing_reuse_start_level: int = 0,
                  route_exploration_prob: float = 0.0,
                  routing_capacity: int | None = None, routing_depth: int | None = None,
@@ -39,6 +40,10 @@ class NeuralEngineV0(nn.Module):
             raise ValueError("circuit_mode must be 'parallel' or 'serial'")
         if memory_write_mode not in {"none", "gated"}:
             raise ValueError("memory_write_mode must be 'none' or 'gated'")
+        if circuit_bank_mode not in {"independent", "shared_residual"}:
+            raise ValueError("circuit_bank_mode must be 'independent' or 'shared_residual'")
+        if shared_rank < 1:
+            raise ValueError("shared_rank must be positive")
         if not 0.0 < halt_threshold < 1.0:
             raise ValueError("halt_threshold must be between 0 and 1")
         self.state_dim = state_dim
@@ -48,6 +53,8 @@ class NeuralEngineV0(nn.Module):
         self.use_task_context = task_context
         self.task_context_update = task_context_update
         self.circuit_mode = circuit_mode
+        self.circuit_bank_mode = circuit_bank_mode
+        self.shared_rank = int(shared_rank)
         self.numeric_value_encoding = numeric_value_encoding
         self.adaptive_halting = adaptive_halting
         self.adaptive_inference = adaptive_halting
@@ -132,7 +139,12 @@ class NeuralEngineV0(nn.Module):
             if router_variant == "family_conditioned":
                 self.family_embeddings = nn.Parameter(torch.empty(family_count, state_dim))
                 nn.init.normal_(self.family_embeddings, std=0.02)
-        self.circuits = MicroCircuitBank(num_circuits, state_dim, circuit_rank)
+        if circuit_bank_mode == "shared_residual":
+            self.circuits = SharedResidualMicroCircuitBank(
+                num_circuits, state_dim, circuit_rank, shared_rank
+            )
+        else:
+            self.circuits = MicroCircuitBank(num_circuits, state_dim, circuit_rank)
         self.correction_gate = (
             nn.Linear(2 * state_dim, 1)
             if correction_gate_mode == "route_bounded" else None
@@ -425,6 +437,10 @@ class NeuralEngineV0(nn.Module):
             shared += count_parameters(self.memory_write)
         if self.correction_gate is not None:
             shared += count_parameters(self.correction_gate)
+        if self.circuit_bank_mode == "shared_residual":
+            shared += self.circuits.shared_down.numel()
+            shared += self.circuits.shared_up.numel()
+            shared += self.circuits.shared_bias.numel()
         one_circuit = self.circuits.down[0].numel() + self.circuits.up[0].numel() + self.circuits.bias[0].numel()
         candidate_key_params = self.router.keys[0].numel() * self.router.candidate_pool
         active = shared + candidate_key_params + one_circuit * self.active_circuits
@@ -433,5 +449,7 @@ class NeuralEngineV0(nn.Module):
             "active_params_estimate": active,
             "active_fraction": active / total,
             "active_circuit_params": one_circuit * self.active_circuits,
+            "circuit_bank_mode": self.circuit_bank_mode,
+            "shared_rank": self.shared_rank,
             "route_exploration_prob": self.route_exploration_prob,
         }

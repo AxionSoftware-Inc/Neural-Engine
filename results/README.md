@@ -17,6 +17,7 @@
 - [P-007 — Post-GRU correction residual audit](P007_POST_CORRECTION_RESIDUAL_AUDIT.md)
 - [P-002 — Route-exposure warmup audit](P002_ROUTE_EXPOSURE_WARMUP_AUDIT.md)
 - [P-003 — New-bank random vs parent-cloned initialization](P003_CLONE_INIT_AUDIT.md)
+- [P-002 — Shared reusable residual bank audit](P002_SHARED_RESIDUAL_AUDIT.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)

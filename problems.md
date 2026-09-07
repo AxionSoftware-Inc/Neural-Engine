@@ -746,3 +746,9 @@ qabul qilinmadi. Opt-in API saqlandi.
 **Status:** `REJECTED`
 **Muammo:** P-002 / P-003
 **Natija:** seed17/18 clone minus random held-out mean accuracy `+0.508 pp`; route NMI delta `-0.00525`; route specialization delta `-0.00821`; dead fraction delta `-0.00285`. Yangi 100M bank qatorlari top `64` parent circuitdan noise bilan initsializatsiya qilindi; qolgan protocol random arm bilan bir xil.
+
+### C-P002-SHARED-RESIDUAL-001 — Shared reusable residual primitive
+
+**Status:** `REJECTED`
+**Muammo:** P-002 / P-003 / P-007
+**Natija:** seed17/18 shared-residual held-out mean accuracy delta `-0.299 pp`; counterfactual NMI/specialization/positive-advantage deltas `-0.02001`/`-0.00632`/`-0.02865`; dead fraction delta `+0.00000`. Shared rank-8 primitive V0’ga opt-in sifatida qo‘shildi, mustaqil per-circuit residual va router saqlandi.
