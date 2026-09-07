@@ -716,3 +716,12 @@ bo‘ldi. Quality yoki route sensitivity gate bajarilmadi; patch
 `REJECTED FOR ADOPTION`.
 
 **Gate audit:** `results/P007_CORRECTION_GATE_AUDIT.md`.
+
+Inference-only correction-gain sweep ham bajarildi: 100M staged seed17/18
+checkpointlarda `circuit_delta_scale={0.5,1,2,4}` tekshirildi. `scale=4`
+seed18 natural accuracy’ni `1.0`ga nisbatan `−1.88 pp` tushirdi; global va
+within-task route replay CE/accuracy ta’siri seedlar orasida qarama-qarshi
+bo‘ldi. Correction amplitudasini oshirish barqaror causal signal bermadi va
+training/default uchun rad qilindi.
+
+**Sweep audit:** `results/P007_CORRECTION_GAIN_SWEEP_AUDIT.md`.

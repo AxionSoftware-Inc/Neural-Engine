@@ -13,6 +13,7 @@
 - [V0.193 — Qwen rank-64 correction dispatch audit](V0_193_QWEN_CORRECTION_DISPATCH_AUDIT.md)
 - [V0.194 — Qwen K=4 on-policy pairwise-router audit](V0_194_QWEN_K4_ON_POLICY_PAIRWISE_AUDIT.md)
 - [P-001 — Sparse output-signature follow-up audit](P001_SPARSE_OUTPUT_SIGNATURE_FOLLOWUP_AUDIT.md)
+- [P-007 — Correction-gain sweep](P007_CORRECTION_GAIN_SWEEP_AUDIT.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
@@ -122,6 +123,13 @@ fell `−0.313 pp` and regret reduction was only `3.14%/7.77%`, despite
 Therefore bank initialization is retained as a research hypothesis, while the
 candidate-only selector remains rejected and P-001 stays open. See
 `P001_SPARSE_OUTPUT_SIGNATURE_FOLLOWUP_AUDIT.md`.
+
+The P-007 inference-only correction-gain sweep also rejected a simple amplitude
+fix. On 100M seed17/18 checkpoints, increasing `circuit_delta_scale` from
+`1.0` to `4.0` did not improve natural quality consistently and produced
+opposite route-replay signals across seeds; seed18 natural accuracy fell
+`1.88 pp`. The correction/state interface remains the next causal target. See
+`P007_CORRECTION_GAIN_SWEEP_AUDIT.md`.
 
 The expert-proposed pairwise cost-router was then tested with a corrected
 final-target protocol. Its initial 36-output structured cost head gives a
