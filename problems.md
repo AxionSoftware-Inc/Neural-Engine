@@ -232,6 +232,8 @@ marginli reference sifatida saqlanadi.
 V0.193 adaptive gather guard decode-like 1×32 timingni K=5’da `1.870x →
 1.406x`, K=6’da `1.942x → 1.612x` qildi. Kichik batchda hali dense’ga teng emas;
 compiled decode kernel/P-006 cost hisobi keyingi systems ishidir.
+K=5 low-batch backend A/B’da grouped `1.406x`, grouped-fused `1.511x`, packed
+`2.090x` bo‘ldi; oddiy backend almashtirish rad qilindi.
 
 Deep-level reuse (`routing_reuse_start_level=2`, weight `2.0`) ham alohida
 tekshirildi: all-screen controlga nisbatan faqat `+0.04 pp`, held-out active-8

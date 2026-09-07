@@ -108,6 +108,11 @@ from `1.942x` to `1.612x` for K=6. This is a meaningful reduction, but it is
 still not dense-equivalent at batch 1; a compiled fused decode kernel remains
 the next runtime task.
 
+The low-batch backend A/B also rejects simple backend swapping as the fix:
+K=5 at 1×32 measured `1.406x` with adaptive `grouped`, `1.511x` with
+`grouped-fused`, and `2.090x` with `packed`. The current grouped layout is
+therefore retained as the best PyTorch fallback.
+
 `V0.193` is accepted as the new grouped correction implementation because it
 preserves the formula and passes both quality seeds while removing the large
 memory gather. This closes the immediate rank-64 correction-dispatch
@@ -125,6 +130,8 @@ the tested 8-layer K=6 configuration.
 - Parity test: `tests/test_qwen_packed_dispatch.py`
 - Low-batch K=5 timing JSON: `results/runs/qwen_v0193_8layers_k5_decodeish_adaptive_timing_seed2026.json`
 - Low-batch K=6 timing JSON: `results/runs/qwen_v0193_8layers_k6_decodeish_adaptive_timing_seed2026.json`
+- Low-batch packed control JSON: `results/runs/qwen_v0193_8layers_k5_decodeish_packed_timing_seed2026.json`
+- Low-batch grouped-fused control JSON: `results/runs/qwen_v0193_8layers_k5_decodeish_groupedfused_timing_seed2026.json`
 - Seed 2026 JSON: `results/runs/qwen_v0193_8layers_k6_grouped_rank64_optcorr_seed2026.json`
 - Seed 2027 JSON: `results/runs/qwen_v0193_8layers_k6_grouped_rank64_optcorr_seed2027.json`
 - K=5 seed 2026 JSON: `results/runs/qwen_v0193_8layers_k5_grouped_rank64_optcorr_seed2026.json`
