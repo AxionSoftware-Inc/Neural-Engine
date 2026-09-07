@@ -138,6 +138,16 @@ imkonsiz degani emas, faqat shu projection formulasi yopildi.
 
 **Audit:** `results/V0_185_QWEN_TEACHER_DERIVED_BASIS_SWIGLU.md`.
 
+**V0.186 conditional-capacity oracle (2026-09-07):** 192/768/1536-wide
+compact children bilan token difficulty bo'yicha teacher-informed width route
+qilindi. Eng yaxshi oracle `34.03%` average active widthda ham `+0.0636` CE,
+`25.49%`da `+0.0679` CE berdi; `<=50%` active budget gate'i bajarilmadi.
+Demak dynamic width g'oyasi route diversity ko'rsatdi, lekin shu compact
+functions representation gapini yopmadi; deployable difficulty predictor
+ustida davom etish hozircha asoslanmagan.
+
+**Audit:** `results/V0_186_QWEN_ADAPTIVE_WIDTH_ORACLE.md`.
+
 Deep-level reuse (`routing_reuse_start_level=2`, weight `2.0`) ham alohida
 tekshirildi: all-screen controlga nisbatan faqat `+0.04 pp`, held-out active-8
 esa `−0.47 pp`, route replay sensitivity esa deyarli oshmadi. Oddiy task-reuse
