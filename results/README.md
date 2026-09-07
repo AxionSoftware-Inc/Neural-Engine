@@ -1215,3 +1215,10 @@ V0.177 tests task-aware routing. A task-context query gives a small two-seed
 gain at 32 circuits, but the full 8/16/32 screen is non-monotonic; route-target
 auxiliary supervision is rejected because it collapses router entropy without
 improving held-out hard selection. See `V0_177_TASK_AWARE_ROUTING.md`.
+
+2026-09-08 P-001 candidate-pool width screen widens the frozen hierarchical
+router window from 32 to 64/128/256 on six 100M/300M/500M staged checkpoints
+using 1,920 identical held-out examples per checkpoint. The mean changes are
+near zero and seed-dependent (64/128/256: `+0.000889/+0.000306/−0.000077 CE`,
+`−0.095/−0.009/−0.026 pp accuracy`), so simple window enlargement is rejected
+as the main quality fix. See `P001_CANDIDATE_POOL_WIDTH_SCREEN_20260908.md`.

@@ -48,6 +48,18 @@ mean delta `−0.05/−0.26/−0.05 pp` bo‘ldi va CE barcha scale’da yomonla
 Shuning uchun full-bank scoring hierarchical candidate retrievalning oddiy
 yechimi emas.
 
+2026-09-08 candidate-window screen’da 100M/300M/500M seed17/18 checkpointlari
+1,920 ta bir xil held-out misolda `candidate_pool=32,64,128,256` bilan
+inference-only tekshirildi. O‘rtacha delta 32-poolga nisbatan 64/128/256 uchun
+mos ravishda `+0.000889/+0.000306/−0.000077 CE` va
+`−0.095/−0.009/−0.026 pp accuracy` bo‘ldi. Seedlar qarama-qarshi yo‘nalishda
+ketdi; 500M seed17’dagi `256` pool yaxshilanishi seed18’da takrorlanmadi.
+Demak oddiy lokal oynani kengaytirish katta muammoni hal qilmaydi va default
+candidate pool o‘zgartirilmadi. Bu test learned retrievalni butunlay inkor
+qilmaydi, lekin P-001ning “32 pool torligi asosiy sabab” qismini zaiflashtiradi.
+
+**Audit:** `results/P001_CANDIDATE_POOL_WIDTH_SCREEN_20260908.md`.
+
 #### Muammo ta’rifi
 
 Retriever arzon bo‘lishi kerak, lekin yaxshi pair ichidagi circuitlarning
