@@ -313,7 +313,7 @@ kerak.
 
 ### C-P003-STAGED-GROWTH-001 — Inherited circuit bank with staged exposure
 
-**Status:** `PROMISING — NEEDS REPLICATION`
+**Status:** `PROMISING — NEEDS SCALE TEST`
 **Muammo:** P-003
 **Natija:** NE-20 5k checkpointdan parent circuit/router weightlari ko‘chirilib,
 avval 100M modelning `1408` reachable bankida 5k, keyin full `7552` bankida

@@ -72,8 +72,17 @@ Bir xil staged checkpointda active budget sweep:
 | 16 | 82.60% | 82.45% | 82.53% |
 | 32 | 82.50% | 82.40% | 82.45% |
 
-8 active circuit allaqachon yetarli; 16/32 ga oshirish faqat `+0.19/+0.11 pp`
-atrofida qo‘shimcha beradi va active compute’ni oshiradi.
+Uchinchi seed bilan kengaytirilgan audit:
+
+| Active circuits | Seed17 | Seed18 | Seed19 | 3-seed mean |
+|---:|---:|---:|---:|---:|
+| 4 | 82.40% | 82.03% | 80.00% | 81.48% |
+| 8 | 82.45% | 82.24% | 80.16% | 81.61% |
+| 16 | 82.60% | 82.45% | 80.31% | 81.79% |
+| 32 | 82.50% | 82.40% | 80.36% | 81.75% |
+
+8 active circuit allaqachon yetarli; 3-seed sweepda 16/32 ga oshirish faqat
+`+0.17/+0.14 pp` atrofida qo‘shimcha beradi va active compute’ni oshiradi.
 
 ## Qaror
 
