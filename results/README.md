@@ -81,6 +81,9 @@ launch overhead remains, so a compiled decode kernel is still needed.
 Low-batch backend A/B rejects simple swapping: K=5 is `1.406x` grouped,
 `1.511x` grouped-fused, and `2.090x` packed. Grouped remains the best
 PyTorch fallback.
+At true one-token decode (`1×1`, 100 iterations), K=5/K=6 are `1.371x` and
+`1.403x`; sequence length one has no CE element, so these are latency-only
+smokes and a compiled decode kernel remains the next systems task.
 
 The same patch also validates the lower-budget K=5 point: the existing
 two-seed quality pass remains (`+0.03881`/`+0.04036` CE), while timing falls

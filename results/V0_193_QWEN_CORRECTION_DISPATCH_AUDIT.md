@@ -113,6 +113,13 @@ K=5 at 1×32 measured `1.406x` with adaptive `grouped`, `1.511x` with
 `grouped-fused`, and `2.090x` with `packed`. The current grouped layout is
 therefore retained as the best PyTorch fallback.
 
+Finally, a true one-token decode-like smoke (`batch=1`, `sequence=1`, 100
+timing iterations) measured `1.371x` at K=5 and `1.403x` at K=6. The loss is
+intentionally not interpreted because sequence length one has no next-token
+CE element and reports NaN. This confirms that the adaptive path helps actual
+decode-sized inputs, but also leaves a roughly 40% end-to-end overhead that
+requires a compiled decode dispatch to remove.
+
 `V0.193` is accepted as the new grouped correction implementation because it
 preserves the formula and passes both quality seeds while removing the large
 memory gather. This closes the immediate rank-64 correction-dispatch
@@ -130,6 +137,8 @@ the tested 8-layer K=6 configuration.
 - Parity test: `tests/test_qwen_packed_dispatch.py`
 - Low-batch K=5 timing JSON: `results/runs/qwen_v0193_8layers_k5_decodeish_adaptive_timing_seed2026.json`
 - Low-batch K=6 timing JSON: `results/runs/qwen_v0193_8layers_k6_decodeish_adaptive_timing_seed2026.json`
+- One-token K=5 timing JSON: `results/runs/qwen_v0193_8layers_k5_decode1_adaptive_timing_seed2026.json`
+- One-token K=6 timing JSON: `results/runs/qwen_v0193_8layers_k6_decode1_adaptive_timing_seed2026.json`
 - Low-batch packed control JSON: `results/runs/qwen_v0193_8layers_k5_decodeish_packed_timing_seed2026.json`
 - Low-batch grouped-fused control JSON: `results/runs/qwen_v0193_8layers_k5_decodeish_groupedfused_timing_seed2026.json`
 - Seed 2026 JSON: `results/runs/qwen_v0193_8layers_k6_grouped_rank64_optcorr_seed2026.json`

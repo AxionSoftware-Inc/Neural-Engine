@@ -234,6 +234,9 @@ V0.193 adaptive gather guard decode-like 1×32 timingni K=5’da `1.870x →
 compiled decode kernel/P-006 cost hisobi keyingi systems ishidir.
 K=5 low-batch backend A/B’da grouped `1.406x`, grouped-fused `1.511x`, packed
 `2.090x` bo‘ldi; oddiy backend almashtirish rad qilindi.
+Haqiqiy one-token decode smoke’da (`1×1`, 100 iteration) K=5/K=6 `1.371x /
+1.403x` bo‘ldi. Bu latency-only natija; seq=1 CE hisoblanmaydi. Compiled
+decode dispatch hali ochiq.
 
 Deep-level reuse (`routing_reuse_start_level=2`, weight `2.0`) ham alohida
 tekshirildi: all-screen controlga nisbatan faqat `+0.04 pp`, held-out active-8
