@@ -514,6 +514,15 @@ ko‘rsatdi. Demak Qwen FFN dispatchini tezlatish butun Transformer one-token
 yo‘lini avtomatik ravishda tezlashtirmaydi; bu Native Engine’ning
 attention-free yo‘liga qarshi dalil emas.
 
+Router-only ablation ham muammo faqat router emasligini ko‘rsatdi: sakkiz
+qatlamli one-token smoke’da odatiy router `37.245 ms`, statik nol-logit
+controller `33.822 ms`, dense parent `29.019 ms` bo‘ldi. Router taxminan
+`3.423 ms` tejaydi, lekin router olib tashlanganda ham sparse yo‘l `1.166x`
+sekin. Shuning uchun keyingi haqiqiy runtime sakrashi fused
+router+top-k+dispatch kernelidan kelishi kerak; oddiy router MLPni
+kichraytirishning o‘zi yetarli emas. Batafsil:
+`results/RUNTIME_QWEN_ROUTER_OVERHEAD_20260908.md`.
+
 ## Yopilgan yoki rad qilingan yo‘llar
 
 Bu bo‘lim aktiv muammolarni to‘ldiradi; muvaffaqiyatsiz tajribalar o‘chirilmaydi.
