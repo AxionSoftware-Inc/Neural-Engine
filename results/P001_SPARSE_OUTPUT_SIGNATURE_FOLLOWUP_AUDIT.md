@@ -30,6 +30,7 @@ evaluator va oldindan belgilangan gate bilan tekshirildi.
 | Bank-init rank8 / dim16, trainable | `+0.469 pp` | `6.77%` | `9.43%` | `1.043x` | 40,513 | 12,457 | Rejected for gate |
 | Bank-init rank8 / dim16, frozen | `−0.651 pp` | `1.72%` | `3.67%` | `1.190x` | 40,513 | 12,457 | Rejected |
 | Bank-init rank8 / dim16, individual-additive target | `−0.234 pp` | `6.51%` | `12.16%` | `1.312x` | 40,513 | 12,457 | Rejected |
+| Bank-init rank8 / dim16 + key prior 0.25 | `−0.313 pp` | `3.14%` | `7.77%` | `1.063x` | 40,513 | 13,481 | Rejected |
 
 Bank-init trainable variantning seed-level natijasi:
 
@@ -57,6 +58,10 @@ accuracy `+0.469 pp` va regret `6.77%/9.43%` bo‘lib gate’dan o‘tmadi.
   final hard accuracy `−0.234 pp` va max latency `1.312x` bo‘ldi. Demak lokal
   pair-selection regretining yaxshilanishi final recurrent cascade sifatiga
   avtomatik ko‘chmaydi.
+- Existing key-score’ni `0.25` prior bilan qo‘shish latency guard’dan o‘tdi,
+  lekin hard accuracy `−0.313 pp` va regret `3.14%/7.77%` bo‘ldi. Demak
+  output-aware signal va retrieval score oddiy additive prior sifatida
+  birlashtirilganda ham final sifat muammosi hal bo‘lmaydi.
 - Handoff D candidate-only selectori umumiy sifat yechimi sifatida qabul
   qilinmadi. P-001 ochiq qoladi; P-002/P-004 bilan bog‘liq bank
   specialization va cascade target mismatch hali hal qilinmagan.
@@ -70,6 +75,7 @@ Raw JSONlar Git’dan ignore qilingan `results/runs/` ichida:
 - `p001_sparse_output_signature_bank_init_rank8_dim16_s17_s18.json`
 - `p001_sparse_output_signature_bank_init_freeze_rank8_dim16_s17_s18.json`
 - `p001_sparse_output_signature_bank_init_individual_rank8_dim16_s17_s18.json`
+- `p001_sparse_output_signature_bank_init_keyprior025_rank8_dim16_s17_s18.json`
 
 Bank-init implementation `exp/p001-bank-initialized-signature` branchida
 `3766464` commit sifatida opt-in patch qilib saqlandi; default modelga merge

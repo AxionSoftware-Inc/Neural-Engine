@@ -116,6 +116,9 @@ both seeds, `0.935x/1.043x` latency), but mean/p95 regret reductions were only
 Switching the teacher to individual-output-additive losses raised mean p95
 regret reduction to `12.16%`, but final accuracy fell `−0.234 pp` and max
 latency reached `1.312x`.
+Adding the existing key score as a `0.25` prior also failed: mean accuracy
+fell `−0.313 pp` and regret reduction was only `3.14%/7.77%`, despite
+`0.969x` mean latency.
 Therefore bank initialization is retained as a research hypothesis, while the
 candidate-only selector remains rejected and P-001 stays open. See
 `P001_SPARSE_OUTPUT_SIGNATURE_FOLLOWUP_AUDIT.md`.

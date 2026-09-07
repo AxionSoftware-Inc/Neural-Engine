@@ -444,7 +444,8 @@ random rank8/dim32 `−0.026 pp`; bank-init rank8/dim16 trainingga ochiq variant
 additive target p95 regretni `12.16%`ga ko‘tardi, ammo final accuracy
 `−0.234 pp` va max latency `1.312x` bo‘ldi. Bank-init trainable variant eng
 yaxshi signal sifatida qayd qilindi, ammo `+2 pp` accuracy va `>=10%` regret
-gate’lari bajarilmadi. P-001 `ACTIVE` qoladi.
+gate’lari bajarilmadi. Key-score prior `0.25` bilan qo‘shilganda ham accuracy
+`−0.313 pp`, regret reduction `3.14%/7.77%` bo‘ldi. P-001 `ACTIVE` qoladi.
 **Batafsil:** `results/P001_SPARSE_OUTPUT_SIGNATURE_FOLLOWUP_AUDIT.md`.
 
 ### C-P004-QWEN-TRANSFER-RECHECK-001 — Exact Qwen FFN compilation
