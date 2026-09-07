@@ -148,6 +148,16 @@ ustida davom etish hozircha asoslanmagan.
 
 **Audit:** `results/V0_186_QWEN_ADAPTIVE_WIDTH_ORACLE.md`.
 
+**V0.187 signed group-sketch router (2026-09-07):** Qwen E=8/K=4 raw-neuron
+bank uchun har bir group output'ining 8-D signed cosine sketch'i mavjud
+pairwise cost headga berildi. Seed2026/27 learned CE `+0.05899/+0.05469`,
+timing `1.183x/1.182x`, exact subset match esa layer25/26da taxminan
+`53%/72%` bo'ldi. Old hidden-input pairwise controldan yaxshilanmadi va probe
+cost oshdi. `REJECTED`; sketch dimensionni oshirish yoki 8-layer scale run
+qilinmaydi.
+
+**Audit:** `results/V0_187_QWEN_SIGNED_GROUP_SKETCH_ROUTER.md`.
+
 Deep-level reuse (`routing_reuse_start_level=2`, weight `2.0`) ham alohida
 tekshirildi: all-screen controlga nisbatan faqat `+0.04 pp`, held-out active-8
 esa `−0.47 pp`, route replay sensitivity esa deyarli oshmadi. Oddiy task-reuse

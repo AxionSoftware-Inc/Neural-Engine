@@ -576,6 +576,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         router_hidden_size: int = 128,
         router_input: str = "hidden",
         pairwise_cost_parameterization: str = "components",
+        router_sketch_dim: int = 8,
     ) -> None:
         super().__init__()
         if not 1 <= active_experts <= num_experts:
@@ -611,10 +612,15 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self.route_source = route_source
         if router_hidden_size < 1:
             raise ValueError("router hidden size must be positive")
-        if router_input not in {"hidden", "group-energy"}:
-            raise ValueError("router input must be hidden or group-energy")
+        if router_input not in {"hidden", "group-energy", "group-sketch"}:
+            raise ValueError(
+                "router input must be hidden, group-energy, or group-sketch"
+            )
         self.router_hidden_size = int(router_hidden_size)
         self.router_input = router_input
+        if router_sketch_dim < 1:
+            raise ValueError("router sketch dimension must be positive")
+        self.router_sketch_dim = int(router_sketch_dim)
         if pairwise_cost_parameterization not in {"components", "centered-basis"}:
             raise ValueError(
                 "pairwise cost parameterization must be components or centered-basis"
@@ -725,6 +731,24 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             torch.stack([expert.output_projection.weight for expert in self.experts]),
             persistent=False,
         )
+        if router_input == "group-sketch":
+            coordinates = torch.arange(
+                1, hidden_size + 1,
+                device=parent.gate_proj.weight.device,
+                dtype=torch.float32,
+            ).unsqueeze(-1)
+            frequencies = torch.arange(
+                1, self.router_sketch_dim + 1,
+                device=coordinates.device,
+                dtype=torch.float32,
+            ).unsqueeze(0)
+            sketch = torch.cos(
+                coordinates * frequencies * torch.pi / hidden_size,
+            )
+            sketch = sketch / sketch.norm(dim=0, keepdim=True).clamp_min(1e-6)
+            self.register_buffer(
+                "router_sketch_projection", sketch, persistent=False,
+            )
         if route_source in {
             "subset-router", "oracle-subset", "pairwise-cost-router",
         }:
@@ -741,7 +765,9 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 persistent=False,
             )
             router_input_size = (
-                hidden_size if router_input == "hidden" else num_experts
+                hidden_size if router_input == "hidden"
+                else num_experts if router_input == "group-energy"
+                else num_experts * self.router_sketch_dim
             )
             if route_source == "pairwise-cost-router":
                 pair_ids = torch.tensor(
@@ -823,11 +849,25 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             "nh,ech->nec", flat_hidden, self.group_value_weight,
         )
         coefficient = F.silu(grouped_gate) * grouped_value
-        energy = coefficient.float().square().mean(dim=-1)
-        output_scale = self.group_output_weight.float().square().mean(dim=(1, 2))
-        features = torch.log1p(energy * output_scale.unsqueeze(0))
-        return features.reshape(*hidden_states.shape[:-1], self.num_experts).to(
-            dtype=hidden_states.dtype,
+        if self.router_input == "group-energy":
+            energy = coefficient.float().square().mean(dim=-1)
+            output_scale = self.group_output_weight.float().square().mean(dim=(1, 2))
+            features = torch.log1p(energy * output_scale.unsqueeze(0))
+            return features.reshape(*hidden_states.shape[:-1], self.num_experts).to(
+                dtype=hidden_states.dtype,
+            )
+        projection = self.router_sketch_projection.to(
+            device=flat_hidden.device, dtype=coefficient.dtype,
+        )
+        sketch = torch.einsum(
+            "nec,ehc,hd->ned",
+            coefficient,
+            self.group_output_weight.to(dtype=coefficient.dtype),
+            projection,
+        )
+        return sketch.reshape(
+            *hidden_states.shape[:-1],
+            self.num_experts * self.router_sketch_dim,
         )
 
     def _subset_scores(self, hidden_states: torch.Tensor) -> torch.Tensor:
@@ -1847,6 +1887,7 @@ def make_transferred_routed_qwen_child(
     router_input: str = "hidden",
     pairwise_cost_parameterization: str = "components",
     core_overlap_fraction: float = 0.25,
+    router_sketch_dim: int = 8,
 ) -> torch.nn.Module:
     partition_indices = None
     if partition_mode == "activation-balanced":
@@ -1895,6 +1936,7 @@ def make_transferred_routed_qwen_child(
         router_hidden_size,
         router_input,
         pairwise_cost_parameterization,
+        router_sketch_dim,
     ).to(device=device, dtype=dtype)
     if calibration_rank > 0 or calibration_mode == "signed-subset":
         if calibration_mode == "shared-basis":
@@ -3131,6 +3173,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 router_input=args.router_input,
                 pairwise_cost_parameterization=args.pairwise_cost_parameterization,
                 core_overlap_fraction=args.core_overlap_fraction,
+                router_sketch_dim=args.router_sketch_dim,
             )
             if args.calibration_mode == "teacher-group-decoder":
                 initialize_teacher_group_decoders(
@@ -3479,6 +3522,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "route_source": args.route_source,
         "router_hidden_size": args.router_hidden_size,
         "router_input": args.router_input,
+        "router_sketch_dim": args.router_sketch_dim,
         "pairwise_cost_parameterization": args.pairwise_cost_parameterization,
         "router_target": args.router_target,
         "post_router_target": args.post_router_target,
@@ -3653,9 +3697,13 @@ def main() -> None:
     )
     parser.add_argument(
         "--router-input",
-        choices=("hidden", "group-energy"),
+        choices=("hidden", "group-energy", "group-sketch"),
         default="hidden",
         help="features provided to the learned subset router",
+    )
+    parser.add_argument(
+        "--router-sketch-dim", type=int, default=8,
+        help="signed output sketch dimensions per group for group-sketch input",
     )
     parser.add_argument(
         "--pairwise-cost-parameterization",
