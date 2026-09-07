@@ -82,6 +82,14 @@ steady-state smoke'da Graph/eager ratio batch-1da `0.959x`
 Bu kichik launch foydasi, lekin asosiy one-token gapni yopadigan sakrash emas;
 dynamic adaptive path uchun defaultga qo'yilmadi.
 
+Native branch qayta tekshiruvida (`exp/track-native-engine`) Graph logit xatosi
+yana `0.0` bo‘ldi, ammo timing batch-1da eager `0.654 ms` va Graph `0.659 ms`
+(`1.009x`), batch-128da eager `3.602 ms` va Graph `3.552 ms` (`0.986x`) chiqdi.
+Demak fixed-shape Graph batch-128da faqat taxminan `1.4%` mikro-foyda beradi,
+one-token muammosini yopmaydi. `benchmark_native_compile.py` qayta sinovida
+esa Windows muhitida ishlaydigan Triton topilmadi; compile natijasi muhit
+cheklovi sifatida `OPEN`, model yoki sifat rad javobi sifatida emas.
+
 `torch.cuda.make_graphed_callables` uchun `router_decisions` va `soft_route`
 metadata'lari GPU scalar emas, host metadata sifatida qaytarildi. Bu numerik
 model outputini o'zgartirmaydi va router testlari saqlandi.

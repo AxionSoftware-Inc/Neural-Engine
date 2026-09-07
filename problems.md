@@ -497,6 +497,12 @@ defaultga olinmadi. Float32 `matmul_precision=high` ham batch-1da atigi
 bu ham defaultga olinmadi. Batafsil:
 `results/RUNTIME_NATIVE_SMALL_BATCH_BASELINE_20260908.md`.
 
+Native branch recheckda CUDA Graph logit error `0.0` bo‘ldi, lekin batch-1
+`1.009x` va batch-128 `0.986x` bo‘lib, faqat taxminan `1.4%` batch-128
+mikro-foyda berdi. `torch.compile` qayta sinovida Triton topilmadi; bu Windows
+toolchain cheklovi, model rejection emas. Fused decode kernel muammosi ochiq
+qoladi.
+
 ## Yopilgan yoki rad qilingan yo‘llar
 
 Bu bo‘lim aktiv muammolarni to‘ldiradi; muvaffaqiyatsiz tajribalar o‘chirilmaydi.
