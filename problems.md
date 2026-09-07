@@ -224,6 +224,11 @@ not solved by this systems patch.
 
 **Audit:** `results/V0_193_QWEN_CORRECTION_DISPATCH_AUDIT.md`.
 
+K=5 ham qayta tasdiqlandi: ikki seedli CE `+0.03881/+0.04036` bilan gate’dan
+o‘tdi, timing esa avvalgi `1.91x`dan `1.134x/1.129x`ga tushdi. Shu sabab K=5
+(`62.5%` active) hozirgi pastroq-budget operating point, K=6 esa yuqori
+marginli reference sifatida saqlanadi.
+
 Deep-level reuse (`routing_reuse_start_level=2`, weight `2.0`) ham alohida
 tekshirildi: all-screen controlga nisbatan faqat `+0.04 pp`, held-out active-8
 esa `−0.47 pp`, route replay sensitivity esa deyarli oshmadi. Oddiy task-reuse

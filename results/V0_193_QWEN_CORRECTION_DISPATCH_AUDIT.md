@@ -77,13 +77,36 @@ The two-iteration timing has normal CUDA noise, so the stable claim is that
 the former 2.1x dispatch penalty was removed in this protocol; a production
 throughput claim needs a longer timing run.
 
+## K=5 active-budget validation
+
+Because the earlier V0.174 K=5 scale-normalized control passed quality at a
+lower active budget but remained `1.91x` slower, the same patch was checked at
+E=8/K=5 with `hard_route_scale=5`, `timing-warmup=2`, and five timing
+iterations.
+
+| seed | sparse alpha=0 CE delta | old timing / parent | new timing / parent |
+|---:|---:|---:|---:|
+| 2026 | `+0.038812` | `1.91x` | `1.134x` |
+| 2027 | `+0.040363` | `1.91x` | `1.129x` |
+
+Both K=5 seeds pass the `+0.05` quality gate. The new sparse means were
+`272.321 ms` vs `240.073 ms` dense (seed 2026) and `271.095 ms` vs
+`240.157 ms` dense (seed 2027). This establishes K=5/62.5% active as the
+current best lower-budget operating point: it preserves the existing quality
+result while reducing the old dispatch penalty to roughly 13% overhead.
+
+The K=5 commands are identical to the K=6 commands above except for
+`--active-experts 5`, `--hard-route-scale 5`, the seed, and the output path.
+The JSON artifacts are listed below.
+
 ## Decision and next step
 
 `V0.193` is accepted as the new grouped correction implementation because it
 preserves the formula and passes both quality seeds while removing the large
 memory gather. This closes the immediate rank-64 correction-dispatch
 bottleneck, but P-006 instrumentation and the larger K=4 router-gap/P-001/
-P-002 research problems remain open.
+P-002 research problems remain open. K=5 is the preferred lower-budget
+operating point; K=6 remains the higher-margin quality reference.
 
 Do not interpret this as proof that the attention-free model beats Qwen. It is
 a systems result: the existing sparse child can now run near dense latency in
@@ -95,3 +118,5 @@ the tested 8-layer K=6 configuration.
 - Parity test: `tests/test_qwen_packed_dispatch.py`
 - Seed 2026 JSON: `results/runs/qwen_v0193_8layers_k6_grouped_rank64_optcorr_seed2026.json`
 - Seed 2027 JSON: `results/runs/qwen_v0193_8layers_k6_grouped_rank64_optcorr_seed2027.json`
+- K=5 seed 2026 JSON: `results/runs/qwen_v0193_8layers_k5_grouped_rank64_optcorr_seed2026.json`
+- K=5 seed 2027 JSON: `results/runs/qwen_v0193_8layers_k5_grouped_rank64_optcorr_seed2027.json`

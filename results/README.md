@@ -75,6 +75,12 @@ two-seed timing is `0.991x` and `1.004x` with only two timing iterations.
 This is a systems/dispatch result, not a new quality or scaling claim. See
 `V0_193_QWEN_CORRECTION_DISPATCH_AUDIT.md`.
 
+The same patch also validates the lower-budget K=5 point: the existing
+two-seed quality pass remains (`+0.03881`/`+0.04036` CE), while timing falls
+from the old `1.91x` to `1.134x`/`1.129x` with five timing iterations. K=5
+(`62.5%` active) is now the preferred lower-budget operating point; K=6 is
+still the higher-margin reference.
+
 The optimal-scalar diagnostic is small on both budgets: local MSE gain is
 `0.00222` for K4 and `0.00158` for K5, with mean `g*≈0.992`; therefore a scale
 predictor is not promoted and the remaining target is router/subset regret.
