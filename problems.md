@@ -848,6 +848,13 @@ scale qilinmadi.
 
 **Route-final-target audit:** `results/P007_ROUTE_FINAL_TARGET_AUDIT.md`.
 
+Training bilan `post_correction_residual_scale=1.0` ham ikki seedda tekshirildi:
+seed17 accuracy `−0.104 pp`, seed18 `+0.078 pp`, mean `−0.013 pp`; CE mean
+`+0.003219` yomonlashdi. Demak inference-only bypassdagi qarama-qarshi signal
+training bilan ham tuzalmadi. Route-state bypass oilasi `REJECTED FOR ADOPTION`,
+100M/300Mga scale qilinmaydi. Batafsil:
+`results/P007_POST_CORRECTION_RESIDUAL_TRAINING_AUDIT_20260908.md`.
+
 **One-step route causality audit (2026-09-08):** 100M/300M seed17/18da faqat
 bitta internal step route’i almashtirilganda route-delta L2 `1.53–1.90`, keyingi
 query L2 `0.56–0.96`, final logit L2 `0.59–1.03` bo‘ldi. Demak route correction
