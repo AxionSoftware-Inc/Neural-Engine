@@ -78,6 +78,21 @@ scoring `REJECTED AS DIRECT FIX`.
 
 **Audit:** `results/P001_ROUTE_NEIGHBORHOOD_REGRET_AUDIT_20260908.md`.
 
+**Query/key cost-surrogate screen (2026-09-08):** 20M seed17/18da train
+splitdan `92,160` one-swap CE label bilan kichik `261,705`-parametrli MLP
+o‘qitildi. Feature’lar query, candidate key, selected-route summary va
+key-score edi. Held-out surrogate route delta’si seed17/18da mos ravishda
+`−0.000359/+0.000616 CE`, ikki-seed o‘rtachasi `+0.000129 CE` bo‘ldi; oracle
+gain recovery `−3.75%/6.87%`, top-1 match `3.47%/2.92%`. Calibration loss
+pasaygan bo‘lsa ham final route tanlovi generalizatsiya qilmadi.
+
+Demak target-cost router g‘oyasi hozirgi feature set bilan ishlamadi. Muammo
+candidate circuitning query-dependent output signalini ko‘rmayotgan bo‘lishi
+mumkin; output signature qo‘shish esa active budget va routing costni yashirin
+oshirmasligi kerak. Shu sabab full modelga integratsiya qilinmadi.
+
+**Audit:** `results/P001_ROUTE_COST_SURROGATE_AUDIT_20260908.md`.
+
 **Route-neighborhood audit (2026-09-08):** 100M/300M/500M seed17/18 frozen
 checkpointlarda natural route uchun bir circuitlik one-swap qidiruv qilindi.
 Candidate pool ichidagi local selection headroom `0.00357–0.00506 CE` bo‘ldi.

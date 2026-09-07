@@ -1232,6 +1232,13 @@ than deployable. The next route experiment should learn final-cost alignment
 from query plus circuit signatures. See
 `P001_ROUTE_NEIGHBORHOOD_REGRET_AUDIT_20260908.md`.
 
+2026-09-08 query/key final-cost surrogate screen on 20M seed17/18 used
+92,160 calibration labels and a 261,705-parameter MLP. Held-out route deltas
+were `−0.000359/+0.000616 CE`, with only `−3.75%/6.87%` oracle-gain recovery,
+so query/key/route-summary features are rejected as insufficient. A future
+output-signature probe must account for its hidden active-compute cost. See
+`P001_ROUTE_COST_SURROGATE_AUDIT_20260908.md`.
+
 2026-09-08 P-001 route-neighborhood audit separates one-swap regret inside the
 32-circuit candidate pool from a full-bank key top-8 probe. Local selection
 headroom is `0.00357–0.00506 CE`; extra target-evaluated retrieval opportunity
