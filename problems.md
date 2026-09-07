@@ -670,7 +670,12 @@ ko‘proq qayta ishlatildi/dead fraction `15.06–16.72%`gacha tushdi va quality
 staged growthdagi qo‘shimcha training va meros qilingan circuitlar ta’siri
 hali alohida ajratilmagan.
 **Keyingi tajriba:** route fragmentation/coverage’ni kamaytiruvchi minimal patchni
-100M va 300M control bilan tekshirish; 500M faqat scale-control sifatida qoladi.
+100M va 300M control bilan tekshirish; route-causal diagnostic o‘tkazildi va
+prefix-preserving transition window (`H1`) 100M ikki-seed pilotda `−0.44/−0.13
+pp` bo‘lib, `NOT PROMOTED` qilindi. 500M faqat scale-control sifatida qoladi.
+Keyingi sinov circuit output → recurrent state/final-target causal interface’iga
+qaratiladi. Batafsil:
+`results/P003_ROUTE_CAUSAL_DIAGNOSTIC_20260907.md`.
 
 ### C-P003-SCALE-SATURATION-001 — Capacity growth does not improve held-out quality
 
