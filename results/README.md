@@ -10,6 +10,7 @@
 - [V0.181 — Qwen contribution-space micro-group audit](V0_181_QWEN_CONTRIBUTION_CLUSTER.md)
 - [V0.182 — Qwen signed-subset reconstruction audit](V0_182_QWEN_SIGNED_SUBSET_RECONSTRUCTION.md)
 - [V0.183 — Qwen deterministic core-overlap codebook audit](V0_183_QWEN_CORE_OVERLAP_CODEBOOK.md)
+- [V0.184 — Qwen contribution-diverse partition audit](V0_184_QWEN_CONTRIBUTION_DIVERSE.md)
 
 V0.174 follows the expert audit in `KEYINGI_YOL_2026-09-06.md` and fixes the
 hard-training/grouped-inference scale mismatch plus stale copied-expert
@@ -817,6 +818,11 @@ V0.183 tests a deterministic overlap codebook that repeats high-energy core
 neurons in every group. Even its exact oracle fails at `+0.1429` (25% core)
 and `+0.1500` (12.5% core), so this overlap construction is rejected before
 router training. See `V0_183_QWEN_CORE_OVERLAP_CODEBOOK.md`.
+
+V0.184 reverses contribution clustering by distributing every output-space
+cluster across all groups. The exact oracle reaches `+0.0397` versus `+0.0374`
+for the disjoint signed control, but learned routing is `+0.0697`; the tiny
+oracle movement is not an adoption signal. See `V0_184_QWEN_CONTRIBUTION_DIVERSE.md`.
 
 The proposal history is indexed in the repository root: `taklif.md` is the
 original scale/systems proposal, `taklif1.md` records completed experiments

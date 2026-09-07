@@ -366,6 +366,17 @@ Teacher-fitted signed subset oracle 25% core’da `+0.1429` CE, 12.5% core’da
 Takrorlangan muhim neuronlar tashlab yuborilgan tail hissasini tiklamadi.
 **Batafsil:** `results/V0_183_QWEN_CORE_OVERLAP_CODEBOOK.md`.
 
+### C-P004-QWEN-CONTRIB-DIVERSE-001 — Contribution-diverse disjoint groups
+
+**Status:** `REJECTED FOR ADOPTION`
+**Muammo:** Qwen sparse decomposition / P-004 transfer lane
+**Natija:** Output-space contribution clusterlarining teng bo‘laklari barcha
+disjoint group’lar orasida tarqatildi. Exact oracle `+0.0397` CE berdi, bu
+disjoint signed control `+0.0374`dan faqat `+0.0023`; learned router esa
+`+0.0697` bilan gate’dan o‘tmadi. Shuning uchun bu layout katta siljish emas,
+4-layer yoki 700M/1B davom ettirishga asos yo‘q.
+**Batafsil:** `results/V0_184_QWEN_CONTRIBUTION_DIVERSE.md`.
+
 ## Expertga yuborish uchun qisqa format
 
 ```text

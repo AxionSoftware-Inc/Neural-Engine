@@ -496,6 +496,42 @@ def contribution_cluster_partition(
     ]
 
 
+@torch.no_grad()
+def contribution_diverse_partition(
+    parent: torch.nn.Module,
+    io_batches: list[dict[str, torch.Tensor]],
+    device: torch.device,
+    dtype: torch.dtype,
+    num_experts: int,
+) -> list[torch.Tensor]:
+    """Distribute every output-space contribution cluster across all groups.
+
+    ``contribution_cluster_partition`` makes groups locally coherent.  This
+    complementary layout keeps the same disjoint compute budget but places an
+    equal slice of every cluster in every group, so any active subset sees a
+    broad mixture of functional directions instead of only half the clusters.
+    """
+    clusters = contribution_cluster_partition(
+        parent, io_batches, device, dtype, num_experts,
+    )
+    inner_size = int(parent.gate_proj.weight.shape[0])
+    chunk = inner_size // num_experts
+    if chunk % num_experts:
+        raise ValueError(
+            "contribution-diverse requires group width divisible by num_experts"
+        )
+    per_cluster = chunk // num_experts
+    groups = []
+    for expert_id in range(num_experts):
+        pieces = [
+            cluster[expert_id * per_cluster:(expert_id + 1) * per_cluster]
+            for cluster in clusters
+        ]
+        groups.append(torch.cat(pieces, dim=0))
+    parent_device = parent.gate_proj.weight.device
+    return [group.to(device=parent_device, dtype=torch.long) for group in groups]
+
+
 class QwenSwiGLUSlice(torch.nn.Module):
     """One contiguous intermediate-neuron slice of a Qwen SwiGLU."""
 
@@ -555,12 +591,13 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         if partition_mode not in {
             "contiguous", "interleaved", "norm-balanced", "activation-balanced",
             "sampled-overlap", "stratified-overlap", "activation-cluster",
-            "contribution-cluster", "core-overlap",
+            "contribution-cluster", "contribution-diverse", "core-overlap",
         }:
             raise ValueError(
                 "partition_mode must be contiguous, interleaved, norm-balanced, "
                 "activation-balanced, sampled-overlap, stratified-overlap, "
-                "activation-cluster, contribution-cluster, or core-overlap"
+                "activation-cluster, contribution-cluster, contribution-diverse, "
+                "or core-overlap"
             )
         self.partition_mode = partition_mode
         if route_source not in {
@@ -633,6 +670,11 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 raise ValueError(
                     "core-overlap partition requires one index tensor per expert"
                 )
+        if partition_mode == "contribution-diverse":
+            if partition_indices is None or len(partition_indices) != num_experts:
+                raise ValueError(
+                    "contribution-diverse partition requires one index tensor per expert"
+                )
         self.experts = torch.nn.ModuleList()
         for expert_id in range(num_experts):
             if partition_mode == "contiguous":
@@ -656,6 +698,8 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             elif partition_mode == "contribution-cluster":
                 indices = partition_indices[expert_id]
             elif partition_mode == "core-overlap":
+                indices = partition_indices[expert_id]
+            elif partition_mode == "contribution-diverse":
                 indices = partition_indices[expert_id]
             else:
                 if norm_order is None:
@@ -1829,6 +1873,12 @@ def make_transferred_routed_qwen_child(
         if partition_io is None:
             raise ValueError("contribution-cluster partition requires calibration IO")
         partition_indices = contribution_cluster_partition(
+            parent, partition_io, device, dtype, num_experts,
+        )
+    elif partition_mode == "contribution-diverse":
+        if partition_io is None:
+            raise ValueError("contribution-diverse partition requires calibration IO")
+        partition_indices = contribution_diverse_partition(
             parent, partition_io, device, dtype, num_experts,
         )
     elif partition_mode == "core-overlap":
@@ -3580,7 +3630,7 @@ def main() -> None:
         choices=(
             "contiguous", "interleaved", "norm-balanced", "activation-balanced",
             "sampled-overlap", "stratified-overlap", "activation-cluster",
-            "contribution-cluster", "core-overlap",
+            "contribution-cluster", "contribution-diverse", "core-overlap",
         ),
         default="contiguous",
         help="layout of copied parent neurons inside expert groups",
