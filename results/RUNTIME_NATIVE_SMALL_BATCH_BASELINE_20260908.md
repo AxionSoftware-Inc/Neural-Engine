@@ -40,6 +40,16 @@ Native batch-128da dense reference'dan `4.18x` tezroq, lekin batch-1da hali
 dense'dan `8.4%` sekinroq. Bu sezilarli overhead kamayishi, ammo one-token
 muammoni to'liq yopadigan fused kernel emas.
 
+## Native branch qayta tekshiruvi
+
+Runtime patchlari `exp/track-native-engine` branchiga cherry-pick qilingandan
+keyin ayni checkpoint, RTX 3060, `balanced_batch` va `collect_stats=False`
+protokolida qayta o‘lchandi. Batch-1 `3.304 ms` (`302.7 samples/s`), batch-128
+`8.165 ms` (`15,676 samples/s`) chiqdi. Bu avvalgi runtime-branch natijalari
+(`3.572/8.077 ms`) bilan bir xil tartibda; kichik farq GPU timing shovqini.
+Model logitsi yoki active budget o‘zgarmadi. Shu bilan serving patchi Native
+branchda ham regressiyasiz tasdiqlandi.
+
 Native benchmarkdagi adaptive execution seed17 balanced batch uchun batch-128da
 o'rtacha `1.5625`, batch-1da `1.0` internal step bo'ldi. Natijalarni shu
 parametr va workload bilan qayta olish kerak; batchlar sifat benchmarki emas,
