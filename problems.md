@@ -313,19 +313,20 @@ kerak.
 
 ### C-P003-STAGED-GROWTH-001 — Inherited circuit bank with staged exposure
 
-**Status:** `PROMISING — NEEDS SCALE TEST`
+**Status:** `PROMISING — SCALE SATURATION OBSERVED`
 **Muammo:** P-003
 **Natija:** NE-20 5k checkpointdan parent circuit/router weightlari ko‘chirilib,
-avval 100M modelning `1408` reachable bankida 5k, keyin full `7552` bankida
-5k training qilindi. Seed17/18/19 staged full-bank mean accuracy `82.42%`;
-NE-20 direct 10k mean `77.99%`, noldan NE-100 progressive 10k mean `77.86%`.
-Gain `+4.43/+4.56 pp`; clean held-out mean `82.14%` vs NE-20 `78.46%`
-(`+3.67 pp`). Complex `compose_add_mul` seed17/18 o‘rtachasi
-`40.23% → 53.52%`ga ko‘tarildi. Full-bank route auditida dead fraction
-`14–17%` bo‘ldi, noldan progressive NE-100da `32–34%` edi. Bu hozirgi eng
-kuchli ijobiy signal, lekin staged yo‘l 15k qadamdan iborat va architecture
-stage contribution hali ajratilmagan; shuning uchun `SOLVED` yoki default emas.
-**Batafsil:** `results/P003_STAGED_BANK_GROWTH_SEED17_18.md`.
+avval kichik reachable bankda, keyin full bankda training qilindi. 100M staged
+growth seed17/18/19 full-bank mean accuracy `82.42%` va clean held-out mean
+`82.14%` berdi. Keyingi 300M/500M scale auditida full stage 10k exposure bilan
+300M mean `84.99%`, 500M mean `84.94%` bo‘ldi; 300M/500M active-8 held-out
+mean mos ravishda `85.05%/85.05%` bo‘ldi. NE-20 direct 10k mean `77.99%`dan
+katta ustunlik saqlanadi, lekin 300Mdan 500Mga qo‘shimcha foyda yo‘q.
+Staged growth hanuz eng kuchli yo‘l, ammo parametr sonini oshirish bilan emas,
+full-bank exposure va route sifati bilan foyda bergan; shuning uchun `SOLVED`
+yoki default emas.
+**Batafsil:** `results/P003_STAGED_BANK_GROWTH_SEED17_18.md` va
+`results/P003_STAGED_SCALE_300M_500M_SEED17_18.md`.
 
 ### C-P003-DIRECT-GROWTH-001 — Direct inherited growth control
 
@@ -349,5 +350,35 @@ ko‘proq qayta ishlatildi/dead fraction `15.06–16.72%`gacha tushdi va quality
 `+4.40 pp` o‘sdi. Bu routing fragmentationni kuchli nomzod qiladi, lekin
 staged growthdagi qo‘shimcha training va meros qilingan circuitlar ta’siri
 hali alohida ajratilmagan.
-**Keyingi tajriba:** staged growthni uchinchi seed, clean held-out split va
-300M/500M bankda takrorlash; qaysi stage zarurligini 2x2 ablation bilan ajratish.
+**Keyingi tajriba:** route fragmentation/coverage’ni kamaytiruvchi minimal patchni
+100M va 300M control bilan tekshirish; 500M faqat scale-control sifatida qoladi.
+
+### C-P003-SCALE-SATURATION-001 — Capacity growth does not improve held-out quality
+
+**Status:** `ACTIVE`
+**Muammo:** P-003
+**Dalil:** Bir xil staged full-bank exposure va held-out active-budget
+evaluatorida 100M/300M/500M 10k active-8 means `84.90% / 85.05% / 85.05%`.
+All-screen means `84.99% / 84.99% / 84.94%`. 500M total parametrni 100Mga
+nisbatan 5x oshirdi, active decision esa `~1.98M`da qoldi; 500M eval route
+auditida dead circuit ulushi `60.26–60.97%` bo‘ldi.
+
+**Muammo ta’rifi:** Bank kattalashmoqda, lekin yangi circuitlar route orqali
+yetarli darajada foydali va qayta ishlatiladigan computationga aylanmayapti.
+Shuning uchun qo‘shimcha parametrlarning katta qismi sifatga aylanmasdan
+unused/fragmented bankda qolmoqda. Bu fundamental arxitektura imkonsizligini
+isbotlamaydi, ammo yana 700M/1B scale’ga o‘tishdan oldin hal qilinishi kerak.
+
+**Qabul qilish mezonlari:**
+
+- 100M/300M/500M bilan bir xil data, active budget, seed va held-out evaluator;
+- kamida ikki seedda active-8 mean uchun `>=+1 pp` yoki murakkab tasklarda
+  barqaror `>=+3 pp` improvement;
+- route dead fraction va task route overlap hisobotlari;
+- total/active params, latency va VRAM alohida qayd qilinsin.
+
+**Keyingi tajriba:** yangi bankni kattalashtirmasdan route fragmentation/coverage
+muammosini minimal patch bilan sinash. 500M konfiguratsiya scale-control sifatida
+saqlanadi, defaultga ko‘chirilmaydi.
+
+**Batafsil:** `results/P003_STAGED_SCALE_300M_500M_SEED17_18.md`.
