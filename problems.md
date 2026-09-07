@@ -382,3 +382,56 @@ muammosini minimal patch bilan sinash. 500M konfiguratsiya scale-control sifatid
 saqlanadi, defaultga ko‘chirilmaydi.
 
 **Batafsil:** `results/P003_STAGED_SCALE_300M_500M_SEED17_18.md`.
+
+### P-007 — Selected circuit route outputni yetarli boshqarmayapti
+
+**Status:** `ACTIVE`
+**Prioritet:** P0
+**Bog‘liq:** P-001, P-002, P-003, P-004
+
+#### Dalil
+
+- 100M/300M/500M 10k checkpointlarda circuit delta normasi shared encoded
+  signalining faqat `~3.9–4.9%`iga teng bo‘ldi.
+- 100% route replayda seed17 global accuracy drop 100M/300M/500M uchun
+  `−0.26/−0.52/−0.16 pp`; within-task drop `−0.31/−0.05/−0.05 pp` bo‘ldi.
+- 500M seed18da global drop `+0.05 pp`, within-task drop `0.00 pp` bo‘ldi.
+- 500M seed17da route almashtirish circuit delta’ni encoded normaning
+  `5.2–5.9%`i miqdorida o‘zgartirdi, lekin final hard accuracy sezilarli
+  o‘zgarmadi.
+
+#### Muammo ta’rifi
+
+Router circuit tanlayapti, ammo tanlangan circuitning correction yo‘li shared
+input reinjection/recurrent state ichida juda kichik ulushga ega bo‘lishi yoki
+circuitlar bir-biriga o‘xshash funksiyani berishi mumkin. Bunday holatda
+candidate retrievalni yaxshilashning o‘zi yetarli emas: route qarori causal
+bo‘lmasa, qo‘shimcha capacity sifatga aylanmaydi.
+
+#### Qabul qilish mezonlari
+
+- kamida ikki seedda held-out hard accuracy baseline’dan pasaymasin;
+- 100% global va within-task route replayda natural routega nisbatan kamida
+  `+1 pp` accuracy drop yoki equivalent logit/state sensitivity ko‘rinsin;
+- circuit delta/encoded normasi o‘lchansin va faqat forced gain bilan sun’iy
+  ko‘tarilmasin;
+- active params, latency va training stability alohida hisobot qilinsin;
+- default model o‘zgarmasin, patch opt-in bo‘lsin.
+
+#### Keyingi tajriba
+
+Router arxitekturasini birdan almashtirmasdan, circuit correctionning state
+update’dagi ulushini nazorat qiluvchi minimal variantni (learned bounded
+correction gate yoki route-conditioned normalization) 100M ikki-seed controlda
+sinash. Agar route replay sensitivity oshib, held-out quality yaxshilanmasa,
+muammo circuit identifikatsiyasi/specialization tomoniga ko‘chiriladi.
+
+**Batafsil:** `results/P003_STAGED_SCALE_300M_500M_SEED17_18.md`.
+
+Scale=0.5 statik correction patchi sinab ko‘rildi: seed17 all-screen
+`85.57% → 85.18%`, held-out active-8 `86.20% → 86.20%`. Test-time sweepdagi
+kichik seed17 foydasi trainingga ko‘chmadi; bu patch `REJECTED FOR ADOPTION`.
+Keyingi variant statik scale emas, learned bounded gate yoki route-conditioned
+normalization bo‘ladi.
+
+**Scale audit:** `results/P007_CORRECTION_SCALE_05_AUDIT.md`.

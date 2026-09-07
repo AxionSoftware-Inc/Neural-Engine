@@ -23,7 +23,8 @@ class NeuralEngineV0(nn.Module):
                  task_context_update: bool = True, circuit_mode: str = "parallel",
                  numeric_value_encoding: bool = False, adaptive_halting: bool = False,
                  halt_threshold: float = 0.5, routing_coverage_temperature: float = 0.25,
-                 input_reinjection: float = 1.0, memory_write_mode: str = "none",
+                 input_reinjection: float = 1.0, circuit_delta_scale: float = 1.0,
+                 memory_write_mode: str = "none",
                  route_exploration_prob: float = 0.0,
                  routing_capacity: int | None = None, routing_depth: int | None = None,
                  router_variant: str = "global", family_count: int = 2,
@@ -53,6 +54,9 @@ class NeuralEngineV0(nn.Module):
             raise ValueError("route_exploration_prob must be between 0 and 1")
         self.route_exploration_prob = route_exploration_prob
         self.input_reinjection = input_reinjection
+        if circuit_delta_scale <= 0.0:
+            raise ValueError("circuit_delta_scale must be positive")
+        self.circuit_delta_scale = circuit_delta_scale
         self.memory_write_mode = memory_write_mode
         if router_variant not in {"global", "flat", "probe", "family_local", "family_conditioned"}:
             raise ValueError("router_variant must be 'global', 'flat', 'probe', 'family_local', or 'family_conditioned'")
@@ -283,7 +287,8 @@ class NeuralEngineV0(nn.Module):
                 circuit_delta = self.circuits.forward_serial(step_query, selected, weights)
             else:
                 circuit_delta = self.circuits(step_query, selected, weights)
-            delta = circuit_delta * route_gain.unsqueeze(-1)
+            delta = (circuit_delta * route_gain.unsqueeze(-1)
+                     * self.circuit_delta_scale)
             update = (delta + self.input_reinjection * encoded[active_indices]
                       + self.step_embedding[step])
             if task_context is not None and self.task_context_update:

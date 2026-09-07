@@ -57,6 +57,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["halt_threshold"] = config.get("halt_threshold", 0.5)
     model_kwargs["routing_coverage_temperature"] = config.get("routing_coverage_temperature", 0.25)
     model_kwargs["input_reinjection"] = config.get("input_reinjection", 1.0)
+    model_kwargs["circuit_delta_scale"] = config.get("circuit_delta_scale", 1.0)
     model_kwargs["memory_write_mode"] = config.get("memory_write_mode", "none")
     model_kwargs["route_exploration_prob"] = config.get("route_exploration_prob", 0.0)
     model_kwargs["routing_capacity"] = config.get("routing_capacity")

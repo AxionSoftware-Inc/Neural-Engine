@@ -62,6 +62,23 @@ unique circuit ishladi. 500M ko‘proq bankdan foydalansa ham uning active
 budgeti va sifat natijasi 300Mdan sezilarli oshmadi. Total capacity o‘sishi
 active pathga avtomatik ravishda foydali yangi computation olib kirmayapti.
 
+## Route causality va circuit contribution diagnostikasi
+
+10k full checkpointlarda 100% route replay ham route tanlovining final outputga
+kuchli sababiy bog‘lanmaganini ko‘rsatdi. Seed17da global route swap accuracy
+drop 100M/300M/500M uchun mos ravishda `-0.26/-0.52/-0.16 pp`, within-task
+swap esa `-0.31/-0.05/-0.05 pp` bo‘ldi. 500M seed18da global drop `+0.05 pp`,
+within-task drop `0.00 pp` bo‘ldi. Manfiy drop swap route ayrim samplelarda
+naturaldan yaxshiroq bo‘lganini bildiradi; bu route’lar foydasiz degan qat’iy
+isbot emas, lekin route tanlovi hali outputni boshqarmayotganini bildiradi.
+
+Norm diagnostikasida 100M/300M/500M circuit delta’lari shared encoded
+signalining taxminan `3.9–4.9%`iga teng. 500M seed17da natural route’ni global
+almashtirish circuit delta farqini encoded normaning `5.2–5.9%`igacha o‘zgartirdi,
+ammo hard output accuracy deyarli o‘zgarmadi. Demak route tanlovi mavjud, biroq
+uning ta’siri shared input reinjection va recurrent state tomonidan
+bosib ketilmoqda yoki circuitlar funksional jihatdan bir-biriga juda o‘xshash.
+
 ## Qaror
 
 **500M scale default uchun qabul qilinmadi.** Staged growthning asosiy foydasi
