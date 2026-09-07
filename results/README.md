@@ -75,6 +75,10 @@ two-seed timing is `0.991x` and `1.004x` with only two timing iterations.
 This is a systems/dispatch result, not a new quality or scaling claim. See
 `V0_193_QWEN_CORRECTION_DISPATCH_AUDIT.md`.
 
+An adaptive 128-MiB gather guard improves decode-like 1×32 timing from
+`1.870x` to `1.406x` at K=5 and from `1.942x` to `1.612x` at K=6; small-batch
+launch overhead remains, so a compiled decode kernel is still needed.
+
 The same patch also validates the lower-budget K=5 point: the existing
 two-seed quality pass remains (`+0.03881`/`+0.04036` CE), while timing falls
 from the old `1.91x` to `1.134x`/`1.129x` with five timing iterations. K=5

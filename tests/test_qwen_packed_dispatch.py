@@ -71,7 +71,9 @@ def test_cross_group_hard_correction_matches_reference_formula() -> None:
     )
     child = CrossGroupOutputMixRoutedQwenChild(base, 3).eval()
     inputs = torch.randn(3, 5, 8)
-    actual = child(inputs)
+    direct = child(inputs)
+    child.max_dense_gather_bytes = 0
+    packed = child(inputs)
     selected_outputs = base.last_selected_outputs
     selected = base.last_selected
     route_weights = base.last_route_weights
@@ -88,4 +90,5 @@ def test_cross_group_hard_correction_matches_reference_formula() -> None:
     expected = base_output + base.hard_route_scale * (
         selected_corrections * route_weights.unsqueeze(-1)
     ).sum(dim=-2)
-    assert torch.allclose(actual, expected, atol=1e-6, rtol=1e-6)
+    assert torch.allclose(direct, expected, atol=1e-6, rtol=1e-6)
+    assert torch.allclose(packed, expected, atol=1e-6, rtol=1e-6)

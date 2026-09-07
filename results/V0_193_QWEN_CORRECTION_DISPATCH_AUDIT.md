@@ -101,6 +101,13 @@ The JSON artifacts are listed below.
 
 ## Decision and next step
 
+The follow-up adaptive guard uses the vectorized path only when both indexed
+projection gathers fit under 128 MiB; otherwise it selects the packed path.
+The 1×32 decode-like smoke improved from `1.870x` to `1.406x` for K=5 and
+from `1.942x` to `1.612x` for K=6. This is a meaningful reduction, but it is
+still not dense-equivalent at batch 1; a compiled fused decode kernel remains
+the next runtime task.
+
 `V0.193` is accepted as the new grouped correction implementation because it
 preserves the formula and passes both quality seeds while removing the large
 memory gather. This closes the immediate rank-64 correction-dispatch
@@ -116,6 +123,8 @@ the tested 8-layer K=6 configuration.
 
 - Code: `benchmark_qwen_multi_layer_transplant.py`
 - Parity test: `tests/test_qwen_packed_dispatch.py`
+- Low-batch K=5 timing JSON: `results/runs/qwen_v0193_8layers_k5_decodeish_adaptive_timing_seed2026.json`
+- Low-batch K=6 timing JSON: `results/runs/qwen_v0193_8layers_k6_decodeish_adaptive_timing_seed2026.json`
 - Seed 2026 JSON: `results/runs/qwen_v0193_8layers_k6_grouped_rank64_optcorr_seed2026.json`
 - Seed 2027 JSON: `results/runs/qwen_v0193_8layers_k6_grouped_rank64_optcorr_seed2027.json`
 - K=5 seed 2026 JSON: `results/runs/qwen_v0193_8layers_k5_grouped_rank64_optcorr_seed2026.json`
