@@ -72,6 +72,15 @@ qo'yilmadi.
 metadata'lari GPU scalar emas, host metadata sifatida qaytarildi. Bu numerik
 model outputini o'zgartirmaydi va router testlari saqlandi.
 
+## Float32 precision A/B
+
+RTX 3060 TF32 yo'lini ham alohida tekshirdim. Batch-1da `highest → high`
+`3.620 → 3.594 ms` (`0.993x`) bo'ldi va shu inputda logits farqi `0.0` edi.
+Batch-128da esa `8.083 → 8.639 ms` (`1.069x`, ya'ni sekinroq) bo'ldi; max
+logit abs error `0.007057`, mean error `0.000909`. Natija workloadga qarab
+qarama-qarshi va batch-128da precision farqi ham bor, shuning uchun
+`matmul_precision=high` defaultga yoki quality pathga o'tkazilmadi.
+
 ## Keyingi yo'l
 
 `collect_stats=False` serving path sifatida saqlanadi. Keyingi runtime
