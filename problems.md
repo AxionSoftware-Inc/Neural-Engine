@@ -506,6 +506,14 @@ optimallashtirish, ammo one-token muammosi yechildi deb hisoblanmadi va
 trained quality auditgacha defaultga olinmadi. Batafsil:
 `results/RUNTIME_QWEN_SINGLE_TOKEN_FAST_PATH_20260908.md`.
 
+`grouped-fused` va `packed` nazoratlari ham foyda bermadi: isolated timinglar
+mos ravishda `0.713 ms` va `3.297 ms`, sakkiz qatlamli grouped-fused full
+forward esa `36.725 ms` bo‘ldi. Full Qwen profileri shu smoke’da
+scaled-dot-product attentionning o‘zi taxminan `25.5 ms` CUDA vaqt olganini
+ko‘rsatdi. Demak Qwen FFN dispatchini tezlatish butun Transformer one-token
+yo‘lini avtomatik ravishda tezlashtirmaydi; bu Native Engine’ning
+attention-free yo‘liga qarshi dalil emas.
+
 ## Yopilgan yoki rad qilingan yo‘llar
 
 Bu bo‘lim aktiv muammolarni to‘ldiradi; muvaffaqiyatsiz tajribalar o‘chirilmaydi.

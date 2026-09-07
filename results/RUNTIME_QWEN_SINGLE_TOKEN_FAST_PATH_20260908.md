@@ -31,6 +31,14 @@ The selected-output max absolute difference versus token-loop was
 `1.678e-4`. This is a dispatch-level reduction-order difference; it is not a
 quality result.
 
+Two additional backends were run as controls. The isolated grouped-fused
+single-token path measured `0.713 ms`, therefore it was slower than ordinary
+grouped fast dispatch. The packed path measured `3.297 ms` and did not provide
+a speedup. In the corresponding eight-layer full-model smoke, grouped-fused
+fast dispatch measured `36.725 ms` versus `40.286 ms` for its old path; this is
+still slower than ordinary grouped fast dispatch at `32.560 ms`. These controls
+were rejected for adoption.
+
 ## Full Qwen forward smoke
 
 One-token full-model forward, `use_cache=False`, same local Qwen checkpoint,
@@ -51,9 +59,20 @@ The child in this smoke used an untrained zero-initialized router and was
 created for runtime measurement only. Therefore these numbers do not make a
 new Qwen quality claim and cannot replace the trained K=5/K=6 quality reports.
 
+## Full-model profiler
+
+The eight-layer fast-path forward was profiled separately. Scaled-dot-product
+attention accounted for approximately `25.5 ms` of CUDA self time in this
+one-token smoke. The remaining MLP dispatch improvement is therefore not
+enough to make the full Transformer path faster than its dense parent. This is
+a systems bottleneck in the Qwen/Transformer lane, not evidence against the
+attention-free Native Engine architecture.
+
 ## Qaror
 
 - Keep `single_token_fast_path` as an opt-in runtime feature.
+- Keep ordinary grouped dispatch as the only tested fast-path candidate; do
+  not promote grouped-fused or packed based on these measurements.
 - Do not call it a quality-equivalent replacement until a trained multilayer
   checkpoint is evaluated on the existing CE/accuracy gate.
 - Do not claim one-token decode is solved: end-to-end sparse path is still

@@ -28,6 +28,8 @@ def measure(module, hidden: torch.Tensor, warmup: int, iterations: int) -> float
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--layer", type=int, default=26)
+    parser.add_argument("--dispatch-mode", choices=("grouped", "grouped-fused", "packed"),
+                        default="grouped")
     parser.add_argument("--warmup", type=int, default=20)
     parser.add_argument("--iterations", type=int, default=100)
     args = parser.parse_args()
@@ -49,19 +51,20 @@ def main() -> None:
     hidden = capture_mlp_io(model, ids, args.layer)["input"]
     child = make_transferred_routed_qwen_child(
         parent, 8, 6, 1.0, 0, "base-output", "low-rank",
-        "grouped", "contiguous", "router", 6.0,
+        args.dispatch_mode, "contiguous", "router", 6.0,
         device, torch.float32,
     ).eval()
-    child.single_token_fast_path = True
+    child.single_token_fast_path = args.dispatch_mode in {"grouped", "grouped-fused"}
     child.dispatch_mode = "token-loop"
     token_loop_output = child(hidden)
     token_loop_ms = measure(child, hidden, args.warmup, args.iterations)
-    child.dispatch_mode = "grouped"
+    child.dispatch_mode = args.dispatch_mode
     grouped_output = child(hidden)
     grouped_ms = measure(child, hidden, args.warmup, args.iterations)
     diff = (grouped_output - token_loop_output).abs()
     print({
         "shape": list(hidden.shape),
+        "dispatch_mode": args.dispatch_mode,
         "token_loop_ms": token_loop_ms,
         "grouped_single_token_ms": grouped_ms,
         "grouped_over_token_loop": grouped_ms / token_loop_ms,

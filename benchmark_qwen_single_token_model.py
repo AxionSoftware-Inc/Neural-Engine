@@ -31,6 +31,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--layers", default="26",
                         help="comma-separated Qwen layer indices to replace")
+    parser.add_argument("--dispatch-mode", choices=("grouped", "grouped-fused", "packed"),
+                        default="grouped")
     parser.add_argument("--warmup", type=int, default=20)
     parser.add_argument("--iterations", type=int, default=50)
     args = parser.parse_args()
@@ -58,7 +60,7 @@ def main() -> None:
     for index, parent in zip(layer_indices, parents):
         child = make_transferred_routed_qwen_child(
             parent, 8, 6, 1.0, 0, "base-output", "low-rank",
-            "grouped", "contiguous", "router", 6.0,
+            args.dispatch_mode, "contiguous", "router", 6.0,
             device, torch.float32,
         ).eval()
         child.single_token_fast_path = False
@@ -67,7 +69,7 @@ def main() -> None:
     grouped_logits = forward_logits(model, ids)
     grouped_ms = measure(model, ids, args.warmup, args.iterations)
     for child in children:
-        child.single_token_fast_path = True
+        child.single_token_fast_path = args.dispatch_mode in {"grouped", "grouped-fused"}
     fast_logits = forward_logits(model, ids)
     fast_ms = measure(model, ids, args.warmup, args.iterations)
     grouped_fast_diff = (fast_logits - grouped_logits).abs()
