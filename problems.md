@@ -317,13 +317,14 @@ kerak.
 **Muammo:** P-003
 **Natija:** NE-20 5k checkpointdan parent circuit/router weightlari ko‘chirilib,
 avval 100M modelning `1408` reachable bankida 5k, keyin full `7552` bankida
-5k training qilindi. Seed17/18 staged full-bank mean accuracy `82.83%` bo‘ldi;
-NE-20 direct 10k mean `78.42%`, noldan NE-100 progressive 10k mean `78.07%`.
-Gain `+4.40/+4.75 pp`, complex `compose_add_mul` o‘rtachasi ham
-`40.49% → 53.52%`ga ko‘tarildi. Full-bank route auditida dead fraction
-`15–17%` bo‘ldi, noldan progressive NE-100da `32–34%` edi. Bu hozirgi eng
-kuchli ijobiy signal, lekin eval hali `split=all`, faqat ikki seed bor va jami
-staged yo‘l 15k qadamdan iborat; shuning uchun `SOLVED` yoki default emas.
+5k training qilindi. Seed17/18/19 staged full-bank mean accuracy `82.42%`;
+NE-20 direct 10k mean `77.99%`, noldan NE-100 progressive 10k mean `77.86%`.
+Gain `+4.43/+4.56 pp`; clean held-out mean `82.14%` vs NE-20 `78.46%`
+(`+3.67 pp`). Complex `compose_add_mul` seed17/18 o‘rtachasi
+`40.23% → 53.52%`ga ko‘tarildi. Full-bank route auditida dead fraction
+`14–17%` bo‘ldi, noldan progressive NE-100da `32–34%` edi. Bu hozirgi eng
+kuchli ijobiy signal, lekin staged yo‘l 15k qadamdan iborat va architecture
+stage contribution hali ajratilmagan; shuning uchun `SOLVED` yoki default emas.
 **Batafsil:** `results/P003_STAGED_BANK_GROWTH_SEED17_18.md`.
 
 ### C-P003-DIRECT-GROWTH-001 — Direct inherited growth control

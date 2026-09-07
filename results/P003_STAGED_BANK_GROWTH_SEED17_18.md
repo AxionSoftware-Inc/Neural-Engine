@@ -1,4 +1,4 @@
-# P-003 — Warm-started staged bank growth
+# P-003 — Warm-started staged bank growth (seeds 17/18/19)
 
 Sana: 2026-09-07. Maqsad: katta bankni noldan o‘qitish o‘rniga avval kichik
 reachable circuit bankda foydali computationni o‘rgatib, keyin saqlangan katta
@@ -24,12 +24,25 @@ qoldi. Inference’da active budget `8` bo‘lib qoldi (`~1.98M` active params).
 |---:|---:|---:|---:|---:|
 | 17 | 77.92% | **82.99%** | 78.72% | 77.76% |
 | 18 | 78.10% | **82.66%** | 78.12% | 78.54% |
-| **Mean** | **78.01%** | **82.83%** | **78.42%** | **78.15%** |
+| 19 | 77.16% | **81.61%** | 77.14% | — |
+| **Mean** | **77.73%** | **82.42%** | **77.99%** | **78.15%** (2 seed) |
 
-Staged full-bank variant NE-20 direct 10kdan `+4.40 pp`, direct warm-start
-growthdan `+4.67 pp`, noldan o‘qitilgan NE-100 progressive 10k ikki-seed
-controldan `+4.75 pp` yuqori chiqdi. Seedlar orasidagi staged farq faqat
-`0.33 pp` bo‘ldi.
+Staged full-bank variant NE-20 direct 10kdan `+4.43 pp`, noldan NE-100
+progressive 10k uch-seed mean `77.86%`dan `+4.56 pp` yuqori chiqdi. Direct
+warm-start growth faqat seed17/18da o‘lchangan va `78.15%` mean bo‘ldi;
+staged variant shu nazoratdan `+4.67 pp` yuqori. Staged seedlar oralig‘i
+`1.38 pp` bo‘lib, ijobiy signal saqlangan, lekin seed variance nol emas.
+
+Bir xil active-budget evaluatorida clean held-out split natijasi:
+
+| Model | Seed17 | Seed18 | Seed19 | Mean |
+|---|---:|---:|---:|---:|
+| NE-20 direct | 78.36% | 79.06% | 77.97% | 78.46% |
+| NE-100 progressive from scratch | 78.10% | 78.52% | 78.59% | 78.40% |
+| NE-100 staged growth | **82.50%** | **82.42%** | **81.48%** | **82.14%** |
+
+Shu held-out screenda staged growth NE-20dan `+3.67 pp` yuqori. Demak
+`split=all` natijadagi signal alohida held-out batchda ham saqlanadi.
 
 ## Murakkab vazifalar
 
@@ -65,11 +78,10 @@ atrofida qo‘shimcha beradi va active compute’ni oshiradi.
 ## Qaror
 
 **PROMISING — defaultga hali qo‘yilmaydi.** Bu hozirgi tajribalar ichidagi
-birinchi katta va ikki seedda takrorlangan ijobiy signal. Ammo quyidagilar
-hali tekshirilmagan:
+birinchi katta va uch seedda takrorlangan ijobiy signal; clean held-outda ham
+`+3.67 pp` ustunlik saqlandi. Ammo quyidagilar hali tekshirilmagan:
 
 - clean held-out split va aniq zero-shot composition benchmark;
-- uchinchi seed;
 - staged yo‘lning qaysi bosqichi zarur ekanini 2x2 nazorat bilan ajratish;
 - 300M/500M da xuddi shu inherited-growth protokolining ishlashi.
 
