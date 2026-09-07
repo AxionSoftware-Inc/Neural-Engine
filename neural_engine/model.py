@@ -24,7 +24,7 @@ class NeuralEngineV0(nn.Module):
                  numeric_value_encoding: bool = False, adaptive_halting: bool = False,
                  halt_threshold: float = 0.5, routing_coverage_temperature: float = 0.25,
                  input_reinjection: float = 1.0, circuit_delta_scale: float = 1.0,
-                 memory_write_mode: str = "none",
+                 correction_gate_mode: str = "none", memory_write_mode: str = "none",
                  route_exploration_prob: float = 0.0,
                  routing_capacity: int | None = None, routing_depth: int | None = None,
                  router_variant: str = "global", family_count: int = 2,
@@ -57,6 +57,9 @@ class NeuralEngineV0(nn.Module):
         if circuit_delta_scale <= 0.0:
             raise ValueError("circuit_delta_scale must be positive")
         self.circuit_delta_scale = circuit_delta_scale
+        if correction_gate_mode not in {"none", "route_bounded"}:
+            raise ValueError("correction_gate_mode must be 'none' or 'route_bounded'")
+        self.correction_gate_mode = correction_gate_mode
         self.memory_write_mode = memory_write_mode
         if router_variant not in {"global", "flat", "probe", "family_local", "family_conditioned"}:
             raise ValueError("router_variant must be 'global', 'flat', 'probe', 'family_local', or 'family_conditioned'")
@@ -111,6 +114,10 @@ class NeuralEngineV0(nn.Module):
                 self.family_embeddings = nn.Parameter(torch.empty(family_count, state_dim))
                 nn.init.normal_(self.family_embeddings, std=0.02)
         self.circuits = MicroCircuitBank(num_circuits, state_dim, circuit_rank)
+        self.correction_gate = (
+            nn.Linear(2 * state_dim, 1)
+            if correction_gate_mode == "route_bounded" else None
+        )
         self.output = nn.Sequential(nn.LayerNorm(state_dim), nn.Linear(state_dim, num_classes))
         nn.init.normal_(self.position_embedding, std=0.02)
         nn.init.normal_(self.position_scale, std=0.01)
@@ -121,6 +128,11 @@ class NeuralEngineV0(nn.Module):
             # preserve the old state when a write would overwrite useful work.
             nn.init.zeros_(self.memory_write.weight)
             nn.init.constant_(self.memory_write.bias, 5.0)
+        if self.correction_gate is not None:
+            # 2 * sigmoid(0) = 1, so the optional gate starts exactly as the
+            # default un-gated correction path.
+            nn.init.zeros_(self.correction_gate.weight)
+            nn.init.zeros_(self.correction_gate.bias)
         self._last_route: dict[str, torch.Tensor] = {}
 
     def encode(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -287,8 +299,14 @@ class NeuralEngineV0(nn.Module):
                 circuit_delta = self.circuits.forward_serial(step_query, selected, weights)
             else:
                 circuit_delta = self.circuits(step_query, selected, weights)
+            if self.correction_gate is not None:
+                gate_input = torch.cat((step_query, circuit_delta), dim=-1)
+                correction_gate = 2.0 * torch.sigmoid(
+                    self.correction_gate(gate_input)).squeeze(-1)
+            else:
+                correction_gate = torch.ones_like(route_gain)
             delta = (circuit_delta * route_gain.unsqueeze(-1)
-                     * self.circuit_delta_scale)
+                     * self.circuit_delta_scale * correction_gate.unsqueeze(-1))
             update = (delta + self.input_reinjection * encoded[active_indices]
                       + self.step_embedding[step])
             if task_context is not None and self.task_context_update:
@@ -370,6 +388,8 @@ class NeuralEngineV0(nn.Module):
             shared += count_parameters(self.halt_head)
         if self.memory_write is not None:
             shared += count_parameters(self.memory_write)
+        if self.correction_gate is not None:
+            shared += count_parameters(self.correction_gate)
         one_circuit = self.circuits.down[0].numel() + self.circuits.up[0].numel() + self.circuits.bias[0].numel()
         candidate_key_params = self.router.keys[0].numel() * self.router.candidate_pool
         active = shared + candidate_key_params + one_circuit * self.active_circuits

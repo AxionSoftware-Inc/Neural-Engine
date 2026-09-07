@@ -65,3 +65,17 @@ def test_circuit_delta_scale_is_positive_and_defaults_to_one():
             candidate_pool=4, active_circuits=2, internal_steps=2,
             circuit_delta_scale=0.0,
         )
+
+
+def test_route_bounded_correction_gate_starts_at_identity():
+    model = NeuralEngineV0(
+        vocab_size=32, num_classes=8, seq_len=4, d_model=16, state_dim=16,
+        num_circuits=16, circuit_rank=4, router_branch=2, router_depth=3,
+        candidate_pool=4, active_circuits=2, internal_steps=2,
+        correction_gate_mode="route_bounded",
+    )
+    assert model.correction_gate is not None
+    assert torch.allclose(model.correction_gate.weight,
+                          torch.zeros_like(model.correction_gate.weight))
+    assert torch.allclose(model.correction_gate.bias,
+                          torch.zeros_like(model.correction_gate.bias))

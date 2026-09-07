@@ -15,6 +15,9 @@ def expand_state(parent_state: dict[str, torch.Tensor],
     expanded = {}
     for name, target in grown_state.items():
         if name not in parent_state:
+            if name in {"correction_gate.weight", "correction_gate.bias"}:
+                expanded[name] = torch.zeros_like(target)
+                continue
             raise KeyError(f"parent checkpoint is missing {name}")
         source = parent_state[name]
         if source.shape == target.shape:

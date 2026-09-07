@@ -435,3 +435,11 @@ Keyingi variant statik scale emas, learned bounded gate yoki route-conditioned
 normalization bo‘ladi.
 
 **Scale audit:** `results/P007_CORRECTION_SCALE_05_AUDIT.md`.
+
+Learned bounded gate (`correction_gate_mode=route_bounded`) ham seed17da
+tekshirildi: full 10k all-screen `85.57% → 85.29%`, held-out active-8
+`86.20% → 86.25%`, route replay drop esa global/within-task `+0.05/+0.10 pp`
+bo‘ldi. Quality yoki route sensitivity gate bajarilmadi; patch
+`REJECTED FOR ADOPTION`.
+
+**Gate audit:** `results/P007_CORRECTION_GATE_AUDIT.md`.
