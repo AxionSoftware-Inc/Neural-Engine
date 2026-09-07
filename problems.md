@@ -127,6 +127,17 @@ replay sensitivity faqat `+0.42 pp` bo‘ldi. Oddiy reuse regularizeri
 
 **Audit:** `results/P008_ROUTING_REUSE_AUDIT.md`.
 
+**V0.185 representation audit (2026-09-07):** Qwen teacher gate/value
+activation covariance asosida yangi 6.25%--12.5% compact SwiGLU basis qurildi.
+Qiyin held-out protokolda teacher-derived variant `+0.1123`/`+0.1333` CE bilan
+gate'dan o'tmadi; same-width random controls `+0.1067`/`+0.0972` bo'ldi.
+25% va 50% random compact controls ham `+0.0790` va `+0.0832` bo'lib,
+monotonic quality scaling bermadi. `V0.185`dagi activation-covariance
+Galerkin basis `REJECTED`; bu Qwen'dan teacher-derived basislar umuman
+imkonsiz degani emas, faqat shu projection formulasi yopildi.
+
+**Audit:** `results/V0_185_QWEN_TEACHER_DERIVED_BASIS_SWIGLU.md`.
+
 Deep-level reuse (`routing_reuse_start_level=2`, weight `2.0`) ham alohida
 tekshirildi: all-screen controlga nisbatan faqat `+0.04 pp`, held-out active-8
 esa `−0.47 pp`, route replay sensitivity esa deyarli oshmadi. Oddiy task-reuse
