@@ -41,6 +41,7 @@ class SparseOutputSignatureSelector(nn.Module):
         active_circuits: int = 2,
         signature_rank: int = 2,
         signature_dim: int = 8,
+        key_prior_weight: float = 0.0,
     ) -> None:
         super().__init__()
         if active_circuits != 2:
@@ -55,6 +56,9 @@ class SparseOutputSignatureSelector(nn.Module):
         self.active_circuits = int(active_circuits)
         self.signature_rank = int(signature_rank)
         self.signature_dim = int(signature_dim)
+        self.key_prior_weight = float(key_prior_weight)
+        if self.key_prior_weight < 0.0:
+            raise ValueError("key_prior_weight must be non-negative")
 
         self.signature_down = nn.Parameter(
             torch.empty(num_circuits, state_dim, signature_rank)
@@ -81,6 +85,16 @@ class SparseOutputSignatureSelector(nn.Module):
             dtype=torch.long,
         )
         self.register_buffer("pair_positions", positions, persistent=False)
+        self.register_buffer("reference_keys", torch.empty(0), persistent=False)
+
+    @torch.no_grad()
+    def set_reference_keys(self, keys: torch.Tensor) -> None:
+        if keys.shape != (self.num_circuits, self.state_dim):
+            raise ValueError(
+                "reference keys must have shape "
+                f"({self.num_circuits}, {self.state_dim})"
+            )
+        self.reference_keys = keys.detach().clone()
 
     @torch.no_grad()
     def initialize_from_circuit_bank(
@@ -164,6 +178,16 @@ class SparseOutputSignatureSelector(nn.Module):
         scores = scores + 0.5 * (
             self.circuit_bias[left_ids] + self.circuit_bias[right_ids]
         )
+        if self.key_prior_weight:
+            if self.reference_keys.numel() == 0:
+                raise RuntimeError("key prior requested but reference keys are unset")
+            key_logits = torch.einsum(
+                "bd,bmd->bm", query, self.reference_keys[candidate_ids]
+            ) / math.sqrt(self.state_dim)
+            key_pair = 0.5 * (
+                key_logits[:, left_pos] + key_logits[:, right_pos]
+            )
+            scores = scores + self.key_prior_weight * key_pair
         pair_ids = torch.stack([left_ids, right_ids], dim=-1)
         return scores, pair_ids
 
@@ -473,6 +497,10 @@ def selector_cost_report(
         "full_bank_real_circuit_rows_scored_per_decision": 0,
         "candidate_real_circuit_rows_scored_at_inference": 0,
     })
+    key_rows = int(model.router.candidate_pool * model.state_dim) if selector.key_prior_weight else 0
+    report["key_prior_weight"] = float(selector.key_prior_weight)
+    report["key_prior_touched_params_per_decision"] = key_rows
+    report["selector_total_touched_params_per_decision"] += key_rows
     return report
 
 

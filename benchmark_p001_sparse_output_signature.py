@@ -102,7 +102,10 @@ def _make_selector(model, args: argparse.Namespace, seed: int, device: torch.dev
         active_circuits=int(model.active_circuits),
         signature_rank=args.signature_rank,
         signature_dim=args.signature_dim,
+        key_prior_weight=args.key_prior_weight,
     )
+    if args.key_prior_weight:
+        selector.set_reference_keys(model.router.keys)
     if args.init_from_bank:
         if args.signature_rank != int(model.circuits.down.shape[-1]):
             raise ValueError(
@@ -633,6 +636,7 @@ def parse_args() -> argparse.Namespace:
         choices=("full_local_losses", "individual_additive_losses"),
         default="full_local_losses",
     )
+    parser.add_argument("--key-prior-weight", type=float, default=0.0)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     parser.add_argument("--grad-clip", type=float, default=1.0)
@@ -677,6 +681,7 @@ def main() -> None:
         + (" --init-from-bank" if args.init_from_bank else "")
         + (" --freeze-signature" if args.freeze_signature else "")
         + f" --teacher-target {args.teacher_target}"
+        + f" --key-prior-weight {args.key_prior_weight}"
         + " --update-problems-on-reject"
     )
 

@@ -421,3 +421,10 @@ va nima sabab ishlamaganini ko‘rsating.
 **Muammo:** P-004
 **Natija:** seed17/18 held-out accuracy mean delta `-0.625 pp`, held-out CE delta `-0.00006`, mean regret reduction `-6.83%`, p95 regret reduction `-19.08%`, training overhead `1.291x`. Pre-registered gate bajarilmadi; P-004 `ACTIVE` qoladi.
 **Batafsil:** `results/P004_CASCADE_CREDIT_SEED17_18.md` va `results/P004_CASCADE_CREDIT_SEED17_18.json`.
+
+### C-P001-OUTPUT-SIGNATURE-001 — Sparse output-aware selector
+
+**Status:** `REJECTED`  
+**Muammo:** P-001 / Handoff D  
+**Natija:** seed17/18 mean hard accuracy delta `-0.026 pp`, mean selection-regret reduction `6.03%`, p95 reduction `7.36%`, max latency `1.421x`. Gate bajarilmadi. Dense full-bank inference ishlatilmadi; P-001 `ACTIVE` qoladi.
+
