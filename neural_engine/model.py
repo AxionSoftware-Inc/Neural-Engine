@@ -197,7 +197,8 @@ class NeuralEngineV0(nn.Module):
                 forced_selected_ids: torch.Tensor | None = None,
                 forced_selected_weights: torch.Tensor | None = None,
                 forced_route_gains: torch.Tensor | None = None,
-                coverage: bool = False) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+                coverage: bool = False,
+                collect_stats: bool = True) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """Run the model, optionally replaying a previously recorded route.
 
         The forced-route arguments are an analysis hook for causal route
@@ -217,9 +218,9 @@ class NeuralEngineV0(nn.Module):
             task_context = self.task_context_embedding(task_ids)
         batch_size = inputs.shape[0]
         num_classes = self.output[-1].out_features
-        selected_steps = []
-        candidate_steps = []
-        query_steps = []
+        selected_steps = [] if collect_stats else None
+        candidate_steps = [] if collect_stats else None
+        query_steps = [] if collect_stats else None
         coverage_losses = []
         routing_target_losses = []
         routing_reuse_losses = []
@@ -227,13 +228,18 @@ class NeuralEngineV0(nn.Module):
                       and self.router_variant in {"global", "family_conditioned"}
                       and getattr(self, "routing_mode", "learned") != "controlled_task")
         route_width = self.router.candidate_pool if soft_route else self.active_circuits
-        selected_weights = torch.zeros(batch_size, self.internal_steps, route_width,
-                                       device=inputs.device)
-        route_gains = torch.ones(batch_size, self.internal_steps, device=inputs.device)
-        step_entropies = torch.zeros(batch_size, self.internal_steps, device=inputs.device)
-        executed_mask = torch.zeros(batch_size, self.internal_steps, dtype=torch.bool, device=inputs.device)
-        step_logits = torch.zeros(batch_size, self.internal_steps, num_classes, device=inputs.device)
-        halt_logits = torch.zeros(batch_size, self.internal_steps, device=inputs.device)
+        selected_weights = (torch.zeros(batch_size, self.internal_steps, route_width,
+                                         device=inputs.device) if collect_stats else None)
+        route_gains = (torch.ones(batch_size, self.internal_steps, device=inputs.device)
+                       if collect_stats else None)
+        step_entropies = (torch.zeros(batch_size, self.internal_steps, device=inputs.device)
+                          if collect_stats else None)
+        executed_mask = (torch.zeros(batch_size, self.internal_steps, dtype=torch.bool,
+                                     device=inputs.device) if collect_stats else None)
+        step_logits = (torch.zeros(batch_size, self.internal_steps, num_classes,
+                                   device=inputs.device) if collect_stats else None)
+        halt_logits = (torch.zeros(batch_size, self.internal_steps, device=inputs.device)
+                       if collect_stats else None)
         last_logits = torch.zeros(batch_size, num_classes, device=inputs.device)
         active = torch.ones(batch_size, dtype=torch.bool, device=inputs.device)
         if forced_selected_ids is not None:
@@ -252,16 +258,25 @@ class NeuralEngineV0(nn.Module):
             if forced_route_gains is not None:
                 forced_route_gains = forced_route_gains.to(device=inputs.device)
         for step in range(self.internal_steps):
-            active_indices = active.nonzero(as_tuple=False).squeeze(-1)
-            selected_step = torch.full((batch_size, route_width), -1,
-                                       dtype=torch.long, device=inputs.device)
-            candidate_step = torch.full((batch_size, self.router.candidate_pool), -1,
+            # With adaptive execution disabled every sample is active at every
+            # stage.  Avoid the dynamic nonzero/index path so fixed-shape
+            # serving can be captured by CUDA Graphs and pays fewer launches.
+            if not use_adaptive:
+                active_indices = torch.arange(batch_size, device=inputs.device)
+            else:
+                active_indices = active.nonzero(as_tuple=False).squeeze(-1)
+            selected_step = (torch.full((batch_size, route_width), -1,
                                         dtype=torch.long, device=inputs.device)
+                             if collect_stats else None)
+            candidate_step = (torch.full((batch_size, self.router.candidate_pool), -1,
+                                         dtype=torch.long, device=inputs.device)
+                              if collect_stats else None)
             if active_indices.numel() == 0:
-                selected_steps.append(selected_step)
-                candidate_steps.append(candidate_step)
-                query_steps.append(torch.zeros(batch_size, self.state_dim, device=inputs.device))
-                step_logits[:, step] = last_logits
+                if collect_stats:
+                    selected_steps.append(selected_step)
+                    candidate_steps.append(candidate_step)
+                    query_steps.append(torch.zeros(batch_size, self.state_dim, device=inputs.device))
+                    step_logits[:, step] = last_logits
                 continue
             active_state = state[active_indices]
             # A distinct query per recurrent step encourages compositional
@@ -269,8 +284,9 @@ class NeuralEngineV0(nn.Module):
             step_query = active_state + self.step_embedding[step]
             if task_context is not None:
                 step_query = step_query + task_context[active_indices]
-            query_step = torch.zeros(batch_size, self.state_dim, device=inputs.device)
-            query_step[active_indices] = step_query
+            if collect_stats:
+                query_step = torch.zeros(batch_size, self.state_dim, device=inputs.device)
+                query_step[active_indices] = step_query
             router_kwargs = {
                 "coverage": coverage,
                 "coverage_temperature": self.routing_coverage_temperature,
@@ -302,7 +318,8 @@ class NeuralEngineV0(nn.Module):
                 selected, weights, route_stats = self.router(router_query, **router_kwargs)
             route_gain = route_stats["route_gain"]
             route_candidates = route_stats.get("candidate_ids")
-            if route_candidates is not None and route_candidates.shape[-1] == self.router.candidate_pool:
+            if (collect_stats and route_candidates is not None
+                    and route_candidates.shape[-1] == self.router.candidate_pool):
                 candidate_step[active_indices] = route_candidates
             if "routing_coverage_loss" in route_stats:
                 coverage_losses.append(route_stats["routing_coverage_loss"])
@@ -369,22 +386,28 @@ class NeuralEngineV0(nn.Module):
                 next_state = state.clone()
                 next_state[active_indices] = updated_state
                 state = next_state
-            selected_step[active_indices] = selected
-            selected_steps.append(selected_step)
-            candidate_steps.append(candidate_step)
-            query_steps.append(query_step)
-            selected_weights[active_indices, step] = weights
-            route_gains[active_indices, step] = route_gain
-            executed_mask[active_indices, step] = True
-            step_entropies[active_indices, step] = route_stats["router_entropy"]
+            if collect_stats:
+                selected_step[active_indices] = selected
+                selected_steps.append(selected_step)
+                candidate_steps.append(candidate_step)
+                query_steps.append(query_step)
+                selected_weights[active_indices, step] = weights
+                route_gains[active_indices, step] = route_gain
+                executed_mask[active_indices, step] = True
+                step_entropies[active_indices, step] = route_stats["router_entropy"]
             updated_logits = self.output(updated_state)
-            next_logits = last_logits.clone()
-            next_logits[active_indices] = updated_logits
-            last_logits = next_logits
-            step_logits[:, step] = last_logits
+            if active_indices.numel() == batch_size:
+                last_logits = updated_logits
+            else:
+                next_logits = last_logits.clone()
+                next_logits[active_indices] = updated_logits
+                last_logits = next_logits
+            if collect_stats:
+                step_logits[:, step] = last_logits
             if self.halt_head is not None:
                 updated_halt_logits = self.halt_head(updated_state).squeeze(-1)
-                halt_logits[active_indices, step] = updated_halt_logits
+                if collect_stats:
+                    halt_logits[active_indices, step] = updated_halt_logits
                 if use_adaptive:
                     should_halt = torch.sigmoid(updated_halt_logits) >= self.halt_threshold
                     if step == self.internal_steps - 1:
@@ -392,6 +415,9 @@ class NeuralEngineV0(nn.Module):
                     next_active = active.clone()
                     next_active[active_indices[should_halt]] = False
                     active = next_active
+        if not collect_stats:
+            self._last_route = {}
+            return last_logits, {}
         stats = {
             "active_circuits": torch.tensor(self.active_circuits, device=inputs.device),
             "internal_steps": torch.tensor(self.internal_steps, device=inputs.device),

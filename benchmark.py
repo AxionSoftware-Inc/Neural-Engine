@@ -25,6 +25,8 @@ def main() -> None:
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--balanced-batch", action="store_true",
                         help="Use a near-uniform task mix for reproducible adaptive-step statistics")
+    parser.add_argument("--no-stats", action="store_true",
+                        help="Skip diagnostic route tensors for serving-style latency")
     args = parser.parse_args()
     checkpoint_payload = None
     if args.checkpoint:
@@ -58,14 +60,19 @@ def main() -> None:
         batch = generator.task_balanced_batch(args.batch_size, device)
     else:
         batch = generator.batch(args.batch_size, device)
+    def run_model():
+        if model_kind == "ne":
+            return model(batch.inputs, collect_stats=not args.no_stats)
+        return model(batch.inputs)
+
     for _ in range(3):
-        model(batch.inputs)
+        run_model()
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats(device)
         torch.cuda.synchronize()
     start = time.perf_counter()
     for _ in range(args.iterations):
-        _, stats = model(batch.inputs)
+        _, stats = run_model()
     if device.type == "cuda":
         torch.cuda.synchronize()
     elapsed = time.perf_counter() - start
@@ -78,6 +85,7 @@ def main() -> None:
         "samples_per_second": args.batch_size * args.iterations / elapsed,
         "checkpoint": str(args.checkpoint) if args.checkpoint else None,
         "balanced_batch": bool(args.balanced_batch),
+        "stats_collected": not args.no_stats,
     }
     if device.type == "cuda":
         result["peak_vram_mb"] = int(torch.cuda.max_memory_allocated(device) // (1024 * 1024))

@@ -31,6 +31,29 @@ def test_input_reinjection_scale_is_configurable():
     assert model.input_reinjection == 0.5
 
 
+def test_inference_can_skip_diagnostic_route_stats_without_changing_logits():
+    model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
+                           num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,
+                           candidate_pool=4, active_circuits=2, internal_steps=2)
+    batch = SyntheticTaskGenerator(seed=51).batch(3)
+    with torch.no_grad():
+        with_stats, _ = model(batch.inputs, adaptive=False, collect_stats=True)
+        without_stats, stats = model(batch.inputs, adaptive=False, collect_stats=False)
+    assert torch.allclose(with_stats, without_stats)
+    assert stats == {}
+
+
+def test_fixed_nonadaptive_stats_free_path_matches_stats_path():
+    model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
+                           num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,
+                           candidate_pool=4, active_circuits=2, internal_steps=2)
+    batch = SyntheticTaskGenerator(seed=52).batch(3)
+    with torch.no_grad():
+        stats_logits, _ = model(batch.inputs, adaptive=False, collect_stats=True)
+        fixed, _ = model(batch.inputs, adaptive=False, collect_stats=False)
+    assert torch.allclose(stats_logits, fixed)
+
+
 def test_gated_memory_write_preserves_forward_and_gradients():
     model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
                            num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,
@@ -118,7 +141,11 @@ def test_adaptive_halting_skips_later_circuits():
     batch = SyntheticTaskGenerator(seed=12).batch(4)
     with torch.no_grad():
         logits, stats = model(batch.inputs, adaptive=True)
+        serving_logits, serving_stats = model(
+            batch.inputs, adaptive=True, collect_stats=False)
     assert logits.shape == (4, 64)
+    assert torch.allclose(logits, serving_logits)
+    assert serving_stats == {}
     assert stats["executed_steps"].tolist() == [1, 1, 1, 1]
     assert bool(stats["selected_ids"][:, 1:].eq(-1).all())
 

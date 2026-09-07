@@ -479,6 +479,20 @@ memory layout yoki compiled/fused decode kernel uchun minimal patch yozing.
 Avval profiler baseline, keyin benchmark va numerical equivalence testlarini
 qo‘shing.
 
+**2026-09-08 baseline:** Native 100M staged checkpoint RTX 3060’da
+diagnostic-heavy path bilan batch-128 `10.871 ms`, batch-1 `4.881 ms` bo‘ldi;
+dense reference mos ravishda `33.802 ms` va `3.296 ms`. `collect_stats=False`
+serving path diagnostics tensorlarini yig‘masdan batch-128ni `9.618 ms`ga,
+batch-1ni `3.737 ms`ga tushirdi va logitsni numerik teng saqladi. Bu foydali
+overhead patchi, lekin one-token latency muammosi yopilmadi: Native hali
+dense’dan `1.134x`.
+
+**Status update:** stats-free serving path `ACCEPTED FOR SERVING PATH`; compiled
+decode/fused router kernel `ACTIVE`. Static CUDA Graph fixed-shape smoke logit
+error `0.0`, lekin speed ratio faqat `0.968x/0.989x` (batch-1/128) bo‘ldi va
+defaultga olinmadi. Batafsil:
+`results/RUNTIME_NATIVE_SMALL_BATCH_BASELINE_20260908.md`.
+
 ## Yopilgan yoki rad qilingan yo‘llar
 
 Bu bo‘lim aktiv muammolarni to‘ldiradi; muvaffaqiyatsiz tajribalar o‘chirilmaydi.
