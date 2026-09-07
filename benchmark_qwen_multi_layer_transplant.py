@@ -634,9 +634,12 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             )
             if hard_route_scale is None else float(hard_route_scale)
         )
-        if dispatch_mode not in {"grouped", "packed", "token-loop"}:
+        if dispatch_mode not in {
+            "grouped", "packed", "packed-fused", "fused", "token-loop",
+        }:
             raise ValueError(
-                "transferred sparse child supports grouped, packed, or token-loop"
+                "transferred sparse child supports grouped, packed, packed-fused, "
+                "fused, or token-loop"
             )
         self.dispatch_mode = dispatch_mode
         chunk = inner_size // num_experts
@@ -731,6 +734,11 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self.register_buffer(
             "group_output_weight",
             torch.stack([expert.output_projection.weight for expert in self.experts]),
+            persistent=False,
+        )
+        self.register_buffer(
+            "group_gate_value_weight",
+            torch.cat((self.group_gate_weight, self.group_value_weight), dim=1),
             persistent=False,
         )
         if router_input == "group-sketch":
@@ -1021,6 +1029,88 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         )
         return self.hard_route_scale * flat_output.reshape_as(hidden_states)
 
+    def _forward_fused(
+        self,
+        hidden_states: torch.Tensor,
+        top_ids: torch.Tensor,
+        weights: torch.Tensor,
+    ) -> torch.Tensor:
+        """Run selected groups through the optional single-launch CUDA kernel."""
+        from neural_engine.qwen_fused_dispatch import fused_dispatch
+
+        flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1]).contiguous()
+        flat_ids = top_ids.reshape(-1, self.active_experts).contiguous()
+        flat_weights = weights.reshape(-1, self.active_experts).contiguous()
+        selected_outputs, flat_output = fused_dispatch(
+            flat_hidden,
+            flat_ids,
+            flat_weights,
+            self.group_gate_weight.contiguous(),
+            self.group_value_weight.contiguous(),
+            self.group_output_weight.contiguous(),
+            self.hard_route_scale,
+        )
+        self.last_selected_outputs = selected_outputs.reshape(
+            *hidden_states.shape[:-1], self.active_experts, hidden_states.shape[-1],
+        )
+        self.last_active_expert_fraction = flat_ids.numel() / max(
+            flat_hidden.shape[0] * self.num_experts, 1
+        )
+        return flat_output.reshape_as(hidden_states)
+
+    def _forward_packed_fused(
+        self,
+        hidden_states: torch.Tensor,
+        top_ids: torch.Tensor,
+        weights: torch.Tensor,
+    ) -> torch.Tensor:
+        """Packed dispatch with one gate+value GEMM per selected expert."""
+        flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
+        flat_ids = top_ids.reshape(-1, self.active_experts)
+        flat_weights = weights.reshape(-1, self.active_experts)
+        selected_outputs = torch.empty(
+            flat_ids.numel(), flat_hidden.shape[-1],
+            device=flat_hidden.device, dtype=flat_hidden.dtype,
+        )
+        flat_output = torch.zeros_like(flat_hidden)
+        pair_indices = torch.arange(flat_ids.numel(), device=flat_ids.device)
+        token_ids = pair_indices // self.active_experts
+        slots = pair_indices % self.active_experts
+        expert_ids = flat_ids[token_ids, slots]
+        group_size = self.group_gate_weight.shape[1]
+        for expert_id in range(self.num_experts):
+            expert_token_ids = torch.where(expert_ids == expert_id)[0]
+            if expert_token_ids.numel() == 0:
+                continue
+            selected_hidden = flat_hidden[token_ids[expert_token_ids]]
+            gate_value = F.linear(
+                selected_hidden, self.group_gate_value_weight[expert_id],
+            )
+            coefficient = (
+                F.silu(gate_value[..., :group_size])
+                * gate_value[..., group_size:]
+            )
+            selected_output = F.linear(
+                coefficient, self.group_output_weight[expert_id],
+            )
+            pair_ids = token_ids[expert_token_ids] * self.active_experts + slots[
+                expert_token_ids
+            ]
+            selected_outputs.index_copy_(0, pair_ids, selected_output)
+            contribution = selected_output * flat_weights[
+                token_ids[expert_token_ids], slots[expert_token_ids],
+            ].unsqueeze(-1)
+            flat_output.index_add_(0, token_ids[expert_token_ids], contribution)
+        self.last_selected_outputs = selected_outputs.reshape(
+            flat_hidden.shape[0], self.active_experts, flat_hidden.shape[-1],
+        ).reshape(
+            *hidden_states.shape[:-1], self.active_experts, hidden_states.shape[-1],
+        )
+        self.last_active_expert_fraction = token_ids.numel() / max(
+            flat_hidden.shape[0] * self.num_experts, 1
+        )
+        return self.hard_route_scale * flat_output.reshape_as(hidden_states)
+
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         soft_output = None
         hard_blend = 1.0
@@ -1150,6 +1240,10 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             return self._forward_grouped(hidden_states, top_ids, weights)
         if not self.training and self.dispatch_mode == "packed":
             return self._forward_packed(hidden_states, top_ids, weights)
+        if not self.training and self.dispatch_mode == "packed-fused":
+            return self._forward_packed_fused(hidden_states, top_ids, weights)
+        if not self.training and self.dispatch_mode == "fused":
+            return self._forward_fused(hidden_states, top_ids, weights)
         flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
         flat_ids = top_ids.reshape(-1, self.active_experts)
         flat_weights = weights.reshape(-1, self.active_experts)
@@ -3733,7 +3827,8 @@ def main() -> None:
     )
     parser.add_argument("--routing-temperature", type=float, default=1.0)
     parser.add_argument(
-        "--dispatch-mode", choices=("grouped", "packed", "token-loop"),
+        "--dispatch-mode",
+        choices=("grouped", "packed", "packed-fused", "fused", "token-loop"),
         default="grouped",
     )
     parser.add_argument(

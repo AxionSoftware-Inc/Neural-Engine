@@ -168,6 +168,18 @@ haqiqiy speedup uchun fused CUDA/Triton backend kerak.
 
 **Audit:** `results/V0_188_QWEN_DISPATCH_BACKEND_AUDIT.md`.
 
+**V0.189 fused-dispatch audit (2026-09-07):** CUDA toolkit va Visual Studio
+Build Tools mavjud muhitda opt-in `packed-fused` va custom `fused` backendlar
+qo‘shildi. Gate+value projectionni bitta GEMMga birlashtirish 1-layerda
+`269.78 → 269.71 ms` (ikkalasi `1.139x`) bo‘ldi; 8-layer qisqa smoke
+`509.91 ms`, ya’ni V0.188 packed `505.88 ms`dan yaxshi emas. Custom kernel
+real shape (`N=1024,H=1024,E=8,K=6,group=384`)da `832.6 ms`/dispatch chiqdi:
+parity bor, lekin cuBLAS GEMMdan juda sekin. `REJECTED FOR ADOPTION`; default
+o‘zgarmadi. P-006 uchun keyingi haqiqiy yo‘l tiled/grouped GEMM (CUTLASS,
+cuBLAS grouped yoki Triton-capable environment), oddiy per-pair kernel emas.
+
+**Audit:** `results/V0_189_QWEN_FUSED_DISPATCH_AUDIT.md`.
+
 Deep-level reuse (`routing_reuse_start_level=2`, weight `2.0`) ham alohida
 tekshirildi: all-screen controlga nisbatan faqat `+0.04 pp`, held-out active-8
 esa `−0.47 pp`, route replay sensitivity esa deyarli oshmadi. Oddiy task-reuse

@@ -6,6 +6,7 @@
 - [V0.186 — Qwen conditional-width oracle](V0_186_QWEN_ADAPTIVE_WIDTH_ORACLE.md)
 - [V0.187 — Qwen signed group-output sketch router](V0_187_QWEN_SIGNED_GROUP_SKETCH_ROUTER.md)
 - [V0.188 — Qwen selected-group dispatch backend audit](V0_188_QWEN_DISPATCH_BACKEND_AUDIT.md)
+- [V0.189 — Qwen fused-dispatch kernel audit](V0_189_QWEN_FUSED_DISPATCH_AUDIT.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
