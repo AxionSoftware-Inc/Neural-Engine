@@ -725,3 +725,12 @@ bo‘ldi. Correction amplitudasini oshirish barqaror causal signal bermadi va
 training/default uchun rad qilindi.
 
 **Sweep audit:** `results/P007_CORRECTION_GAIN_SWEEP_AUDIT.md`.
+
+Post-GRU correction residual (`post_correction_residual_scale=β`) ham
+inference-only tekshirildi. `β=1.0` seed17’da `+1.25 pp`, seed18’da
+`−0.42 pp` natural accuracy berdi; CE va route-replay sensitivity ham
+qarama-qarshi bo‘ldi. Shuning uchun correction’ni GRU’dan keyin bevosita
+qo‘shish mavjud checkpoint uchun barqaror quality fix emas va training/defaultga
+qabul qilinmadi. Opt-in API saqlandi.
+
+**Residual audit:** `results/P007_POST_CORRECTION_RESIDUAL_AUDIT.md`.

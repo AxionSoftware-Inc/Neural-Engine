@@ -61,6 +61,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["circuit_delta_scale"] = config.get("circuit_delta_scale", 1.0)
     model_kwargs["correction_gate_mode"] = config.get("correction_gate_mode", "none")
     model_kwargs["memory_write_mode"] = config.get("memory_write_mode", "none")
+    model_kwargs["post_correction_residual_scale"] = config.get("post_correction_residual_scale", 0.0)
     model_kwargs["routing_reuse_weight"] = config.get("routing_reuse_weight", 0.0)
     model_kwargs["routing_reuse_start_level"] = config.get("routing_reuse_start_level", 0)
     model_kwargs["route_exploration_prob"] = config.get("route_exploration_prob", 0.0)
@@ -75,7 +76,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
         for key in ("task_context", "task_context_update", "adaptive_halting",
                     "halt_threshold", "routing_coverage_temperature",
                     "input_reinjection", "circuit_delta_scale", "correction_gate_mode",
-                    "memory_write_mode", "router_variant",
+                    "memory_write_mode", "post_correction_residual_scale", "router_variant",
                     "soft_routing_temperature", "route_target_supervision",
                     "routing_reuse_weight", "routing_reuse_start_level",
                     "input_reinjection_schedule"):

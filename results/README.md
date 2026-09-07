@@ -14,6 +14,7 @@
 - [V0.194 — Qwen K=4 on-policy pairwise-router audit](V0_194_QWEN_K4_ON_POLICY_PAIRWISE_AUDIT.md)
 - [P-001 — Sparse output-signature follow-up audit](P001_SPARSE_OUTPUT_SIGNATURE_FOLLOWUP_AUDIT.md)
 - [P-007 — Correction-gain sweep](P007_CORRECTION_GAIN_SWEEP_AUDIT.md)
+- [P-007 — Post-GRU correction residual audit](P007_POST_CORRECTION_RESIDUAL_AUDIT.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
@@ -130,6 +131,12 @@ fix. On 100M seed17/18 checkpoints, increasing `circuit_delta_scale` from
 opposite route-replay signals across seeds; seed18 natural accuracy fell
 `1.88 pp`. The correction/state interface remains the next causal target. See
 `P007_CORRECTION_GAIN_SWEEP_AUDIT.md`.
+
+The next post-GRU residual bypass was also rejected for adoption. With
+`post_correction_residual_scale=1.0`, seed17 gained `1.25 pp` natural accuracy
+but seed18 lost `0.42 pp`; CE and replay sensitivity again disagreed across
+seeds. The bypass remains opt-in only. See
+`P007_POST_CORRECTION_RESIDUAL_AUDIT.md`.
 
 The expert-proposed pairwise cost-router was then tested with a corrected
 final-target protocol. Its initial 36-output structured cost head gives a

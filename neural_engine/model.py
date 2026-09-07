@@ -26,6 +26,7 @@ class NeuralEngineV0(nn.Module):
                  input_reinjection: float = 1.0, circuit_delta_scale: float = 1.0,
                  input_reinjection_schedule: list[float] | tuple[float, ...] | None = None,
                  correction_gate_mode: str = "none", memory_write_mode: str = "none",
+                 post_correction_residual_scale: float = 0.0,
                  routing_reuse_weight: float = 0.0, routing_reuse_start_level: int = 0,
                  route_exploration_prob: float = 0.0,
                  routing_capacity: int | None = None, routing_depth: int | None = None,
@@ -75,6 +76,9 @@ class NeuralEngineV0(nn.Module):
         if correction_gate_mode not in {"none", "route_bounded"}:
             raise ValueError("correction_gate_mode must be 'none' or 'route_bounded'")
         self.correction_gate_mode = correction_gate_mode
+        if post_correction_residual_scale < 0.0:
+            raise ValueError("post_correction_residual_scale must be non-negative")
+        self.post_correction_residual_scale = float(post_correction_residual_scale)
         self.memory_write_mode = memory_write_mode
         if router_variant not in {"global", "flat", "probe", "family_local", "family_conditioned"}:
             raise ValueError("router_variant must be 'global', 'flat', 'probe', 'family_local', or 'family_conditioned'")
@@ -340,6 +344,13 @@ class NeuralEngineV0(nn.Module):
                 updated_state = active_state + write_gate * (proposal_state - active_state)
             else:
                 updated_state = proposal_state
+            if self.post_correction_residual_scale:
+                # Optional causal bypass: the selected correction reaches the
+                # recurrent state after the GRU instead of being fully gated
+                # through its update.  The default scale is exactly zero.
+                updated_state = updated_state + (
+                    self.post_correction_residual_scale * delta
+                )
             if active_indices.numel() == batch_size:
                 state = updated_state
             else:
