@@ -785,6 +785,12 @@ versus 99.6622% for 500M (`−0.0367 pp`). The sparse 1.79M active-path estimate
 is preserved, so 700M is a frozen quality control rather than evidence for a
 1B capacity jump. See `P003_TYPED_REGISTER_700M_SEED18_VALIDATION_20260907.md`.
 
+The matching 700M unseen-range run trains only on values 0–31 and reaches
+99.84% in-range but just 27.74% on the held-out 32–63 range, below the 500M
+parent-growth result of 28.57%. Capacity-only scaling is therefore closed for
+this gate; the next target is a value-independent representation or teacher-
+derived activation transfer. See `P003_TYPED_REGISTER_700M_OOD_RANGE_20260907.md`.
+
 The proposal history is indexed in the repository root: `taklif.md` is the
 original scale/systems proposal, `taklif1.md` records completed experiments
 and rejected variants, `taklif2.md` records family-local routing history,

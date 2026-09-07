@@ -448,6 +448,19 @@ qo‘shimcha 200M virtual capacity sifatga qo‘shimcha bermadi. 1B ga faqat haj
 uchun o‘tish rad qilindi; P-003 direct-v0 va unseen-value muammolari ochiq.
 **Batafsil:** `results/P003_TYPED_REGISTER_700M_SEED18_VALIDATION_20260907.md`.
 
+### C-P003-TYPED-700M-OOD-001 — 700M unseen-value range audit
+
+**Status:** `REJECTED AS A CAPACITY-ONLY GENERALIZATION FIX`
+**Muammo:** P-003
+**Natija:** Seed17 700M parent-growth modeli `0–31`da o‘qitilib, unseen
+`32–63` qat’iy `32^3 x 9` gridda tekshirildi. Train-range `99.84%`, unseen
+range `27.74%` bo‘ldi. Bu 500M growthdagi `28.57%`dan `−0.83 pp` va 300Mdagi
+`27.35%`dan faqat `+0.39 pp`. Total `25.79M`, active estimate `1.79M`
+o‘zgarmadi. Demak sig‘imni 700Mga oshirish unseen generalizationni hal qilmadi;
+1B capacity-only run rad qilindi. Keyingi yo‘l representation yoki teacher-
+derived activation transfer.
+**Batafsil:** `results/P003_TYPED_REGISTER_700M_OOD_RANGE_20260907.md`.
+
 ### P-007 — Selected circuit route outputni yetarli boshqarmayapti
 
 **Status:** `ACTIVE`
