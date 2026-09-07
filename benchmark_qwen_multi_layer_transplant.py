@@ -986,6 +986,127 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         return hard_output
 
 
+class SignedSubsetReconstructionQwenChild(torch.nn.Module):
+    """Reconstruct selected group outputs with teacher-fitted signed weights.
+
+    The base routed child uses a fixed ``E/K`` scale and a softmax over the
+    selected groups.  That is unbiased only under a restrictive sampling
+    assumption and cannot express cancellation between correlated group
+    outputs.  This wrapper fits one small K-dimensional signed coefficient
+    vector for every subset.  The hard path still evaluates only the selected
+    groups; the change is solely in their reconstruction contract.
+    """
+
+    def __init__(self, base: TransferredRoutedQwenChild) -> None:
+        super().__init__()
+        if base.active_experts >= base.num_experts:
+            raise ValueError("signed subset reconstruction requires sparse routing")
+        if base.route_source not in {
+            "subset-router", "oracle-subset", "pairwise-cost-router",
+        }:
+            raise ValueError(
+                "signed subset reconstruction requires a subset-capable router"
+            )
+        self.base = base
+        subset_ids = torch.tensor(
+            list(combinations(range(base.num_experts), base.active_experts)),
+            device=base.group_gate_weight.device,
+            dtype=torch.long,
+        )
+        self.register_buffer("subset_ids", subset_ids, persistent=False)
+        self.coefficients = torch.nn.Parameter(
+            torch.zeros(subset_ids.shape[0], base.num_experts),
+        )
+        default = base.hard_route_scale / max(base.active_experts, 1)
+        with torch.no_grad():
+            self.coefficients.copy_(
+                base.subset_membership.to(self.coefficients.dtype) * default
+            )
+        self.fit_ridge = 1e-3
+        self.last_subset_index: torch.Tensor | None = None
+
+    def _subset_index(self, selected: torch.Tensor) -> torch.Tensor:
+        membership = F.one_hot(
+            selected, num_classes=self.base.num_experts,
+        ).sum(dim=-2).to(dtype=self.base.subset_membership.dtype)
+        matches = membership.unsqueeze(-2).eq(
+            self.base.subset_membership
+        ).all(dim=-1)
+        if not matches.any(dim=-1).all():
+            raise RuntimeError("selected groups do not form a known subset")
+        return matches.to(dtype=torch.float32).argmax(dim=-1)
+
+    def _apply_selected(
+        self,
+        selected_outputs: torch.Tensor,
+        selected: torch.Tensor,
+        subset_index: torch.Tensor,
+    ) -> torch.Tensor:
+        subset_coefficients = self.coefficients[subset_index]
+        selected_coefficients = torch.gather(
+            subset_coefficients, -1, selected,
+        )
+        return (
+            selected_outputs * selected_coefficients.unsqueeze(-1)
+        ).sum(dim=-2)
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        # The exact oracle must score the *new* reconstruction contract.  It
+        # intentionally evaluates the full bank, so this is an upper-bound
+        # diagnostic and is never used as a deployment path.
+        if not self.training and self.base.route_source == "oracle-subset":
+            outputs = torch.stack([
+                expert(hidden_states) for expert in self.base.experts
+            ], dim=-2)
+            flat_outputs = outputs.reshape(-1, self.base.num_experts, outputs.shape[-1])
+            candidate_outputs = torch.einsum(
+                "neh,ce->nch", flat_outputs, self.coefficients,
+            )
+            target = flat_outputs.sum(dim=1)
+            errors = (candidate_outputs - target.unsqueeze(1)).square().mean(dim=-1)
+            best_subset_index = errors.argmin(dim=-1)
+            selected = self.subset_ids[best_subset_index]
+            selected_output = candidate_outputs[
+                torch.arange(flat_outputs.shape[0], device=hidden_states.device),
+                best_subset_index,
+            ]
+            self.last_subset_index = best_subset_index.reshape(
+                *hidden_states.shape[:-1],
+            )
+            self.base.last_selected = selected.reshape(
+                *hidden_states.shape[:-1], self.base.active_experts,
+            )
+            self.base.last_route_weights = torch.full(
+                (*hidden_states.shape[:-1], self.base.active_experts),
+                1.0 / self.base.active_experts,
+                device=hidden_states.device,
+                dtype=hidden_states.dtype,
+            )
+            self.base.last_all_outputs = None
+            self.base.last_selected_outputs = torch.gather(
+                outputs, -2,
+                selected.reshape(
+                    *hidden_states.shape[:-1], self.base.active_experts, 1,
+                ).expand(*hidden_states.shape[:-1], self.base.active_experts, outputs.shape[-1]),
+            )
+            self.base.last_active_expert_fraction = (
+                self.base.active_experts / self.base.num_experts
+            )
+            return selected_output.reshape_as(hidden_states)
+
+        base_output = self.base(hidden_states)
+        selected_outputs = self.base.last_selected_outputs
+        selected = self.base.last_selected
+        if selected_outputs is None or selected is None:
+            # During the soft phase the base has no selected hard outputs.  The
+            # wrapper is deliberately identity there; fitting is an offline
+            # calibration step and future joint training can opt into hard mode.
+            return base_output
+        subset_index = self._subset_index(selected)
+        self.last_subset_index = subset_index
+        return self._apply_selected(selected_outputs, selected, subset_index)
+
+
 class TransferredRoutedQwenNeuronChild(torch.nn.Module):
     """Copied Qwen neurons with token-level top-k execution."""
 
@@ -1539,6 +1660,72 @@ def initialize_teacher_group_residuals(
     mixer.mix_out[:, :, :rank].copy_(left[:, :, :rank] * root.unsqueeze(1))
 
 
+@torch.no_grad()
+def initialize_signed_subset_reconstruction(
+    child: torch.nn.Module,
+    io_batches: list[dict[str, torch.Tensor]],
+    device: torch.device,
+    dtype: torch.dtype,
+    ridge: float = 1e-3,
+) -> None:
+    """Fit one signed K-group reconstruction vector per subset.
+
+    The fit is a tiny ridge regression in the selected-group output space:
+    ``sum_k coefficient[k] * group_output[k] ~= teacher_output``.  It does
+    not introduce a dense decoder or evaluate omitted groups on the hard path.
+    """
+    reconstructor = next(
+        nested for nested in child.modules()
+        if isinstance(nested, SignedSubsetReconstructionQwenChild)
+    )
+    base = reconstructor.base
+    if not io_batches:
+        raise ValueError("signed subset reconstruction requires calibration IO")
+    num_subsets = int(reconstructor.subset_ids.shape[0])
+    active = base.active_experts
+    gram = torch.zeros(
+        num_subsets, active, active, device=device, dtype=torch.float32,
+    )
+    cross = torch.zeros(
+        num_subsets, active, device=device, dtype=torch.float32,
+    )
+    was_training = base.training
+    base.eval()
+    for batch in io_batches:
+        inputs = batch["input"].to(device=device, dtype=dtype)
+        outputs = torch.stack([
+            expert(inputs) for expert in base.experts
+        ], dim=-2).float()
+        outputs = outputs.reshape(-1, base.num_experts, outputs.shape[-1])
+        target = batch["output"].to(device=device, dtype=torch.float32)
+        target = target.reshape(-1, outputs.shape[-1])
+        for subset_index, subset in enumerate(reconstructor.subset_ids):
+            selected = outputs.index_select(1, subset)
+            gram[subset_index] += torch.einsum(
+                "nkh,nlh->kl", selected, selected,
+            )
+            cross[subset_index] += torch.einsum(
+                "nkh,nh->k", selected, target,
+            )
+    identity = torch.eye(active, device=device, dtype=torch.float32)
+    scale = gram.diagonal(dim1=-2, dim2=-1).mean(dim=-1).clamp_min(1e-6)
+    solved = torch.linalg.solve(
+        gram + (ridge * scale).view(num_subsets, 1, 1) * identity,
+        cross.unsqueeze(-1),
+    ).squeeze(-1)
+    fitted = torch.zeros_like(reconstructor.coefficients)
+    fitted.scatter_(1, reconstructor.subset_ids, solved)
+    reconstructor.coefficients.copy_(fitted.to(reconstructor.coefficients.dtype))
+    reconstructor.fit_ridge = float(ridge)
+    reconstructor.last_fit_negative_fraction = float(
+        (solved < 0).float().mean().item()
+    )
+    reconstructor.last_fit_coefficient_rms = float(
+        solved.square().mean().sqrt().item()
+    )
+    base.train(was_training)
+
+
 def make_transferred_routed_qwen_child(
     parent: torch.nn.Module,
     num_experts: int,
@@ -1593,7 +1780,7 @@ def make_transferred_routed_qwen_child(
         router_input,
         pairwise_cost_parameterization,
     ).to(device=device, dtype=dtype)
-    if calibration_rank > 0:
+    if calibration_rank > 0 or calibration_mode == "signed-subset":
         if calibration_mode == "shared-basis":
             child = SharedBasisRoutedQwenChild(
                 child, int(calibration_rank),
@@ -1620,6 +1807,10 @@ def make_transferred_routed_qwen_child(
                     child, int(calibration_rank),
                 ).to(device=device, dtype=dtype)
             child = OutputContractRoutedQwenChild(child).to(
+                device=device, dtype=dtype,
+            )
+        elif calibration_mode == "signed-subset":
+            child = SignedSubsetReconstructionQwenChild(child).to(
                 device=device, dtype=dtype,
             )
         else:
@@ -1698,6 +1889,13 @@ def train_importance_router(
     base = next(
         nested for nested in child.modules()
         if isinstance(nested, TransferredRoutedQwenChild)
+    )
+    signed_reconstructor = next(
+        (
+            nested for nested in child.modules()
+            if isinstance(nested, SignedSubsetReconstructionQwenChild)
+        ),
+        None,
     )
     if base.active_experts == base.num_experts:
         # With every group active, routing is the identity and the copied
@@ -1781,30 +1979,43 @@ def train_importance_router(
                         batch["output"].to(device=device, dtype=torch.float32)
                         .reshape(-1, outputs.shape[-1])
                     )
-                    gram = torch.einsum(
-                        "neh,nfh->nef", flat_outputs, flat_outputs,
-                    )
-                    cross = torch.einsum(
-                        "neh,nh->ne", flat_outputs, flat_target,
-                    )
                     subset_ids = torch.tensor(
                         list(combinations(
                             range(base.num_experts), base.active_experts,
                         )), device=device, dtype=torch.long,
                     )
-                    membership = F.one_hot(
-                        subset_ids, num_classes=base.num_experts,
-                    ).sum(dim=1).float()
-                    pair_energy = torch.einsum(
-                        "ce,nef,cf->nc", membership, gram, membership,
-                    )
-                    cross_energy = cross @ membership.transpose(0, 1)
-                    coefficient = base.hard_route_scale / base.active_experts
-                    errors = (
-                        coefficient * coefficient * pair_energy
-                        - 2.0 * coefficient * cross_energy
-                        + flat_target.square().sum(dim=-1, keepdim=True)
-                    )
+                    if signed_reconstructor is not None:
+                        # The router must see the same signed reconstruction
+                        # contract that hard inference will execute.
+                        candidate_outputs = torch.einsum(
+                            "neh,ce->nch",
+                            flat_outputs,
+                            signed_reconstructor.coefficients,
+                        )
+                        errors = (
+                            candidate_outputs - flat_target.unsqueeze(1)
+                        ).square().mean(dim=-1)
+                        membership = base.subset_membership
+                    else:
+                        gram = torch.einsum(
+                            "neh,nfh->nef", flat_outputs, flat_outputs,
+                        )
+                        cross = torch.einsum(
+                            "neh,nh->ne", flat_outputs, flat_target,
+                        )
+                        membership = F.one_hot(
+                            subset_ids, num_classes=base.num_experts,
+                        ).sum(dim=1).float()
+                        pair_energy = torch.einsum(
+                            "ce,nef,cf->nc", membership, gram, membership,
+                        )
+                        cross_energy = cross @ membership.transpose(0, 1)
+                        coefficient = base.hard_route_scale / base.active_experts
+                        errors = (
+                            coefficient * coefficient * pair_energy
+                            - 2.0 * coefficient * cross_energy
+                            + flat_target.square().sum(dim=-1, keepdim=True)
+                        )
                     best_subset_index = errors.argmin(dim=-1)
                     best_subset = subset_ids[best_subset_index]
                     if target_mode == "subset":
@@ -2095,6 +2306,13 @@ def routing_diagnostics(
         nested for nested in child.modules()
         if isinstance(nested, TransferredRoutedQwenChild)
     )
+    signed_reconstructor = next(
+        (
+            nested for nested in child.modules()
+            if isinstance(nested, SignedSubsetReconstructionQwenChild)
+        ),
+        None,
+    )
     if base.route_source not in {
         "subset-router", "oracle-subset", "pairwise-cost-router",
     }:
@@ -2114,26 +2332,37 @@ def routing_diagnostics(
         _, outputs = routing_group_outputs(child, inputs)
         flat_outputs = outputs.reshape(-1, base.num_experts, outputs.shape[-1])
         flat_target = target.reshape(-1, outputs.shape[-1])
-        gram = torch.einsum("neh,nfh->nef", flat_outputs, flat_outputs)
-        cross = torch.einsum("neh,nh->ne", flat_outputs, flat_target)
         subset_ids = torch.tensor(
             list(combinations(
                 range(base.num_experts), base.active_experts,
             )), device=device, dtype=torch.long,
         )
-        membership = F.one_hot(
-            subset_ids, num_classes=base.num_experts,
-        ).sum(dim=1).float()
-        pair_energy = torch.einsum(
-            "ce,nef,cf->nc", membership, gram, membership,
-        )
-        cross_energy = cross @ membership.transpose(0, 1)
-        coefficient = base.hard_route_scale / base.active_experts
-        errors = (
-            coefficient * coefficient * pair_energy
-            - 2.0 * coefficient * cross_energy
-            + flat_target.square().sum(dim=-1, keepdim=True)
-        )
+        if signed_reconstructor is not None:
+            candidate_outputs = torch.einsum(
+                "neh,ce->nch", flat_outputs,
+                signed_reconstructor.coefficients,
+            )
+            errors = (
+                candidate_outputs - flat_target.unsqueeze(1)
+            ).square().sum(dim=-1)
+            membership = base.subset_membership
+            coefficient = 1.0
+        else:
+            gram = torch.einsum("neh,nfh->nef", flat_outputs, flat_outputs)
+            cross = torch.einsum("neh,nh->ne", flat_outputs, flat_target)
+            membership = F.one_hot(
+                subset_ids, num_classes=base.num_experts,
+            ).sum(dim=1).float()
+            pair_energy = torch.einsum(
+                "ce,nef,cf->nc", membership, gram, membership,
+            )
+            cross_energy = cross @ membership.transpose(0, 1)
+            coefficient = base.hard_route_scale / base.active_experts
+            errors = (
+                coefficient * coefficient * pair_energy
+                - 2.0 * coefficient * cross_energy
+                + flat_target.square().sum(dim=-1, keepdim=True)
+            )
         best_subset_index = errors.argmin(dim=-1)
         best_membership = membership[best_subset_index]
         if base.route_source in {"subset-router", "pairwise-cost-router"}:
@@ -2142,14 +2371,26 @@ def routing_diagnostics(
         else:
             predicted_subset_index = best_subset_index
         predicted_membership = membership[predicted_subset_index]
-        learned_sum = (
-            flat_outputs * predicted_membership.unsqueeze(-1)
-        ).sum(dim=1)
-        oracle_sum = (
-            flat_outputs * best_membership.unsqueeze(-1)
-        ).sum(dim=1)
-        learned_output = coefficient * learned_sum
-        oracle_output = coefficient * oracle_sum
+        if signed_reconstructor is not None:
+            learned_output = candidate_outputs[
+                torch.arange(flat_outputs.shape[0], device=device),
+                predicted_subset_index,
+            ]
+            oracle_output = candidate_outputs[
+                torch.arange(flat_outputs.shape[0], device=device),
+                best_subset_index,
+            ]
+            learned_sum = learned_output
+            oracle_sum = oracle_output
+        else:
+            learned_sum = (
+                flat_outputs * predicted_membership.unsqueeze(-1)
+            ).sum(dim=1)
+            oracle_sum = (
+                flat_outputs * best_membership.unsqueeze(-1)
+            ).sum(dim=1)
+            learned_output = coefficient * learned_sum
+            oracle_output = coefficient * oracle_sum
         learned_error = errors.gather(
             1, predicted_subset_index.unsqueeze(1),
         ).squeeze(1)
@@ -2782,6 +3023,10 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 initialize_teacher_group_residuals(
                     child, train_io, device, dtype,
                 )
+            elif args.calibration_mode == "signed-subset":
+                initialize_signed_subset_reconstruction(
+                    child, train_io, device, dtype,
+                )
             router_histories.append(train_importance_router(
                 child, train_io, device, dtype, args.router_supervision_steps,
                 args.learning_rate, args.max_grad_norm, args.log_every,
@@ -3243,7 +3488,7 @@ def main() -> None:
         choices=(
             "low-rank", "swiglu", "shared-basis", "cross-group",
             "teacher-group-decoder", "teacher-group-residual", "residual-coreset",
-            "output-contract",
+            "output-contract", "signed-subset",
         ),
         default="low-rank",
         help="correction type for transferred sparse children",

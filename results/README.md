@@ -8,6 +8,7 @@
 - [V0.178 — Route retrieval vs selection audit](V0_178_ROUTE_RETRIEVAL_SELECTION_AUDIT.md)
 - [V0.179 — Flat full-bank router screen](V0_179_FLAT_ROUTER_SCREEN.md)
 - [V0.181 — Qwen contribution-space micro-group audit](V0_181_QWEN_CONTRIBUTION_CLUSTER.md)
+- [V0.182 — Qwen signed-subset reconstruction audit](V0_182_QWEN_SIGNED_SUBSET_RECONSTRUCTION.md)
 
 V0.174 follows the expert audit in `KEYINGI_YOL_2026-09-06.md` and fixes the
 hard-training/grouped-inference scale mismatch plus stale copied-expert
@@ -803,6 +804,13 @@ but the learned 2-layer route reaches +0.1399 CE delta and the exact best-
 subset oracle +0.1779. Since the oracle also fails, simple contribution-space
 grouping is rejected as a decomposition fix; signed overlapping reconstruction
 is the next gate. See `V0_181_QWEN_CONTRIBUTION_CLUSTER.md`.
+
+V0.182 fits signed coefficients for each selected disjoint group subset. The
+exact oracle is reproducible at `+0.0374` CE on two layers and `+0.0435` on
+four layers, but learned routing remains `+0.064--0.077`; router-size,
+group-energy, and pairwise-cost controls do not close the gap. Static signed
+reconstruction is therefore rejected; true overlap/codebook decomposition is
+still untested. See `V0_182_QWEN_SIGNED_SUBSET_RECONSTRUCTION.md`.
 
 The proposal history is indexed in the repository root: `taklif.md` is the
 original scale/systems proposal, `taklif1.md` records completed experiments

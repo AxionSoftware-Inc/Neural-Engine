@@ -339,6 +339,21 @@ bo‘lgani uchun bu variantda asosiy bottleneck router emas, group decomposition
 va missing signed contributions. 4-layer run qilinmadi.
 **Batafsil:** `results/V0_181_QWEN_CONTRIBUTION_CLUSTER.md`.
 
+### C-P004-QWEN-SIGNED-SUBSET-001 — Signed subset reconstruction
+
+**Status:** `REJECTED FOR ADOPTION`
+**Muammo:** Qwen sparse decomposition / P-004 transfer lane
+**Natija:** Har bir `E=8, K=4` disjoint group subset uchun teacher-fitted
+signed coefficient qo‘llandi. Exact cost oracle ikki seedda bir xil `+0.0374`
+CE, 4-layer oracle `+0.0435` berdi; bu mavjud exact-subset control’dan katta
+ustunlik emas. Learned subset router `+0.0720`, 300-step soft target `+0.0660`,
+group-energy `+0.1088`, pairwise cost `+0.0659`, va 512-hidden router `+0.0642`
+bo‘lib, hammasi `+0.05` gate’dan o‘tdi emas. Demak fixed `E/K` scale yagona
+muammo emas; static signed reconstruction oracle’da barqaror bo‘lsa ham,
+route’ni o‘rganish va decomposition bottleneckini hal qilmadi. True overlapping
+codebook hali alohida gipoteza; 700M/1B scale bu natija asosida boshlanmaydi.
+**Batafsil:** `results/V0_182_QWEN_SIGNED_SUBSET_RECONSTRUCTION.md`.
+
 ## Expertga yuborish uchun qisqa format
 
 ```text
