@@ -93,6 +93,21 @@ oshirmasligi kerak. Shu sabab full modelga integratsiya qilinmadi.
 
 **Audit:** `results/P001_ROUTE_COST_SURROGATE_AUDIT_20260908.md`.
 
+**Cost-router ketma-ket screenlari (2026-09-08):** Query/key MLP held-outda
+ikki seed o‘rtachasida atigi `+0.000129 CE` berdi. 8/32/64-D candidate output
+signature variantlarining o‘rtacha delta’si mos ravishda `+0.000009/+0.000407/
++0.000585 CE` bo‘ldi; 64-D signature routing yo‘lini `3.16x` qimmatlashtirdi.
+Faqat `router.keys`ni one-swap CE label bilan target-align qilish esa
+agressiv va konservativ LR/anchor nazoratlarida ham ikki seedda regressiya
+berdi (`+0.00283…+0.00572 CE`).
+
+Shu sabab oddiy cost MLP, output sketch va post-hoc key retraining direct fix
+sifatida rad qilindi. P-001 ochiq: oracle retrieval headroom mavjud, lekin uni
+active budgetni saqlagan holda end-to-end trainable utilityga aylantirish
+kerak.
+
+**Jamlangan audit:** `results/P001_COST_ROUTER_AUDITS_20260908.md`.
+
 **Route-neighborhood audit (2026-09-08):** 100M/300M/500M seed17/18 frozen
 checkpointlarda natural route uchun bir circuitlik one-swap qidiruv qilindi.
 Candidate pool ichidagi local selection headroom `0.00357–0.00506 CE` bo‘ldi.

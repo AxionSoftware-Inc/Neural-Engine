@@ -1239,6 +1239,13 @@ so query/key/route-summary features are rejected as insufficient. A future
 output-signature probe must account for its hidden active-compute cost. See
 `P001_ROUTE_COST_SURROGATE_AUDIT_20260908.md`.
 
+2026-09-08 P-001 cost-router audit rejects query/key MLP, 8/32/64-D output
+signature surrogates, and post-hoc router-key retraining as direct fixes. The
+64-D signature returned only `+0.000585` mean CE while adding `3.16x` routing
+overhead; key retraining regressed both seeds. Retrieval headroom remains real,
+so the open problem is an end-to-end target-aligned utility that preserves the
+K=8 active budget. See `P001_COST_ROUTER_AUDITS_20260908.md`.
+
 2026-09-08 P-001 route-neighborhood audit separates one-swap regret inside the
 32-circuit candidate pool from a full-bank key top-8 probe. Local selection
 headroom is `0.00357–0.00506 CE`; extra target-evaluated retrieval opportunity

@@ -74,7 +74,8 @@ def _make_batches(config: dict, device: torch.device, split: str,
     ]
 
 
-def _feature_tensor(model: NeuralEngineV0, stats: dict, step: int) -> torch.Tensor:
+def _feature_tensor(model: NeuralEngineV0, stats: dict, step: int,
+                    signature_projection: torch.Tensor | None = None) -> torch.Tensor:
     query = stats["query_states"][:, step]
     candidate_ids = stats["candidate_ids"][:, step]
     selected_ids = stats["selected_ids"][:, step]
@@ -92,21 +93,40 @@ def _feature_tensor(model: NeuralEngineV0, stats: dict, step: int) -> torch.Tens
     repeated_step = step_one_hot.unsqueeze(1).expand(
         -1, candidate_keys.shape[1], -1,
     )
-    return torch.cat(
-        (repeated_query, candidate_keys, repeated_summary,
-         key_score.unsqueeze(-1), repeated_step), dim=-1,
-    )
+    features = [
+        repeated_query, candidate_keys, repeated_summary,
+        key_score.unsqueeze(-1),
+    ]
+    if signature_projection is not None:
+        circuits = model.circuits
+        if not all(hasattr(circuits, name) for name in ("down", "up", "bias")):
+            raise ValueError("output signature requires an independent-style circuit bank")
+        down = circuits.down[candidate_ids]
+        up = circuits.up[candidate_ids]
+        bias = circuits.bias[candidate_ids]
+        hidden = torch.einsum("bd,bpdr->bpr", query, down)
+        hidden = F.gelu(hidden)
+        projected_up = torch.einsum("bprd,ds->bprs", up, signature_projection)
+        signature = torch.einsum("bpr,bprs->bps", hidden, projected_up)
+        signature = signature + torch.einsum(
+            "bpd,ds->bps", bias, signature_projection,
+        )
+        features.append(signature)
+    features.append(repeated_step)
+    return torch.cat(tuple(features), dim=-1)
 
 
 @torch.inference_mode()
 def _collect_batch(model: NeuralEngineV0, inputs: torch.Tensor,
-                   targets: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, dict]:
+                   targets: torch.Tensor,
+                   signature_projection: torch.Tensor | None = None,
+                   ) -> tuple[torch.Tensor, torch.Tensor, dict]:
     natural_logits, stats = model(inputs, adaptive=False, collect_stats=True)
     natural_loss = F.cross_entropy(natural_logits, targets, reduction="none")
     features = []
     labels = []
     for step in range(model.internal_steps):
-        step_features = _feature_tensor(model, stats, step)
+        step_features = _feature_tensor(model, stats, step, signature_projection)
         query = stats["query_states"][:, step]
         candidates = stats["candidate_ids"][:, step]
         replace_slot = stats["selected_weights"][:, step].argmin(dim=-1)
@@ -137,11 +157,15 @@ def _collect_batch(model: NeuralEngineV0, inputs: torch.Tensor,
 
 
 def _collect_dataset(model: NeuralEngineV0,
-                     batches: list[tuple[torch.Tensor, torch.Tensor]]) -> tuple[torch.Tensor, torch.Tensor]:
+                     batches: list[tuple[torch.Tensor, torch.Tensor]],
+                     signature_projection: torch.Tensor | None = None,
+                     ) -> tuple[torch.Tensor, torch.Tensor]:
     feature_rows = []
     label_rows = []
     for inputs, targets in batches:
-        features, labels, _ = _collect_batch(model, inputs, targets)
+        features, labels, _ = _collect_batch(
+            model, inputs, targets, signature_projection,
+        )
         feature_rows.append(features.reshape(-1, features.shape[-1]).cpu())
         label_rows.append(labels.reshape(-1).cpu())
     return torch.cat(feature_rows), torch.cat(label_rows)
@@ -181,7 +205,9 @@ def _train_surrogate(features: torch.Tensor, labels: torch.Tensor,
 @torch.inference_mode()
 def _evaluate(model: NeuralEngineV0, surrogate: CostSurrogate,
               feature_mean: torch.Tensor, feature_std: torch.Tensor,
-              batches: list[tuple[torch.Tensor, torch.Tensor]]) -> dict:
+              batches: list[tuple[torch.Tensor, torch.Tensor]],
+              signature_projection: torch.Tensor | None = None,
+              ) -> dict:
     totals = {
         "examples": 0,
         "natural_loss": 0.0,
@@ -197,7 +223,9 @@ def _evaluate(model: NeuralEngineV0, surrogate: CostSurrogate,
             "oracle_matches", "predicted_improvement",
         )}
         for inputs, targets in batches:
-            features, labels, context = _collect_batch(model, inputs, targets)
+            features, labels, context = _collect_batch(
+                model, inputs, targets, signature_projection,
+            )
             step_features = features[:, step]
             step_labels = labels[:, step]
             prediction = surrogate(
@@ -279,6 +307,8 @@ def main() -> None:
     parser.add_argument("--examples-per-task", type=int, default=16)
     parser.add_argument("--surrogate-steps", type=int, default=1000)
     parser.add_argument("--surrogate-batch-size", type=int, default=4096)
+    parser.add_argument("--signature-dim", type=int, default=0,
+                        help="Add a fixed candidate output sketch to the surrogate feature")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
@@ -289,7 +319,15 @@ def main() -> None:
     model, config = _load_checkpoint(checkpoint, device)
     train_batches = _make_batches(config, device, "train", args.train_batches, args.examples_per_task)
     eval_batches = _make_batches(config, device, "heldout", args.eval_batches, args.examples_per_task)
-    train_features, train_labels = _collect_dataset(model, train_batches)
+    signature_projection = None
+    if args.signature_dim > 0:
+        generator = torch.Generator(device=device).manual_seed(int(config["seed"]) + 9091)
+        signature_projection = torch.randn(
+            model.state_dim, args.signature_dim, generator=generator, device=device,
+        ) / (model.state_dim ** 0.5)
+    train_features, train_labels = _collect_dataset(
+        model, train_batches, signature_projection,
+    )
     surrogate, mean, std, train_report = _train_surrogate(
         train_features,
         train_labels,
@@ -298,7 +336,9 @@ def main() -> None:
         args.surrogate_batch_size,
         int(config["seed"]),
     )
-    evaluation = _evaluate(model, surrogate, mean, std, eval_batches)
+    evaluation = _evaluate(
+        model, surrogate, mean, std, eval_batches, signature_projection,
+    )
     result = {
         "checkpoint": str(checkpoint),
         "model": config.get("model"),
@@ -309,6 +349,7 @@ def main() -> None:
         "examples_per_task": int(args.examples_per_task),
         "active_circuits": int(model.active_circuits),
         "candidate_pool": int(model.router.candidate_pool),
+        "signature_dim": int(args.signature_dim),
         "calibration": train_report,
         "evaluation": evaluation,
     }
