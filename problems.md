@@ -270,11 +270,13 @@ barqaror regressiya qildi. Shuning uchun bu yo‘l trainingga o‘tkazilmadi va
 
 #### Keyingi opt-in gipoteza
 
-Hierarchical routerdagi tasklararo path-distribution variance uchun yumshoq
-`routing_reuse_weight` regularizer sinov qilinadi. U circuit ID yoki active
-budgetni majburlamaydi; faqat katta bankda har taskning butunlay alohida
-subtreega parchalanishini kamaytirishni ko‘zlaydi. Qabul qilish faqat held-out
-hard accuracy, route coverage va active cost birga yaxshilansa mumkin.
+P-008 task-reuse/path-variance regularizer allaqachon sinovdan o‘tdi va
+`REJECTED FOR ADOPTION` qilindi; uni takrorlamaymiz. Keyingi ish avval 100M va
+300M staged checkpointlarda route causal ta’sirini circuit contribution,
+candidate inclusion va recurrent-state bypass bo‘yicha alohida ajratadigan
+diagnostic bo‘ladi. Faqat qaysi bo‘g‘in sabab ekani ko‘rsatilgandan keyin bitta
+minimal opt-in patch sinov qilinadi. Active budget yoki route’ni majburan bir
+xil qilish qabul qilinmaydi.
 
 ---
 
