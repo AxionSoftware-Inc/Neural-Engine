@@ -9,6 +9,7 @@
 - [V0.189 — Qwen fused-dispatch kernel audit](V0_189_QWEN_FUSED_DISPATCH_AUDIT.md)
 - [V0.190 — Qwen FP16 selected-dispatch audit](V0_190_QWEN_FP16_DISPATCH_AUDIT.md)
 - [V0.191 — Qwen dispatch-stage profile](V0_191_QWEN_DISPATCH_STAGE_PROFILE.md)
+- [V0.192 — Qwen grouped-fused dispatch audit](V0_192_QWEN_GROUPED_FUSED_AUDIT.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)

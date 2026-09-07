@@ -635,12 +635,12 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             if hard_route_scale is None else float(hard_route_scale)
         )
         if dispatch_mode not in {
-            "grouped", "packed", "packed-fused", "packed-fp16", "fused",
-            "token-loop",
+            "grouped", "grouped-fused", "packed", "packed-fused", "packed-fp16",
+            "fused", "token-loop",
         }:
             raise ValueError(
-                "transferred sparse child supports grouped, packed, packed-fused, "
-                "packed-fp16, fused, or token-loop"
+                "transferred sparse child supports grouped, grouped-fused, packed, "
+                "packed-fused, packed-fp16, fused, or token-loop"
             )
         self.dispatch_mode = dispatch_mode
         chunk = inner_size // num_experts
@@ -912,6 +912,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         hidden_states: torch.Tensor,
         top_ids: torch.Tensor,
         weights: torch.Tensor,
+        fused_projections: bool = False,
     ) -> torch.Tensor:
         flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
         flat_ids = top_ids.reshape(-1, self.active_experts)
@@ -941,12 +942,20 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         grouped_hidden = grouped_hidden.reshape(
             self.num_experts, max_count, flat_hidden.shape[-1],
         )
-        grouped_gate = F.silu(torch.bmm(
-            grouped_hidden, self.group_gate_weight.transpose(1, 2),
-        ))
-        grouped_value = torch.bmm(
-            grouped_hidden, self.group_value_weight.transpose(1, 2),
-        )
+        if fused_projections:
+            group_size = self.group_gate_weight.shape[1]
+            grouped_gate_value = torch.bmm(
+                grouped_hidden, self.group_gate_value_weight.transpose(1, 2),
+            )
+            grouped_gate = F.silu(grouped_gate_value[..., :group_size])
+            grouped_value = grouped_gate_value[..., group_size:]
+        else:
+            grouped_gate = F.silu(torch.bmm(
+                grouped_hidden, self.group_gate_weight.transpose(1, 2),
+            ))
+            grouped_value = torch.bmm(
+                grouped_hidden, self.group_value_weight.transpose(1, 2),
+            )
         grouped_output = torch.bmm(
             grouped_gate * grouped_value,
             self.group_output_weight.transpose(1, 2),
@@ -1302,6 +1311,10 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             ).sum(dim=-2)
         if not self.training and self.dispatch_mode == "grouped":
             return self._forward_grouped(hidden_states, top_ids, weights)
+        if not self.training and self.dispatch_mode == "grouped-fused":
+            return self._forward_grouped(
+                hidden_states, top_ids, weights, fused_projections=True,
+            )
         if not self.training and self.dispatch_mode == "packed":
             return self._forward_packed(hidden_states, top_ids, weights)
         if not self.training and self.dispatch_mode == "packed-fused":
@@ -3895,7 +3908,7 @@ def main() -> None:
     parser.add_argument(
         "--dispatch-mode",
         choices=(
-            "grouped", "packed", "packed-fused", "packed-fp16", "fused",
+            "grouped", "grouped-fused", "packed", "packed-fused", "packed-fp16", "fused",
             "token-loop",
         ),
         default="grouped",

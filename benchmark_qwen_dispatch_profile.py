@@ -16,7 +16,10 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--dispatch-mode",
-        choices=("parent", "grouped", "packed", "packed-fused", "packed-fp16"),
+        choices=(
+            "parent", "grouped", "grouped-fused", "packed", "packed-fused",
+            "packed-fp16",
+        ),
         default="grouped",
     )
     parser.add_argument("--layer", type=int, default=26)

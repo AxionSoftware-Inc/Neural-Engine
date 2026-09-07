@@ -201,6 +201,16 @@ quality/capacity dalili emas.
 
 **Audit:** `results/V0_191_QWEN_DISPATCH_STAGE_PROFILE.md`.
 
+**V0.192 grouped-fused audit (2026-09-07):** Gate va value projectionlarini
+bitta batched GEMMga birlashtirish isolated layer26 MLPni `7.564 → 6.549 ms`
+qildi, ammo 8-layer end-to-end timing `506.93 ms / 238.88 ms = 2.122x` bo‘ldi;
+V0.188 grouped control `506.60 ms / 237.27 ms = 2.135x` bilan amalda teng.
+CPU parity `1e-6`dan o‘tdi, lekin launch sonini kamaytirish deployment speedup
+bermadi. `REJECTED FOR ADOPTION`; P-006 uchun uch bosqichni (ragged grouping,
+tiled GEMM, scatter) bitta kernelda boshqaradigan backend kerak.
+
+**Audit:** `results/V0_192_QWEN_GROUPED_FUSED_AUDIT.md`.
+
 Deep-level reuse (`routing_reuse_start_level=2`, weight `2.0`) ham alohida
 tekshirildi: all-screen controlga nisbatan faqat `+0.04 pp`, held-out active-8
 esa `−0.47 pp`, route replay sensitivity esa deyarli oshmadi. Oddiy task-reuse
