@@ -354,6 +354,18 @@ route’ni o‘rganish va decomposition bottleneckini hal qilmadi. True overlapp
 codebook hali alohida gipoteza; 700M/1B scale bu natija asosida boshlanmaydi.
 **Batafsil:** `results/V0_182_QWEN_SIGNED_SUBSET_RECONSTRUCTION.md`.
 
+### C-P004-QWEN-CORE-OVERLAP-001 — Deterministic core-overlap codebook
+
+**Status:** `REJECTED`
+**Muammo:** Qwen sparse decomposition / P-004 transfer lane
+**Natija:** High-energy core neuronlarini har bir group’da takrorlab, qolgan
+tail’ni deterministic interleave qiluvchi `E=8,K=4` codebook sinab ko‘rildi.
+Teacher-fitted signed subset oracle 25% core’da `+0.1429` CE, 12.5% core’da
+`+0.1500` berdi; disjoint signed oracle `+0.0374` edi. Oraclening o‘zi
+`+0.05` gate’dan o‘tmagani uchun learned router va 4-layer run qilinmadi.
+Takrorlangan muhim neuronlar tashlab yuborilgan tail hissasini tiklamadi.
+**Batafsil:** `results/V0_183_QWEN_CORE_OVERLAP_CODEBOOK.md`.
+
 ## Expertga yuborish uchun qisqa format
 
 ```text

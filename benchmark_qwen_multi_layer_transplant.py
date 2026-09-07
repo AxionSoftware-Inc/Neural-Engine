@@ -205,6 +205,57 @@ def activation_balanced_partition(
     ]
 
 
+@torch.no_grad()
+def core_overlap_partition(
+    parent: torch.nn.Module,
+    io_batches: list[dict[str, torch.Tensor]],
+    device: torch.device,
+    dtype: torch.dtype,
+    num_experts: int,
+    core_fraction: float = 0.25,
+) -> list[torch.Tensor]:
+    """Repeat a high-energy core and distribute the remaining tail evenly.
+
+    Each group keeps the same width as a disjoint partition.  The top
+    ``core_fraction`` of neurons by observed output energy is copied into every
+    group; the remaining slots are filled from a deterministic, interleaved
+    tail.  This creates a fixed overlap codebook without random sampling or
+    increasing active compute.
+    """
+    gate_weight = parent.gate_proj.weight
+    up_weight = parent.up_proj.weight
+    down_weight = parent.down_proj.weight
+    inner_size = int(gate_weight.shape[0])
+    if inner_size % num_experts:
+        raise ValueError("Qwen intermediate size must divide evenly into experts")
+    if not 0.0 < core_fraction < 1.0:
+        raise ValueError("core_overlap core_fraction must be between zero and one")
+    chunk = inner_size // num_experts
+    score = torch.zeros(inner_size, device=device, dtype=torch.float32)
+    down_norm_sq = down_weight.float().square().sum(dim=0)
+    for batch in io_batches:
+        inputs = batch["input"].to(device=device, dtype=dtype)
+        neuron_value = F.silu(F.linear(inputs, gate_weight)) * F.linear(
+            inputs, up_weight,
+        )
+        score += neuron_value.float().square().mean(dim=(0, 1)) * down_norm_sq
+    order = score.argsort(descending=True)
+    core_size = min(chunk - 1, max(1, int(round(chunk * core_fraction))))
+    core = order[:core_size]
+    tail = order[core_size:]
+    tail_slots = chunk - core_size
+    # Interleaving gives each group comparable tail energy while preserving a
+    # deterministic codebook.  The unselected low-energy tail is intentional.
+    groups = []
+    for expert_id in range(num_experts):
+        selected_tail = tail[expert_id::num_experts][:tail_slots]
+        if selected_tail.numel() != tail_slots:
+            raise RuntimeError("core-overlap tail could not fill all groups")
+        groups.append(torch.cat((core, selected_tail), dim=0))
+    parent_device = gate_weight.device
+    return [group.to(device=parent_device, dtype=torch.long) for group in groups]
+
+
 def sampled_overlap_partition(
     parent: torch.nn.Module,
     num_experts: int,
@@ -504,12 +555,12 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         if partition_mode not in {
             "contiguous", "interleaved", "norm-balanced", "activation-balanced",
             "sampled-overlap", "stratified-overlap", "activation-cluster",
-            "contribution-cluster",
+            "contribution-cluster", "core-overlap",
         }:
             raise ValueError(
                 "partition_mode must be contiguous, interleaved, norm-balanced, "
                 "activation-balanced, sampled-overlap, stratified-overlap, "
-                "activation-cluster, or contribution-cluster"
+                "activation-cluster, contribution-cluster, or core-overlap"
             )
         self.partition_mode = partition_mode
         if route_source not in {
@@ -577,6 +628,11 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 raise ValueError(
                     "contribution-cluster partition requires one index tensor per expert"
                 )
+        if partition_mode == "core-overlap":
+            if partition_indices is None or len(partition_indices) != num_experts:
+                raise ValueError(
+                    "core-overlap partition requires one index tensor per expert"
+                )
         self.experts = torch.nn.ModuleList()
         for expert_id in range(num_experts):
             if partition_mode == "contiguous":
@@ -598,6 +654,8 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             elif partition_mode == "activation-cluster":
                 indices = partition_indices[expert_id]
             elif partition_mode == "contribution-cluster":
+                indices = partition_indices[expert_id]
+            elif partition_mode == "core-overlap":
                 indices = partition_indices[expert_id]
             else:
                 if norm_order is None:
@@ -1744,6 +1802,7 @@ def make_transferred_routed_qwen_child(
     router_hidden_size: int = 128,
     router_input: str = "hidden",
     pairwise_cost_parameterization: str = "components",
+    core_overlap_fraction: float = 0.25,
 ) -> torch.nn.Module:
     partition_indices = None
     if partition_mode == "activation-balanced":
@@ -1771,6 +1830,13 @@ def make_transferred_routed_qwen_child(
             raise ValueError("contribution-cluster partition requires calibration IO")
         partition_indices = contribution_cluster_partition(
             parent, partition_io, device, dtype, num_experts,
+        )
+    elif partition_mode == "core-overlap":
+        if partition_io is None:
+            raise ValueError("core-overlap partition requires calibration IO")
+        partition_indices = core_overlap_partition(
+            parent, partition_io, device, dtype, num_experts,
+            core_fraction=core_overlap_fraction,
         )
     child = TransferredRoutedQwenChild(
         parent, num_experts, active_experts, routing_temperature, dispatch_mode,
@@ -3014,6 +3080,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 router_hidden_size=args.router_hidden_size,
                 router_input=args.router_input,
                 pairwise_cost_parameterization=args.pairwise_cost_parameterization,
+                core_overlap_fraction=args.core_overlap_fraction,
             )
             if args.calibration_mode == "teacher-group-decoder":
                 initialize_teacher_group_decoders(
@@ -3513,10 +3580,14 @@ def main() -> None:
         choices=(
             "contiguous", "interleaved", "norm-balanced", "activation-balanced",
             "sampled-overlap", "stratified-overlap", "activation-cluster",
-            "contribution-cluster",
+            "contribution-cluster", "core-overlap",
         ),
         default="contiguous",
         help="layout of copied parent neurons inside expert groups",
+    )
+    parser.add_argument(
+        "--core-overlap-fraction", type=float, default=0.25,
+        help="fraction of each group repeated in core-overlap mode",
     )
     parser.add_argument(
         "--route-source",
