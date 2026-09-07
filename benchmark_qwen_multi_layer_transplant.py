@@ -849,6 +849,9 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self.last_selected_outputs: torch.Tensor | None = None
         self.last_active_expert_fraction = 1.0
         self._fp16_dispatch_weights: tuple[torch.Tensor, ...] | None = None
+        # One-token dispatch is kept opt-in until a full-model numerical
+        # equivalence/quality audit approves its different reduction order.
+        self.single_token_fast_path = False
 
     def _router_features(self, hidden_states: torch.Tensor) -> torch.Tensor:
         if self.router_input == "hidden":
@@ -916,6 +919,12 @@ class TransferredRoutedQwenChild(torch.nn.Module):
     ) -> torch.Tensor:
         flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
         flat_ids = top_ids.reshape(-1, self.active_experts)
+        if self.single_token_fast_path and flat_hidden.shape[0] == 1:
+            return self._forward_single_token(
+                hidden_states, flat_hidden, flat_ids,
+                weights.reshape(-1, self.active_experts),
+                fused_projections=fused_projections,
+            )
         flat_weights = weights.reshape(-1, self.active_experts)
         pair_indices = torch.arange(flat_ids.numel(), device=flat_ids.device)
         token_ids = pair_indices // self.active_experts
@@ -985,6 +994,53 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         return self.hard_route_scale * flat_output.reshape_as(
             hidden_states,
         )
+
+    def _forward_single_token(
+        self,
+        hidden_states: torch.Tensor,
+        flat_hidden: torch.Tensor,
+        flat_ids: torch.Tensor,
+        flat_weights: torch.Tensor,
+        *,
+        fused_projections: bool = False,
+    ) -> torch.Tensor:
+        """Avoid sort/bincount/scatter for the one-token decode shape.
+
+        The regular grouped path is optimized for many tokens per expert.  At
+        one token, its packing work costs more than the selected projections.
+        Gathering only the K selected groups keeps the same hard route and
+        output contract while using three small batched contractions.
+        """
+        selected_gate = self.group_gate_weight[flat_ids]
+        selected_value = self.group_value_weight[flat_ids]
+        selected_output_weight = self.group_output_weight[flat_ids]
+        if fused_projections:
+            selected_gate_value = self.group_gate_value_weight[flat_ids]
+            projected = torch.einsum(
+                "nh,nqgh->nqg", flat_hidden, selected_gate_value,
+            )
+            group_size = self.group_gate_weight.shape[1]
+            gate = F.silu(projected[..., :group_size])
+            value = projected[..., group_size:]
+        else:
+            gate = F.silu(torch.einsum(
+                "nh,nqgh->nqg", flat_hidden, selected_gate,
+            ))
+            value = torch.einsum(
+                "nh,nqgh->nqg", flat_hidden, selected_value,
+            )
+        coefficient = gate * value
+        selected = torch.einsum(
+            "nqg,nqhg->nqh", coefficient, selected_output_weight,
+        )
+        self.last_selected_outputs = selected.reshape(
+            *hidden_states.shape[:-1], self.active_experts, hidden_states.shape[-1],
+        )
+        self.last_active_expert_fraction = flat_ids.numel() / max(
+            flat_hidden.shape[0] * self.num_experts, 1
+        )
+        contribution = (selected * flat_weights.unsqueeze(-1)).sum(dim=1)
+        return self.hard_route_scale * contribution.reshape_as(hidden_states)
 
     def _forward_packed(
         self,

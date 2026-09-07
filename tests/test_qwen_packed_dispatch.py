@@ -63,6 +63,23 @@ def test_grouped_fused_dispatch_matches_grouped() -> None:
     assert child.last_selected_outputs.shape == (3, 5, 2, 8)
 
 
+def test_grouped_single_token_fast_path_matches_token_loop() -> None:
+    torch.manual_seed(2030)
+    child = TransferredRoutedQwenChild(
+        TinyQwenMlp(), 4, 2, 1.0, "grouped", "contiguous",
+        "router", 2.0,
+    ).eval()
+    child.single_token_fast_path = True
+    inputs = torch.randn(1, 1, 8)
+    child.dispatch_mode = "token-loop"
+    token_loop = child(inputs)
+    child.dispatch_mode = "grouped"
+    grouped = child(inputs)
+    assert torch.allclose(token_loop, grouped, atol=1e-6, rtol=1e-6)
+    assert child.last_selected_outputs is not None
+    assert child.last_selected_outputs.shape == (1, 1, 2, 8)
+
+
 def test_cross_group_hard_correction_matches_reference_formula() -> None:
     torch.manual_seed(2029)
     base = TransferredRoutedQwenChild(

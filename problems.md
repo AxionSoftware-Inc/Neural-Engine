@@ -497,6 +497,15 @@ defaultga olinmadi. Float32 `matmul_precision=high` ham batch-1da atigi
 bu ham defaultga olinmadi. Batafsil:
 `results/RUNTIME_NATIVE_SMALL_BATCH_BASELINE_20260908.md`.
 
+Qwen one-token grouped dispatch uchun `single_token_fast_path` opt-in yo‘li
+qo‘shildi. Isolated `[1,1,1024]` layerda token-loopga nisbatan `2.230 →
+0.365 ms`; sakkizta layer full-forward smoke’da eski grouped `36.294 →
+32.560 ms` (`10.3%`) bo‘ldi. Final logits max farqi `7.629e-6`, lekin sparse
+fast path parentdan hali `1.095x` bo‘lib qoldi. Shu sabab bu dispatch foydali
+optimallashtirish, ammo one-token muammosi yechildi deb hisoblanmadi va
+trained quality auditgacha defaultga olinmadi. Batafsil:
+`results/RUNTIME_QWEN_SINGLE_TOKEN_FAST_PATH_20260908.md`.
+
 ## Yopilgan yoki rad qilingan yo‘llar
 
 Bu bo‘lim aktiv muammolarni to‘ldiradi; muvaffaqiyatsiz tajribalar o‘chirilmaydi.
