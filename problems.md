@@ -238,6 +238,13 @@ Haqiqiy one-token decode smoke’da (`1×1`, 100 iteration) K=5/K=6 `1.371x /
 1.403x` bo‘ldi. Bu latency-only natija; seq=1 CE hisoblanmaydi. Compiled
 decode dispatch hali ochiq.
 
+**V0.194 K=4 pairwise aggregate (2026-09-07):** 36-component
+`pairwise-cost-router`ni 3 round on-policy cascade refit bilan 8 qatlamda
+sinash seed2026/2027’da `+0.06822/+0.07745` CE berdi; direct-hard subset
+baseline `+0.06462/+0.06165` edi. O‘rtacha local regret `0.07392/0.07224`
+bo‘lib qoldi. Demak richer pairwise head + aggregation route gapni tuzatmadi;
+`REJECTED`. **Audit:** `results/V0_194_QWEN_K4_ON_POLICY_PAIRWISE_AUDIT.md`.
+
 Deep-level reuse (`routing_reuse_start_level=2`, weight `2.0`) ham alohida
 tekshirildi: all-screen controlga nisbatan faqat `+0.04 pp`, held-out active-8
 esa `−0.47 pp`, route replay sensitivity esa deyarli oshmadi. Oddiy task-reuse

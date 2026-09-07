@@ -11,6 +11,7 @@
 - [V0.191 — Qwen dispatch-stage profile](V0_191_QWEN_DISPATCH_STAGE_PROFILE.md)
 - [V0.192 — Qwen grouped-fused dispatch audit](V0_192_QWEN_GROUPED_FUSED_AUDIT.md)
 - [V0.193 — Qwen rank-64 correction dispatch audit](V0_193_QWEN_CORRECTION_DISPATCH_AUDIT.md)
+- [V0.194 — Qwen K=4 on-policy pairwise-router audit](V0_194_QWEN_K4_ON_POLICY_PAIRWISE_AUDIT.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
@@ -90,6 +91,13 @@ two-seed quality pass remains (`+0.03881`/`+0.04036` CE), while timing falls
 from the old `1.91x` to `1.134x`/`1.129x` with five timing iterations. K=5
 (`62.5%` active) is now the preferred lower-budget operating point; K=6 is
 still the higher-margin reference.
+
+V0.194 rejects the eight-layer K=4 pairwise-cost router with three-round
+on-policy aggregation: learned CE is `+0.06822/+0.07745` across seeds, worse
+than the direct-hard subset-router control (`+0.06462/+0.06165`). The route
+gap is therefore not repaired by pairwise parameterization plus cascade refit;
+K=4 remains closed for this recipe. See
+`V0_194_QWEN_K4_ON_POLICY_PAIRWISE_AUDIT.md`.
 
 The optimal-scalar diagnostic is small on both budgets: local MSE gain is
 `0.00222` for K4 and `0.00158` for K5, with mean `g*≈0.992`; therefore a scale
