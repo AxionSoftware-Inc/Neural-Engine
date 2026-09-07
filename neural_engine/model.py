@@ -24,6 +24,7 @@ class NeuralEngineV0(nn.Module):
                  numeric_value_encoding: bool = False, adaptive_halting: bool = False,
                  halt_threshold: float = 0.5, routing_coverage_temperature: float = 0.25,
                  input_reinjection: float = 1.0, circuit_delta_scale: float = 1.0,
+                 input_reinjection_schedule: list[float] | tuple[float, ...] | None = None,
                  correction_gate_mode: str = "none", memory_write_mode: str = "none",
                  routing_reuse_weight: float = 0.0, routing_reuse_start_level: int = 0,
                  route_exploration_prob: float = 0.0,
@@ -55,6 +56,13 @@ class NeuralEngineV0(nn.Module):
             raise ValueError("route_exploration_prob must be between 0 and 1")
         self.route_exploration_prob = route_exploration_prob
         self.input_reinjection = input_reinjection
+        if input_reinjection_schedule is None:
+            input_reinjection_schedule = [input_reinjection] * internal_steps
+        if len(input_reinjection_schedule) != internal_steps:
+            raise ValueError("input_reinjection_schedule must match internal_steps")
+        if any(float(value) < 0.0 for value in input_reinjection_schedule):
+            raise ValueError("input_reinjection_schedule values must be non-negative")
+        self.input_reinjection_schedule = tuple(float(value) for value in input_reinjection_schedule)
         if circuit_delta_scale <= 0.0:
             raise ValueError("circuit_delta_scale must be positive")
         self.circuit_delta_scale = circuit_delta_scale
@@ -321,7 +329,7 @@ class NeuralEngineV0(nn.Module):
                 correction_gate = torch.ones_like(route_gain)
             delta = (circuit_delta * route_gain.unsqueeze(-1)
                      * self.circuit_delta_scale * correction_gate.unsqueeze(-1))
-            update = (delta + self.input_reinjection * encoded[active_indices]
+            update = (delta + self.input_reinjection_schedule[step] * encoded[active_indices]
                       + self.step_embedding[step])
             if task_context is not None and self.task_context_update:
                 update = update + task_context[active_indices]

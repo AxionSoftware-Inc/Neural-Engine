@@ -67,6 +67,23 @@ def test_circuit_delta_scale_is_positive_and_defaults_to_one():
         )
 
 
+def test_input_reinjection_schedule_matches_internal_steps():
+    model = NeuralEngineV0(
+        vocab_size=32, num_classes=8, seq_len=4, d_model=16, state_dim=16,
+        num_circuits=16, circuit_rank=4, router_branch=2, router_depth=3,
+        candidate_pool=4, active_circuits=2, internal_steps=2,
+        input_reinjection_schedule=[1.0, 0.25],
+    )
+    assert model.input_reinjection_schedule == (1.0, 0.25)
+    with pytest.raises(ValueError):
+        NeuralEngineV0(
+            vocab_size=32, num_classes=8, seq_len=4, d_model=16, state_dim=16,
+            num_circuits=16, circuit_rank=4, router_branch=2, router_depth=3,
+            candidate_pool=4, active_circuits=2, internal_steps=2,
+            input_reinjection_schedule=[1.0],
+        )
+
+
 def test_route_bounded_correction_gate_starts_at_identity():
     model = NeuralEngineV0(
         vocab_size=32, num_classes=8, seq_len=4, d_model=16, state_dim=16,

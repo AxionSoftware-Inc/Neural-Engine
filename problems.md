@@ -134,6 +134,14 @@ loss oilasi adoption uchun rad qilindi.
 
 **Deep audit:** `results/P008_ROUTING_REUSE_AUDIT.md`.
 
+Input reinjection schedule ham inference-only tekshirildi. Yumshoq
+`[1,0.75,0.5]` schedule 64 misol/task, seed17/18 bo‘yicha o‘rtacha faqat
+`+0.10 pp` accuracy berdi, CE esa `+0.0114` yomonlashdi; kuchliroq schedule’lar
+barqaror regressiya qildi. Shuning uchun bu yo‘l trainingga o‘tkazilmadi va
+`REJECTED FOR ADOPTION` deb belgilandi.
+
+**Audit:** `results/P007_INPUT_REINJECTION_SCHEDULE_AUDIT.md`.
+
 #### Keyingi opt-in gipoteza
 
 Hierarchical routerdagi tasklararo path-distribution variance uchun yumshoq

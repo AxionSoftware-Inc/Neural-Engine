@@ -57,6 +57,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["halt_threshold"] = config.get("halt_threshold", 0.5)
     model_kwargs["routing_coverage_temperature"] = config.get("routing_coverage_temperature", 0.25)
     model_kwargs["input_reinjection"] = config.get("input_reinjection", 1.0)
+    model_kwargs["input_reinjection_schedule"] = config.get("input_reinjection_schedule")
     model_kwargs["circuit_delta_scale"] = config.get("circuit_delta_scale", 1.0)
     model_kwargs["correction_gate_mode"] = config.get("correction_gate_mode", "none")
     model_kwargs["memory_write_mode"] = config.get("memory_write_mode", "none")
@@ -75,7 +76,8 @@ def make_model(config: dict[str, Any]) -> nn.Module:
                     "halt_threshold", "routing_coverage_temperature",
                     "input_reinjection", "memory_write_mode", "router_variant",
                     "soft_routing_temperature", "route_target_supervision",
-                    "routing_reuse_weight", "routing_reuse_start_level"):
+                    "routing_reuse_weight", "routing_reuse_start_level",
+                    "input_reinjection_schedule"):
             model_kwargs.pop(key, None)
         model_kwargs["readout_mode"] = config.get("readout_mode", "routed")
         model_kwargs["route_query_mode"] = config.get("route_query_mode", "value_and_type")
@@ -413,6 +415,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "soft_routing_steps": soft_routing_steps,
         "route_target_weight": float(config.get("route_target_weight", 0.0)),
         "input_reinjection": float(config.get("input_reinjection", 1.0)),
+        "input_reinjection_schedule": list(config.get("input_reinjection_schedule", [])),
         "memory_write_mode": str(config.get("memory_write_mode", "none")),
         "optimizer": str(config.get("optimizer", "adamw")),
         "train_value_range": [train_value_min, train_value_max],
