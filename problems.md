@@ -490,7 +490,9 @@ dense’dan `1.134x`.
 **Status update:** stats-free serving path `ACCEPTED FOR SERVING PATH`; compiled
 decode/fused router kernel `ACTIVE`. Static CUDA Graph fixed-shape smoke logit
 error `0.0`, lekin speed ratio faqat `0.968x/0.989x` (batch-1/128) bo‘ldi va
-defaultga olinmadi. Batafsil:
+defaultga olinmadi. Float32 `matmul_precision=high` ham batch-1da atigi
+`0.993x`, batch-128da `1.069x` bo‘ldi va max logit farqi `0.007057` chiqdi;
+bu ham defaultga olinmadi. Batafsil:
 `results/RUNTIME_NATIVE_SMALL_BATCH_BASELINE_20260908.md`.
 
 ## Yopilgan yoki rad qilingan yo‘llar

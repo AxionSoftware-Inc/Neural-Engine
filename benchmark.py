@@ -27,7 +27,11 @@ def main() -> None:
                         help="Use a near-uniform task mix for reproducible adaptive-step statistics")
     parser.add_argument("--no-stats", action="store_true",
                         help="Skip diagnostic route tensors for serving-style latency")
+    parser.add_argument("--matmul-precision", choices=("highest", "high", "medium"),
+                        default="highest",
+                        help="Float32 matmul precision mode for the runtime A/B")
     args = parser.parse_args()
+    torch.set_float32_matmul_precision(args.matmul_precision)
     checkpoint_payload = None
     if args.checkpoint:
         checkpoint_payload = torch.load(Path(args.checkpoint), map_location="cpu", weights_only=True)
@@ -86,6 +90,7 @@ def main() -> None:
         "checkpoint": str(args.checkpoint) if args.checkpoint else None,
         "balanced_batch": bool(args.balanced_batch),
         "stats_collected": not args.no_stats,
+        "matmul_precision": args.matmul_precision,
     }
     if device.type == "cuda":
         result["peak_vram_mb"] = int(torch.cuda.max_memory_allocated(device) // (1024 * 1024))
