@@ -20,6 +20,7 @@
 - [P-002 — Shared reusable residual bank audit](P002_SHARED_RESIDUAL_AUDIT.md)
 - [P-003/P-002 — Native route-causal diagnostic](P003_ROUTE_CAUSAL_DIAGNOSTIC_20260907.md)
 - [P-007 — Route-final-target auxiliary loss audit](P007_ROUTE_FINAL_TARGET_AUDIT.md)
+- [P-007 — One-step route causality audit](P007_ROUTE_STEP_CAUSALITY_AUDIT_20260908.md)
 - [Runtime — Native small-batch baseline and stats-free path](RUNTIME_NATIVE_SMALL_BATCH_BASELINE_20260908.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)

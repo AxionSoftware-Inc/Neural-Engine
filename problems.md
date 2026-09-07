@@ -848,6 +848,17 @@ scale qilinmadi.
 
 **Route-final-target audit:** `results/P007_ROUTE_FINAL_TARGET_AUDIT.md`.
 
+**One-step route causality audit (2026-09-08):** 100M/300M seed17/18da faqat
+bitta internal step route’i almashtirilganda route-delta L2 `1.53–1.90`, keyingi
+query L2 `0.56–0.96`, final logit L2 `0.59–1.03` bo‘ldi. Demak route correction
+recurrent state’ga causal ravishda yetib boradi; u butunlay yutilib ketmayapti.
+Shu bilan birga final CE `−0.00431…+0.00211`, hard accuracy esa
+`−1.25…+0.42 pp` diapazonda seed/taskga qarab o‘zgardi. P-007 ochiq qoladi,
+lekin bottleneck route-state interface’dan ko‘ra candidate retrieval, subset
+regret, specialization va final classifier margin tomoniga siljidi. Bypass va
+correction-scale variantlarini yana scale qilmaymiz. Batafsil:
+`results/P007_ROUTE_STEP_CAUSALITY_AUDIT_20260908.md`.
+
 ### C-P002-EXPOSURE-WARMUP-001 — Initial task-stable route exposure
 
 **Status:** `REJECTED`
