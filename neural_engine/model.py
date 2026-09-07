@@ -25,6 +25,7 @@ class NeuralEngineV0(nn.Module):
                  halt_threshold: float = 0.5, routing_coverage_temperature: float = 0.25,
                  input_reinjection: float = 1.0, circuit_delta_scale: float = 1.0,
                  correction_gate_mode: str = "none", memory_write_mode: str = "none",
+                 routing_reuse_weight: float = 0.0,
                  route_exploration_prob: float = 0.0,
                  routing_capacity: int | None = None, routing_depth: int | None = None,
                  router_variant: str = "global", family_count: int = 2,
@@ -57,6 +58,9 @@ class NeuralEngineV0(nn.Module):
         if circuit_delta_scale <= 0.0:
             raise ValueError("circuit_delta_scale must be positive")
         self.circuit_delta_scale = circuit_delta_scale
+        if routing_reuse_weight < 0.0:
+            raise ValueError("routing_reuse_weight must be non-negative")
+        self.routing_reuse_weight = routing_reuse_weight
         if correction_gate_mode not in {"none", "route_bounded"}:
             raise ValueError("correction_gate_mode must be 'none' or 'route_bounded'")
         self.correction_gate_mode = correction_gate_mode
@@ -191,6 +195,7 @@ class NeuralEngineV0(nn.Module):
         query_steps = []
         coverage_losses = []
         routing_target_losses = []
+        routing_reuse_losses = []
         soft_route = (self.training and getattr(self.router, "soft_routing_temperature", 0.0) > 0.0
                       and self.router_variant in {"global", "family_conditioned"}
                       and getattr(self, "routing_mode", "learned") != "controlled_task")
@@ -244,6 +249,9 @@ class NeuralEngineV0(nn.Module):
                 "coverage_temperature": self.routing_coverage_temperature,
                 "exploration_prob": (self.route_exploration_prob if self.training else 0.0),
             }
+            if (self.training and self.routing_reuse_weight > 0.0
+                    and self.router_variant in {"global", "family_conditioned"}):
+                router_kwargs["reuse_task_ids"] = (inputs[:, 0] - 1).clamp(0, 14)[active_indices]
             if self.route_target_supervision and self.router_variant in {"global", "family_conditioned"}:
                 group_count = max(1, self.router.num_circuits // self.active_circuits)
                 task_ids = (inputs[:, 0] - 1).clamp(0, 14)
@@ -272,6 +280,8 @@ class NeuralEngineV0(nn.Module):
                 coverage_losses.append(route_stats["routing_coverage_loss"])
             if "routing_target_loss" in route_stats:
                 routing_target_losses.append(route_stats["routing_target_loss"])
+            if "routing_reuse_loss" in route_stats:
+                routing_reuse_losses.append(route_stats["routing_reuse_loss"])
             if forced_selected_ids is not None:
                 forced_ids = forced_selected_ids[active_indices, step].to(device=inputs.device)
                 override = forced_ids[:, 0].ge(0)
@@ -365,6 +375,8 @@ class NeuralEngineV0(nn.Module):
             stats["routing_coverage_loss"] = torch.stack(coverage_losses).mean()
         if routing_target_losses:
             stats["routing_target_loss"] = torch.stack(routing_target_losses).mean()
+        if routing_reuse_losses:
+            stats["routing_reuse_loss"] = torch.stack(routing_reuse_losses).mean()
         self._last_route = stats
         return last_logits, stats
 

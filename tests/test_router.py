@@ -94,6 +94,23 @@ def test_soft_coverage_regularizer_is_differentiable():
     assert router.level_projections.grad is not None
 
 
+def test_task_reuse_regularizer_is_differentiable():
+    router = HierarchicalRouter(32, num_circuits=64, branch=4, depth=2,
+                                candidate_pool=8, active_circuits=4)
+    _, _, stats = router(torch.randn(8, 32), reuse_task_ids=torch.tensor([0, 0, 1, 1, 2, 2, 3, 3]))
+    assert stats["routing_reuse_loss"].ndim == 0
+    assert torch.isfinite(stats["routing_reuse_loss"])
+    stats["routing_reuse_loss"].backward()
+    assert router.level_projections.grad is not None
+
+
+def test_task_reuse_regularizer_handles_uneven_groups():
+    router = HierarchicalRouter(16, num_circuits=32, branch=2, depth=3,
+                                candidate_pool=4, active_circuits=2)
+    _, _, stats = router(torch.randn(7, 16), reuse_task_ids=torch.tensor([0, 0, 0, 1, 1, 2, 2]))
+    assert torch.isfinite(stats["routing_reuse_loss"])
+
+
 def test_router_capacity_warmup_limits_reachable_bank_and_can_expand():
     router = HierarchicalRouter(32, num_circuits=128, branch=4, depth=3,
                                 candidate_pool=16, active_circuits=4,

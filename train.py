@@ -60,6 +60,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["circuit_delta_scale"] = config.get("circuit_delta_scale", 1.0)
     model_kwargs["correction_gate_mode"] = config.get("correction_gate_mode", "none")
     model_kwargs["memory_write_mode"] = config.get("memory_write_mode", "none")
+    model_kwargs["routing_reuse_weight"] = config.get("routing_reuse_weight", 0.0)
     model_kwargs["route_exploration_prob"] = config.get("route_exploration_prob", 0.0)
     model_kwargs["routing_capacity"] = config.get("routing_capacity")
     model_kwargs["routing_depth"] = config.get("routing_depth")
@@ -72,7 +73,8 @@ def make_model(config: dict[str, Any]) -> nn.Module:
         for key in ("task_context", "task_context_update", "adaptive_halting",
                     "halt_threshold", "routing_coverage_temperature",
                     "input_reinjection", "memory_write_mode", "router_variant",
-                    "soft_routing_temperature", "route_target_supervision"):
+                    "soft_routing_temperature", "route_target_supervision",
+                    "routing_reuse_weight"):
             model_kwargs.pop(key, None)
         model_kwargs["readout_mode"] = config.get("readout_mode", "routed")
         model_kwargs["route_query_mode"] = config.get("route_query_mode", "value_and_type")
@@ -366,6 +368,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         route_target_weight = float(config.get("route_target_weight", 0.0))
         if route_target_weight and "routing_target_loss" in route_stats:
             loss = loss + route_target_weight * route_stats["routing_target_loss"]
+        routing_reuse_weight = float(config.get("routing_reuse_weight", 0.0))
+        if routing_reuse_weight and "routing_reuse_loss" in route_stats:
+            loss = loss + routing_reuse_weight * route_stats["routing_reuse_loss"]
         loss.backward()
         nn.utils.clip_grad_norm_(model.parameters(), config["grad_clip"])
         optimizer.step()
@@ -397,6 +402,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "halt_loss_weight": float(config.get("halt_loss_weight", 0.0)),
         "exit_loss_weight": float(config.get("exit_loss_weight", 0.0)),
         "routing_coverage_weight": coverage_weight,
+        "routing_reuse_weight": float(config.get("routing_reuse_weight", 0.0)),
         "routing_coverage_temperature": float(config.get("routing_coverage_temperature", 0.25)),
         "routing_warmup_steps": routing_warmup_steps,
         "routing_schedule": routing_schedule,

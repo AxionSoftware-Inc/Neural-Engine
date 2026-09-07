@@ -91,12 +91,17 @@ class HierarchicalRouter(nn.Module):
                 routing_offset: int | torch.Tensor = 0,
                 routing_capacity: int | None = None,
                 routing_windows: torch.Tensor | None = None,
-                target_bases: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
+                target_bases: torch.Tensor | None = None,
+                reuse_task_ids: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
         if coverage_temperature <= 0:
             raise ValueError("coverage_temperature must be positive")
         if not 0.0 <= exploration_prob <= 1.0:
             raise ValueError("exploration_prob must be between 0 and 1")
         batch = state.shape[0]
+        if reuse_task_ids is not None:
+            if reuse_task_ids.ndim != 1 or reuse_task_ids.shape[0] != batch:
+                raise ValueError("reuse_task_ids must have one value per batch item")
+            reuse_task_ids = reuse_task_ids.to(device=state.device, dtype=torch.long)
         local_capacity = self.routing_capacity if routing_capacity is None else int(routing_capacity)
         if not 0 < local_capacity <= self.routing_capacity:
             raise ValueError("routing_capacity must be between 1 and the configured routing capacity")
@@ -127,6 +132,7 @@ class HierarchicalRouter(nn.Module):
         entropies = []
         path_scores = []
         coverage_distributions = []
+        reuse_level_probabilities = []
         target_path_losses = []
         target_leaf = None
         if target_bases is not None:
@@ -151,6 +157,8 @@ class HierarchicalRouter(nn.Module):
                     target_path_losses.append(F.cross_entropy(logits, target_child, reduction="none"))
                 probs = F.softmax(logits, dim=-1)
                 level_probs.append(probs)
+                if reuse_task_ids is not None:
+                    reuse_level_probabilities.append(probs)
                 if coverage:
                     coverage_level_probs.append(F.softmax(logits / coverage_temperature, dim=-1))
                 entropies.append(-(probs * probs.clamp_min(1e-8).log()).sum(dim=-1))
@@ -215,6 +223,22 @@ class HierarchicalRouter(nn.Module):
             "selected_ids": selected_ids,
             "soft_route": torch.tensor(use_soft_route, device=state.device),
         }
+        if reuse_level_probabilities and reuse_task_ids is not None:
+            task_groups = torch.unique(reuse_task_ids, sorted=True)
+            if task_groups.numel() > 1:
+                group_losses = []
+                group_indices = torch.searchsorted(task_groups, reuse_task_ids)
+                group_counts = torch.bincount(
+                    group_indices, minlength=task_groups.numel()).to(dtype=state.dtype)
+                for probs in reuse_level_probabilities:
+                    group_sums = torch.zeros(
+                        task_groups.numel(), probs.shape[-1],
+                        device=state.device, dtype=probs.dtype)
+                    group_sums.scatter_add_(
+                        0, group_indices.unsqueeze(-1).expand_as(probs), probs)
+                    group_means = group_sums / group_counts.clamp_min(1).unsqueeze(-1)
+                    group_losses.append(group_means.var(dim=0, unbiased=False).mean())
+                stats["routing_reuse_loss"] = torch.stack(group_losses).mean()
         if target_loss is not None:
             stats["routing_target_loss"] = target_loss
         if coverage:

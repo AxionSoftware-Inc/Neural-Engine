@@ -112,6 +112,23 @@ qaysi gipoteza rad etilganini hujjatlashtiring.
 Keyingi sinov functional collapse’ni emas, circuitlararo qayta foydalanish va
 route fragmentationni kamaytirishni tekshirishi kerak.
 
+Tasklararo path-distribution variance regularizer (`routing_reuse_weight`) ham
+sinab ko‘rildi. `weight=2.0` 100Mda all-screenni `86.48% → 86.22%` ga tushirib,
+dead fractionni `7.15% → 32.27%` qildi. Yumshoq `weight=0.25` all-screenni
+`+0.08 pp` oshirdi, lekin held-out active-8ni `−0.21 pp` pasaytirdi va route
+replay sensitivity faqat `+0.42 pp` bo‘ldi. Oddiy reuse regularizeri
+`REJECTED FOR ADOPTION`; P-002 ochiq qoladi.
+
+**Audit:** `results/P008_ROUTING_REUSE_AUDIT.md`.
+
+#### Keyingi opt-in gipoteza
+
+Hierarchical routerdagi tasklararo path-distribution variance uchun yumshoq
+`routing_reuse_weight` regularizer sinov qilinadi. U circuit ID yoki active
+budgetni majburlamaydi; faqat katta bankda har taskning butunlay alohida
+subtreega parchalanishini kamaytirishni ko‘zlaydi. Qabul qilish faqat held-out
+hard accuracy, route coverage va active cost birga yaxshilansa mumkin.
+
 ---
 
 ### P-003 — Capacity oshganda quality scaling kafolatlanmayapti
