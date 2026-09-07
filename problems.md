@@ -81,6 +81,16 @@ Circuitlar alohida va qayta ishlatiladigan funksiyalarni o‘rganishi kerak.
 Hozir route tanlovi bilan circuit learning signali bir-biriga bog‘langan:
 kam tanlangan circuit o‘qimaydi, o‘qimagan circuit esa tanlanmaydi.
 
+#### Yangi diagnostik dalil (2026-09-07)
+
+100M/300M/500M staged 10k checkpointlarda candidate circuit chiqishlarining
+mean pair cosine’i mos ravishda seed17/18 uchun `0.040/0.040`, `0.043/0.042`
+va `0.042/0.041` bo‘ldi. Demak bank functional jihatdan to‘liq collapse
+bo‘lmagan. Biroq ishlatilgan bank ulushi `44.5–45.6% → 16.1–16.3% →
+12.4–12.6%` ga tushdi, used-circuit task entropy esa `~0.25 → ~0.14 →
+~0.07` bo‘ldi. Bu capacity oshganda over-specialization va route
+fragmentation kuchayayotganini ko‘rsatadi.
+
 #### Qabul qilish mezonlari
 
 - router o‘zgarmagan control bilan solishtirish;
@@ -97,6 +107,10 @@ uchun bitta minimal experiment yozing. Circuit body, correction va routing
 gradientlarini qaysi tartibda va nima uchun o‘zgartirayotganingizni ko‘rsating.
 Joint architecture rewrite qilmang. Natija bo‘lmasa, negative resultni va
 qaysi gipoteza rad etilganini hujjatlashtiring.
+
+**Diagnostika:** `results/P002_CIRCUIT_FUNCTIONAL_SPECIALIZATION_AUDIT.md`.
+Keyingi sinov functional collapse’ni emas, circuitlararo qayta foydalanish va
+route fragmentationni kamaytirishni tekshirishi kerak.
 
 ---
 
