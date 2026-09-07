@@ -310,3 +310,43 @@ oldingi screen undertraining ta’sirida bo‘lganini ko‘rsatdi. P-003 `ACTIVE
 qoladi: routing/circuit utilization va murakkab task regressiyalari tekshirilishi
 kerak.
 **Batafsil:** `results/P003_MATCHED_10K_SEED17_19.md`.
+
+### C-P003-STAGED-GROWTH-001 — Inherited circuit bank with staged exposure
+
+**Status:** `PROMISING — NEEDS REPLICATION`
+**Muammo:** P-003
+**Natija:** NE-20 5k checkpointdan parent circuit/router weightlari ko‘chirilib,
+avval 100M modelning `1408` reachable bankida 5k, keyin full `7552` bankida
+5k training qilindi. Seed17/18 staged full-bank mean accuracy `82.83%` bo‘ldi;
+NE-20 direct 10k mean `78.42%`, noldan NE-100 progressive 10k mean `78.07%`.
+Gain `+4.40/+4.75 pp`, complex `compose_add_mul` o‘rtachasi ham
+`40.49% → 53.52%`ga ko‘tarildi. Full-bank route auditida dead fraction
+`15–17%` bo‘ldi, noldan progressive NE-100da `32–34%` edi. Bu hozirgi eng
+kuchli ijobiy signal, lekin eval hali `split=all`, faqat ikki seed bor va jami
+staged yo‘l 15k qadamdan iborat; shuning uchun `SOLVED` yoki default emas.
+**Batafsil:** `results/P003_STAGED_BANK_GROWTH_SEED17_18.md`.
+
+### C-P003-DIRECT-GROWTH-001 — Direct inherited growth control
+
+**Status:** `REJECTED`
+**Muammo:** P-003
+**Natija:** NE-20 5k checkpointdan full 7552 bankka to‘g‘ridan-to‘g‘ri ko‘chirish
+va yana 5k training seed17/18da `77.76% / 78.54%`, mean `78.15%` berdi.
+Bu NE-20 direct 10k mean `78.42%`dan yuqori emas va staged exposure bo‘lmasa
+katta sakrash yo‘q. Demak foyda oddiy weight-copy emas; avval kichik reachable
+bankda moslashish bosqichi kerak bo‘lishi mumkin.
+**Batafsil:** `results/P003_STAGED_BANK_GROWTH_SEED17_18.md`.
+
+### C-P003-ROUTE-FRAGMENTATION-001 — Large-bank route fragmentation
+
+**Status:** `ACTIVE`
+**Muammo:** P-003
+**Dalil:** 10k route auditida noldan NE-100 progressive variantlarida task
+ichidagi route Jaccard `0.0049–0.0112`, eval dead fraction `31.70–34.18%` va
+between-task Jaccard `0.0480–0.0522` bo‘ldi. Staged growthda task route’lari
+ko‘proq qayta ishlatildi/dead fraction `15.06–16.72%`gacha tushdi va quality
+`+4.40 pp` o‘sdi. Bu routing fragmentationni kuchli nomzod qiladi, lekin
+staged growthdagi qo‘shimcha training va meros qilingan circuitlar ta’siri
+hali alohida ajratilmagan.
+**Keyingi tajriba:** staged growthni uchinchi seed, clean held-out split va
+300M/500M bankda takrorlash; qaysi stage zarurligini 2x2 ablation bilan ajratish.
