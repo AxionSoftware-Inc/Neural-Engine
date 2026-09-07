@@ -62,28 +62,10 @@ rewrite.
 
 ## Problem ownership
 
-The existing `problems.md` remains the single registry for Native Engine
-problems P-001 through P-007 and their historical rejection records. The
-following track-specific work items are added here so Qwen and runtime work do
-not get mixed into those IDs:
-
-### QWEN-001 — K=4 candidate retrieval and subset regret
-
-**Status:** `ACTIVE`
-
-Do not increase model size or change circuit bodies. Improve candidate
-inclusion and hard-subset selection, measured against the exact paired oracle.
-Acceptance must include two seeds, candidate recall, p95 regret, hard
-accuracy, CE, dead circuits, and latency.
-
-### RUNTIME-001 — small-batch/decode kernel overhead
-
-**Status:** `ACTIVE`
-
-Do not change routing quality or training objectives. Profile and optimize the
-selected-token dispatch/control path, with separate batch-128, batch-1 and
-one-token measurements. A speed improvement is not accepted if numerical
-outputs change beyond the existing tolerance.
+The existing `problems.md` is the single problem registry. P-001–P-007 and
+the historical C-* records cover Native Engine work; `QWEN-001` and
+`RUNTIME-001` explicitly identify the two other tracks. This keeps one place
+for expert handoffs without mixing their benchmarks or acceptance gates.
 
 ## Branch rules
 
@@ -112,4 +94,3 @@ outputs change beyond the existing tolerance.
    evidence.
 5. Integrate a track into `main` only after a two-seed benchmark passes its
    stated gate and the result is documented.
-

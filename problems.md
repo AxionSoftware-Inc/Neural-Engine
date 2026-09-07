@@ -415,6 +415,68 @@ Model body yoki router sifatini o‘zgartirmasdan parameter/cost instrumentation
 patchini yozing. Eski testlarni saqlang va oldingi benchmark natijalari bilan
 backward-compatible hisobot chiqaring.
 
+---
+
+### QWEN-001 — K=4 candidate retrieval va subset regret
+
+**Status:** `ACTIVE`  
+**Track:** Sparse Qwen  
+**Prioritet:** P0
+
+#### Dalil
+
+- K=4 (`50%` active) learned routingda ikki seed CE delta `+0.06462` va
+  `+0.06165` bo‘ldi.
+- Xuddi shu circuitlarda exact paired-subset oracle `+0.01607` va `+0.01227`
+  berdi.
+- Demak foydali sparse subsetlar mavjud; joriy asosiy to‘siq learned
+  candidate retrieval/subset tanlashdagi regret.
+
+#### Qabul qilish mezonlari
+
+- bir xil frozen children, K=4, sakkiz qatlam, seed17/18;
+- candidate recall eski routerdan pasaymasin;
+- p95 retrieval/selection regret kamida 10% yaxshilansin;
+- hard accuracy va CE ikkala seedda yaxshilansin yoki gate’dan o‘tishi;
+- dead circuits va sparse latency alohida hisoblansin.
+
+#### Expert task
+
+Faqat candidate retrieval yoki subset-selection signalini o‘zgartiradigan
+minimal patch yozing. Circuit body, correction formulasi va recurrent state
+update’ni bir vaqtda o‘zgartirmang. Exact paired oracle bilan gapni alohida
+hisoblang; gate bajarilmasa `REJECTED` deb hujjatlashtiring.
+
+---
+
+### RUNTIME-001 — Small-batch va one-token decode overhead
+
+**Status:** `ACTIVE`  
+**Track:** Runtime  
+**Prioritet:** P1
+
+#### Dalil
+
+- Qwen selected-token dispatch katta batchda deyarli dense darajasiga tushdi,
+  ammo one-token decode K=5/K=6 da `1.371x/1.403x` bo‘lib qolmoqda.
+- Native Engine V0.12 batch=128 da tez, lekin kichik batchda Python/PyTorch
+  kernel-launch va routing overheadi hali asosiy xavf.
+
+#### Qabul qilish mezonlari
+
+- batch=128, batch=1 va sequence/one-token rejimlari alohida o‘lchansin;
+- numerical output mavjud tolerance ichida aynan saqlansin;
+- Native va Qwen natijalari bir jadvalda aralashtirilmasin;
+- speedup bilan birga active bytes, kernel/dispatch va controller xarajati
+  ko‘rsatilsin.
+
+#### Expert task
+
+Routing objective yoki model sifatini o‘zgartirmasdan selected-token dispatch,
+memory layout yoki compiled/fused decode kernel uchun minimal patch yozing.
+Avval profiler baseline, keyin benchmark va numerical equivalence testlarini
+qo‘shing.
+
 ## Yopilgan yoki rad qilingan yo‘llar
 
 Bu bo‘lim aktiv muammolarni to‘ldiradi; muvaffaqiyatsiz tajribalar o‘chirilmaydi.
