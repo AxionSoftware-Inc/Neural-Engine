@@ -366,9 +366,12 @@ class NeuralEngineV0(nn.Module):
                 correction_gate = torch.ones_like(route_gain)
             delta = (circuit_delta * route_gain.unsqueeze(-1)
                      * self.circuit_delta_scale * correction_gate.unsqueeze(-1))
-            route_delta_step = torch.zeros(batch_size, self.state_dim, device=inputs.device)
-            route_delta_step[active_indices] = delta
-            route_delta_steps.append(route_delta_step)
+            if collect_stats:
+                route_delta_step = torch.zeros(
+                    batch_size, self.state_dim, device=inputs.device,
+                )
+                route_delta_step[active_indices] = delta
+                route_delta_steps.append(route_delta_step)
             update = (delta + self.input_reinjection_schedule[step] * encoded[active_indices]
                       + self.step_embedding[step])
             if task_context is not None and self.task_context_update:
