@@ -8,6 +8,16 @@ Experimental research repository for a **non-Transformer, non-MoE neural archite
 
 This repository starts from first principles. The initial goal is **not** to build a production LLM, not to generate fluent text, and not to beat state-of-the-art models. The first goal is to determine whether a new architecture can achieve useful learned behavior while using dramatically fewer active parameters and less memory traffic than a comparable dense Transformer.
 
+## Current research organization
+
+The repository now keeps three tracks separate: the original Native Engine,
+the Sparse Qwen FFN-transfer study, and shared runtime/kernel engineering.
+They use different benchmarks and must not be treated as one model. The branch
+map, frozen baselines, ownership rules, and next steps are recorded in
+[`RESEARCH_TRACKS.md`](RESEARCH_TRACKS.md); the compact comparison table is in
+[`results/BASELINES.md`](results/BASELINES.md). Open Native problems remain in
+[`problems.md`](problems.md).
+
 ---
 
 ## 1. Research question

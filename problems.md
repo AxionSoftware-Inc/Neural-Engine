@@ -16,6 +16,14 @@ keyin Codex uni mustaqil test qiladi.
 - Har bir patch eski defaultni o‘zgartirmaydigan opt-in experiment sifatida
   boshlanadi.
 
+## Track chegarasi
+
+P-001–P-007 va quyidagi tarixiy C-* yozuvlari Native Engine tadqiqot oqimiga
+tegishli. Sparse Qwen va umumiy runtime muammolari alohida yuritiladi:
+`RESEARCH_TRACKS.md` dagi `QWEN-001` va `RUNTIME-001`. Natijalarni bir-biriga
+aralashtirmaslik kerak, chunki benchmark va teacher/reference ta’riflari
+farq qiladi.
+
 ## Aktiv muammolar
 
 ### P-001 — Candidate retrieval kerakli circuitlarni topmayapti
