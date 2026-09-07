@@ -791,6 +791,12 @@ parent-growth result of 28.57%. Capacity-only scaling is therefore closed for
 this gate; the next target is a value-independent representation or teacher-
 derived activation transfer. See `P003_TYPED_REGISTER_700M_OOD_RANGE_20260907.md`.
 
+After power recovery, the exact Qwen3-0.6B FFN conversion was re-run across
+all 28 layers with no training: both layer MLP and full-model logit errors were
+0.0. This validates the no-training compilation control, not sparse quality or
+full Transformer removal; the next gate remains held-out functionally coherent
+micro-groups. See `P004_QWEN_EXACT_TRANSFER_RECHECK_20260907.md`.
+
 The proposal history is indexed in the repository root: `taklif.md` is the
 original scale/systems proposal, `taklif1.md` records completed experiments
 and rejected variants, `taklif2.md` records family-local routing history,

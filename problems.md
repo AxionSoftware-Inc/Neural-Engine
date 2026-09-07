@@ -315,6 +315,18 @@ muammoni hal qilmadi. Batafsil: `results/V0_179_FLAT_ROUTER_SCREEN.md`.
 har ikki seedda `−8.33 pp` bo‘ldi. Batafsil:
 `results/COUPLED_PROBE_ROUTER_AUDIT.md`.
 
+### C-P004-QWEN-TRANSFER-RECHECK-001 — Exact Qwen FFN compilation
+
+**Status:** `VALIDATED CONTROL`
+**Muammo:** P-004 bilan bog‘liq Qwen transfer lane
+**Natija:** Lokal Qwen3-0.6Bning 28 ta MLP qatlami Neural Engine SwiGLU
+circuitlariga training va calibration’siz ko‘chirildi. Max layer MLP error va
+full-model max logit error `0.0`; converted parameter count `264,241,152`.
+Bu tayyor FFN funksiyasidan boshlash mumkinligini tasdiqlaydi, ammo attention
+bloklari hali qoladi va dense transfer active compute’ni kamaytirmaydi. Sparse
+micro-group decomposition hamda held-out text quality muammosi ochiq.
+**Batafsil:** `results/P004_QWEN_EXACT_TRANSFER_RECHECK_20260907.md`.
+
 ## Expertga yuborish uchun qisqa format
 
 ```text
