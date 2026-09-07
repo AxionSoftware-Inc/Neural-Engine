@@ -1222,3 +1222,21 @@ using 1,920 identical held-out examples per checkpoint. The mean changes are
 near zero and seed-dependent (64/128/256: `+0.000889/+0.000306/−0.000077 CE`,
 `−0.095/−0.009/−0.026 pp accuracy`), so simple window enlargement is rejected
 as the main quality fix. See `P001_CANDIDATE_POOL_WIDTH_SCREEN_20260908.md`.
+
+2026-09-08 P-001 route-neighborhood audit separates one-swap regret inside the
+32-circuit candidate pool from a full-bank key top-8 probe. Local selection
+headroom is `0.00357–0.00506 CE`; extra target-evaluated retrieval opportunity
+is `0.00558–0.02199 CE`, with only `0.10–0.97%` full-key top-8 candidate recall.
+The signal grows at 500M, but the target-evaluated probe is diagnostic rather
+than deployable. The next route experiment should learn final-cost alignment
+from query plus circuit signatures. See
+`P001_ROUTE_NEIGHBORHOOD_REGRET_AUDIT_20260908.md`.
+
+2026-09-08 P-001 route-neighborhood audit separates one-swap regret inside the
+32-circuit candidate pool from a full-bank key top-8 probe. Local selection
+headroom is `0.00357–0.00506 CE`; extra target-evaluated retrieval opportunity
+is `0.00558–0.02199 CE`, with only `0.10–0.97%` full-key top-8 candidate recall.
+The signal grows at 500M, but the target-evaluated probe is diagnostic rather
+than deployable. The next route experiment should learn final-cost alignment
+from query plus circuit signatures. See
+`P001_ROUTE_NEIGHBORHOOD_REGRET_AUDIT_20260908.md`.

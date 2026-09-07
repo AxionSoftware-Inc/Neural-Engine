@@ -60,6 +60,42 @@ qilmaydi, lekin P-001ning “32 pool torligi asosiy sabab” qismini zaiflashtir
 
 **Audit:** `results/P001_CANDIDATE_POOL_WIDTH_SCREEN_20260908.md`.
 
+**Route-neighborhood audit (2026-09-08):** 100M/300M/500M seed17/18 frozen
+checkpointlarda natural route uchun bir circuitlik one-swap qidiruv qilindi.
+Candidate pool ichidagi local selection headroom `0.00357–0.00506 CE` bo‘ldi.
+Full-bank key top-8 circuitlarini target CE bilan diagnostik tekshirganda local
+probe ustiga qo‘shimcha `0.00558–0.02199 CE` opportunity chiqdi; full-key top-8
+candidate recall esa faqat `0.10–0.97%` edi. 500M’da retrieval opportunity
+local selection headroomidan `3.3–5.8x` katta.
+
+Bu full-bank key route productionga tayyor degani emas: key score target costga
+mos emasligi sabab oldingi full-bank screen natural qualityni oshirmagan. Ammo
+capacity kattalashganda useful circuitlar bor-u, current key/tree retriever
+ularni ko‘rmayotgani va candidate ichidagi selector ham mukammal emasligi
+aniqroq ko‘rindi. P-001 uchun keyingi yo‘l hidden state + circuit output
+signature’dan final-cost surrogate; oddiy pool enlargement va full-bank key
+scoring `REJECTED AS DIRECT FIX`.
+
+**Audit:** `results/P001_ROUTE_NEIGHBORHOOD_REGRET_AUDIT_20260908.md`.
+
+**Route-neighborhood audit (2026-09-08):** 100M/300M/500M seed17/18 frozen
+checkpointlarda natural route uchun bir circuitlik one-swap qidiruv qilindi.
+Candidate pool ichidagi local selection headroom `0.00357–0.00506 CE` bo‘ldi.
+Full-bank key top-8 circuitlarini target CE bilan diagnostik tekshirganda local
+probe ustiga qo‘shimcha `0.00558–0.02199 CE` opportunity chiqdi; full-key top-8
+candidate recall esa faqat `0.10–0.97%` edi. 500M’da retrieval opportunity
+local selection headroomidan `3.3–5.8x` katta.
+
+Bu full-bank key route productionga tayyor degani emas: key score target costga
+mos emasligi sabab oldingi full-bank screen natural qualityni oshirmagan. Ammo
+capacity kattalashganda useful circuitlar bor-u, current key/tree retriever
+ularni ko‘rmayotgani va candidate ichidagi selector ham mukammal emasligi
+aniqroq ko‘rindi. P-001 uchun keyingi yo‘l hidden state + circuit output
+signature’dan final-cost surrogate; oddiy pool enlargement va full-bank key
+scoring `REJECTED AS DIRECT FIX`.
+
+**Audit:** `results/P001_ROUTE_NEIGHBORHOOD_REGRET_AUDIT_20260908.md`.
+
 #### Muammo ta’rifi
 
 Retriever arzon bo‘lishi kerak, lekin yaxshi pair ichidagi circuitlarning
