@@ -155,6 +155,25 @@ def test_typed_register_bridge_can_preserve_multiple_intermediate_slots():
     assert torch.isfinite(model.register_value_embedding.weight.grad).all()
 
 
+def test_typed_register_bridge_can_read_slots_with_structured_mixer():
+    model = NeuralEngineV0(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=64, circuit_rank=4, router_branch=4, router_depth=2,
+        candidate_pool=8, active_circuits=2, internal_steps=3,
+        typed_register_bridge=True, register_slot_count=2,
+        register_slot_read_mode="mix",
+    )
+    inputs = torch.randint(1, 8, (4, 8))
+    _, stats = model(inputs, adaptive=False)
+
+    assert stats["register_contexts"].shape == (4, 3, 32)
+    assert model.parameter_report()["register_slot_read_mode"] == "mix"
+    loss = stats["register_contexts"].square().mean()
+    loss.backward()
+    assert model.register_slot_mixer.weight.grad is not None
+    assert torch.isfinite(model.register_slot_mixer.weight.grad).all()
+
+
 def test_operation_transition_adapter_is_neutral_until_trained_and_has_gradients():
     model = NeuralEngineV0(
         vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,

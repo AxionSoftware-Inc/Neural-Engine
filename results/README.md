@@ -1314,6 +1314,13 @@ only overwriting one register value, so the two-slot bridge remains opt-in and
 P-004 stays open for a reusable algebraic value/state primitive. See
 `P004_MULTI_SLOT_REGISTER_AUDIT_20260908.md`.
 
+The structured slot-read follow-up also failed adoption. An
+identity-initialized mixer over the two slots gave bridge-only mean accuracy
+`−0.573 pp` and bridge+stage `−0.339 pp`, while adding 319k total/active
+parameters to the bridge arm. Stage-0 improved but stage-2 and
+`state_machine` did not, so preserving slot identity is not sufficient. See
+`P004_STRUCTURED_SLOT_MIXER_AUDIT_20260908.md`.
+
 2026-09-08 P-001 route-neighborhood audit separates one-swap regret inside the
 32-circuit candidate pool from a full-bank key top-8 probe. Local selection
 headroom is `0.00357–0.00506 CE`; extra target-evaluated retrieval opportunity

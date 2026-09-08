@@ -40,6 +40,7 @@ class NeuralEngineV0(nn.Module):
                  register_bridge_temperature: float = 1.0,
                  register_bridge_mode: str = "soft",
                  register_slot_count: int = 1,
+                 register_slot_read_mode: str = "sum",
                  operation_transition_rank: int = 0,
                  operation_transition_scale: float = 1.0):
         super().__init__()
@@ -117,6 +118,9 @@ class NeuralEngineV0(nn.Module):
         if register_slot_count < 1:
             raise ValueError("register_slot_count must be positive")
         self.register_slot_count = int(register_slot_count)
+        if register_slot_read_mode not in {"sum", "mix"}:
+            raise ValueError("register_slot_read_mode must be sum or mix")
+        self.register_slot_read_mode = register_slot_read_mode
         if operation_transition_rank < 0:
             raise ValueError("operation_transition_rank must be non-negative")
         if operation_transition_scale < 0.0:
@@ -182,6 +186,11 @@ class NeuralEngineV0(nn.Module):
             nn.Embedding(num_classes, state_dim)
             if self.typed_register_bridge else None
         )
+        self.register_slot_mixer = (
+            nn.Linear(self.register_slot_count * state_dim, state_dim, bias=False)
+            if self.typed_register_bridge and self.register_slot_read_mode == "mix"
+            else None
+        )
         if self.operation_transition_rank:
             self.operation_transition_down = nn.Parameter(torch.empty(
                 15, state_dim, self.operation_transition_rank,
@@ -210,6 +219,16 @@ class NeuralEngineV0(nn.Module):
             # A migrated checkpoint starts exactly on the old forward path;
             # training learns the typed value basis from the stage signal.
             nn.init.zeros_(self.register_value_embedding.weight)
+        if self.register_slot_mixer is not None:
+            # Start as the previous slot sum while allowing training to learn
+            # slot identity and cross-slot mixing.
+            nn.init.zeros_(self.register_slot_mixer.weight)
+            with torch.no_grad():
+                for slot in range(self.register_slot_count):
+                    start = slot * state_dim
+                    self.register_slot_mixer.weight[:, start:start + state_dim].copy_(
+                        torch.eye(state_dim)
+                    )
         if self.operation_transition_rank:
             nn.init.normal_(self.operation_transition_down, std=0.02)
             # The adapter is neutral for checkpoint migration; training learns
@@ -242,6 +261,11 @@ class NeuralEngineV0(nn.Module):
         return torch.einsum(
             "br,brd->bd", down, self.operation_transition_up[task_ids]
         )
+
+    def _read_register_slots(self, slot_context: torch.Tensor) -> torch.Tensor:
+        if self.register_slot_read_mode == "sum":
+            return slot_context.sum(dim=1)
+        return self.register_slot_mixer(slot_context.reshape(slot_context.shape[0], -1))
 
     def semantic_family_ids(self, inputs: torch.Tensor) -> torch.Tensor:
         """Return stable task-domain families without selecting a circuit ID."""
@@ -321,7 +345,7 @@ class NeuralEngineV0(nn.Module):
             if self.typed_register_bridge else None
         )
         register_context = (
-            register_slot_context.sum(dim=1)
+            self._read_register_slots(register_slot_context)
             if self.typed_register_bridge else None
         )
         register_probabilities = (
@@ -380,9 +404,9 @@ class NeuralEngineV0(nn.Module):
                 # Feed the previous predicted class through a typed value
                 # register.  This is a differentiable state bridge, not an
                 # unrestricted copy of the recurrent hidden state.
-                step_query = step_query + self.register_bridge_scale * register_slot_context[
-                    active_indices
-                ].sum(dim=1)
+                step_query = step_query + self.register_bridge_scale * self._read_register_slots(
+                    register_slot_context[active_indices]
+                )
             if task_context is not None:
                 step_query = step_query + task_context[active_indices]
             if collect_stats:
@@ -530,13 +554,13 @@ class NeuralEngineV0(nn.Module):
                 if active_indices.numel() == batch_size:
                     register_slot_context = register_slot_context.clone()
                     register_slot_context[:, slot_index] = predicted_register
-                    register_context = register_slot_context.sum(dim=1)
+                    register_context = self._read_register_slots(register_slot_context)
                     register_probabilities = register_probs
                 else:
                     next_register_slot_context = register_slot_context.clone()
                     next_register_slot_context[active_indices, slot_index] = predicted_register
                     register_slot_context = next_register_slot_context
-                    register_context = register_slot_context.sum(dim=1)
+                    register_context = self._read_register_slots(register_slot_context)
                     next_register_probabilities = register_probabilities.clone()
                     next_register_probabilities[active_indices] = register_probs
                     register_probabilities = next_register_probabilities
@@ -616,6 +640,8 @@ class NeuralEngineV0(nn.Module):
             shared += count_parameters(self.correction_gate)
         if self.register_value_embedding is not None:
             shared += count_parameters(self.register_value_embedding)
+        if self.register_slot_mixer is not None:
+            shared += count_parameters(self.register_slot_mixer)
         if self.operation_transition_rank:
             shared += self.operation_transition_down.numel()
             shared += self.operation_transition_up.numel()
@@ -637,6 +663,7 @@ class NeuralEngineV0(nn.Module):
             "typed_register_bridge": self.typed_register_bridge,
             "register_bridge_mode": self.register_bridge_mode,
             "register_slot_count": self.register_slot_count,
+            "register_slot_read_mode": self.register_slot_read_mode,
             "operation_transition_rank": self.operation_transition_rank,
             "operation_transition_scale": self.operation_transition_scale,
         }

@@ -536,6 +536,18 @@ o‘zgarmadi va P-004 `ACTIVE` qoladi.
 
 **Batafsil:** `results/P004_MULTI_SLOT_REGISTER_AUDIT_20260908.md`.
 
+**Structured slot-read sinovi (2026-09-08):** ikki register slotini oddiy
+sum emas, identity-initialized learned mixer bilan o‘qish tekshirildi.
+Bridge-only final accuracy seed17/18 `−0.156/−0.990 pp`, o‘rtacha
+`−0.573 pp`, mean CE `+0.011609` bo‘ldi. Bridge+stage `+0.313/−0.990 pp`,
+o‘rtacha `−0.339 pp`, mean CE `+0.009105` berdi. Stage-0 o‘rtacha `+6.458 pp`
+ko‘tarilgan bo‘lsa ham stage-2 faqat `+1.172 pp` bo‘ldi va
+`state_machine` yaxshilanmadi; mixerning qo‘shimcha 319k
+parametri ham foyda bermadi. Structured slot read `REJECTED FOR ADOPTION`,
+default o‘zgarmadi va P-004 `ACTIVE` qoladi.
+
+**Batafsil:** `results/P004_STRUCTURED_SLOT_MIXER_AUDIT_20260908.md`.
+
 ---
 
 ### P-005 — CE yaxshilanishi hard accuracy'ga aylanmayapti
