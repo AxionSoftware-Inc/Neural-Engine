@@ -39,6 +39,7 @@ class NeuralEngineV0(nn.Module):
                  register_bridge_scale: float = 1.0,
                  register_bridge_temperature: float = 1.0,
                  register_bridge_mode: str = "soft",
+                 register_bridge_basis: str = "learned",
                  register_slot_count: int = 1,
                  register_slot_read_mode: str = "sum",
                  state_stage_head: bool = False,
@@ -112,10 +113,13 @@ class NeuralEngineV0(nn.Module):
             raise ValueError(
                 "register_bridge_mode must be soft or straight_through"
             )
+        if register_bridge_basis not in {"learned", "fourier"}:
+            raise ValueError("register_bridge_basis must be learned or fourier")
         self.typed_register_bridge = bool(typed_register_bridge)
         self.register_bridge_scale = float(register_bridge_scale)
         self.register_bridge_temperature = float(register_bridge_temperature)
         self.register_bridge_mode = register_bridge_mode
+        self.register_bridge_basis = register_bridge_basis
         if register_slot_count < 1:
             raise ValueError("register_slot_count must be positive")
         self.register_slot_count = int(register_slot_count)
@@ -190,8 +194,29 @@ class NeuralEngineV0(nn.Module):
         )
         self.register_value_embedding = (
             nn.Embedding(num_classes, state_dim)
-            if self.typed_register_bridge else None
+            if self.typed_register_bridge and self.register_bridge_basis == "learned"
+            else None
         )
+        self.register_value_projection = None
+        if self.typed_register_bridge and self.register_bridge_basis == "fourier":
+            feature_count = 1 + 2 * len(VALUE_HARMONICS)
+            self.register_value_projection = nn.Linear(
+                feature_count, state_dim,
+            )
+            values = torch.arange(num_classes, dtype=torch.float32).remainder(
+                VALUE_MODULUS
+            )
+            angles = values.unsqueeze(-1) * (2.0 * torch.pi / VALUE_MODULUS)
+            features = [values.unsqueeze(-1) / (VALUE_MODULUS - 1)]
+            for harmonic in VALUE_HARMONICS:
+                features.append(torch.sin(angles * harmonic))
+                features.append(torch.cos(angles * harmonic))
+            self.register_buffer(
+                "register_value_features", torch.cat(features, dim=-1),
+                persistent=False,
+            )
+        else:
+            self.register_value_features = None
         self.register_slot_mixer = (
             nn.Linear(self.register_slot_count * state_dim, state_dim, bias=False)
             if self.typed_register_bridge and self.register_slot_read_mode == "mix"
@@ -230,6 +255,20 @@ class NeuralEngineV0(nn.Module):
             # A migrated checkpoint starts exactly on the old forward path;
             # training learns the typed value basis from the stage signal.
             nn.init.zeros_(self.register_value_embedding.weight)
+        if self.register_value_projection is not None:
+            if (
+                self.value_encoder is not None
+                and self.value_encoder.in_features == self.register_value_projection.in_features
+                and self.value_encoder.out_features == self.register_value_projection.out_features
+            ):
+                # Reuse the already-trained input algebraic representation as
+                # the initial typed-value coordinate system.
+                self.register_value_projection.load_state_dict(
+                    self.value_encoder.state_dict()
+                )
+            else:
+                nn.init.normal_(self.register_value_projection.weight, std=0.02)
+                nn.init.zeros_(self.register_value_projection.bias)
         if self.register_slot_mixer is not None:
             # Start as the previous slot sum while allowing training to learn
             # slot identity and cross-slot mixing.
@@ -565,7 +604,11 @@ class NeuralEngineV0(nn.Module):
                         1, register_probs.argmax(dim=-1, keepdim=True), 1.0,
                     )
                     register_probs = hard_register + register_probs - register_probs.detach()
-                predicted_register = register_probs @ self.register_value_embedding.weight
+                if self.register_value_embedding is not None:
+                    predicted_register = register_probs @ self.register_value_embedding.weight
+                else:
+                    value_features = register_probs @ self.register_value_features
+                    predicted_register = self.register_value_projection(value_features)
                 slot_index = min(step, self.register_slot_count - 1)
                 if active_indices.numel() == batch_size:
                     register_slot_context = register_slot_context.clone()
@@ -664,6 +707,8 @@ class NeuralEngineV0(nn.Module):
             shared += count_parameters(self.correction_gate)
         if self.register_value_embedding is not None:
             shared += count_parameters(self.register_value_embedding)
+        if self.register_value_projection is not None:
+            shared += count_parameters(self.register_value_projection)
         if self.register_slot_mixer is not None:
             shared += count_parameters(self.register_slot_mixer)
         if self.operation_transition_rank:
@@ -686,6 +731,7 @@ class NeuralEngineV0(nn.Module):
             "route_exploration_prob": self.route_exploration_prob,
             "typed_register_bridge": self.typed_register_bridge,
             "register_bridge_mode": self.register_bridge_mode,
+            "register_bridge_basis": self.register_bridge_basis,
             "register_slot_count": self.register_slot_count,
             "register_slot_read_mode": self.register_slot_read_mode,
             "state_stage_head": self.state_stage_head_enabled,

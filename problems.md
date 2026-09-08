@@ -1091,3 +1091,17 @@ correction-scale variantlarini yana scale qilmaymiz. Batafsil:
 **Status:** `REJECTED`
 **Muammo:** P-002 / P-003 / P-007
 **Natija:** seed17/18 shared-residual held-out mean accuracy delta `-0.299 pp`; counterfactual NMI/specialization/positive-advantage deltas `-0.02001`/`-0.00632`/`-0.02865`; dead fraction delta `+0.00000`. Shared rank-8 primitive V0’ga opt-in sifatida qo‘shildi, mustaqil per-circuit residual va router saqlandi.
+
+**Fourier/algebraic register bridge sinovi (2026-09-08):** intermediate
+`step_logits`ni learned 64-vector embedding o‘rniga input numeric encoder’da
+ishlatilgan fixed mod-64 Fourier koordinatalariga o‘tkazib, `13 → state_dim`
+projection orqali keyingi query’ga qaytarish tekshirildi. Bridge-only ikki
+seedda final accuracy `−0.469/−0.313 pp`, o‘rtacha `−0.391 pp`, mean CE
+`+0.001305` bo‘ldi. Bridge+stage `−0.313/+0.365 pp`, o‘rtacha `+0.026 pp`,
+mean CE `−0.000172` berdi. Qo‘shimcha parametr faqat `5,376`; shunga qaramay
+`chain3`, `compose_add_mul`, `state_machine`da barqaror composition foydasi
+chiqmadi. Fourier representation reuse **REJECTED FOR ADOPTION**; P-004
+`ACTIVE` qoladi va keyingi yo‘l representationni ko‘chirish emas, haqiqiy
+operator/state dataflow yoki circuit specializationni nishonga olishi kerak.
+
+**Batafsil:** `results/P004_FOURIER_REGISTER_BRIDGE_AUDIT_20260908.md`.

@@ -1327,6 +1327,15 @@ head gave mean final accuracy `−0.182 pp` and mean CE regression `+0.008092`
 across seed17/18; stage-0 fell `0.286 pp`. The auxiliary head remains opt-in.
 See `P004_STATE_STAGE_HEAD_AUDIT_20260908.md`.
 
+The Fourier/algebraic register bridge follow-up also failed adoption. Reusing
+the existing mod-64 Fourier value coordinates through a small `13 → state_dim`
+projection gave bridge-only mean accuracy `−0.391 pp` and mean CE regression
+`+0.001305`; adding stage supervision produced only `+0.026 pp` and
+`−0.000172` CE across seed17/18. The additional bridge budget was only 5,376
+parameters, but hard composition tasks did not improve consistently. The
+bridge remains opt-in research code and P-004 stays active.
+See `P004_FOURIER_REGISTER_BRIDGE_AUDIT_20260908.md`.
+
 2026-09-08 P-001 route-neighborhood audit separates one-swap regret inside the
 32-circuit candidate pool from a full-bank key top-8 probe. Local selection
 headroom is `0.00357–0.00506 CE`; extra target-evaluated retrieval opportunity

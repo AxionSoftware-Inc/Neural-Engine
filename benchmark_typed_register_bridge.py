@@ -9,8 +9,8 @@ change from the auxiliary stage objective on the same frozen Native checkpoint:
   typed bridge / final + composition stage loss
 
 All four arms see the same generated batch at every step and use the same
-held-out evaluator.  The bridge's value basis is zero-initialized, so its
-initial forward pass matches the old model exactly.
+held-out evaluator.  The learned bridge basis is zero-initialized, while the
+Fourier basis reuses the checkpoint's existing numeric value coordinates.
 """
 
 from __future__ import annotations
@@ -30,12 +30,14 @@ from train import make_model, seed_everything
 def _load_checkpoint(path: Path, device: torch.device,
                      typed_register_bridge: bool,
                      bridge_mode: str = "soft",
+                     register_bridge_basis: str = "learned",
                      register_slot_count: int = 1,
                      register_slot_read_mode: str = "sum") -> tuple[NeuralEngineV0, dict]:
     payload = torch.load(path, map_location="cpu", weights_only=True)
     config = dict(payload["config"])
     config["typed_register_bridge"] = typed_register_bridge
     config["register_bridge_mode"] = bridge_mode
+    config["register_bridge_basis"] = register_bridge_basis
     config["register_slot_count"] = register_slot_count
     config["register_slot_read_mode"] = register_slot_read_mode
     model = make_model(config)
@@ -46,7 +48,13 @@ def _load_checkpoint(path: Path, device: torch.device,
     )
     expected_missing = []
     if typed_register_bridge:
-        expected_missing.append("register_value_embedding.weight")
+        if register_bridge_basis == "learned":
+            expected_missing.append("register_value_embedding.weight")
+        else:
+            expected_missing.extend((
+                "register_value_projection.weight",
+                "register_value_projection.bias",
+            ))
         if register_slot_read_mode == "mix":
             expected_missing.append("register_slot_mixer.weight")
     if sorted(missing) != sorted(expected_missing) or unexpected:
@@ -125,19 +133,23 @@ def _train_arms(arms: dict[str, NeuralEngineV0], config: dict,
 def _run(path: Path, args: argparse.Namespace,
          device: torch.device) -> dict:
     control, config = _load_checkpoint(
-        path, device, False, args.bridge_mode, args.register_slot_count,
+        path, device, False, args.bridge_mode, args.register_bridge_basis,
+        args.register_slot_count,
         args.register_slot_read_mode,
     )
     stage_only, _ = _load_checkpoint(
-        path, device, False, args.bridge_mode, args.register_slot_count,
+        path, device, False, args.bridge_mode, args.register_bridge_basis,
+        args.register_slot_count,
         args.register_slot_read_mode,
     )
     bridge_only, _ = _load_checkpoint(
-        path, device, True, args.bridge_mode, args.register_slot_count,
+        path, device, True, args.bridge_mode, args.register_bridge_basis,
+        args.register_slot_count,
         args.register_slot_read_mode,
     )
     bridge_stage, _ = _load_checkpoint(
-        path, device, True, args.bridge_mode, args.register_slot_count,
+        path, device, True, args.bridge_mode, args.register_bridge_basis,
+        args.register_slot_count,
         args.register_slot_read_mode,
     )
     arms = {
@@ -185,6 +197,8 @@ def main() -> None:
     parser.add_argument("--stage-loss-weight", type=float, default=0.1)
     parser.add_argument("--bridge-mode", choices=("soft", "straight_through"),
                         default="soft")
+    parser.add_argument("--register-bridge-basis", choices=("learned", "fourier"),
+                        default="learned")
     parser.add_argument("--register-slot-count", type=int, default=1)
     parser.add_argument("--register-slot-read-mode", choices=("sum", "mix"),
                         default="sum")
@@ -201,6 +215,7 @@ def main() -> None:
         "steps": int(args.steps),
         "stage_loss_weight": float(args.stage_loss_weight),
         "bridge_mode": args.bridge_mode,
+        "register_bridge_basis": args.register_bridge_basis,
         "register_slot_count": int(args.register_slot_count),
         "register_slot_read_mode": args.register_slot_read_mode,
         "checkpoints": [],
