@@ -548,6 +548,16 @@ default o‘zgarmadi va P-004 `ACTIVE` qoladi.
 
 **Batafsil:** `results/P004_STRUCTURED_SLOT_MIXER_AUDIT_20260908.md`.
 
+**State-only stage head sinovi (2026-09-08):** intermediate targetlarni final
+output head’iga emas, recurrent state’dan o‘qiydigan alohida auxiliary head’ga
+berish tekshirildi. Seed17/18 final accuracy delta `−0.052/−0.313 pp`, mean
+`−0.182 pp`; mean CE `+0.008092` yomonlashdi. Stage-0 o‘rtacha `−0.286 pp`
+bo‘lib, state representation foydali intermediate signalga aylanmadi.
+`state_stage_head` `REJECTED FOR ADOPTION`, default o‘zgarmadi va P-004
+`ACTIVE` qoladi.
+
+**Batafsil:** `results/P004_STATE_STAGE_HEAD_AUDIT_20260908.md`.
+
 ---
 
 ### P-005 — CE yaxshilanishi hard accuracy'ga aylanmayapti

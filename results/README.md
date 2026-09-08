@@ -1321,6 +1321,12 @@ parameters to the bridge arm. Stage-0 improved but stage-2 and
 `state_machine` did not, so preserving slot identity is not sufficient. See
 `P004_STRUCTURED_SLOT_MIXER_AUDIT_20260908.md`.
 
+The state-only supervision follow-up also failed adoption. Moving the
+intermediate loss from the final output head to a separate recurrent-state
+head gave mean final accuracy `−0.182 pp` and mean CE regression `+0.008092`
+across seed17/18; stage-0 fell `0.286 pp`. The auxiliary head remains opt-in.
+See `P004_STATE_STAGE_HEAD_AUDIT_20260908.md`.
+
 2026-09-08 P-001 route-neighborhood audit separates one-swap regret inside the
 32-circuit candidate pool from a full-bank key top-8 probe. Local selection
 headroom is `0.00357–0.00506 CE`; extra target-evaluated retrieval opportunity

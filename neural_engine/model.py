@@ -41,6 +41,7 @@ class NeuralEngineV0(nn.Module):
                  register_bridge_mode: str = "soft",
                  register_slot_count: int = 1,
                  register_slot_read_mode: str = "sum",
+                 state_stage_head: bool = False,
                  operation_transition_rank: int = 0,
                  operation_transition_scale: float = 1.0):
         super().__init__()
@@ -121,6 +122,7 @@ class NeuralEngineV0(nn.Module):
         if register_slot_read_mode not in {"sum", "mix"}:
             raise ValueError("register_slot_read_mode must be sum or mix")
         self.register_slot_read_mode = register_slot_read_mode
+        self.state_stage_head_enabled = bool(state_stage_head)
         if operation_transition_rank < 0:
             raise ValueError("operation_transition_rank must be non-negative")
         if operation_transition_scale < 0.0:
@@ -182,6 +184,10 @@ class NeuralEngineV0(nn.Module):
             if correction_gate_mode == "route_bounded" else None
         )
         self.output = nn.Sequential(nn.LayerNorm(state_dim), nn.Linear(state_dim, num_classes))
+        self.state_stage_head = (
+            nn.Sequential(nn.LayerNorm(state_dim), nn.Linear(state_dim, num_classes))
+            if self.state_stage_head_enabled else None
+        )
         self.register_value_embedding = (
             nn.Embedding(num_classes, state_dim)
             if self.typed_register_bridge else None
@@ -215,6 +221,11 @@ class NeuralEngineV0(nn.Module):
             # default un-gated correction path.
             nn.init.zeros_(self.correction_gate.weight)
             nn.init.zeros_(self.correction_gate.bias)
+        if self.state_stage_head is not None:
+            # This head is an auxiliary training observer; it is not evaluated
+            # on the stats-free serving path.
+            nn.init.zeros_(self.state_stage_head[-1].weight)
+            nn.init.zeros_(self.state_stage_head[-1].bias)
         if self.register_value_embedding is not None:
             # A migrated checkpoint starts exactly on the old forward path;
             # training learns the typed value basis from the stage signal.
@@ -323,6 +334,11 @@ class NeuralEngineV0(nn.Module):
                                      device=inputs.device) if collect_stats else None)
         step_logits = (torch.zeros(batch_size, self.internal_steps, num_classes,
                                    device=inputs.device) if collect_stats else None)
+        state_stage_logits = (
+            torch.zeros(batch_size, self.internal_steps, num_classes,
+                        device=inputs.device)
+            if collect_stats and self.state_stage_head is not None else None
+        )
         halt_logits = (torch.zeros(batch_size, self.internal_steps, device=inputs.device)
                        if collect_stats else None)
         route_delta_steps = [] if collect_stats else None
@@ -566,6 +582,10 @@ class NeuralEngineV0(nn.Module):
                     register_probabilities = next_register_probabilities
             if collect_stats:
                 step_logits[:, step] = last_logits
+                if state_stage_logits is not None:
+                    state_stage_logits[active_indices, step] = self.state_stage_head(
+                        updated_state
+                    )
                 if self.typed_register_bridge:
                     register_context_steps.append(register_context.clone())
                     register_slot_context_steps.append(register_slot_context.clone())
@@ -599,6 +619,8 @@ class NeuralEngineV0(nn.Module):
             "executed_steps": executed_mask.sum(dim=1),
             "executed_mask": executed_mask,
         }
+        if state_stage_logits is not None:
+            stats["state_stage_logits"] = state_stage_logits
         if self.typed_register_bridge:
             stats["register_contexts"] = torch.stack(register_context_steps, dim=1)
             stats["register_slot_contexts"] = torch.stack(
@@ -630,6 +652,8 @@ class NeuralEngineV0(nn.Module):
         elif self.router_variant == "family_conditioned":
             shared += self.family_embeddings.numel()
         shared += count_parameters(self.output)
+        if self.state_stage_head is not None:
+            shared += count_parameters(self.state_stage_head)
         if self.task_context_embedding is not None:
             shared += count_parameters(self.task_context_embedding)
         if self.halt_head is not None:
@@ -664,6 +688,7 @@ class NeuralEngineV0(nn.Module):
             "register_bridge_mode": self.register_bridge_mode,
             "register_slot_count": self.register_slot_count,
             "register_slot_read_mode": self.register_slot_read_mode,
+            "state_stage_head": self.state_stage_head_enabled,
             "operation_transition_rank": self.operation_transition_rank,
             "operation_transition_scale": self.operation_transition_scale,
         }

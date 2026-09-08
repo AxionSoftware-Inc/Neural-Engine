@@ -174,6 +174,30 @@ def test_typed_register_bridge_can_read_slots_with_structured_mixer():
     assert torch.isfinite(model.register_slot_mixer.weight.grad).all()
 
 
+def test_state_stage_head_observes_recurrent_state_without_changing_serving_path():
+    model = NeuralEngineV0(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=64, circuit_rank=4, router_branch=4, router_depth=2,
+        candidate_pool=8, active_circuits=2, internal_steps=3,
+        state_stage_head=True,
+    )
+    inputs = torch.randint(1, 8, (4, 8))
+    with torch.no_grad():
+        serving_logits, serving_stats = model(
+            inputs, adaptive=False, collect_stats=False,
+        )
+    assert serving_logits.shape == (4, 64)
+    assert serving_stats == {}
+
+    logits, stats = model(inputs, adaptive=False)
+    assert logits.shape == (4, 64)
+    assert stats["state_stage_logits"].shape == (4, 3, 64)
+    stage_loss = stats["state_stage_logits"].square().mean()
+    stage_loss.backward()
+    assert model.state_stage_head[-1].weight.grad is not None
+    assert torch.isfinite(model.state_stage_head[-1].weight.grad).all()
+
+
 def test_operation_transition_adapter_is_neutral_until_trained_and_has_gradients():
     model = NeuralEngineV0(
         vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,

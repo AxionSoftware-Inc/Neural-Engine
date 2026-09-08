@@ -80,6 +80,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["register_bridge_mode"] = config.get("register_bridge_mode", "soft")
     model_kwargs["register_slot_count"] = config.get("register_slot_count", 1)
     model_kwargs["register_slot_read_mode"] = config.get("register_slot_read_mode", "sum")
+    model_kwargs["state_stage_head"] = config.get("state_stage_head", False)
     model_kwargs["operation_transition_rank"] = config.get("operation_transition_rank", 0)
     model_kwargs["operation_transition_scale"] = config.get("operation_transition_scale", 1.0)
     if config.get("architecture") == "typed_register":
@@ -92,6 +93,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
                     "register_bridge_temperature", "register_bridge_mode",
                     "register_slot_count",
                     "register_slot_read_mode",
+                    "state_stage_head",
                     "operation_transition_rank", "operation_transition_scale",
                     "routing_reuse_weight", "routing_reuse_start_level",
                     "input_reinjection_schedule"):
