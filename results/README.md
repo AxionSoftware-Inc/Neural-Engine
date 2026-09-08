@@ -1236,10 +1236,10 @@ V0.195 gives the typed-write DynamicRegister a positive combined screen on
 ordinary non-modular arithmetic with unseen depths: training depths 1--2 and
 held-out depths 3--4 reach `85.16%` mean across two seeds at 3,000 steps.
 Depth-4 remains the bottleneck. The 9,000-step validation reaches `85.94%`
-mean across the same two seeds, confirming a positive architecture signal but
-not a capacity-scaling claim. The next gate is a third seed or a larger
-non-modular operand range at the same 300M bank. See
-`V0_196_DYNAMIC_NONMOD_DEPTH4_TYPED_WRITE_VALIDATION.md`.
+mean across two seeds, and the third-seed audit reaches `84.70%`; this confirms
+a positive but variable architecture signal, not a capacity-scaling claim.
+The next gate is a larger non-modular operand range at the same 300M bank. See
+`V0_197_DYNAMIC_NONMOD_DEPTH4_TYPED_WRITE_THIRD_SEED.md`.
 
 2026-09-08 query/key final-cost surrogate screen on 20M seed17/18 used
 92,160 calibration labels and a 261,705-parameter MLP. Held-out route deltas
