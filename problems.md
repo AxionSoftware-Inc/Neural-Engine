@@ -117,6 +117,17 @@ soft aktivatsiyasi quality foydasini bermadi. Opt-in patch `REJECTED`.
 
 **Audit:** `results/P001_NONLINEAR_ROUTE_SCORER_AUDIT_20260908.md`.
 
+**Route-weight ablation (2026-09-08):** selected ID’lar va route gain’lar
+muzlatilgan holda 100M/300M/500M seed17/18da faqat `K=8` weight’lari
+almashtirildi. Uniform weight natural route’ga nisbatan barcha 6 run’da CE’ni
+yaxshiladi, o‘rtacha delta `−0.000201`, ammo accuracy delta `−0.009 pp` bo‘ldi.
+Power-half `−0.000108 CE`, power-2 `+0.000273 CE`, top-1 esa `+0.021070 CE`
+va `−0.391 pp` berdi. Soft mixing muhim, lekin uniform/flattened variantning
+foydasi juda kichik va selected circuitlarni o‘zgartirmaydi. `REJECTED AS A
+PRIMARY FIX`; default o‘zgarmadi.
+
+**Audit:** `results/P001_ROUTE_WEIGHT_ABLATION_AUDIT_20260908.md`.
+
 **Route-neighborhood audit (2026-09-08):** 100M/300M/500M seed17/18 frozen
 checkpointlarda natural route uchun bir circuitlik one-swap qidiruv qilindi.
 Candidate pool ichidagi local selection headroom `0.00357–0.00506 CE` bo‘ldi.

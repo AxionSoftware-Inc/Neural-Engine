@@ -1252,6 +1252,13 @@ continuation on 20M seed17/18, CE regressed by `+0.001152/+0.020205` and
 accuracy by `−0.208/−0.573 pp`; the opt-in scorer is rejected. See
 `P001_NONLINEAR_ROUTE_SCORER_AUDIT_20260908.md`.
 
+2026-09-08 route-weight ablation freezes the natural selected IDs and route
+gains, then replays only the selected-K mixture weights. Uniform weights
+improve CE in all six 100M/300M/500M seed17/18 runs, but the mean change is
+only `−0.000201 CE` and `−0.009 pp` accuracy; top-1 weighting regresses by
+`+0.021070 CE` and `−0.391 pp`. Soft mixing matters, but weighting is not the
+primary capacity-scaling fix. See `P001_ROUTE_WEIGHT_ABLATION_AUDIT_20260908.md`.
+
 2026-09-08 P-001 route-neighborhood audit separates one-swap regret inside the
 32-circuit candidate pool from a full-bank key top-8 probe. Local selection
 headroom is `0.00357–0.00506 CE`; extra target-evaluated retrieval opportunity
