@@ -18,6 +18,36 @@ from neural_engine.instrumentation import count_parameters
 from neural_engine.optim import LazyAdamW
 
 
+def validate_class_targets(
+    targets: torch.Tensor, num_classes: int, label: str,
+) -> None:
+    minimum = int(targets.min().item())
+    maximum = int(targets.max().item())
+    if minimum < 0 or maximum >= num_classes:
+        raise ValueError(
+            f"{label} outside classifier range: min={minimum}, max={maximum}, "
+            f"num_classes={num_classes}"
+        )
+
+
+def output_loss(
+    model: DynamicRegisterNeuralEngine,
+    logits: torch.Tensor,
+    stats: dict[str, torch.Tensor],
+    targets: torch.Tensor,
+) -> torch.Tensor:
+    """Use compact digit supervision when the output head is factorized."""
+    if model.output_mode != "factorized_digits":
+        return nn.functional.cross_entropy(logits, targets)
+    digit_base = model.output_digit_base
+    high_targets = targets // digit_base
+    low_targets = targets.remainder(digit_base)
+    return (
+        nn.functional.cross_entropy(stats["digit_high_logits"][:, -1], high_targets)
+        + nn.functional.cross_entropy(stats["digit_low_logits"][:, -1], low_targets)
+    )
+
+
 def seed_everything(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
@@ -54,7 +84,7 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "modular_template_init",
         "circuit_residual_scale",
         "circuit_input_norm",
-        "output_mode", "output_temperature", "output_scalar_bias",
+        "output_mode", "output_temperature", "output_scalar_bias", "output_digit_base",
         "macro_cell_count", "macro_cell_rank", "macro_cell_depth",
         "macro_router_branch", "macro_router_depth", "macro_candidate_pool",
         "active_macro_cells", "macro_cell_scale",
@@ -189,6 +219,9 @@ def evaluate(
     model.eval()
     batch = generator.balanced_batch(examples_per_depth, device)
     logits, stats = model(batch.inputs)
+    validate_class_targets(
+        batch.targets, int(model.output[-1].out_features), "evaluation targets"
+    )
     correct = logits.argmax(dim=-1).eq(batch.targets)
     per_depth = {}
     for depth in generator.allowed_depths:
@@ -282,18 +315,35 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     for step in range(1, steps + 1):
         batch_size = args.batch_size or int(config["batch_size"])
         batch = train_generator.task_balanced_batch(batch_size, device)
+        num_classes = int(model.output[-1].out_features)
+        validate_class_targets(batch.targets, num_classes, "training targets")
+        validate_class_targets(batch.stage_targets, num_classes, "stage targets")
         optimizer.zero_grad(set_to_none=True)
         logits, stats = model(batch.inputs)
-        loss = nn.functional.cross_entropy(logits, batch.targets)
+        loss = output_loss(model, logits, stats, batch.targets)
         stage_weight = float(config.get("stage_loss_weight", 0.0))
         if stage_weight and batch.stage_targets is not None and batch.stage_mask is not None:
             stage_losses = []
             for stage in range(model.max_ops):
                 mask = batch.stage_mask[:, stage]
                 if mask.any():
-                    stage_losses.append(nn.functional.cross_entropy(
-                        stats["step_logits"][mask, stage], batch.stage_targets[mask, stage]
-                    ))
+                    stage_targets = batch.stage_targets[mask, stage]
+                    if model.output_mode == "factorized_digits":
+                        digit_base = model.output_digit_base
+                        stage_losses.append(
+                            nn.functional.cross_entropy(
+                                stats["digit_high_logits"][mask, stage],
+                                stage_targets // digit_base,
+                            )
+                            + nn.functional.cross_entropy(
+                                stats["digit_low_logits"][mask, stage],
+                                stage_targets.remainder(digit_base),
+                            )
+                        )
+                    else:
+                        stage_losses.append(nn.functional.cross_entropy(
+                            stats["step_logits"][mask, stage], stage_targets
+                        ))
             if stage_losses:
                 loss = loss + stage_weight * torch.stack(stage_losses).mean()
         loss = loss - 0.0001 * stats["router_entropy"]

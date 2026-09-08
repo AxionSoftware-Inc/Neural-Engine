@@ -1,4 +1,4 @@
-model: ne_dynamic_300m_nonmod_depth4_typed_write_adapter_values0_7
+model: ne_dynamic_300m_nonmod_depth4_typed_write_adapter_values0_7_factorized
 architecture: dynamic_register
 vocab_size: 128
 num_classes: 32768
@@ -29,6 +29,8 @@ operation_write_adapter_rank: 16
 operation_write_adapter_scale: 1.0
 operation_circuit_bank: true
 circuit_residual_scale: 1.0
+output_mode: factorized_digits
+output_digit_base: 128
 stage_loss_weight: 0.5
 batch_size: 512
 learning_rate: 0.0003

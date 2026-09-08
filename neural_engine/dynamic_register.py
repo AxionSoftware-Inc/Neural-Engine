@@ -49,6 +49,37 @@ class ScalarGaussianOutput(nn.Module):
         return -0.5 * distances.square() / (self.temperature ** 2)
 
 
+class FactorizedDigitOutput(nn.Module):
+    """Factor a large class index into two small additive digit heads."""
+
+    def __init__(self, input_dim: int, num_classes: int, digit_base: int):
+        super().__init__()
+        if digit_base < 2:
+            raise ValueError("digit_base must be at least two")
+        if num_classes % digit_base:
+            raise ValueError("num_classes must be divisible by digit_base")
+        self.num_classes = int(num_classes)
+        self.digit_base = int(digit_base)
+        self.high_classes = num_classes // digit_base
+        self.high = nn.Linear(input_dim, self.high_classes)
+        self.low = nn.Linear(input_dim, self.digit_base)
+        self.out_features = self.num_classes
+
+    def digit_logits(self, states: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.high(states), self.low(states)
+
+    def combine(
+        self, high_logits: torch.Tensor, low_logits: torch.Tensor
+    ) -> torch.Tensor:
+        return (high_logits.unsqueeze(-1) + low_logits.unsqueeze(-2)).reshape(
+            high_logits.shape[0], self.num_classes
+        )
+
+    def forward(self, states: torch.Tensor) -> torch.Tensor:
+        high_logits, low_logits = self.digit_logits(states)
+        return self.combine(high_logits, low_logits)
+
+
 class DynamicRegisterNeuralEngine(nn.Module):
     """Attention-free recurrent register machine with sparse circuit routing.
 
@@ -118,6 +149,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         output_mode: str = "learned",
         output_temperature: float = 16.0,
         output_scalar_bias: float = 0.0,
+        output_digit_base: int = 128,
         macro_cell_count: int = 0,
         macro_cell_rank: int = 8,
         macro_cell_depth: int = 4,
@@ -204,10 +236,16 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("modular_template_init must be identity or random")
         if circuit_residual_scale < 0.0:
             raise ValueError("circuit_residual_scale must be non-negative")
-        if output_mode not in {"learned", "scalar_gaussian"}:
-            raise ValueError("output_mode must be learned or scalar_gaussian")
+        if output_mode not in {"learned", "scalar_gaussian", "factorized_digits"}:
+            raise ValueError(
+                "output_mode must be learned, scalar_gaussian, or factorized_digits"
+            )
         if output_temperature <= 0.0:
             raise ValueError("output_temperature must be positive")
+        if output_digit_base < 2:
+            raise ValueError("output_digit_base must be at least two")
+        if output_mode == "factorized_digits" and num_classes % output_digit_base:
+            raise ValueError("num_classes must be divisible by output_digit_base")
         if macro_cell_count < 0:
             raise ValueError("macro_cell_count must be non-negative")
         if macro_cell_count:
@@ -274,6 +312,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.output_mode = output_mode
         self.output_temperature = float(output_temperature)
         self.output_scalar_bias = float(output_scalar_bias)
+        self.output_digit_base = int(output_digit_base)
         self.macro_cell_count = int(macro_cell_count)
         self.macro_cell_rank = int(macro_cell_rank)
         self.macro_cell_depth = int(macro_cell_depth)
@@ -512,6 +551,11 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     state_dim, num_classes, output_temperature, output_scalar_bias
                 ),
             )
+        elif output_mode == "factorized_digits":
+            self.output = nn.Sequential(
+                nn.LayerNorm(state_dim),
+                FactorizedDigitOutput(state_dim, num_classes, output_digit_base),
+            )
         else:
             self.output = nn.Sequential(
                 nn.LayerNorm(state_dim), nn.Linear(state_dim, num_classes)
@@ -693,6 +737,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             batch_size, self.max_ops, dtype=torch.bool, device=device
         )
         step_logits = []
+        digit_high_steps = []
+        digit_low_steps = []
         scalar_step_states = []
 
         for step in range(self.max_ops):
@@ -952,7 +998,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 else:
                     step_features = modular_state
                 step_state = step_state + self.modular_projection(step_features)
-            step_logits.append(self.output(step_state))
+            if self.output_mode == "factorized_digits":
+                output_state = self.output[0](step_state)
+                digit_high, digit_low = self.output[1].digit_logits(output_state)
+                step_logits.append(self.output[1].combine(digit_high, digit_low))
+                digit_high_steps.append(digit_high)
+                digit_low_steps.append(digit_low)
+            else:
+                step_logits.append(self.output(step_state))
             if self.structured_scalar_state:
                 scalar_step_states.append(scalar_state)
 
@@ -974,6 +1027,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
             stats["structured_scalar_states"] = torch.stack(
                 scalar_step_states, dim=1
             )
+        if self.output_mode == "factorized_digits":
+            stats["digit_high_logits"] = torch.stack(digit_high_steps, dim=1)
+            stats["digit_low_logits"] = torch.stack(digit_low_steps, dim=1)
         self._last_route = stats
         return stats["step_logits"][:, -1], stats
 
@@ -1184,6 +1240,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "output_mode": self.output_mode,
             "output_temperature": self.output_temperature,
             "output_scalar_bias": self.output_scalar_bias,
+            "output_digit_base": self.output_digit_base,
             "macro_cell_count": self.macro_cell_count,
             "macro_cell_rank": self.macro_cell_rank,
             "macro_cell_depth": self.macro_cell_depth,

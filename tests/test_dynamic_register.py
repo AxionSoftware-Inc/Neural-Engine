@@ -30,6 +30,18 @@ def test_dynamic_generator_supports_non_modular_targets_with_offset():
     assert batch.stage_targets.max().item() < 512
 
 
+def test_dynamic_generator_wide_non_modular_targets_fit_declared_head():
+    generator = DynamicCompositionGenerator(
+        max_ops=4, train_max_ops=2, modulus=None, value_min=0, value_max=7,
+        target_offset=4096, split="heldout", seed=33,
+    )
+    batch = generator.balanced_batch(64)
+    assert batch.targets.min().item() >= 0
+    assert batch.targets.max().item() < 32768
+    assert batch.stage_targets.min().item() >= 0
+    assert batch.stage_targets.max().item() < 32768
+
+
 def test_dynamic_register_supports_non_modular_forward_without_modular_prior():
     model = DynamicRegisterNeuralEngine(
         max_ops=4, num_classes=512, modulus=None, seq_len=10,
@@ -724,6 +736,40 @@ def test_dynamic_register_circuit_input_norm_is_optional():
     assert logits.shape == (4, 64)
     assert model.circuit_input_norm is not None
     assert model.parameter_report()["circuit_input_norm"] is True
+
+
+def test_dynamic_register_factorized_digit_output_reconstructs_classes():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=4,
+        num_classes=32768,
+        modulus=None,
+        seq_len=10,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        output_mode="factorized_digits",
+        output_digit_base=128,
+    )
+    generator = DynamicCompositionGenerator(
+        max_ops=4,
+        train_max_ops=2,
+        modulus=None,
+        value_min=0,
+        value_max=7,
+        target_offset=4096,
+        seed=34,
+    )
+    logits, stats = model(generator.batch(4).inputs)
+    assert logits.shape == (4, 32768)
+    assert stats["digit_high_logits"].shape == (4, 4, 256)
+    assert stats["digit_low_logits"].shape == (4, 4, 128)
+    assert model.parameter_report()["output_mode"] == "factorized_digits"
+    assert model.parameter_report()["output_digit_base"] == 128
 
 
 def test_dynamic_register_macro_cells_add_sparse_multi_step_path():

@@ -1232,6 +1232,23 @@ than deployable. The next route experiment should learn final-cost alignment
 from query plus circuit signatures. See
 `P001_ROUTE_NEIGHBORHOOD_REGRET_AUDIT_20260908.md`.
 
+V0.198 rejects the 0--7 non-modular operand stress configuration: the same
+depth-3/4 gate reaches only `74.80%` mean at 3,000 steps, down from `84.70%`
+on values 0--3, while the 32,768-class flat head raises the estimated active
+path to `14.52M` of `19.82M` stored parameters. This is both a quality and
+sparsity warning, not evidence that more circuit-bank capacity is needed. The
+next test is a factorized digit output with exact reconstructed-class scoring.
+See `V0_198_DYNAMIC_NONMOD_VALUES0_7_SCREEN.md`.
+
+V0.199 rejects factorized digits as a quality fix but retains them as an
+optional sparsity branch: across seeds 17/18, exact held-out accuracy is
+`71.97%` versus the flat-output `74.80%` baseline (`-2.83 pp`), while the
+estimated active path falls from `14.52M` to `2.05M`. Depth-4 accuracy falls
+from `66.41%` to `59.96%`, so the main ceiling is not just the flat output
+head; recurrent state/interface transfer remains the leading suspect. The
+current implementation still reconstructs all 32,768 logits, so this is not a
+latency claim. See `V0_199_DYNAMIC_NONMOD_FACTOR_OUTPUT.md`.
+
 V0.195 gives the typed-write DynamicRegister a positive combined screen on
 ordinary non-modular arithmetic with unseen depths: training depths 1--2 and
 held-out depths 3--4 reach `85.16%` mean across two seeds at 3,000 steps.

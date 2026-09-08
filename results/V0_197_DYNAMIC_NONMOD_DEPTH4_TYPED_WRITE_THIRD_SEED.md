@@ -32,6 +32,12 @@ The next stress test keeps the same 300M architecture and depth protocol but
 expands operands from 0--3 to 0--7. This tests whether the signal is a real
 state/composition interface or a small-value interpolation effect.
 
+The first 0--7 smoke exposed a target-layout bug before evaluation: offset 64
+does not cover the negative products possible at depth 4. That run is invalid
+and is not included in any metric. The stress configuration now uses offset
+4096 and a 32,768-class head; target-range validation was added to prevent a
+CUDA loss assertion from hiding this kind of data error.
+
 ## Artifacts
 
 - `configs/ne_dynamic_300m_nonmod_depth4_typed_write_adapter.yaml`
