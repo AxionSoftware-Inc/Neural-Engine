@@ -251,11 +251,15 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     else:
         device = torch.device(args.device)
     model = make_model(config).to(device)
+    modulus_config = config.get("generator_modulus", config.get("modulus", 64))
+    generator_modulus = None if modulus_config is None else int(modulus_config)
+    target_offset = int(config.get("target_offset", 0))
     train_generator = DynamicCompositionGenerator(
         max_ops=int(config["max_ops"]),
         train_max_ops=int(config.get("train_max_ops", config["max_ops"])),
         seed=run_seed + 1,
-        modulus=int(config.get("modulus", 64)),
+        modulus=generator_modulus,
+        target_offset=target_offset,
         value_min=args.train_value_min,
         value_max=args.train_value_max,
         split="train" if args.heldout_depths else "all",
@@ -264,7 +268,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         max_ops=int(config["max_ops"]),
         train_max_ops=int(config.get("train_max_ops", config["max_ops"])),
         seed=run_seed + 2,
-        modulus=int(config.get("modulus", 64)),
+        modulus=generator_modulus,
+        target_offset=target_offset,
         value_min=args.eval_value_min,
         value_max=args.eval_value_max,
         split="heldout" if args.heldout_depths else "all",
@@ -316,6 +321,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "eval_depths": list(eval_generator.allowed_depths),
         "train_value_range": [args.train_value_min, args.train_value_max],
         "eval_value_range": [args.eval_value_min, args.eval_value_max],
+        "generator_modulus": generator_modulus,
+        "target_offset": target_offset,
         "total_params": count_parameters(model),
         "train": train_eval,
         "evaluation": eval_eval,

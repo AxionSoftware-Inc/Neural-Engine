@@ -18,6 +18,34 @@ def test_dynamic_generator_layout_and_depth_split():
     assert batch.stage_mask.shape == (8, 6)
 
 
+def test_dynamic_generator_supports_non_modular_targets_with_offset():
+    generator = DynamicCompositionGenerator(
+        max_ops=4, train_max_ops=2, modulus=None, value_min=0, value_max=3,
+        target_offset=64, split="all", seed=31,
+    )
+    batch = generator.balanced_batch(8)
+    assert batch.targets.min().item() >= 0
+    assert batch.targets.max().item() < 512
+    assert batch.stage_targets.min().item() >= 0
+    assert batch.stage_targets.max().item() < 512
+
+
+def test_dynamic_register_supports_non_modular_forward_without_modular_prior():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=4, num_classes=512, modulus=None, seq_len=10,
+        d_model=32, state_dim=32, num_circuits=64, circuit_rank=4,
+        router_depth=2, candidate_pool=8, active_circuits=4, factor_count=8,
+    )
+    generator = DynamicCompositionGenerator(
+        max_ops=4, train_max_ops=2, modulus=None, value_min=0, value_max=3,
+        target_offset=64, seed=32,
+    )
+    logits, stats = model(generator.batch(4).inputs)
+    assert logits.shape == (4, 512)
+    assert stats["step_logits"].shape == (4, 4, 512)
+    assert model.parameter_report()["modulus"] is None
+
+
 def test_dynamic_register_forward_has_sparse_trajectory_stats():
     model = DynamicRegisterNeuralEngine(
         max_ops=4,

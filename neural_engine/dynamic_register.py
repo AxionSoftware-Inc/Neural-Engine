@@ -63,7 +63,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self,
         vocab_size: int = 128,
         num_classes: int = 64,
-        modulus: int = VALUE_MODULUS,
+        modulus: int | None = VALUE_MODULUS,
         max_ops: int = 6,
         seq_len: int | None = None,
         d_model: int = 384,
@@ -130,8 +130,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
         super().__init__()
         if max_ops < 1:
             raise ValueError("max_ops must be positive")
-        if modulus < 2:
+        if modulus is not None and modulus < 2:
             raise ValueError("modulus must be at least two")
+        if modular_prior and modulus is None:
+            raise ValueError("modular_prior requires a finite modulus")
         if modular_prior and num_classes != modulus:
             raise ValueError("num_classes must equal modulus when modular_prior is enabled")
         expected_seq_len = 1 + max_ops + (max_ops + 1)
@@ -221,7 +223,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("macro_cell_scale must be non-negative")
 
         self.max_ops = max_ops
-        self.modulus = int(modulus)
+        self.modulus = None if modulus is None else int(modulus)
         self.seq_len = seq_len
         self.state_dim = state_dim
         self.internal_steps = max_ops
@@ -528,7 +530,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("inputs are shorter than the configured program layout")
         tokens = encode_tokens(
             inputs, self.token_embedding, self.value_encoder,
-            value_modulus=self.modulus,
+            value_modulus=(
+                self.modulus if self.modulus is not None else VALUE_MODULUS
+            ),
         )
         positions = self.position_embedding[: inputs.shape[1]]
         scale = self.position_scale[: inputs.shape[1]]

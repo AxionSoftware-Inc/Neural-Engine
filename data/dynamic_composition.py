@@ -33,7 +33,8 @@ class DynamicCompositionGenerator:
         value_min: int = 0,
         value_max: int = MODULUS - 1,
         split: str = "all",
-        modulus: int = MODULUS,
+        modulus: int | None = MODULUS,
+        target_offset: int = 0,
     ) -> None:
         if max_ops < 1:
             raise ValueError("max_ops must be positive")
@@ -41,10 +42,12 @@ class DynamicCompositionGenerator:
             train_max_ops = max_ops
         if not 1 <= train_max_ops <= max_ops:
             raise ValueError("train_max_ops must be within max_ops")
-        if modulus < 2:
+        if modulus is not None and modulus < 2:
             raise ValueError("modulus must be at least 2")
-        if not 0 <= value_min <= value_max < modulus:
+        if modulus is not None and not 0 <= value_min <= value_max < modulus:
             raise ValueError(f"value range must be within [0, {modulus - 1}]")
+        if modulus is None and not 0 <= value_min <= value_max:
+            raise ValueError("value range must be non-negative and ordered")
         if split not in {"all", "train", "heldout"}:
             raise ValueError("split must be all, train, or heldout")
         self.max_ops = max_ops
@@ -53,6 +56,7 @@ class DynamicCompositionGenerator:
         self.value_min = value_min
         self.value_max = value_max
         self.modulus = modulus
+        self.target_offset = int(target_offset)
         self.split = split
         self.rng = np.random.default_rng(seed)
         self.operation_names = tuple(OPERATION_TOKENS)
@@ -93,8 +97,10 @@ class DynamicCompositionGenerator:
             accumulator = apply_operation(
                 operation, accumulator, int(value), modulus=self.modulus
             )
-            stage_targets.append(int(accumulator))
-        stage_targets.extend([int(accumulator)] * (self.max_ops - depth))
+            stage_targets.append(int(accumulator) + self.target_offset)
+        stage_targets.extend(
+            [int(accumulator) + self.target_offset] * (self.max_ops - depth)
+        )
         stage_mask = [True] * depth + [False] * (self.max_ops - depth)
 
         op_tokens = [OPERATION_TOKENS[name] for name in operations]
@@ -106,7 +112,13 @@ class DynamicCompositionGenerator:
             self.operation_names.index(operation) * (len(self.operation_names) ** index)
             for index, operation in enumerate(operations)
         )
-        return tokens, int(accumulator), sequence_id, stage_targets, stage_mask
+        return (
+            tokens,
+            int(accumulator) + self.target_offset,
+            sequence_id,
+            stage_targets,
+            stage_mask,
+        )
 
     @staticmethod
     def _make_batch(
