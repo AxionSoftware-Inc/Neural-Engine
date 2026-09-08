@@ -1275,6 +1275,22 @@ capacity-only scaling is rejected as the next step; the next target is
 intermediate-state/composition dataflow. See
 `P003_TASKWISE_CAPACITY_FRONTIER_AUDIT_20260908.md`.
 
+2026-09-08 composition stage-signal audit compares each recurrent
+`step_logits` output with deterministic intermediate targets. Across six
+100M/300M/500M staged checkpoints, `chain3` reaches only `2.99%/22.14%/25.26%`
+at steps 0/1/final and `state_machine` `2.34%/1.69%/6.77%`; `reverse_sum`
+reaches `96.48%` final while its step-0 partial is `1.56%`. This localizes the
+hardest ceiling to intermediate-state/dataflow use; the next opt-in test is
+composition-only stage supervision. See
+`P004_COMPOSITION_STAGE_SIGNAL_AUDIT_20260908.md`.
+
+The matched 20M composition-only stage-loss continuation then raised stage-0
+accuracy by `+6.641 pp` on average, but final accuracy by only `+0.234 pp` and
+mean CE worsened by `+0.008647` across seeds. The auxiliary loss is therefore
+rejected for adoption; P-004 remains open for an explicit typed register or
+operation-conditioned state transition bridge. No 700M/1B scale follows from
+this result. See `P004_COMPOSITION_STAGE_SIGNAL_AUDIT_20260908.md`.
+
 2026-09-08 P-001 route-neighborhood audit separates one-swap regret inside the
 32-circuit candidate pool from a full-bank key top-8 probe. Local selection
 headroom is `0.00357–0.00506 CE`; extra target-evaluated retrieval opportunity

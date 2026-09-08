@@ -469,6 +469,35 @@ patch yozing. Router arxitekturasini yangidan ixtiro qilmang. Frozen-bank
 control va on-policy controlni alohida ko‘rsating; negative natijani ham
 saqlang.
 
+**Composition stage-signal audit (2026-09-08):** 100M/300M/500M staged 10k
+checkpointlarda `step_logits` intermediate targetlar bilan tekshirildi.
+`chain3` step-0 accuracy `2.99%`, step-1 `22.14%`, final `25.26%`; barcha
+scale’da `state_machine` step-0/1 mos ravishda `2.34%/1.69%`, final `6.77%`
+bo‘ldi. `reverse_sum` final `96.48%` bo‘lsa ham step-0 partial target `1.56%`
+qolgan. Demak model ayrim tasklarda explicit intermediate registerni emas,
+finalni bevosita taxmin qilmoqda; capacity qo‘shishdan oldin state transition
+signalini alohida train qilish kerak.
+
+**Audit:** `results/P004_COMPOSITION_STAGE_SIGNAL_AUDIT_20260908.md`.
+
+**Keyingi opt-in test:** faqat depth-2/3 tasklar uchun `stage_loss_weight=0.1`
+composition-only continuation; depth-1 auxiliary lossdan chiqariladi. Maqsad
+oldingi umumiy stage supervisiondagi easy-task regressionni takrorlamasdan
+intermediate state signalini ko‘tarish.
+
+**Stage-only continuation natijasi (2026-09-08):** 20M matched checkpointlarda
+2,000 qadamlik ikki-seed testda stage-0 accuracy `+6.927/+6.354 pp` ko‘tarildi,
+ammo final accuracy `+0.729/−0.260 pp` bo‘ldi; mean foyda faqat `+0.234 pp`.
+Mean CE `+0.008647` bilan yomonlashdi va ikkala seedda ham treatment CE’si
+control’dan yuqori chiqdi. Shuning uchun composition-only auxiliary loss
+`REJECTED FOR ADOPTION`; oddiy stage loss signalni kuchaytiradi, lekin
+intermediate state’ni keyingi operation uchun foydali computationga aylantirmaydi.
+P-004 `ACTIVE` qoladi. Keyingi yo‘l explicit typed intermediate register yoki
+operation-conditioned state transition bridge; 700M/1B scaling bu dalil bilan
+boshlanmaydi.
+
+**Yakuniy audit:** `results/P004_COMPOSITION_STAGE_SIGNAL_AUDIT_20260908.md`.
+
 ---
 
 ### P-005 — CE yaxshilanishi hard accuracy'ga aylanmayapti
