@@ -31,6 +31,20 @@ def test_soft_training_route_uses_candidate_pool_but_eval_returns_topk():
     assert not bool(stats["soft_route"])
 
 
+def test_candidate_score_residual_starts_as_exact_route_control_and_trains():
+    router = HierarchicalRouter(16, num_circuits=64, branch=4, depth=2,
+                                candidate_pool=8, active_circuits=4)
+    state = torch.randn(7, 16)
+    control_selected, control_weights, _ = router(state)
+    router.enable_candidate_score_residual(hidden_dim=8)
+    treatment_selected, treatment_weights, _ = router(state)
+    assert torch.equal(control_selected, treatment_selected)
+    assert torch.allclose(control_weights, treatment_weights)
+    loss = treatment_weights.square().mean()
+    loss.backward()
+    assert router.candidate_score_residual[-1].weight.grad is not None
+
+
 def test_router_target_supervision_reaches_tree_and_keys():
     router = HierarchicalRouter(32, num_circuits=32, branch=4, depth=3,
                                 candidate_pool=8, active_circuits=2)

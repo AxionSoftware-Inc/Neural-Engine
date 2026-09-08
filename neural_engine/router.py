@@ -61,6 +61,27 @@ class HierarchicalRouter(nn.Module):
         self.routing_capacity = next_capacity
         self.active_depth = next_depth
 
+    def enable_candidate_score_residual(self, hidden_dim: int = 32) -> None:
+        """Add a zero-initialized nonlinear correction to candidate scores.
+
+        The default router remains the original query-key dot product.  This
+        opt-in branch starts with an exactly identical score and can be used
+        by continuation training to learn a target-aligned utility without
+        evaluating any extra circuit body at hard inference time.
+        """
+        if hidden_dim < 1:
+            raise ValueError("hidden_dim must be positive")
+        if hasattr(self, "candidate_score_residual"):
+            raise ValueError("candidate score residual is already enabled")
+        residual = nn.Sequential(
+            nn.Linear(2 * self.keys.shape[-1], hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, 1),
+        ).to(device=self.keys.device, dtype=self.keys.dtype)
+        nn.init.zeros_(residual[-1].weight)
+        nn.init.zeros_(residual[-1].bias)
+        self.candidate_score_residual = residual
+
     def _soft_coverage_distribution(self, level_probs: list[torch.Tensor]) -> torch.Tensor:
         """Estimate circuit usage through the soft tree paths.
 
@@ -197,6 +218,12 @@ class HierarchicalRouter(nn.Module):
         candidate_ids = candidate_ids.reshape(batch, self.candidate_pool)
         candidate_keys = self.keys[candidate_ids]
         candidate_logits = torch.einsum("bd,bkd->bk", state, candidate_keys) / math.sqrt(state.shape[-1])
+        if hasattr(self, "candidate_score_residual"):
+            candidate_state = state.unsqueeze(1).expand_as(candidate_keys)
+            residual_features = torch.cat((candidate_state, candidate_keys), dim=-1)
+            candidate_logits = candidate_logits + self.candidate_score_residual(
+                residual_features,
+            ).squeeze(-1)
         target_loss = None
         if target_bases is not None:
             target_offsets = torch.arange(self.active_circuits, device=state.device).view(1, -1)

@@ -1246,6 +1246,12 @@ overhead; key retraining regressed both seeds. Retrieval headroom remains real,
 so the open problem is an end-to-end target-aligned utility that preserves the
 K=8 active budget. See `P001_COST_ROUTER_AUDITS_20260908.md`.
 
+2026-09-08 nonlinear candidate-score residual audit adds a zero-initialized
+24,641-parameter scorer to query-key routing. After matched 2,000-step soft
+continuation on 20M seed17/18, CE regressed by `+0.001152/+0.020205` and
+accuracy by `−0.208/−0.573 pp`; the opt-in scorer is rejected. See
+`P001_NONLINEAR_ROUTE_SCORER_AUDIT_20260908.md`.
+
 2026-09-08 P-001 route-neighborhood audit separates one-swap regret inside the
 32-circuit candidate pool from a full-bank key top-8 probe. Local selection
 headroom is `0.00357–0.00506 CE`; extra target-evaluated retrieval opportunity

@@ -108,6 +108,15 @@ kerak.
 
 **Jamlangan audit:** `results/P001_COST_ROUTER_AUDITS_20260908.md`.
 
+**Nonlinear candidate-score scorer (2026-09-08):** zero-initialized
+`2*state_dim → 32 → 1` residual scorer bilan 20M seed17/18da 2,000-step
+soft-routing continuation qilindi. Treatment CE delta’si `+0.001152/+0.020205`,
+accuracy delta’si `−0.208/−0.573 pp` bo‘ldi. Ikkala seedda ham regressiya;
+`24,641` qo‘shimcha scorer parametri va trainingda 32 candidate circuitning
+soft aktivatsiyasi quality foydasini bermadi. Opt-in patch `REJECTED`.
+
+**Audit:** `results/P001_NONLINEAR_ROUTE_SCORER_AUDIT_20260908.md`.
+
 **Route-neighborhood audit (2026-09-08):** 100M/300M/500M seed17/18 frozen
 checkpointlarda natural route uchun bir circuitlik one-swap qidiruv qilindi.
 Candidate pool ichidagi local selection headroom `0.00357–0.00506 CE` bo‘ldi.
