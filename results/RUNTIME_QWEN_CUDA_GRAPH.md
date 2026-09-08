@@ -66,7 +66,9 @@ tekshirilishi kerak.
 - Input-buffer update fixed-shape, `use_cache=False` smoke’da parity bilan
   tasdiqlandi. Default serving yo‘liga hali qo‘shilmadi: trained K=5/K=6
   model, `use_cache` bilan haqiqiy decode va bir nechta shape audit qilinishi
-  kerak.
+  kerak. Generic Transformers `StaticCache` graph capture esa alohida
+  screen’da parity bermadi va qabul qilinmadi; buning uchun custom static KV
+  tensor yo‘li kerak bo‘ladi.
 - Keyingi ish graph shape-cache/proper input-copy wrapper va trained K=5
   quality-parity benchmarki. Graph modelni o‘zgartirmaydi, shu sabab Qwen K=4
   router muammosini hal qilgan deb talqin qilinmaydi.
@@ -84,4 +86,17 @@ python -u benchmark_qwen_single_token_cuda_graph.py `
 ## Artifact
 
 - `benchmark_qwen_single_token_cuda_graph.py`
+- `benchmark_qwen_static_cache_graph.py` — rejected `StaticCache` diagnostic
 - Existing trained quality reference: `results/V0_193_QWEN_CORRECTION_DISPATCH_AUDIT.md`
+
+## `use_cache=True` diagnostic
+
+Generic Transformers `StaticCache` bilan graph capture’ni parent-only nazoratda
+ham tekshirdim. `batch=1`, prefix length 4, max cache length 32, 5 replay
+iterations smoke’da capture-vs-eager max logit xatosi `12.78`, replay-vs-eager
+`1.74`, alternate-input replay-vs-eager `7.60` bo‘ldi. Bu parity emas, shuning
+uchun bu yo‘lning latency raqamlari ishlatilmaydi. Muammo sparse child’ga xos
+emas: parent-only nazorat ham yiqildi. Current Qwen/Transformers cache
+`index_copy_`/internal cache state’i generic CUDA Graph capture uchun xavfsiz
+emas; keyingi serving integratsiyasi explicit fixed KV buffers va custom
+cache-update kernelini talab qiladi.

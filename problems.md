@@ -532,7 +532,10 @@ runtime uchun kuchli yangi signal borligini ko‘rsatadi. Router/circuit
 matematikasi o‘zgarmadi, child’lar o‘qitilmagan runtime smoke bo‘lgani uchun
 quality claim emas. `ACCEPTED OPT-IN`; trained K=5/K=6, `use_cache`, input
 buffer update (fixed-shape `use_cache=False` parity o‘tdi) va dynamic shape
-auditlari hali ochiq. Batafsil:
+auditlari hali ochiq. Generic Transformers `StaticCache` bilan `use_cache=True`
+graph screen parent-only nazoratda ham max capture/replay xatosi `12.78/1.74`
+berdi va `UNSAFE` deb rad qilindi; custom fixed KV buffer yo‘li hali ochiq.
+Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 
 ## Yopilgan yoki rad qilingan yo‘llar
