@@ -522,6 +522,20 @@ algebraic value/state primitive.
 
 **Batafsil:** `results/P004_OPERATION_TRANSITION_AUDIT_20260908.md`.
 
+**Multi-slot typed-register sinovi (2026-09-08):** oldingi bridge bitta
+intermediate qiymatni overwrite qilgani sababli signal yo‘qolishi mumkin degan
+gipoteza uchun step-0 va step-1 qiymatlarini alohida slotlarda saqlaydigan
+`register_slot_count=2` varianti tekshirildi. Bridge-only final accuracy
+seed17/18 `+0.365/−0.833 pp`, o‘rtacha `−0.234 pp` va mean CE `−0.001890`
+bo‘ldi. Bridge+stage `+0.104/−1.250 pp`, o‘rtacha `−0.573 pp` va mean CE
+`+0.005282` berdi. Stage-0 o‘rtacha `+6.667 pp` ko‘tarilgan bo‘lsa ham
+stage-2 `−0.521 pp` tushdi. Demak faqat register tarixini saqlash yetarli
+emas; muammo typed representation/state transition va circuit computation
+moslashuvida ham bor. Multi-slot bridge `REJECTED FOR ADOPTION`, default
+o‘zgarmadi va P-004 `ACTIVE` qoladi.
+
+**Batafsil:** `results/P004_MULTI_SLOT_REGISTER_AUDIT_20260908.md`.
+
 ---
 
 ### P-005 — CE yaxshilanishi hard accuracy'ga aylanmayapti

@@ -1306,6 +1306,14 @@ hard-quality gate. Rank-32 improved mean CE by `−0.012546` at 2k and
 P-004 now points to a reusable algebraic value/state primitive. See
 `P004_OPERATION_TRANSITION_AUDIT_20260908.md`.
 
+The multi-slot typed-register follow-up also failed adoption. Preserving both
+step-0 and step-1 predicted values gave bridge-only mean final accuracy
+`−0.234 pp` and bridge+stage `−0.573 pp` across seed17/18; bridge+stage
+stage-0 rose `+6.667 pp`, but stage-2 fell `−0.521 pp`. The problem is not
+only overwriting one register value, so the two-slot bridge remains opt-in and
+P-004 stays open for a reusable algebraic value/state primitive. See
+`P004_MULTI_SLOT_REGISTER_AUDIT_20260908.md`.
+
 2026-09-08 P-001 route-neighborhood audit separates one-swap regret inside the
 32-circuit candidate pool from a full-bank key top-8 probe. Local selection
 headroom is `0.00357–0.00506 CE`; extra target-evaluated retrieval opportunity

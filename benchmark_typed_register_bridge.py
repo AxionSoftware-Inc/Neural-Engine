@@ -29,20 +29,20 @@ from train import make_model, seed_everything
 
 def _load_checkpoint(path: Path, device: torch.device,
                      typed_register_bridge: bool,
-                     bridge_mode: str = "soft") -> tuple[NeuralEngineV0, dict]:
+                     bridge_mode: str = "soft",
+                     register_slot_count: int = 1) -> tuple[NeuralEngineV0, dict]:
     payload = torch.load(path, map_location="cpu", weights_only=True)
     config = dict(payload["config"])
     config["typed_register_bridge"] = typed_register_bridge
     config["register_bridge_mode"] = bridge_mode
+    config["register_slot_count"] = register_slot_count
     model = make_model(config)
     if not isinstance(model, NeuralEngineV0):
         raise ValueError("typed register bridge requires NeuralEngineV0")
     missing, unexpected = model.load_state_dict(
         payload["model_state"], strict=False,
     )
-    expected_missing = (
-        ["register_value_embedding.weight"] if typed_register_bridge else []
-    )
+    expected_missing = ["register_value_embedding.weight"] if typed_register_bridge else []
     if sorted(missing) != sorted(expected_missing) or unexpected:
         raise ValueError(
             f"unexpected checkpoint mismatch: missing={missing}, "
@@ -118,10 +118,18 @@ def _train_arms(arms: dict[str, NeuralEngineV0], config: dict,
 
 def _run(path: Path, args: argparse.Namespace,
          device: torch.device) -> dict:
-    control, config = _load_checkpoint(path, device, False, args.bridge_mode)
-    stage_only, _ = _load_checkpoint(path, device, False, args.bridge_mode)
-    bridge_only, _ = _load_checkpoint(path, device, True, args.bridge_mode)
-    bridge_stage, _ = _load_checkpoint(path, device, True, args.bridge_mode)
+    control, config = _load_checkpoint(
+        path, device, False, args.bridge_mode, args.register_slot_count,
+    )
+    stage_only, _ = _load_checkpoint(
+        path, device, False, args.bridge_mode, args.register_slot_count,
+    )
+    bridge_only, _ = _load_checkpoint(
+        path, device, True, args.bridge_mode, args.register_slot_count,
+    )
+    bridge_stage, _ = _load_checkpoint(
+        path, device, True, args.bridge_mode, args.register_slot_count,
+    )
     arms = {
         "control": control,
         "stage_only": stage_only,
@@ -167,6 +175,7 @@ def main() -> None:
     parser.add_argument("--stage-loss-weight", type=float, default=0.1)
     parser.add_argument("--bridge-mode", choices=("soft", "straight_through"),
                         default="soft")
+    parser.add_argument("--register-slot-count", type=int, default=1)
     parser.add_argument("--eval-batches", type=int, default=4)
     parser.add_argument("--eval-examples-per-task", type=int, default=32)
     parser.add_argument("--device", default="cuda")
@@ -180,6 +189,7 @@ def main() -> None:
         "steps": int(args.steps),
         "stage_loss_weight": float(args.stage_loss_weight),
         "bridge_mode": args.bridge_mode,
+        "register_slot_count": int(args.register_slot_count),
         "checkpoints": [],
     }
     for checkpoint_name in args.checkpoint:

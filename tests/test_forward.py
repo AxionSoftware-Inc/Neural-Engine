@@ -136,6 +136,25 @@ def test_typed_register_bridge_straight_through_has_hard_forward_register():
     assert bool(probabilities.eq(0).sum(dim=-1).eq(63).all())
 
 
+def test_typed_register_bridge_can_preserve_multiple_intermediate_slots():
+    model = NeuralEngineV0(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=64, circuit_rank=4, router_branch=4, router_depth=2,
+        candidate_pool=8, active_circuits=2, internal_steps=3,
+        typed_register_bridge=True, register_slot_count=2,
+    )
+    inputs = torch.randint(1, 8, (4, 8))
+    _, stats = model(inputs, adaptive=False)
+
+    assert stats["register_contexts"].shape == (4, 3, 32)
+    assert stats["register_slot_contexts"].shape == (4, 3, 2, 32)
+    assert model.parameter_report()["register_slot_count"] == 2
+    loss = stats["register_contexts"].square().mean()
+    loss.backward()
+    assert model.register_value_embedding.weight.grad is not None
+    assert torch.isfinite(model.register_value_embedding.weight.grad).all()
+
+
 def test_operation_transition_adapter_is_neutral_until_trained_and_has_gradients():
     model = NeuralEngineV0(
         vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,

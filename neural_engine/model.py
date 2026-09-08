@@ -39,6 +39,7 @@ class NeuralEngineV0(nn.Module):
                  register_bridge_scale: float = 1.0,
                  register_bridge_temperature: float = 1.0,
                  register_bridge_mode: str = "soft",
+                 register_slot_count: int = 1,
                  operation_transition_rank: int = 0,
                  operation_transition_scale: float = 1.0):
         super().__init__()
@@ -113,6 +114,9 @@ class NeuralEngineV0(nn.Module):
         self.register_bridge_scale = float(register_bridge_scale)
         self.register_bridge_temperature = float(register_bridge_temperature)
         self.register_bridge_mode = register_bridge_mode
+        if register_slot_count < 1:
+            raise ValueError("register_slot_count must be positive")
+        self.register_slot_count = int(register_slot_count)
         if operation_transition_rank < 0:
             raise ValueError("operation_transition_rank must be non-negative")
         if operation_transition_scale < 0.0:
@@ -301,13 +305,23 @@ class NeuralEngineV0(nn.Module):
         register_context_steps = (
             [] if collect_stats and self.typed_register_bridge else None
         )
+        register_slot_context_steps = (
+            [] if collect_stats and self.typed_register_bridge else None
+        )
         register_probability_steps = (
             [] if collect_stats and self.typed_register_bridge else None
         )
         last_logits = torch.zeros(batch_size, num_classes, device=inputs.device)
         active = torch.ones(batch_size, dtype=torch.bool, device=inputs.device)
+        register_slot_context = (
+            torch.zeros(
+                batch_size, self.register_slot_count, self.state_dim,
+                device=inputs.device,
+            )
+            if self.typed_register_bridge else None
+        )
         register_context = (
-            torch.zeros(batch_size, self.state_dim, device=inputs.device)
+            register_slot_context.sum(dim=1)
             if self.typed_register_bridge else None
         )
         register_probabilities = (
@@ -355,6 +369,7 @@ class NeuralEngineV0(nn.Module):
                     route_delta_steps.append(torch.zeros(batch_size, self.state_dim, device=inputs.device))
                     if self.typed_register_bridge:
                         register_context_steps.append(register_context.clone())
+                        register_slot_context_steps.append(register_slot_context.clone())
                         register_probability_steps.append(register_probabilities.clone())
                 continue
             active_state = state[active_indices]
@@ -365,7 +380,9 @@ class NeuralEngineV0(nn.Module):
                 # Feed the previous predicted class through a typed value
                 # register.  This is a differentiable state bridge, not an
                 # unrestricted copy of the recurrent hidden state.
-                step_query = step_query + self.register_bridge_scale * register_context[active_indices]
+                step_query = step_query + self.register_bridge_scale * register_slot_context[
+                    active_indices
+                ].sum(dim=1)
             if task_context is not None:
                 step_query = step_query + task_context[active_indices]
             if collect_stats:
@@ -509,13 +526,17 @@ class NeuralEngineV0(nn.Module):
                     )
                     register_probs = hard_register + register_probs - register_probs.detach()
                 predicted_register = register_probs @ self.register_value_embedding.weight
+                slot_index = min(step, self.register_slot_count - 1)
                 if active_indices.numel() == batch_size:
-                    register_context = predicted_register
+                    register_slot_context = register_slot_context.clone()
+                    register_slot_context[:, slot_index] = predicted_register
+                    register_context = register_slot_context.sum(dim=1)
                     register_probabilities = register_probs
                 else:
-                    next_register_context = register_context.clone()
-                    next_register_context[active_indices] = predicted_register
-                    register_context = next_register_context
+                    next_register_slot_context = register_slot_context.clone()
+                    next_register_slot_context[active_indices, slot_index] = predicted_register
+                    register_slot_context = next_register_slot_context
+                    register_context = register_slot_context.sum(dim=1)
                     next_register_probabilities = register_probabilities.clone()
                     next_register_probabilities[active_indices] = register_probs
                     register_probabilities = next_register_probabilities
@@ -523,6 +544,7 @@ class NeuralEngineV0(nn.Module):
                 step_logits[:, step] = last_logits
                 if self.typed_register_bridge:
                     register_context_steps.append(register_context.clone())
+                    register_slot_context_steps.append(register_slot_context.clone())
                     register_probability_steps.append(register_probabilities.clone())
             if self.halt_head is not None:
                 updated_halt_logits = self.halt_head(updated_state).squeeze(-1)
@@ -555,6 +577,9 @@ class NeuralEngineV0(nn.Module):
         }
         if self.typed_register_bridge:
             stats["register_contexts"] = torch.stack(register_context_steps, dim=1)
+            stats["register_slot_contexts"] = torch.stack(
+                register_slot_context_steps, dim=1,
+            )
             stats["register_probabilities"] = torch.stack(
                 register_probability_steps, dim=1,
             )
@@ -611,6 +636,7 @@ class NeuralEngineV0(nn.Module):
             "route_exploration_prob": self.route_exploration_prob,
             "typed_register_bridge": self.typed_register_bridge,
             "register_bridge_mode": self.register_bridge_mode,
+            "register_slot_count": self.register_slot_count,
             "operation_transition_rank": self.operation_transition_rank,
             "operation_transition_scale": self.operation_transition_scale,
         }
