@@ -94,6 +94,22 @@ cheklovi sifatida `OPEN`, model yoki sifat rad javobi sifatida emas.
 metadata'lari GPU scalar emas, host metadata sifatida qaytarildi. Bu numerik
 model outputini o'zgartirmaydi va router testlari saqlandi.
 
+## Post-architecture-change serving recheck
+
+2026-09-08 kuni `exp/track-native-engine` branchida opt-in register auditlari
+qo‘shilgandan keyin default checkpoint yana o‘lchandi. `collect_stats=False`,
+`matmul_precision=highest`, balanced batch va RTX 3060 protokoli bilan:
+
+| Batch | Iterations | Latency / batch | Samples/s | Peak VRAM |
+|---:|---:|---:|---:|---:|
+| 1 | 300 | `3.195 ms` | `313` | `395 MiB` |
+| 128 | 100 | `7.741 ms` | `16,535` | `468 MiB` |
+
+Bu o‘lchovlar bridge/mixer opt-in bo‘lmaganda oldingi stats-free serving yo‘li
+saqlanganini tasdiqlaydi. Quality patchlarining default runtime’ga regressiyasi
+yo‘q; one-token latency muammosi esa hali compiled/fused dispatch bilan
+yopilmagan.
+
 ## Float32 precision A/B
 
 RTX 3060 TF32 yo'lini ham alohida tekshirdim. Batch-1da `highest → high`
