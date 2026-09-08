@@ -408,6 +408,16 @@ funksiyalarga aylanishi va inference'da kerakli subsetga aylanishi kerak.
 Hozir capacity ko‘payishi bilan routing, specialization yoki optimization
 muammolari kuchaymoqda.
 
+**Task-wise frontier reanalysis (2026-09-08):** oldingi staged 10k all-screen
+natijalari task bo‘yicha ajratilganda 100M/300M/500Mda depth-1 mean
+`99.67/99.83/99.61%`, depth-2 `72.14/71.68/72.14%`, depth-3 esa
+`53.26/53.78/53.71%` bo‘ldi. `chain3` o‘rtacha `20.64%`, `state_machine`
+`8.41%`, `compose_add_mul` `60.55%`da qolgan; capacity oshishi bu difficult
+composition tasksni siljitmagan. Demak keyingi muammo raw capacity emas,
+intermediate state/dataflow va composition circuit trainingidir.
+
+**Audit:** `results/P003_TASKWISE_CAPACITY_FRONTIER_AUDIT_20260908.md`.
+
 #### Qabul qilish mezonlari
 
 - bir xil task, data, active budget va evaluation protocol;

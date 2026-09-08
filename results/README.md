@@ -1267,6 +1267,14 @@ effect is not a reliable two-seed fix and does not meet the `+2 pp` gate. The
 natural route-weight default remains. See
 `P001_UNIFORM_WEIGHT_CONTINUATION_AUDIT_20260908.md`.
 
+2026-09-08 task-wise capacity frontier reanalysis shows 100M/300M/500M staged
+all-screen depth-1 means of `99.67/99.83/99.61%`, depth-2 means of
+`72.14/71.68/72.14%`, and depth-3 means of `53.26/53.78/53.71%`. `chain3`
+and `state_machine` remain the main hard-task failures across scales, so
+capacity-only scaling is rejected as the next step; the next target is
+intermediate-state/composition dataflow. See
+`P003_TASKWISE_CAPACITY_FRONTIER_AUDIT_20260908.md`.
+
 2026-09-08 P-001 route-neighborhood audit separates one-swap regret inside the
 32-circuit candidate pool from a full-bank key top-8 probe. Local selection
 headroom is `0.00357–0.00506 CE`; extra target-evaluated retrieval opportunity
