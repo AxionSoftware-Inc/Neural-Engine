@@ -1138,3 +1138,27 @@ keyingi yo‘l operation-specific state write/read yoki aniq intermediate-value
 dataflow bo‘ladi.
 
 **Batafsil:** `results/P004_STATE_HISTORY_TASK_SCALE_AUDIT_20260908.md`.
+
+**DynamicRegister state-trace audit (2026-09-08):** 0--7 non-modular flat
+checkpointlarda direct intermediate accuracy stage-0/1da `100%/100%`,
+stage-2/3da `83.89%/66.70%` bo‘ldi. Post-accumulator state bilan haqiqiy
+intermediate value korrelyatsiyasi seed17/18da mos ravishda
+`1.000/1.000 → 0.905/0.888 → 0.503/0.533 → 0.207/-0.012` ga kamaydi.
+Bu output headning yagona muammo emasligini va depth-4da takroriy state
+composition buzilayotganini ko‘rsatadi; P-004 `ACTIVE` qoladi.
+
+**Keyingi opt-in test:** learned operation-conditioned bilinear scalar lane
+(`old`, `operand`, `old*operand`, `bias`)ni factorized-output controlga qo‘shish.
+Bu arithmetic oracle emas; koeffitsientlar o‘rganiladi. Bank yoki router
+sig‘imi oshirilmaydi. **Batafsil:**
+`results/V0_200_DYNAMIC_NONMOD_STATE_TRACE_AUDIT.md`.
+
+**Persistent scalar read sinovi (2026-09-09):** learned scalar lane’ni query
+va outputdan tashqari keyingi operation `read_accumulator`iga ham qo‘shish
+tekshirildi. Factorized control ikki seedda `71.97%`, scalar-only treatment
+`72.36%` (`+0.39 pp`, seed-unstable), persistent-read treatment esa `71.68%`
+(`−0.29 pp`) berdi. Scalar injection pointlarini ko‘paytirish
+**REJECTED FOR ADOPTION**; P-004 `ACTIVE` qoladi. Keyingi ish alohida
+persistent algebraic value packet/authoritative transition bo‘lishi kerak.
+
+**Batafsil:** `results/V0_201_DYNAMIC_NONMOD_SCALAR_READ_AUDIT.md`.

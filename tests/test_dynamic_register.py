@@ -772,6 +772,52 @@ def test_dynamic_register_factorized_digit_output_reconstructs_classes():
     assert model.parameter_report()["output_digit_base"] == 128
 
 
+def test_dynamic_register_structured_scalar_read_path_is_optional():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=16,
+        state_dim=16,
+        num_circuits=32,
+        circuit_rank=2,
+        router_depth=2,
+        candidate_pool=4,
+        active_circuits=2,
+        factor_count=6,
+        structured_scalar_state=True,
+        structured_scalar_read_scale=1.0,
+    )
+    generator = DynamicCompositionGenerator(max_ops=2, train_max_ops=2, seed=36)
+    logits, _ = model(generator.batch(4).inputs)
+    assert logits.shape == (4, 64)
+    assert model.parameter_report()["structured_scalar_read_scale"] == 1.0
+
+
+def test_dynamic_register_can_collect_recurrent_state_trace():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=3,
+        seq_len=8,
+        d_model=16,
+        state_dim=16,
+        num_circuits=32,
+        circuit_rank=2,
+        router_depth=2,
+        candidate_pool=4,
+        active_circuits=2,
+        factor_count=6,
+    )
+    generator = DynamicCompositionGenerator(max_ops=3, train_max_ops=2, seed=35)
+    logits, stats = model(generator.batch(5).inputs, collect_state_stats=True)
+    assert logits.shape == (5, 64)
+    for name in (
+        "pre_accumulator_states",
+        "query_states",
+        "post_accumulator_states",
+        "step_states",
+    ):
+        assert stats[name].shape == (5, 3, 16)
+
+
 def test_dynamic_register_macro_cells_add_sparse_multi_step_path():
     model = DynamicRegisterNeuralEngine(
         max_ops=2,

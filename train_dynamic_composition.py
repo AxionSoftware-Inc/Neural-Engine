@@ -77,6 +77,7 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "operation_router_keys",
         "operation_transition_rank", "operation_transition_scale",
         "structured_scalar_state", "structured_scalar_scale",
+        "structured_scalar_read_scale",
         "operator_valued_product_encoder", "operator_valued_packet_width",
         "operator_valued_basis_count",
         "numeric_state_dim", "numeric_state_scale",

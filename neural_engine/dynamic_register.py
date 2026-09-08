@@ -136,6 +136,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         operation_transition_scale: float = 1.0,
         structured_scalar_state: bool = False,
         structured_scalar_scale: float = 1.0,
+        structured_scalar_read_scale: float = 0.0,
         operator_valued_product_encoder: bool = False,
         operator_valued_packet_width: int = 16,
         operator_valued_basis_count: int = 8,
@@ -218,6 +219,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("operation_transition_scale must be non-negative")
         if structured_scalar_scale < 0.0:
             raise ValueError("structured_scalar_scale must be non-negative")
+        if structured_scalar_read_scale < 0.0:
+            raise ValueError("structured_scalar_read_scale must be non-negative")
         if operator_valued_packet_width < 1:
             raise ValueError("operator_valued_packet_width must be positive")
         if operator_valued_basis_count < 1:
@@ -299,6 +302,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.operation_transition_scale = float(operation_transition_scale)
         self.structured_scalar_state = bool(structured_scalar_state)
         self.structured_scalar_scale = float(structured_scalar_scale)
+        self.structured_scalar_read_scale = float(structured_scalar_read_scale)
         self.operator_valued_product_encoder = bool(operator_valued_product_encoder)
         self.operator_valued_packet_width = int(operator_valued_packet_width)
         self.operator_valued_basis_count = int(operator_valued_basis_count)
@@ -678,6 +682,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self,
         inputs: torch.Tensor,
         adaptive: bool | None = None,
+        collect_state_stats: bool = False,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         del adaptive
         batch_size = inputs.shape[0]
@@ -740,8 +745,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
         digit_high_steps = []
         digit_low_steps = []
         scalar_step_states = []
+        pre_state_steps = []
+        query_state_steps = []
+        post_state_steps = []
+        step_state_steps = []
 
         for step in range(self.max_ops):
+            if collect_state_stats:
+                pre_state_steps.append(accumulator.clone())
             active_indices = operation_mask[:, step].nonzero(as_tuple=False).squeeze(-1)
             selected_step = torch.full(
                 (batch_size, self.router.active_circuits), -1,
@@ -753,6 +764,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 dtype=torch.long,
                 device=device,
             )
+            query_snapshot = torch.zeros_like(accumulator) if collect_state_stats else None
             if active_indices.numel():
                 active_accumulator = accumulator[active_indices]
                 active_operand = operand_states[active_indices, step + 1]
@@ -763,6 +775,13 @@ class DynamicRegisterNeuralEngine(nn.Module):
                         self._operation_read_adapter(
                             active_accumulator, current_operation_ids
                         )
+                    )
+                if self.structured_scalar_state and self.structured_scalar_read_scale:
+                    scalar_read = self.structured_scalar_projection(
+                        scalar_state[active_indices].unsqueeze(-1)
+                    )
+                    read_accumulator = read_accumulator + (
+                        self.structured_scalar_read_scale * scalar_read
                     )
                 pair = self.pair_encoder(torch.cat([read_accumulator, active_operand], dim=-1))
                 pair = pair + self.product_encoder(read_accumulator * active_operand)
@@ -837,6 +856,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     else:
                         modular_features = modular_state[active_indices].to(query.dtype)
                     query = query + self.modular_projection(modular_features)
+                if collect_state_stats:
+                    query_snapshot[active_indices] = query
                 query = query + 0.25 * self.route_context(query)
                 route_query = query
                 if self.route_context_mode == "operation_step":
@@ -977,6 +998,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 selected_weights[active_indices, step] = weights
                 step_entropies[active_indices, step] = route_stats["router_entropy"]
                 executed_mask[active_indices, step] = True
+            if collect_state_stats:
+                query_state_steps.append(query_snapshot)
+                post_state_steps.append(accumulator.clone())
             selected_steps.append(selected_step)
             macro_selected_steps.append(macro_selected_step)
             step_state = accumulator
@@ -998,6 +1022,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 else:
                     step_features = modular_state
                 step_state = step_state + self.modular_projection(step_features)
+            if collect_state_stats:
+                step_state_steps.append(step_state.clone())
             if self.output_mode == "factorized_digits":
                 output_state = self.output[0](step_state)
                 digit_high, digit_low = self.output[1].digit_logits(output_state)
@@ -1030,6 +1056,11 @@ class DynamicRegisterNeuralEngine(nn.Module):
         if self.output_mode == "factorized_digits":
             stats["digit_high_logits"] = torch.stack(digit_high_steps, dim=1)
             stats["digit_low_logits"] = torch.stack(digit_low_steps, dim=1)
+        if collect_state_stats:
+            stats["pre_accumulator_states"] = torch.stack(pre_state_steps, dim=1)
+            stats["query_states"] = torch.stack(query_state_steps, dim=1)
+            stats["post_accumulator_states"] = torch.stack(post_state_steps, dim=1)
+            stats["step_states"] = torch.stack(step_state_steps, dim=1)
         self._last_route = stats
         return stats["step_logits"][:, -1], stats
 
@@ -1223,6 +1254,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "operation_transition_scale": self.operation_transition_scale,
             "structured_scalar_state": self.structured_scalar_state,
             "structured_scalar_scale": self.structured_scalar_scale,
+            "structured_scalar_read_scale": self.structured_scalar_read_scale,
             "operator_valued_product_encoder": self.operator_valued_product_encoder,
             "operator_valued_packet_width": self.operator_valued_packet_width,
             "operator_valued_basis_count": self.operator_valued_basis_count,

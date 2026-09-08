@@ -1232,6 +1232,15 @@ than deployable. The next route experiment should learn final-cost alignment
 from query plus circuit signatures. See
 `P001_ROUTE_NEIGHBORHOOD_REGRET_AUDIT_20260908.md`.
 
+V0.201 rejects injecting the learned scalar lane into the next operation's
+read accumulator: the two-seed factorized-control mean is `71.97%`, while the
+persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
+output treatment reached `72.36%` (`+0.39 pp`) but was seed-unstable. Repeating
+scalar injection points is therefore closed; the next test must make a
+persistent algebraic value packet authoritative for state transition, or
+accept the current interface ceiling. See
+`V0_201_DYNAMIC_NONMOD_SCALAR_READ_AUDIT.md`.
+
 V0.198 rejects the 0--7 non-modular operand stress configuration: the same
 depth-3/4 gate reaches only `74.80%` mean at 3,000 steps, down from `84.70%`
 on values 0--3, while the 32,768-class flat head raises the estimated active
@@ -1248,6 +1257,14 @@ from `66.41%` to `59.96%`, so the main ceiling is not just the flat output
 head; recurrent state/interface transfer remains the leading suspect. The
 current implementation still reconstructs all 32,768 logits, so this is not a
 latency claim. See `V0_199_DYNAMIC_NONMOD_FACTOR_OUTPUT.md`.
+
+V0.200's inference-only state trace localizes the 0--7 depth-4 failure to
+repeated state composition: direct intermediate accuracy is `100%/100%` at
+stages 0/1, then `83.89%` and `66.70%`, while post-state value correlation
+falls from `1.000` to `0.905/0.888`, `0.503/0.533`, and `0.207/-0.012` across
+seeds 17/18. This makes a larger bank or wider candidate pool premature. The
+next opt-in test is a learned operation-conditioned bilinear scalar lane. See
+`V0_200_DYNAMIC_NONMOD_STATE_TRACE_AUDIT.md`.
 
 V0.195 gives the typed-write DynamicRegister a positive combined screen on
 ordinary non-modular arithmetic with unseen depths: training depths 1--2 and
