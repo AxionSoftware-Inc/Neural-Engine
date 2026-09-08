@@ -106,6 +106,24 @@ def main() -> None:
     graph_ms, graph_logits = measure_graph(
         model, ids, args.warmup, args.iterations,
     )
+    # A serving caller changes token ids between replays.  Keep the captured
+    # shape and storage fixed, but update the graph input buffer in place.
+    alternate_ids = token_stream(
+        tokenizer, "attention free circuits", args.batch_size,
+        args.sequence_length, device,
+    ).reshape(args.batch_size, args.sequence_length)
+    # ``measure_graph`` owns its graph, so make a small second capture here
+    # with an explicit handle for the input-update parity check.  Capture the
+    # original token and then replace it before replaying.
+    with torch.inference_mode():
+        graph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(graph):
+            updated_graph_logits = forward_logits(model, ids)
+        ids.copy_(alternate_ids)
+        graph.replay()
+        torch.cuda.synchronize()
+        updated_eager_logits = forward_logits(model, alternate_ids)
+    updated_diff = (updated_graph_logits - updated_eager_logits).abs()
     graph_diff = (graph_logits - eager_logits).abs()
     sparse_diff = (eager_logits - parent_logits).abs()
     print({
@@ -120,6 +138,8 @@ def main() -> None:
         "graph_over_parent": graph_ms / parent_ms,
         "max_graph_vs_eager_logit_error": graph_diff.max().item(),
         "mean_graph_vs_eager_logit_error": graph_diff.mean().item(),
+        "max_graph_vs_updated_input_eager_error": updated_diff.max().item(),
+        "mean_graph_vs_updated_input_eager_error": updated_diff.mean().item(),
         "max_sparse_vs_parent_logit_error": sparse_diff.max().item(),
     })
 

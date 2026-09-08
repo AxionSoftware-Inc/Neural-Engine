@@ -531,7 +531,8 @@ sparse yo‘l mos ravishda `31.919/33.963 ms` edi. Graph/eager max logit farqi
 runtime uchun kuchli yangi signal borligini ko‘rsatadi. Router/circuit
 matematikasi o‘zgarmadi, child’lar o‘qitilmagan runtime smoke bo‘lgani uchun
 quality claim emas. `ACCEPTED OPT-IN`; trained K=5/K=6, `use_cache`, input
-buffer update va dynamic shape auditlari hali ochiq. Batafsil:
+buffer update (fixed-shape `use_cache=False` parity o‘tdi) va dynamic shape
+auditlari hali ochiq. Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 
 ## Yopilgan yoki rad qilingan yo‘llar

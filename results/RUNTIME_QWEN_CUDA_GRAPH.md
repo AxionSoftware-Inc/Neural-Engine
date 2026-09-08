@@ -32,6 +32,14 @@ oldingi ikki-seed quality auditida CE deltalari `+0.03881/+0.04036` bo‘lib,
 baholamaydi; u K=5 routing/dispatch shakli bilan CUDA Graph overheadini
 tekshiradi.
 
+## Input-buffer update parity
+
+Capture’dan keyin boshqa token ID GPU’dagi captured input buffer’ga `copy_`
+qilindi va graph replay natijasi shu yangi tokenning eager forward’i bilan
+solishtirildi. Max logit farqi `1.05e-5`, mean farq `1.33e-6` bo‘ldi. Demak
+fixed-shape graph faqat capture paytidagi bitta tokenni qaytarmayapti; input
+storage’ni update qilib yangi tokenni qayta hisoblayapti.
+
 Bir qatlamli dastlabki screen ham graph foydasini ko‘rsatdi: parent
 `31.045 ms`, eager `30.448 ms`, graph `10.013 ms`, graph/eager `0.329x`.
 Asosiy qaror sakkiz qatlamli natijalarga tayangan.
@@ -55,8 +63,9 @@ tekshirilishi kerak.
 
 - Fixed-shape CUDA Graph replay’ni runtime uchun `ACCEPTED OPT-IN` deb qabul
   qildim; bu katta runtime signali.
-- Default serving yo‘liga hali qo‘shilmadi: trained K=5/K=6 model, `use_cache`
-  bilan haqiqiy decode, input-buffer update va bir nechta shape audit qilinishi
+- Input-buffer update fixed-shape, `use_cache=False` smoke’da parity bilan
+  tasdiqlandi. Default serving yo‘liga hali qo‘shilmadi: trained K=5/K=6
+  model, `use_cache` bilan haqiqiy decode va bir nechta shape audit qilinishi
   kerak.
 - Keyingi ish graph shape-cache/proper input-copy wrapper va trained K=5
   quality-parity benchmarki. Graph modelni o‘zgartirmaydi, shu sabab Qwen K=4
