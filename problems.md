@@ -498,6 +498,30 @@ boshlanmaydi.
 
 **Yakuniy audit:** `results/P004_COMPOSITION_STAGE_SIGNAL_AUDIT_20260908.md`.
 
+**Typed-register bridge sinovi (2026-09-08):** `step_logits`ni 64-class typed
+value embedding sifatida keyingi recurrent queryga qaytaruvchi opt-in bridge
+2×2 nazorat bilan tekshirildi. Soft bridge + stage loss final accuracy’da
+seed17/18 `+0.990/−0.313 pp`, mean `+0.339 pp`, mean CE `−0.006420` berdi;
+stage-0 esa mean `+6.927 pp` ko‘tarildi, lekin stage-1/2 barqaror emas.
+Straight-through bridge + stage loss `+0.208/−0.156 pp`, mean `+0.026 pp`,
+mean CE `+0.008959` berdi. Ikkalasi ham `+2 pp` gate’dan o‘tmadi va
+`REJECTED FOR ADOPTION` qilindi. P-004 ochiq qoladi: keyingi sinov umumiy
+output reinjection emas, operation-conditioned typed transition bridge bo‘ladi.
+
+**Batafsil:** `results/P004_TYPED_REGISTER_BRIDGE_AUDIT_20260908.md`.
+
+**Operation-conditioned transition sinovi (2026-09-08):** state write’dan
+oldin task-conditioned low-rank adapter tekshirildi. Rank-8 2k continuation
+ikki seedda mean final accuracy `−0.026 pp`, mean CE `+0.003926` bo‘ldi.
+Rank-32 2k’da mean `+0.703 pp` accuracy va `−0.012546` CE, 5k’da esa mean
+`+0.312 pp` accuracy va `−0.023842` CE chiqdi; 5k depth-3 o‘rtacha accuracy
+`−0.521 pp` bo‘ldi. CE foydasi takrorlangan bo‘lsa ham hard-quality gate
+`+2 pp` bajarilmadi. Rank-32 transition `REJECTED FOR ADOPTION`, P-004
+`ACTIVE` qoladi; keyingi yo‘l adapterni kattalashtirish emas, reusable
+algebraic value/state primitive.
+
+**Batafsil:** `results/P004_OPERATION_TRANSITION_AUDIT_20260908.md`.
+
 ---
 
 ### P-005 — CE yaxshilanishi hard accuracy'ga aylanmayapti

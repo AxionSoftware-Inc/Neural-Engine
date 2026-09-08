@@ -34,7 +34,13 @@ class NeuralEngineV0(nn.Module):
                  router_variant: str = "global", family_count: int = 2,
                  shared_fraction: float = 0.125,
                  soft_routing_temperature: float = 0.0,
-                 route_target_supervision: bool = False):
+                 route_target_supervision: bool = False,
+                 typed_register_bridge: bool = False,
+                 register_bridge_scale: float = 1.0,
+                 register_bridge_temperature: float = 1.0,
+                 register_bridge_mode: str = "soft",
+                 operation_transition_rank: int = 0,
+                 operation_transition_scale: float = 1.0):
         super().__init__()
         if circuit_mode not in {"parallel", "serial"}:
             raise ValueError("circuit_mode must be 'parallel' or 'serial'")
@@ -95,6 +101,24 @@ class NeuralEngineV0(nn.Module):
         self.family_count = family_count
         self.shared_fraction = shared_fraction
         self.route_target_supervision = route_target_supervision
+        if register_bridge_scale < 0.0:
+            raise ValueError("register_bridge_scale must be non-negative")
+        if register_bridge_temperature <= 0.0:
+            raise ValueError("register_bridge_temperature must be positive")
+        if register_bridge_mode not in {"soft", "straight_through"}:
+            raise ValueError(
+                "register_bridge_mode must be soft or straight_through"
+            )
+        self.typed_register_bridge = bool(typed_register_bridge)
+        self.register_bridge_scale = float(register_bridge_scale)
+        self.register_bridge_temperature = float(register_bridge_temperature)
+        self.register_bridge_mode = register_bridge_mode
+        if operation_transition_rank < 0:
+            raise ValueError("operation_transition_rank must be non-negative")
+        if operation_transition_scale < 0.0:
+            raise ValueError("operation_transition_scale must be non-negative")
+        self.operation_transition_rank = int(operation_transition_rank)
+        self.operation_transition_scale = float(operation_transition_scale)
         embedding_vocab = 16 if numeric_value_encoding else vocab_size
         self.token_embedding = nn.Embedding(embedding_vocab, d_model, padding_idx=0)
         self.value_encoder = nn.Linear(1 + 2 * len(VALUE_HARMONICS), d_model) if numeric_value_encoding else None
@@ -150,6 +174,20 @@ class NeuralEngineV0(nn.Module):
             if correction_gate_mode == "route_bounded" else None
         )
         self.output = nn.Sequential(nn.LayerNorm(state_dim), nn.Linear(state_dim, num_classes))
+        self.register_value_embedding = (
+            nn.Embedding(num_classes, state_dim)
+            if self.typed_register_bridge else None
+        )
+        if self.operation_transition_rank:
+            self.operation_transition_down = nn.Parameter(torch.empty(
+                15, state_dim, self.operation_transition_rank,
+            ))
+            self.operation_transition_up = nn.Parameter(torch.empty(
+                15, self.operation_transition_rank, state_dim,
+            ))
+        else:
+            self.operation_transition_down = None
+            self.operation_transition_up = None
         nn.init.normal_(self.position_embedding, std=0.02)
         nn.init.normal_(self.position_scale, std=0.01)
         nn.init.normal_(self.position_bias, std=0.01)
@@ -164,6 +202,15 @@ class NeuralEngineV0(nn.Module):
             # default un-gated correction path.
             nn.init.zeros_(self.correction_gate.weight)
             nn.init.zeros_(self.correction_gate.bias)
+        if self.register_value_embedding is not None:
+            # A migrated checkpoint starts exactly on the old forward path;
+            # training learns the typed value basis from the stage signal.
+            nn.init.zeros_(self.register_value_embedding.weight)
+        if self.operation_transition_rank:
+            nn.init.normal_(self.operation_transition_down, std=0.02)
+            # The adapter is neutral for checkpoint migration; training learns
+            # the operation-specific update direction.
+            nn.init.zeros_(self.operation_transition_up)
         self._last_route: dict[str, torch.Tensor] = {}
 
     def encode(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -181,6 +228,16 @@ class NeuralEngineV0(nn.Module):
         else:
             encoded_input = tokens.sum(dim=1) / mask.sum(dim=1).clamp_min(1)
         return self.encoder(encoded_input)
+
+    def _operation_transition(
+        self, update: torch.Tensor, task_ids: torch.Tensor
+    ) -> torch.Tensor:
+        down = torch.einsum(
+            "bd,bdr->br", update, self.operation_transition_down[task_ids]
+        )
+        return torch.einsum(
+            "br,brd->bd", down, self.operation_transition_up[task_ids]
+        )
 
     def semantic_family_ids(self, inputs: torch.Tensor) -> torch.Tensor:
         """Return stable task-domain families without selecting a circuit ID."""
@@ -241,8 +298,25 @@ class NeuralEngineV0(nn.Module):
         halt_logits = (torch.zeros(batch_size, self.internal_steps, device=inputs.device)
                        if collect_stats else None)
         route_delta_steps = [] if collect_stats else None
+        register_context_steps = (
+            [] if collect_stats and self.typed_register_bridge else None
+        )
+        register_probability_steps = (
+            [] if collect_stats and self.typed_register_bridge else None
+        )
         last_logits = torch.zeros(batch_size, num_classes, device=inputs.device)
         active = torch.ones(batch_size, dtype=torch.bool, device=inputs.device)
+        register_context = (
+            torch.zeros(batch_size, self.state_dim, device=inputs.device)
+            if self.typed_register_bridge else None
+        )
+        register_probabilities = (
+            torch.full(
+                (batch_size, num_classes), 1.0 / num_classes,
+                device=inputs.device,
+            )
+            if self.typed_register_bridge else None
+        )
         if forced_selected_ids is not None:
             expected_shape = (batch_size, self.internal_steps, self.active_circuits)
             if tuple(forced_selected_ids.shape) != expected_shape:
@@ -279,11 +353,19 @@ class NeuralEngineV0(nn.Module):
                     query_steps.append(torch.zeros(batch_size, self.state_dim, device=inputs.device))
                     step_logits[:, step] = last_logits
                     route_delta_steps.append(torch.zeros(batch_size, self.state_dim, device=inputs.device))
+                    if self.typed_register_bridge:
+                        register_context_steps.append(register_context.clone())
+                        register_probability_steps.append(register_probabilities.clone())
                 continue
             active_state = state[active_indices]
             # A distinct query per recurrent step encourages compositional
             # paths instead of routing every step from the same representation.
             step_query = active_state + self.step_embedding[step]
+            if self.typed_register_bridge:
+                # Feed the previous predicted class through a typed value
+                # register.  This is a differentiable state bridge, not an
+                # unrestricted copy of the recurrent hidden state.
+                step_query = step_query + self.register_bridge_scale * register_context[active_indices]
             if task_context is not None:
                 step_query = step_query + task_context[active_indices]
             if collect_stats:
@@ -376,6 +458,11 @@ class NeuralEngineV0(nn.Module):
                       + self.step_embedding[step])
             if task_context is not None and self.task_context_update:
                 update = update + task_context[active_indices]
+            if self.operation_transition_rank:
+                task_ids = (inputs[:, 0] - 1).clamp(0, 14)[active_indices]
+                update = update + self.operation_transition_scale * (
+                    self._operation_transition(update, task_ids)
+                )
             proposal_state = self.state.step(active_state, update)
             if self.memory_write is not None:
                 write_input = torch.cat([active_state, update], dim=-1)
@@ -412,8 +499,31 @@ class NeuralEngineV0(nn.Module):
                 next_logits = last_logits.clone()
                 next_logits[active_indices] = updated_logits
                 last_logits = next_logits
+            if self.typed_register_bridge:
+                register_probs = torch.softmax(
+                    updated_logits / self.register_bridge_temperature, dim=-1,
+                )
+                if self.register_bridge_mode == "straight_through":
+                    hard_register = torch.zeros_like(register_probs).scatter_(
+                        1, register_probs.argmax(dim=-1, keepdim=True), 1.0,
+                    )
+                    register_probs = hard_register + register_probs - register_probs.detach()
+                predicted_register = register_probs @ self.register_value_embedding.weight
+                if active_indices.numel() == batch_size:
+                    register_context = predicted_register
+                    register_probabilities = register_probs
+                else:
+                    next_register_context = register_context.clone()
+                    next_register_context[active_indices] = predicted_register
+                    register_context = next_register_context
+                    next_register_probabilities = register_probabilities.clone()
+                    next_register_probabilities[active_indices] = register_probs
+                    register_probabilities = next_register_probabilities
             if collect_stats:
                 step_logits[:, step] = last_logits
+                if self.typed_register_bridge:
+                    register_context_steps.append(register_context.clone())
+                    register_probability_steps.append(register_probabilities.clone())
             if self.halt_head is not None:
                 updated_halt_logits = self.halt_head(updated_state).squeeze(-1)
                 if collect_stats:
@@ -443,6 +553,11 @@ class NeuralEngineV0(nn.Module):
             "executed_steps": executed_mask.sum(dim=1),
             "executed_mask": executed_mask,
         }
+        if self.typed_register_bridge:
+            stats["register_contexts"] = torch.stack(register_context_steps, dim=1)
+            stats["register_probabilities"] = torch.stack(
+                register_probability_steps, dim=1,
+            )
         if coverage_losses:
             stats["routing_coverage_loss"] = torch.stack(coverage_losses).mean()
         if routing_target_losses:
@@ -474,6 +589,11 @@ class NeuralEngineV0(nn.Module):
             shared += count_parameters(self.memory_write)
         if self.correction_gate is not None:
             shared += count_parameters(self.correction_gate)
+        if self.register_value_embedding is not None:
+            shared += count_parameters(self.register_value_embedding)
+        if self.operation_transition_rank:
+            shared += self.operation_transition_down.numel()
+            shared += self.operation_transition_up.numel()
         if self.circuit_bank_mode == "shared_residual":
             shared += self.circuits.shared_down.numel()
             shared += self.circuits.shared_up.numel()
@@ -489,4 +609,8 @@ class NeuralEngineV0(nn.Module):
             "circuit_bank_mode": self.circuit_bank_mode,
             "shared_rank": self.shared_rank,
             "route_exploration_prob": self.route_exploration_prob,
+            "typed_register_bridge": self.typed_register_bridge,
+            "register_bridge_mode": self.register_bridge_mode,
+            "operation_transition_rank": self.operation_transition_rank,
+            "operation_transition_scale": self.operation_transition_scale,
         }

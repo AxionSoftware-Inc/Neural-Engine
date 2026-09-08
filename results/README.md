@@ -1291,6 +1291,21 @@ rejected for adoption; P-004 remains open for an explicit typed register or
 operation-conditioned state transition bridge. No 700M/1B scale follows from
 this result. See `P004_COMPOSITION_STAGE_SIGNAL_AUDIT_20260908.md`.
 
+The follow-up typed-register bridge 2×2 audit also failed adoption. Soft
+bridge + composition stage loss gave only `+0.339 pp` mean final accuracy
+with `−0.006420` mean CE; stage-0 rose `+6.927 pp` but later stages were not
+stable. Straight-through mode gave `+0.026 pp` and worsened CE by `+0.008959`.
+The bridge remains opt-in research code; P-004 next targets an
+operation-conditioned typed transition, not more output reinjection or scale.
+See `P004_TYPED_REGISTER_BRIDGE_AUDIT_20260908.md`.
+
+The operation-conditioned low-rank state-transition follow-up also failed the
+hard-quality gate. Rank-32 improved mean CE by `−0.012546` at 2k and
+`−0.023842` at 5k, but mean final accuracy rose only `+0.703/+0.312 pp`; the
+5k depth-3 mean fell `0.521 pp`. The adapter is rejected for adoption and
+P-004 now points to a reusable algebraic value/state primitive. See
+`P004_OPERATION_TRANSITION_AUDIT_20260908.md`.
+
 2026-09-08 P-001 route-neighborhood audit separates one-swap regret inside the
 32-circuit candidate pool from a full-bank key top-8 probe. Local selection
 headroom is `0.00357–0.00506 CE`; extra target-evaluated retrieval opportunity

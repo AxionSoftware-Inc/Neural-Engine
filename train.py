@@ -74,12 +74,21 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["shared_fraction"] = config.get("shared_fraction", 0.125)
     model_kwargs["soft_routing_temperature"] = config.get("soft_routing_temperature", 0.0)
     model_kwargs["route_target_supervision"] = config.get("route_target_supervision", False)
+    model_kwargs["typed_register_bridge"] = config.get("typed_register_bridge", False)
+    model_kwargs["register_bridge_scale"] = config.get("register_bridge_scale", 1.0)
+    model_kwargs["register_bridge_temperature"] = config.get("register_bridge_temperature", 1.0)
+    model_kwargs["register_bridge_mode"] = config.get("register_bridge_mode", "soft")
+    model_kwargs["operation_transition_rank"] = config.get("operation_transition_rank", 0)
+    model_kwargs["operation_transition_scale"] = config.get("operation_transition_scale", 1.0)
     if config.get("architecture") == "typed_register":
         for key in ("task_context", "task_context_update", "adaptive_halting",
                     "halt_threshold", "routing_coverage_temperature",
                     "input_reinjection", "circuit_delta_scale", "correction_gate_mode",
                     "memory_write_mode", "post_correction_residual_scale", "router_variant",
                     "soft_routing_temperature", "route_target_supervision",
+                    "typed_register_bridge", "register_bridge_scale",
+                    "register_bridge_temperature", "register_bridge_mode",
+                    "operation_transition_rank", "operation_transition_scale",
                     "routing_reuse_weight", "routing_reuse_start_level",
                     "input_reinjection_schedule"):
             model_kwargs.pop(key, None)

@@ -104,6 +104,62 @@ def test_task_context_binds_operation_identity():
     assert not torch.allclose(first_logits, second_logits)
 
 
+def test_typed_register_bridge_reinjects_predicted_value_and_backpropagates():
+    model = NeuralEngineV0(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=64, circuit_rank=4, router_branch=4, router_depth=2,
+        candidate_pool=8, active_circuits=2, internal_steps=3,
+        typed_register_bridge=True,
+    )
+    inputs = torch.randint(1, 8, (4, 8))
+    logits, stats = model(inputs, adaptive=False)
+
+    assert logits.shape == (4, 64)
+    assert stats["register_contexts"].shape == (4, 3, 32)
+    logits.square().mean().backward()
+    assert model.register_value_embedding.weight.grad is not None
+    assert torch.isfinite(model.register_value_embedding.weight.grad).all()
+
+
+def test_typed_register_bridge_straight_through_has_hard_forward_register():
+    model = NeuralEngineV0(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=64, circuit_rank=4, router_branch=4, router_depth=2,
+        candidate_pool=8, active_circuits=2, internal_steps=3,
+        typed_register_bridge=True, register_bridge_mode="straight_through",
+    )
+    inputs = torch.randint(1, 8, (4, 8))
+    _, stats = model(inputs, adaptive=False)
+    probabilities = stats["register_probabilities"]
+    assert probabilities.shape == (4, 3, 64)
+    assert torch.allclose(probabilities.sum(dim=-1), torch.ones(4, 3))
+    assert bool(probabilities.eq(0).sum(dim=-1).eq(63).all())
+
+
+def test_operation_transition_adapter_is_neutral_until_trained_and_has_gradients():
+    model = NeuralEngineV0(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=64, circuit_rank=4, router_branch=4, router_depth=2,
+        candidate_pool=8, active_circuits=2, internal_steps=3,
+        operation_transition_rank=4,
+    )
+    batch = SyntheticTaskGenerator(seq_len=8, seed=72).batch(4)
+    baseline = NeuralEngineV0(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=64, circuit_rank=4, router_branch=4, router_depth=2,
+        candidate_pool=8, active_circuits=2, internal_steps=3,
+    )
+    baseline.load_state_dict(model.state_dict(), strict=False)
+    with torch.no_grad():
+        transition_logits, _ = model(batch.inputs, adaptive=False)
+        baseline_logits, _ = baseline(batch.inputs, adaptive=False)
+    assert torch.allclose(transition_logits, baseline_logits)
+    loss = torch.nn.functional.cross_entropy(model(batch.inputs)[0], batch.targets)
+    loss.backward()
+    assert model.operation_transition_up.grad is not None
+    assert torch.isfinite(model.operation_transition_up.grad).all()
+
+
 def test_serial_circuit_mode_has_same_shapes_and_gradients():
     model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
                            num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,
