@@ -29,6 +29,7 @@ class HierarchicalRouter(nn.Module):
         if soft_routing_temperature < 0.0:
             raise ValueError("soft_routing_temperature must be non-negative")
         self.soft_routing_temperature = soft_routing_temperature
+        self.route_weight_mode = "natural"
         self.routing_capacity = num_circuits if routing_capacity is None else int(routing_capacity)
         self.active_depth = depth if routing_depth is None else int(routing_depth)
         if not 0 < self.routing_capacity <= num_circuits:
@@ -60,6 +61,12 @@ class HierarchicalRouter(nn.Module):
             raise ValueError("routing depth must be between 1 and depth")
         self.routing_capacity = next_capacity
         self.active_depth = next_depth
+
+    def set_route_weight_mode(self, mode: str) -> None:
+        """Choose natural key-softmax or uniform weights for hard routes."""
+        if mode not in {"natural", "uniform"}:
+            raise ValueError("route weight mode must be 'natural' or 'uniform'")
+        self.route_weight_mode = mode
 
     def enable_candidate_score_residual(self, hidden_dim: int = 32) -> None:
         """Add a zero-initialized nonlinear correction to candidate scores.
@@ -243,7 +250,10 @@ class HierarchicalRouter(nn.Module):
         else:
             top_values, top_positions = candidate_logits.topk(self.active_circuits, dim=-1)
             selected_ids = candidate_ids.gather(1, top_positions)
-            weights = F.softmax(top_values, dim=-1)
+            if self.route_weight_mode == "uniform":
+                weights = torch.full_like(top_values, 1.0 / self.active_circuits)
+            else:
+                weights = F.softmax(top_values, dim=-1)
         # The address is hard/structured for execution, but this small gain
         # keeps the chosen tree path connected to the task loss for learning.
         path_score = path_score_total / self.num_addresses

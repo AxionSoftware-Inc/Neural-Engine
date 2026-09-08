@@ -128,6 +128,17 @@ PRIMARY FIX`; default o‘zgarmadi.
 
 **Audit:** `results/P001_ROUTE_WEIGHT_ABLATION_AUDIT_20260908.md`.
 
+**Uniform-weight continuation (2026-09-08):** 20M seed17/18da natural
+query-key top-8 weight bilan control va uniform `1/K` weight bilan treatment
+2,000 continuation step yurdi. Uniform deployment seed17’da `−0.002880 CE,
++1.094 pp`, seed18’da `+0.002210 CE, −0.104 pp` berdi; o‘rtacha
+`−0.000335 CE, +0.495 pp`. Treatmentni natural weight bilan eval qilganda ham
+o‘rtacha `−0.000247 CE, +0.521 pp` bo‘ldi. Seedlar orasida barqarorlik va `+2
+pp` gate yo‘q; weighting primary fix sifatida `REJECTED FOR ADOPTION`, natural
+default saqlandi.
+
+**Audit:** `results/P001_UNIFORM_WEIGHT_CONTINUATION_AUDIT_20260908.md`.
+
 **Route-neighborhood audit (2026-09-08):** 100M/300M/500M seed17/18 frozen
 checkpointlarda natural route uchun bir circuitlik one-swap qidiruv qilindi.
 Candidate pool ichidagi local selection headroom `0.00357–0.00506 CE` bo‘ldi.

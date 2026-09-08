@@ -45,6 +45,18 @@ def test_candidate_score_residual_starts_as_exact_route_control_and_trains():
     assert router.candidate_score_residual[-1].weight.grad is not None
 
 
+def test_uniform_route_weight_mode_preserves_selection_and_normalizes_weights():
+    router = HierarchicalRouter(16, num_circuits=64, branch=4, depth=2,
+                                candidate_pool=8, active_circuits=4)
+    state = torch.randn(7, 16)
+    natural_selected, _, _ = router(state)
+    router.set_route_weight_mode("uniform")
+    uniform_selected, uniform_weights, _ = router(state)
+    assert torch.equal(natural_selected, uniform_selected)
+    assert torch.allclose(uniform_weights, torch.full_like(uniform_weights, 0.25))
+    assert torch.allclose(uniform_weights.sum(-1), torch.ones(7))
+
+
 def test_router_target_supervision_reaches_tree_and_keys():
     router = HierarchicalRouter(32, num_circuits=32, branch=4, depth=3,
                                 candidate_pool=8, active_circuits=2)

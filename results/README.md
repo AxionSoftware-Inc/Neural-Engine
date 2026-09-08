@@ -1259,6 +1259,14 @@ only `−0.000201 CE` and `−0.009 pp` accuracy; top-1 weighting regresses by
 `+0.021070 CE` and `−0.391 pp`. Soft mixing matters, but weighting is not the
 primary capacity-scaling fix. See `P001_ROUTE_WEIGHT_ABLATION_AUDIT_20260908.md`.
 
+2026-09-08 uniform-weight continuation on matched 20M seed17/18 checkpoints
+gives `+0.495 pp` mean held-out accuracy and `−0.000335` mean CE under uniform
+deployment; seed17 improves but seed18 regresses. Natural-weight evaluation
+of the treatment is similarly seed-dependent (`+0.521 pp` mean), so the
+effect is not a reliable two-seed fix and does not meet the `+2 pp` gate. The
+natural route-weight default remains. See
+`P001_UNIFORM_WEIGHT_CONTINUATION_AUDIT_20260908.md`.
+
 2026-09-08 P-001 route-neighborhood audit separates one-swap regret inside the
 32-circuit candidate pool from a full-bank key top-8 probe. Local selection
 headroom is `0.00357–0.00506 CE`; extra target-evaluated retrieval opportunity
