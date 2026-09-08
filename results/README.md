@@ -1336,6 +1336,21 @@ parameters, but hard composition tasks did not improve consistently. The
 bridge remains opt-in research code and P-004 stays active.
 See `P004_FOURIER_REGISTER_BRIDGE_AUDIT_20260908.md`.
 
+The recurrent state information probe found substantial but incomplete
+held-out decodability of prior intermediate values: nonlinear probes reached
+`67.27%` for stage-0 carry and `51.32%` for stage-1 carry across the
+100M/300M/500M seed17/18 checkpoints, while the direct stage outputs reached
+`67.60%` and `60.04%`. The signal did not grow materially with capacity, so
+the next test was a state-history skip rather than a larger readout head.
+See `P004_STATE_INFORMATION_PROBE_AUDIT_20260908.md`.
+
+The 5k state-history continuation gave history+stage mean accuracy `+0.781 pp`
+over final-loss controls across 20M seed17/18/19; matching history-free
+stage-only controls gave `+0.139 pp`. The approximate history interaction was
+`+0.642 pp` accuracy but `+0.007819` CE, below the adoption gate and with
+remaining seed variance. State history remains opt-in and P-004 stays active.
+See `P004_STATE_HISTORY_AUDIT_20260908.md`.
+
 2026-09-08 P-001 route-neighborhood audit separates one-swap regret inside the
 32-circuit candidate pool from a full-bank key top-8 probe. Local selection
 headroom is `0.00357–0.00506 CE`; extra target-evaluated retrieval opportunity

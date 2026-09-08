@@ -84,6 +84,8 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["state_stage_head"] = config.get("state_stage_head", False)
     model_kwargs["operation_transition_rank"] = config.get("operation_transition_rank", 0)
     model_kwargs["operation_transition_scale"] = config.get("operation_transition_scale", 1.0)
+    model_kwargs["state_history_mode"] = config.get("state_history_mode", "none")
+    model_kwargs["state_history_scale"] = config.get("state_history_scale", 1.0)
     if config.get("architecture") == "typed_register":
         for key in ("task_context", "task_context_update", "adaptive_halting",
                     "halt_threshold", "routing_coverage_temperature",
@@ -97,6 +99,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
                     "register_slot_read_mode",
                     "state_stage_head",
                     "operation_transition_rank", "operation_transition_scale",
+                    "state_history_mode", "state_history_scale",
                     "routing_reuse_weight", "routing_reuse_start_level",
                     "input_reinjection_schedule"):
             model_kwargs.pop(key, None)

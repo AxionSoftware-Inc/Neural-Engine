@@ -157,6 +157,21 @@ def test_typed_register_bridge_fourier_basis_reuses_numeric_coordinates():
     assert torch.isfinite(model.register_value_projection.weight.grad).all()
 
 
+def test_state_history_sum_adds_only_older_state_to_later_query():
+    model = NeuralEngineV0(
+        vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,
+        num_circuits=64, circuit_rank=4, router_branch=4, router_depth=2,
+        candidate_pool=8, active_circuits=2, internal_steps=3,
+        state_history_mode="sum", state_history_scale=0.5,
+    )
+    inputs = torch.randint(1, 8, (4, 8))
+    _, stats = model(inputs, adaptive=False)
+
+    assert stats["query_states"].shape == (4, 3, 32)
+    assert model.parameter_report()["state_history_mode"] == "sum"
+    assert model.parameter_report()["state_history_scale"] == 0.5
+
+
 def test_typed_register_bridge_can_preserve_multiple_intermediate_slots():
     model = NeuralEngineV0(
         vocab_size=128, num_classes=64, seq_len=8, d_model=32, state_dim=32,

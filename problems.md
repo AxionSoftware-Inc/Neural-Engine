@@ -1105,3 +1105,25 @@ chiqmadi. Fourier representation reuse **REJECTED FOR ADOPTION**; P-004
 operator/state dataflow yoki circuit specializationni nishonga olishi kerak.
 
 **Batafsil:** `results/P004_FOURIER_REGISTER_BRIDGE_AUDIT_20260908.md`.
+
+**Recurrent state information probe (2026-09-08):** 100M/300M/500M seed17/18
+frozen checkpointlarda query state oldingi intermediate targetni chance
+`1.5625%` emas, linear probe’da step1 `59.59%`, step2 `45.14%` va nonlinear
+probe’da mos ravishda `67.27%`, `51.32%` held-out accuracy bilan olib yurishi
+ko‘rsatildi. Direct stage output `67.60%/60.04%` bo‘lib, nonlinear probe’dan
+ustun qoldi. Demak ma’lumot state’da butunlay yo‘qolmayapti, ammo capacity
+oshganda signal monotonik kuchaymayapti; P-004ning asosiy ceilingi state’dan
+keyingi operation uchun foydali composition olishda.
+
+**Batafsil:** `results/P004_STATE_INFORMATION_PROBE_AUDIT_20260908.md`.
+
+**State-history skip sinovi (2026-09-08):** oldingi recurrent state’larni
+step-2 query’ga parameter-free normalized sum sifatida berish 20M seed17/18/19
+5k continuationda history+stage treatment sifatida tekshirildi. Final accuracy
+delta `+0.260/+1.146/+0.938 pp`, o‘rtacha `+0.781 pp`; matching history’siz
+stage-only control o‘rtachasi `+0.139 pp` bo‘ldi. History interaction accuracy
+taxminan `+0.642 pp`, lekin CE interaction `+0.007819` yomonlashdi; history-only
+2k o‘rtachasi `−0.078 pp`. Shuning uchun bu faqat zaif diagnostik signal:
+opt-in qoldi, default va scale o‘zgarmadi. P-004 `ACTIVE` qoladi.
+
+**Batafsil:** `results/P004_STATE_HISTORY_AUDIT_20260908.md`.

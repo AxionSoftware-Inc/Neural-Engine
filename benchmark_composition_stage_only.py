@@ -24,9 +24,13 @@ from neural_engine.model import NeuralEngineV0
 from train import make_model, seed_everything
 
 
-def _load_checkpoint(path: Path, device: torch.device) -> tuple[NeuralEngineV0, dict]:
+def _load_checkpoint(path: Path, device: torch.device,
+                     state_history_mode: str = "none",
+                     state_history_scale: float = 1.0) -> tuple[NeuralEngineV0, dict]:
     payload = torch.load(path, map_location="cpu", weights_only=True)
     config = dict(payload["config"])
+    config["state_history_mode"] = state_history_mode
+    config["state_history_scale"] = state_history_scale
     model = make_model(config)
     if not isinstance(model, NeuralEngineV0):
         raise ValueError("composition stage continuation requires NeuralEngineV0")
@@ -177,7 +181,9 @@ def _train_pair(control: NeuralEngineV0, treatment: NeuralEngineV0,
 
 
 def _run(path: Path, args: argparse.Namespace, device: torch.device) -> dict:
-    base, config = _load_checkpoint(path, device)
+    base, config = _load_checkpoint(
+        path, device, args.state_history_mode, args.state_history_scale,
+    )
     control = copy.deepcopy(base)
     treatment = copy.deepcopy(base)
     eval_batches = _make_eval_batches(
@@ -221,6 +227,9 @@ def main() -> None:
     parser.add_argument("--checkpoint", action="append", required=True)
     parser.add_argument("--steps", type=int, default=2000)
     parser.add_argument("--stage-loss-weight", type=float, default=0.1)
+    parser.add_argument("--state-history-mode", choices=("none", "sum"),
+                        default="none")
+    parser.add_argument("--state-history-scale", type=float, default=1.0)
     parser.add_argument("--eval-batches", type=int, default=4)
     parser.add_argument("--eval-examples-per-task", type=int, default=32)
     parser.add_argument("--device", default="cuda")
@@ -233,6 +242,8 @@ def main() -> None:
         "device": str(device),
         "steps": int(args.steps),
         "stage_loss_weight": float(args.stage_loss_weight),
+        "state_history_mode": args.state_history_mode,
+        "state_history_scale": float(args.state_history_scale),
         "checkpoints": [],
     }
     for checkpoint_name in args.checkpoint:

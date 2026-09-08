@@ -44,7 +44,9 @@ class NeuralEngineV0(nn.Module):
                  register_slot_read_mode: str = "sum",
                  state_stage_head: bool = False,
                  operation_transition_rank: int = 0,
-                 operation_transition_scale: float = 1.0):
+                 operation_transition_scale: float = 1.0,
+                 state_history_mode: str = "none",
+                 state_history_scale: float = 1.0):
         super().__init__()
         if circuit_mode not in {"parallel", "serial"}:
             raise ValueError("circuit_mode must be 'parallel' or 'serial'")
@@ -131,8 +133,14 @@ class NeuralEngineV0(nn.Module):
             raise ValueError("operation_transition_rank must be non-negative")
         if operation_transition_scale < 0.0:
             raise ValueError("operation_transition_scale must be non-negative")
+        if state_history_mode not in {"none", "sum"}:
+            raise ValueError("state_history_mode must be none or sum")
+        if state_history_scale < 0.0:
+            raise ValueError("state_history_scale must be non-negative")
         self.operation_transition_rank = int(operation_transition_rank)
         self.operation_transition_scale = float(operation_transition_scale)
+        self.state_history_mode = state_history_mode
+        self.state_history_scale = float(state_history_scale)
         embedding_vocab = 16 if numeric_value_encoding else vocab_size
         self.token_embedding = nn.Embedding(embedding_vocab, d_model, padding_idx=0)
         self.value_encoder = nn.Linear(1 + 2 * len(VALUE_HARMONICS), d_model) if numeric_value_encoding else None
@@ -347,6 +355,7 @@ class NeuralEngineV0(nn.Module):
             raise ValueError("adaptive inference requires adaptive_halting=True")
         encoded = self.encode(inputs)
         state = self.state.initialize(encoded)
+        state_history = [] if self.state_history_mode == "sum" else None
         task_context = None
         if self.task_context_embedding is not None:
             task_ids = (inputs[:, 0] - 1).clamp(0, self.task_context_embedding.num_embeddings - 1)
@@ -455,6 +464,14 @@ class NeuralEngineV0(nn.Module):
             # A distinct query per recurrent step encourages compositional
             # paths instead of routing every step from the same representation.
             step_query = active_state + self.step_embedding[step]
+            if state_history is not None and step > 1:
+                # The current state already contains the immediately previous
+                # stage.  Add older states as a bounded skip-history so a
+                # later operation can reuse an earlier partial result without
+                # overwriting it in the single GRU state.
+                history = torch.stack(state_history[:step - 1], dim=1).sum(dim=1)
+                history = history / (step - 1) ** 0.5
+                step_query = step_query + self.state_history_scale * history[active_indices]
             if self.typed_register_bridge:
                 # Feed the previous predicted class through a typed value
                 # register.  This is a differentiable state bridge, not an
@@ -579,6 +596,8 @@ class NeuralEngineV0(nn.Module):
                 next_state = state.clone()
                 next_state[active_indices] = updated_state
                 state = next_state
+            if state_history is not None:
+                state_history.append(state)
             if collect_stats:
                 selected_step[active_indices] = selected
                 selected_steps.append(selected_step)
@@ -737,4 +756,6 @@ class NeuralEngineV0(nn.Module):
             "state_stage_head": self.state_stage_head_enabled,
             "operation_transition_rank": self.operation_transition_rank,
             "operation_transition_scale": self.operation_transition_scale,
+            "state_history_mode": self.state_history_mode,
+            "state_history_scale": self.state_history_scale,
         }
