@@ -1127,3 +1127,14 @@ taxminan `+0.642 pp`, lekin CE interaction `+0.007819` yomonlashdi; history-only
 opt-in qoldi, default va scale o‘zgarmadi. P-004 `ACTIVE` qoladi.
 
 **Batafsil:** `results/P004_STATE_HISTORY_AUDIT_20260908.md`.
+
+**Task-scaled history sinovi (2026-09-08):** har bir 15 task uchun alohida
+o‘rganiladigan history read-scale qo‘shildi. 20M seed17/18 2k matching
+continuationda final accuracy deltalari `+0.885/-0.729 pp`, o‘rtachasi
+`+0.078 pp`; mean CE `+0.00002679` yomonlashdi. Stage-0 ikkala seedda oshgan,
+ammo keyingi stage’lar sign-flip qilgan. Shuning uchun task-specific scale
+`REJECTED FOR ADOPTION`; 100M+ ga scale qilinmaydi. P-004 `ACTIVE` qoladi va
+keyingi yo‘l operation-specific state write/read yoki aniq intermediate-value
+dataflow bo‘ladi.
+
+**Batafsil:** `results/P004_STATE_HISTORY_TASK_SCALE_AUDIT_20260908.md`.

@@ -1351,6 +1351,15 @@ stage-only controls gave `+0.139 pp`. The approximate history interaction was
 remaining seed variance. State history remains opt-in and P-004 stays active.
 See `P004_STATE_HISTORY_AUDIT_20260908.md`.
 
+The task-scaled state-history follow-up was rejected. Fifteen learned
+per-task history read scales improved final accuracy by `+0.885 pp` on seed17
+but regressed `−0.729 pp` on seed18; the mean was only `+0.078 pp` and mean CE
+worsened by `+0.00002679`. Stage-0 improved in both seeds, while later stages
+flipped sign. The patch adds only 15 scalars and remains opt-in for
+reproducibility, but it is not scaled or made default. P-004 therefore still
+targets operation-specific state write/read or an explicit intermediate-value
+dataflow. See `P004_STATE_HISTORY_TASK_SCALE_AUDIT_20260908.md`.
+
 2026-09-08 P-001 route-neighborhood audit separates one-swap regret inside the
 32-circuit candidate pool from a full-bank key top-8 probe. Local selection
 headroom is `0.00357–0.00506 CE`; extra target-evaluated retrieval opportunity

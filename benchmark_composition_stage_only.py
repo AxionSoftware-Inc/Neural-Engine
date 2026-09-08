@@ -34,7 +34,18 @@ def _load_checkpoint(path: Path, device: torch.device,
     model = make_model(config)
     if not isinstance(model, NeuralEngineV0):
         raise ValueError("composition stage continuation requires NeuralEngineV0")
-    model.load_state_dict(payload["model_state"])
+    missing, unexpected = model.load_state_dict(
+        payload["model_state"], strict=False,
+    )
+    expected_missing = (
+        ["state_history_task_scales"]
+        if state_history_mode == "task_scaled" else []
+    )
+    if sorted(missing) != sorted(expected_missing) or unexpected:
+        raise ValueError(
+            f"unexpected checkpoint mismatch: missing={missing}, "
+            f"unexpected={unexpected}"
+        )
     model.to(device)
     return model, config
 
@@ -227,7 +238,7 @@ def main() -> None:
     parser.add_argument("--checkpoint", action="append", required=True)
     parser.add_argument("--steps", type=int, default=2000)
     parser.add_argument("--stage-loss-weight", type=float, default=0.1)
-    parser.add_argument("--state-history-mode", choices=("none", "sum"),
+    parser.add_argument("--state-history-mode", choices=("none", "sum", "task_scaled"),
                         default="none")
     parser.add_argument("--state-history-scale", type=float, default=1.0)
     parser.add_argument("--eval-batches", type=int, default=4)
