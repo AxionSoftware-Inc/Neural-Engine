@@ -21,6 +21,7 @@
 - [Runtime — Native small-batch baseline and stats-free path](RUNTIME_NATIVE_SMALL_BATCH_BASELINE_20260908.md)
 - [Runtime — Qwen one-token selected-dispatch fast path](RUNTIME_QWEN_SINGLE_TOKEN_FAST_PATH_20260908.md)
 - [Runtime — Qwen one-token router overhead ablation](RUNTIME_QWEN_ROUTER_OVERHEAD_20260908.md)
+- [Runtime — Qwen fixed-shape CUDA Graph replay](RUNTIME_QWEN_CUDA_GRAPH.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)

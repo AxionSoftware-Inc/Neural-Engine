@@ -523,6 +523,17 @@ router+top-k+dispatch kernelidan kelishi kerak; oddiy router MLPni
 kichraytirishning o‘zi yetarli emas. Batafsil:
 `results/RUNTIME_QWEN_ROUTER_OVERHEAD_20260908.md`.
 
+**V0.195 fixed-shape CUDA Graph replay (2026-09-09):** Qwen3-0.6B sakkiz
+qatlamli `batch=1, sequence=1` smoke’da K=5 graph replay `13.730 ms` va
+`0.467x` dense parent, K=6 esa `17.087 ms` va `0.588x` parent bo‘ldi; eager
+sparse yo‘l mos ravishda `31.919/33.963 ms` edi. Graph/eager max logit farqi
+`1.6e-5` ichida qoldi. Bu fixed-shape launch overheadi katta ekanini va
+runtime uchun kuchli yangi signal borligini ko‘rsatadi. Router/circuit
+matematikasi o‘zgarmadi, child’lar o‘qitilmagan runtime smoke bo‘lgani uchun
+quality claim emas. `ACCEPTED OPT-IN`; trained K=5/K=6, `use_cache`, input
+buffer update va dynamic shape auditlari hali ochiq. Batafsil:
+`results/RUNTIME_QWEN_CUDA_GRAPH.md`.
+
 ## Yopilgan yoki rad qilingan yo‘llar
 
 Bu bo‘lim aktiv muammolarni to‘ldiradi; muvaffaqiyatsiz tajribalar o‘chirilmaydi.

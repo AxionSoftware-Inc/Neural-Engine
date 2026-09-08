@@ -56,11 +56,15 @@ it does not validate replacing the whole Transformer, including attention.
 The Qwen selected-token correction dispatch was repaired in V0.193. The old
 hard-path gather measured about `2.135x` dense; the comparable smoke measured
 `1.128x`, and the trained two-seed timing was approximately `0.99x/1.00x`.
-True one-token decode is still slower (`1.371x/1.403x` for K=5/K=6), so the
-next runtime milestone is a compiled decode kernel rather than another router
-rewrite. Native's stats-free serving path already removes diagnostic tensor
-overhead (`23.5%` faster at batch-1 in the first smoke); it remains opt-in
-until a production caller is wired to it.
+True one-token eager decode was still slower (`1.371x/1.403x` for K=5/K=6),
+but a fixed-shape CUDA Graph replay smoke on eight layers reached `0.467x`
+of the dense parent at K=5 and `0.588x` at K=6, with max eager-logit error
+`1.6e-5`. This is a positive opt-in runtime result, not yet a trained
+`use_cache` serving claim. The next milestone is a trained K=5 graph audit
+with input-buffer updates and a small shape cache. Native's stats-free
+serving path already removes diagnostic tensor overhead (`23.5%` faster at
+batch-1 in the first smoke); it remains opt-in until a production caller is
+wired to it.
 
 ## Problem ownership
 
