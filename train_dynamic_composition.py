@@ -48,6 +48,32 @@ def output_loss(
     )
 
 
+def structured_scalar_contract_loss(
+    model: DynamicRegisterNeuralEngine,
+    stats: dict[str, torch.Tensor],
+    stage_targets: torch.Tensor,
+    stage_mask: torch.Tensor,
+    target_offset: int,
+    target_scale: float,
+) -> torch.Tensor:
+    """Supervise the learned scalar packet against raw intermediate values."""
+    if not model.structured_scalar_state:
+        return stage_targets.new_zeros((), dtype=torch.float32)
+    values = stats["structured_scalar_states"]
+    terms = []
+    for stage in range(model.max_ops):
+        mask = stage_mask[:, stage]
+        if mask.any():
+            predicted = values[mask, stage] / target_scale
+            target = (
+                stage_targets[mask, stage].to(predicted.dtype) - target_offset
+            ) / target_scale
+            terms.append(nn.functional.smooth_l1_loss(predicted, target))
+    if not terms:
+        return values.new_zeros(())
+    return torch.stack(terms).mean()
+
+
 def seed_everything(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
@@ -67,6 +93,7 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "input_reinjection_scale", "write_gate", "value_encoder_mode",
         "factor_mix_mode", "route_context_mode", "modular_prior",
         "state_layout",
+        "state_update_mode", "state_residual_scale",
         "predecessor_operation_context",
         "operation_adapter_rank", "operation_adapter_scale",
         "operation_adapter_gate",
@@ -78,6 +105,7 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "operation_transition_rank", "operation_transition_scale",
         "structured_scalar_state", "structured_scalar_scale",
         "structured_scalar_read_scale",
+        "structured_scalar_authoritative",
         "operator_valued_product_encoder", "operator_valued_packet_width",
         "operator_valued_basis_count",
         "numeric_state_dim", "numeric_state_scale",
@@ -347,6 +375,23 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                         ))
             if stage_losses:
                 loss = loss + stage_weight * torch.stack(stage_losses).mean()
+        contract_weight = float(config.get("structured_scalar_contract_loss_weight", 0.0))
+        if (
+            contract_weight
+            and batch.stage_targets is not None
+            and batch.stage_mask is not None
+        ):
+            contract_scale = float(config.get("structured_scalar_target_scale", 1.0))
+            if contract_scale <= 0.0:
+                raise ValueError("structured_scalar_target_scale must be positive")
+            loss = loss + contract_weight * structured_scalar_contract_loss(
+                model,
+                stats,
+                batch.stage_targets,
+                batch.stage_mask,
+                target_offset,
+                contract_scale,
+            )
         loss = loss - 0.0001 * stats["router_entropy"]
         if not torch.isfinite(loss):
             raise FloatingPointError(f"non-finite loss at step {step}")
@@ -379,6 +424,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "evaluation": eval_eval,
         "train_loss_first": losses[0],
         "train_loss_last": losses[-1],
+        "structured_scalar_contract_loss_weight": float(
+            config.get("structured_scalar_contract_loss_weight", 0.0)
+        ),
+        "structured_scalar_target_scale": float(
+            config.get("structured_scalar_target_scale", 1.0)
+        ),
     }
     report.update(model.parameter_report())
     output_path = Path(args.output) / f"{args.run_id}.json"

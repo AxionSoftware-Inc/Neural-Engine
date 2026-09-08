@@ -121,6 +121,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         factor_mix_mode: str = "per_address",
         route_context_mode: str = "full",
         state_layout: str = "flat",
+        state_update_mode: str = "overwrite",
+        state_residual_scale: float = 0.25,
         predecessor_operation_context: bool = False,
         operation_adapter_rank: int = 0,
         operation_adapter_scale: float = 1.0,
@@ -137,6 +139,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         structured_scalar_state: bool = False,
         structured_scalar_scale: float = 1.0,
         structured_scalar_read_scale: float = 0.0,
+        structured_scalar_authoritative: bool = False,
         operator_valued_product_encoder: bool = False,
         operator_valued_packet_width: int = 16,
         operator_valued_basis_count: int = 8,
@@ -194,6 +197,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("state_layout must be flat or dual_slot")
         if state_layout == "dual_slot" and state_dim % 2:
             raise ValueError("state_dim must be even for dual_slot state layout")
+        if state_update_mode not in {"overwrite", "residual"}:
+            raise ValueError("state_update_mode must be overwrite or residual")
+        if state_residual_scale < 0.0:
+            raise ValueError("state_residual_scale must be non-negative")
         if operation_adapter_rank < 0:
             raise ValueError("operation_adapter_rank must be non-negative")
         if operation_adapter_scale < 0.0:
@@ -221,6 +228,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("structured_scalar_scale must be non-negative")
         if structured_scalar_read_scale < 0.0:
             raise ValueError("structured_scalar_read_scale must be non-negative")
+        if structured_scalar_authoritative and not structured_scalar_state:
+            raise ValueError("structured_scalar_authoritative requires structured_scalar_state")
         if operator_valued_packet_width < 1:
             raise ValueError("operator_valued_packet_width must be positive")
         if operator_valued_basis_count < 1:
@@ -287,6 +296,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("factor_pair_scale must be non-negative")
         self.route_context_mode = route_context_mode
         self.state_layout = state_layout
+        self.state_update_mode = state_update_mode
+        self.state_residual_scale = float(state_residual_scale)
         self.predecessor_operation_context = bool(predecessor_operation_context)
         self.operation_adapter_rank = int(operation_adapter_rank)
         self.operation_adapter_scale = float(operation_adapter_scale)
@@ -303,6 +314,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.structured_scalar_state = bool(structured_scalar_state)
         self.structured_scalar_scale = float(structured_scalar_scale)
         self.structured_scalar_read_scale = float(structured_scalar_read_scale)
+        self.structured_scalar_authoritative = bool(structured_scalar_authoritative)
         self.operator_valued_product_encoder = bool(operator_valued_product_encoder)
         self.operator_valued_packet_width = int(operator_valued_packet_width)
         self.operator_valued_basis_count = int(operator_valued_basis_count)
@@ -776,7 +788,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
                             active_accumulator, current_operation_ids
                         )
                     )
-                if self.structured_scalar_state and self.structured_scalar_read_scale:
+                if (
+                    self.structured_scalar_state
+                    and self.structured_scalar_authoritative
+                ):
+                    read_accumulator = self.structured_scalar_projection(
+                        scalar_state[active_indices].unsqueeze(-1)
+                    )
+                elif self.structured_scalar_state and self.structured_scalar_read_scale:
                     scalar_read = self.structured_scalar_projection(
                         scalar_state[active_indices].unsqueeze(-1)
                     )
@@ -921,6 +940,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
                         )
                     )
                 candidate = self._write_state(active_accumulator, write_input)
+                if self.state_update_mode == "residual":
+                    candidate = active_accumulator + self.state_residual_scale * candidate
                 if self.operation_write_adapter_rank:
                     if self.operation_write_adapter_mode == "post_state":
                         candidate = candidate + self.operation_write_adapter_scale * (
@@ -1009,11 +1030,15 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     numeric_state
                 )
             if self.structured_scalar_state:
-                step_state = step_state + self.structured_scalar_scale * (
-                    self.structured_scalar_projection(
-                        scalar_state.unsqueeze(-1)
-                    )
+                scalar_projection = self.structured_scalar_projection(
+                    scalar_state.unsqueeze(-1)
                 )
+                if self.structured_scalar_authoritative:
+                    step_state = scalar_projection
+                else:
+                    step_state = step_state + self.structured_scalar_scale * (
+                        scalar_projection
+                    )
             if self.modular_prior_enabled:
                 if self.modular_prior_mode == "fixed":
                     step_features = nn.functional.one_hot(
@@ -1233,6 +1258,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             ),
             "route_context_mode": self.route_context_mode,
             "state_layout": self.state_layout,
+            "state_update_mode": self.state_update_mode,
+            "state_residual_scale": self.state_residual_scale,
             "predecessor_operation_context": self.predecessor_operation_context,
             "operation_adapter_rank": self.operation_adapter_rank,
             "operation_adapter_scale": self.operation_adapter_scale,
@@ -1255,6 +1282,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "structured_scalar_state": self.structured_scalar_state,
             "structured_scalar_scale": self.structured_scalar_scale,
             "structured_scalar_read_scale": self.structured_scalar_read_scale,
+            "structured_scalar_authoritative": self.structured_scalar_authoritative,
             "operator_valued_product_encoder": self.operator_valued_product_encoder,
             "operator_valued_packet_width": self.operator_valued_packet_width,
             "operator_valued_basis_count": self.operator_valued_basis_count,

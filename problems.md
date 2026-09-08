@@ -1162,3 +1162,31 @@ tekshirildi. Factorized control ikki seedda `71.97%`, scalar-only treatment
 persistent algebraic value packet/authoritative transition bo‘lishi kerak.
 
 **Batafsil:** `results/V0_201_DYNAMIC_NONMOD_SCALAR_READ_AUDIT.md`.
+
+**Authoritative scalar packet sinovi (2026-09-09):** scalar register’ni dense
+state o‘rniga authoritative qilish seed17da 1,000 qadamda seen accuracy
+`27.73%`, held-out `5.08%`, loss `3.59` berdi; 1,500 qadamda loss `3.61`ga
+plateau qildi. **REJECTED AS A LEARNING CONFIGURATION.** Bu persistent
+packetning o‘zini emas, numeric contract loss’siz authority berishni rad
+qiladi. P-004 `ACTIVE`; keyingi sinov bo‘lsa packetga normalized direct value
+loss beriladi, capacity oshirilmaydi.
+
+**Batafsil:** `results/V0_202_DYNAMIC_NONMOD_AUTHORITATIVE_VALUE_AUDIT.md`.
+
+**Authoritative value contract sinovi (2026-09-09):** scalar packetga
+normalized direct stage loss qo‘shildi. Weight `1`da seed17 1,000 qadamda
+seen/held-out `27.34%/5.08%`, weight `100`da `26.56%/6.25%` va loss `4.42`
+bo‘ldi. **REJECTED.** Bu scalar packet family’sini yopadi: keyingi yo‘l
+dense writerdagi explicit residual state update; capacity oshirilmaydi.
+
+**Batafsil:** `results/V0_203_DYNAMIC_NONMOD_VALUE_CONTRACT_AUDIT.md`.
+
+**Dense state residual sinovi (2026-09-09):** `new = old + 0.25 * proposal`
+update seed17da 1,000 qadamda `65.63%`, 3,000 qadamda `66.99%` held-out berdi;
+matched factorized control `71.09%`. Depth-4 `53.52%` bo‘lib, controldagi
+`59.38%`dan `5.86 pp` past. Seen depths `100%` bo‘lsa ham depth-transfer
+regressiyasi sabab **REJECTED FOR ADOPTION**. Scalar va oddiy residual state
+preservation oilasi yopildi; P-004 `ACTIVE`, keyingi yo‘l genuinely structured
+transition yoki FFN/circuit-transplant lane.
+
+**Batafsil:** `results/V0_204_DYNAMIC_NONMOD_STATE_RESIDUAL_AUDIT.md`.

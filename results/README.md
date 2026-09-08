@@ -1241,6 +1241,31 @@ persistent algebraic value packet authoritative for state transition, or
 accept the current interface ceiling. See
 `V0_201_DYNAMIC_NONMOD_SCALAR_READ_AUDIT.md`.
 
+V0.202 rejects the fully authoritative scalar packet as a learning
+configuration: at 1,000 steps seed17 reached only `27.73%` on seen depths and
+`5.08%` held out, with loss still `3.59`; it plateaued near `3.61` at step
+1,500. The failure is not evidence against persistent packets in general,
+but shows that authority without an explicit normalized value-contract loss
+does not learn the seen task in budget. The next scalar-packet test, if kept,
+must supervise that contract directly. See
+`V0_202_DYNAMIC_NONMOD_AUTHORITATIVE_VALUE_AUDIT.md`.
+
+V0.203 closes the current scalar-packet family: a normalized direct value
+contract with weight `1` left seed17 at `27.34%` seen and `5.08%` held out,
+while weight `100` reached only `26.56%` seen and `6.25%` held out with loss
+`4.42`. Neither rescued the authoritative packet. The next test returns to
+the dense state writer and evaluates an explicit residual state update.
+See `V0_203_DYNAMIC_NONMOD_VALUE_CONTRACT_AUDIT.md`.
+
+V0.204 rejects simple additive dense-state residual updates: seed17 reaches
+`66.99%` held out at 3,000 steps versus `71.09%` for the matched factorized
+control, with depth-4 at `53.52%` versus `59.38%`. Seen depths still reach
+`100%`, so the regression is specifically in depth transfer. Scalar and
+simple residual state-preservation variants are now closed; the next change
+must use a genuinely different structured transition or return to the
+FFN/circuit-transplant lane. See
+`V0_204_DYNAMIC_NONMOD_STATE_RESIDUAL_AUDIT.md`.
+
 V0.198 rejects the 0--7 non-modular operand stress configuration: the same
 depth-3/4 gate reaches only `74.80%` mean at 3,000 steps, down from `84.70%`
 on values 0--3, while the 32,768-class flat head raises the estimated active

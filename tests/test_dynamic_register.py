@@ -793,6 +793,28 @@ def test_dynamic_register_structured_scalar_read_path_is_optional():
     assert model.parameter_report()["structured_scalar_read_scale"] == 1.0
 
 
+def test_dynamic_register_authoritative_scalar_requires_and_uses_value_lane():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=16,
+        state_dim=16,
+        num_circuits=32,
+        circuit_rank=2,
+        router_depth=2,
+        candidate_pool=4,
+        active_circuits=2,
+        factor_count=6,
+        structured_scalar_state=True,
+        structured_scalar_authoritative=True,
+    )
+    generator = DynamicCompositionGenerator(max_ops=2, train_max_ops=2, seed=37)
+    logits, stats = model(generator.batch(4).inputs)
+    assert logits.shape == (4, 64)
+    assert stats["step_logits"].shape == (4, 2, 64)
+    assert model.parameter_report()["structured_scalar_authoritative"] is True
+
+
 def test_dynamic_register_can_collect_recurrent_state_trace():
     model = DynamicRegisterNeuralEngine(
         max_ops=3,
@@ -816,6 +838,29 @@ def test_dynamic_register_can_collect_recurrent_state_trace():
         "step_states",
     ):
         assert stats[name].shape == (5, 3, 16)
+
+
+def test_dynamic_register_residual_state_update_preserves_explicit_mode():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=16,
+        state_dim=16,
+        num_circuits=32,
+        circuit_rank=2,
+        router_depth=2,
+        candidate_pool=4,
+        active_circuits=2,
+        factor_count=6,
+        state_update_mode="residual",
+        state_residual_scale=0.25,
+    )
+    generator = DynamicCompositionGenerator(max_ops=2, train_max_ops=2, seed=38)
+    logits, _ = model(generator.batch(4).inputs)
+    assert logits.shape == (4, 64)
+    report = model.parameter_report()
+    assert report["state_update_mode"] == "residual"
+    assert report["state_residual_scale"] == 0.25
 
 
 def test_dynamic_register_macro_cells_add_sparse_multi_step_path():
