@@ -766,6 +766,18 @@ default o‘zgarmadi. Keyingi asosiy ish rankni yana qisqartirish emas, selected
 FFN launch/packing overheadini static-index yoki to‘liq fused dispatch bilan
 olib tashlash.
 **Batafsil:** `results/RUNTIME_QWEN_RANK1_LONG_AUDIT_20260909.md`.
+
+**V0.230 rank-1 shape sweep (2026-09-09):** rank-1 trained K=5 yo‘l B1,
+B8 va B32 fixed-shape graph’da ikki seed bilan tekshirildi. Dense-parentga
+nisbiy grouped-fused vaqtlar seed2026 uchun `1.080x/1.044x/1.065x`, seed17
+uchun `1.078x/1.042x/1.060x` bo‘ldi. Quality CE delta `+0.047808/+0.042103`
+bo‘lib gate ichida qoldi; generation parity barcha shape’larda exact. Demak
+rank-1 B8ga xos emas va opt-in candidate sifatida saqlanadi, lekin hech bir
+shape’da dense’dan tez emas. Grouped-fused oddiy groupeddan barqaror ustun
+emas; batch policy kiritilmadi. Keyingi ish router yoki rankni qisqartirish
+emas, selected FFN launch/packing overheadini static-index/tiled yoki full
+fused implementation bilan kamaytirish.
+**Batafsil:** `results/RUNTIME_QWEN_RANK1_SHAPE_SWEEP_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 

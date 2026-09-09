@@ -189,6 +189,12 @@ both eight-token generation checks are exact. Rank 1 is therefore the smallest
 tested viable opt-in candidate, but the dense-serving gap remains open and the
 rank-64 compatibility default is unchanged. The next runtime target is
 selected-FFN launch/packing fusion, not further router work.
+V0.230 checks the same rank-1 recipe at B1/B8/B32 on both seeds. The
+grouped-fused graph/dense ratios are `1.080x/1.044x/1.065x` and
+`1.078x/1.042x/1.060x`; quality deltas remain within `+0.05` and generation
+parity is exact. This confirms shape robustness of the opt-in candidate but no
+dense-serving win. Grouped-fused is not promoted over ordinary grouped; the
+next target remains selected-FFN launch/packing fusion.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is
