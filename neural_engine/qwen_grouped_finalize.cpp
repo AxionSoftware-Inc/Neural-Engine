@@ -14,6 +14,13 @@ torch::Tensor qwen_grouped_finalize_token_cuda(
     torch::Tensor route_weights,
     double hard_route_scale);
 
+torch::Tensor qwen_grouped_finalize_token_ids_cuda(
+    torch::Tensor grouped_output,
+    torch::Tensor top_ids,
+    torch::Tensor route_weights,
+    int64_t experts,
+    double hard_route_scale);
+
 torch::Tensor forward(
     torch::Tensor grouped_output,
     torch::Tensor packed_positions,
@@ -43,8 +50,23 @@ torch::Tensor forward_token(
         grouped_output, packed_positions, route_weights, hard_route_scale);
 }
 
+torch::Tensor forward_token_ids(
+    torch::Tensor grouped_output,
+    torch::Tensor top_ids,
+    torch::Tensor route_weights,
+    int64_t experts,
+    double hard_route_scale) {
+    TORCH_CHECK(grouped_output.is_cuda(), "grouped output must be CUDA");
+    TORCH_CHECK(top_ids.is_cuda(), "top ids must be CUDA");
+    TORCH_CHECK(route_weights.is_cuda(), "route weights must be CUDA");
+    return qwen_grouped_finalize_token_ids_cuda(
+        grouped_output, top_ids, route_weights, experts, hard_route_scale);
+}
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("forward", &forward, "Finalize grouped Qwen output");
     m.def("forward_token", &forward_token,
           "Finalize grouped Qwen output with token-owned reduction");
+    m.def("forward_token_ids", &forward_token_ids,
+          "Finalize fixed grouped Qwen output from token expert IDs");
 }

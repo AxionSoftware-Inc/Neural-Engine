@@ -1456,3 +1456,9 @@ rows are exactly preserved and full generation remains identical, but the
 two-seed full-cascade graph change is only −0.19%/−0.05%/+0.06% at B1/B8/B32.
 It remains opt-in and is rejected as a material serving optimization. See
 `RUNTIME_QWEN_VEC4_FIXED_PACK_AUDIT_20260909.md`.
+
+V0.257 removes the fixed-pack `packed_positions` buffer by deriving each
+grouped row inside the token finalizer. Exact parity and generation are
+preserved; two-seed graph change is only −0.86%/+0.03%/+0.05% at B1/B8/B32.
+It remains opt-in and is rejected as a material serving optimization. See
+`RUNTIME_QWEN_DERIVED_POSITION_AUDIT_20260909.md`.

@@ -32,8 +32,12 @@ def set_dispatch_path(
     inplace_swiglu = dispatch_mode == "grouped-adaptive-fixed-pack-inplace"
     token_finalize = dispatch_mode == "grouped-adaptive-fixed-pack-token-finalize"
     vectorized_pack = dispatch_mode == "grouped-adaptive-fixed-pack-vectorized"
+    derived_positions = dispatch_mode == "grouped-adaptive-fixed-pack-derived-position"
     bucketed_projections = dispatch_mode == "grouped-adaptive-bucketed"
-    if inplace_swiglu or token_finalize or vectorized_pack or bucketed_projections:
+    if (
+        inplace_swiglu or token_finalize or vectorized_pack or derived_positions
+        or bucketed_projections
+    ):
         effective_dispatch_mode = "grouped-adaptive-fixed-pack"
     if bucketed_projections:
         effective_dispatch_mode = "grouped-adaptive"
@@ -51,6 +55,7 @@ def set_dispatch_path(
         base.grouped_token_finalize = bool(token_finalize)
         base.grouped_bucketed_projections = bool(bucketed_projections)
         base.grouped_vectorized_pack = bool(vectorized_pack)
+        base.grouped_derived_positions = bool(derived_positions)
         for nested in child.modules():
             if isinstance(nested, CrossGroupOutputMixRoutedQwenChild):
                 if effective_dispatch_mode == "fused-effective-output":
@@ -186,6 +191,10 @@ def main() -> None:
     parser.add_argument(
         "--include-grouped-adaptive-fixed-pack-vectorized", action="store_true",
         help="include fixed-pack with float4 vectorized route writes",
+    )
+    parser.add_argument(
+        "--include-grouped-adaptive-fixed-pack-derived-position", action="store_true",
+        help="include fixed-pack finalization without packed-position metadata",
     )
     parser.add_argument(
         "--include-grouped-adaptive-bucketed", action="store_true",
@@ -357,6 +366,11 @@ def main() -> None:
             "grouped-adaptive-fixed-pack-vectorized", False,
             "grouped-adaptive-fixed-pack-vectorized", False, True,
         ))
+    if args.include_grouped_adaptive_fixed_pack_derived_position:
+        path_specs.append((
+            "grouped-adaptive-fixed-pack-derived-position", False,
+            "grouped-adaptive-fixed-pack-derived-position", False, True,
+        ))
     if args.include_grouped_adaptive_bucketed:
         path_specs.append((
             "grouped-adaptive-bucketed", False,
@@ -475,6 +489,8 @@ def main() -> None:
                 candidates.append("grouped-adaptive-fixed-pack-token-finalize")
             if args.include_grouped_adaptive_fixed_pack_vectorized:
                 candidates.append("grouped-adaptive-fixed-pack-vectorized")
+            if args.include_grouped_adaptive_fixed_pack_derived_position:
+                candidates.append("grouped-adaptive-fixed-pack-derived-position")
             if args.include_grouped_adaptive_bucketed:
                 candidates.append("grouped-adaptive-bucketed")
             for candidate in candidates:
@@ -648,6 +664,15 @@ def main() -> None:
             uniform_accum=True,
         )
         grouped_adaptive_fixed_pack_vectorized_generation = greedy_generate_fixed_shape(
+            model, generation_prompt, 8, use_cuda_graph=True,
+        )
+    grouped_adaptive_fixed_pack_derived_position_generation = None
+    if args.include_grouped_adaptive_fixed_pack_derived_position:
+        set_dispatch_path(
+            children, False, "grouped-adaptive-fixed-pack-derived-position",
+            uniform_accum=True,
+        )
+        grouped_adaptive_fixed_pack_derived_position_generation = greedy_generate_fixed_shape(
             model, generation_prompt, 8, use_cuda_graph=True,
         )
     grouped_adaptive_bucketed_generation = None
@@ -867,6 +892,14 @@ def main() -> None:
                     )
                 ),
             } if grouped_adaptive_fixed_pack_vectorized_generation is not None else {}),
+            **({
+                "grouped_vs_grouped_adaptive_fixed_pack_derived_position_exact_token_match": bool(
+                    torch.equal(
+                        grouped_generation,
+                        grouped_adaptive_fixed_pack_derived_position_generation,
+                    )
+                ),
+            } if grouped_adaptive_fixed_pack_derived_position_generation is not None else {}),
             **({
                 "grouped_vs_grouped_adaptive_bucketed_exact_token_match": bool(
                     torch.equal(

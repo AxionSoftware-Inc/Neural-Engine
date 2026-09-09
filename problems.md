@@ -1168,3 +1168,14 @@ servingda material yutuq emas. Decode B=1 dagi pack-only penalty sabab adaptiv
 fallback qo‘shildi. Variant opt-in benchmark sifatida saqlandi, default
 o‘zgarmadi.
 **Batafsil:** `results/RUNTIME_QWEN_VEC4_FIXED_PACK_AUDIT_20260909.md`.
+
+### C-RUNTIME-DERIVED-POSITION-001 — Fixed-pack pozitsiyasini finalizerda hisoblash
+
+**Status:** `REJECTED AS MATERIAL OPTIMIZATION`
+**Muammo:** runtime bottleneck; P-007 sifat muammosini yechmaydi
+**Natija:** Fixed-pack `packed_positions` bufferi olib tashlandi. Ikki seedli
+full-cascade graph o‘zgarishi B=1/B=8/B=32 da `-0.86%/+0.03%/+0.05%`, eager
+o‘zgarishi `-7.74%/-3.12%/-0.10%` bo‘ldi. Exact numerical parity va generation
+saqlandi. Eager yutug‘i graph servingga ko‘chmagani uchun default o‘zgarmadi;
+variant opt-in qoldi.
+**Batafsil:** `results/RUNTIME_QWEN_DERIVED_POSITION_AUDIT_20260909.md`.

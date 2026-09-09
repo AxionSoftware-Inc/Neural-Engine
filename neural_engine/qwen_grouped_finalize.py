@@ -83,3 +83,34 @@ def grouped_finalize_token(
         grouped_output, packed_positions, route_weights,
         float(hard_route_scale),
     )
+
+
+def grouped_finalize_token_ids(
+    grouped_output: torch.Tensor,
+    top_ids: torch.Tensor,
+    route_weights: torch.Tensor,
+    num_experts: int,
+    hard_route_scale: float,
+) -> torch.Tensor:
+    """Finalize fixed grouped output by deriving rows from token expert IDs."""
+    tensors = grouped_output, top_ids, route_weights
+    if any(tensor.device.type != "cuda" for tensor in tensors):
+        raise ValueError("grouped token-id finalization requires CUDA tensors")
+    if grouped_output.dtype != torch.float32 or route_weights.dtype != torch.float32:
+        raise ValueError("grouped token-id finalization currently supports float32")
+    if top_ids.dtype != torch.int64:
+        raise ValueError("grouped token-id finalization top_ids must be int64")
+    if grouped_output.dim() != 2 or top_ids.dim() != 2 or route_weights.dim() != 2:
+        raise ValueError("grouped token-id finalization expects rank-2 tensors")
+    if top_ids.shape != route_weights.shape:
+        raise ValueError("top_ids/route_weights shape mismatch")
+    if grouped_output.shape[0] != int(num_experts) * top_ids.shape[0]:
+        raise ValueError("fixed grouped output row count mismatch")
+    if any(not tensor.is_contiguous() for tensor in tensors):
+        raise ValueError("grouped token-id finalization inputs must be contiguous")
+    if num_experts < 1:
+        raise ValueError("num_experts must be positive")
+    return _extension().forward_token_ids(
+        grouped_output, top_ids, route_weights, int(num_experts),
+        float(hard_route_scale),
+    )

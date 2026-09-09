@@ -48,6 +48,12 @@ def main() -> None:
     parser.add_argument("--warmup", type=int, default=3)
     parser.add_argument("--profile-iterations", type=int, default=5)
     parser.add_argument("--seed", type=int, default=2026)
+    parser.add_argument(
+        "--dispatch-path",
+        choices=("grouped-adaptive", "grouped-adaptive-fixed-pack-vectorized"),
+        default="grouped-adaptive",
+        help="grouped runtime path to attribute",
+    )
     parser.add_argument("--output")
     args = parser.parse_args()
     if not torch.cuda.is_available():
@@ -99,8 +105,8 @@ def main() -> None:
     set_dispatch_path(
         children,
         False,
-        "grouped-adaptive",
-        fused_correction=True,
+        args.dispatch_path,
+        fused_correction=args.dispatch_path == "grouped-adaptive",
         uniform_accum=True,
     )
     prefix_pool = tokenizer(
@@ -160,12 +166,12 @@ def main() -> None:
                 "stages": stages,
             })
     result = {
-        "experiment": "V0.240_grouped_stage_profile",
+        "experiment": "V0.256_grouped_stage_profile",
         "model": args.model,
         "seed": args.seed,
         "layers": layers,
         "dtype": "float32",
-        "dispatch_policy": "grouped-adaptive",
+        "dispatch_policy": args.dispatch_path,
         "rows": rows,
     }
     print(json.dumps(result, indent=2))

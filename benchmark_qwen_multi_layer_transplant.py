@@ -881,6 +881,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self.grouped_token_finalize = False
         self.grouped_bucketed_projections = False
         self.grouped_vectorized_pack = False
+        self.grouped_derived_positions = False
         # Optional inference-only BMM layout probe.  The native buffers keep
         # Linear's [out, in] layout; grouped BMM consumes their transposes.
         # Caching contiguous transposes lets cuBLAS see the exact [E, in, out]
@@ -1037,6 +1038,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         finalize_output: bool = False,
         fixed_pack: bool = False,
         vectorized_pack: bool = False,
+        derived_positions: bool = False,
         inplace_swiglu: bool = False,
         token_finalize: bool = False,
         bucketed_projections: bool = False,
@@ -1073,7 +1075,6 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 slots = pair_indices % self.active_experts
         with record_function("neural_engine.grouped.pack"):
             route_counts: torch.Tensor | None = None
-            expert_ids = flat_ids[token_ids, slots]
             if fixed_pack:
                 # The vectorized kernel improves the multi-token pack, but its
                 # extra launch/register shape loses at decode B=1.  Keep the
@@ -1095,12 +1096,19 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 grouped_hidden = grouped_hidden.reshape(
                     self.num_experts, max_count, flat_hidden.shape[-1],
                 )
-                sorted_experts = expert_ids
-                sorted_token_ids = token_ids
-                sorted_slots = slots
-                grouped_indices = (
-                    sorted_experts * max_count + sorted_token_ids
-                )
+                if derived_positions:
+                    grouped_indices = None
+                    sorted_experts = None
+                    sorted_token_ids = None
+                    sorted_slots = None
+                else:
+                    expert_ids = flat_ids[token_ids, slots]
+                    sorted_experts = expert_ids
+                    sorted_token_ids = token_ids
+                    sorted_slots = slots
+                    grouped_indices = (
+                        sorted_experts * max_count + sorted_token_ids
+                    )
             elif atomic_pack:
                 from neural_engine.qwen_atomic_pack import atomic_pack as pack_rows
 
@@ -1110,10 +1118,12 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                     self.num_experts,
                 )
                 max_count = flat_hidden.shape[0]
+                expert_ids = flat_ids[token_ids, slots]
                 sorted_experts = expert_ids
                 sorted_token_ids = token_ids
                 sorted_slots = slots
             else:
+                expert_ids = flat_ids[token_ids, slots]
                 sort_order = torch.argsort(expert_ids, stable=True)
                 sorted_experts = expert_ids[sort_order]
                 # ``bincount`` plus a host scalar read makes the grouped path
@@ -1247,7 +1257,18 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 grouped_output_flat = grouped_output.reshape(
                     self.num_experts * max_count, flat_hidden.shape[-1],
                 ).contiguous()
-                if token_finalize:
+                if derived_positions:
+                    from neural_engine.qwen_grouped_finalize import (
+                        grouped_finalize_token_ids,
+                    )
+                    flat_output = grouped_finalize_token_ids(
+                        grouped_output_flat,
+                        flat_ids.contiguous(),
+                        flat_weights.contiguous(),
+                        self.num_experts,
+                        self.hard_route_scale,
+                    )
+                elif token_finalize:
                     flat_output = grouped_finalize_token(
                         grouped_output_flat,
                         grouped_indices.contiguous(),
@@ -1986,6 +2007,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 fixed_pack=True,
                 finalize_output=True,
                 vectorized_pack=self.grouped_vectorized_pack,
+                derived_positions=self.grouped_derived_positions,
                 inplace_swiglu=self.grouped_inplace_swiglu,
                 token_finalize=self.grouped_token_finalize,
             )
