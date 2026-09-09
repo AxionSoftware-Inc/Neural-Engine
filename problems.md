@@ -690,6 +690,13 @@ shuning uchun avtomatik batch-size switch kiritilmadi; vectorized default
 saqlandi. Bu muammo **OPEN**: repeated interleaved timing va router/top-k
 fusion kerak.
 **Batafsil:** `results/RUNTIME_QWEN_FULL_CORRECTION_BATCH_SWEEP_AUDIT_20260909.md`.
+**V0.217 interleaved correction timing (2026-09-09):** ikkala seedda ham
+batch1 fused/vectorized `1.478x/1.468x` sekin, batch8 esa faqat
+`0.978x/0.975x` tezroq chiqdi; final-logit xatosi `8.58e-6–1.53e-5`.
+Shuning uchun fused-fullning katta speed claim’i **REJECTED**, parity-safe
+opt-in kodi saqlandi, vectorized default o‘zgarmadi. Keyingi katta target —
+router+top-k+selected dispatch+correctionni bir kernelga birlashtirish.
+**Batafsil:** `results/RUNTIME_QWEN_FULL_CORRECTION_INTERLEAVED_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import statistics
 import time
 from pathlib import Path
 
@@ -294,8 +295,11 @@ def trained_correction_backend_matrix(
     device: torch.device,
     warmup: int,
     iterations: int,
+    timing_repeats: int = 1,
 ) -> list[dict[str, object]]:
     """Compare PyTorch, custom CUDA, and packed correction on trained children."""
+    if timing_repeats < 1:
+        raise ValueError("timing_repeats must be positive")
     base_prefix = tokenizer(
         "Neural Engine sparse circuits", return_tensors="pt",
     ).input_ids[:, :4].to(device)
@@ -354,20 +358,37 @@ def trained_correction_backend_matrix(
                     )
                     route_base.single_token_fast_path = True
                     layer.mlp = child
-                eager_cache = make_cache_and_fill_prefix(
-                    model, prefix_ids, cache_length,
-                )
-                eager_ms, eager_logits = measure_eager(
-                    model, token_ids, eager_cache, position, warmup, iterations,
-                )
-                graph_cache = make_cache_and_fill_prefix(
-                    model, prefix_ids, cache_length,
-                )
-                try:
-                    graph_ms, _, graph_logits, _ = measure_graph(
-                        model, token_ids, graph_cache, position, warmup, iterations,
+                eager_samples = []
+                graph_samples = []
+                eager_logits = None
+                graph_logits = None
+                failure = None
+                for _ in range(timing_repeats):
+                    eager_cache = make_cache_and_fill_prefix(
+                        model, prefix_ids, cache_length,
                     )
-                except RuntimeError as exc:
+                    eager_sample, eager_sample_logits = measure_eager(
+                        model, token_ids, eager_cache, position, warmup, iterations,
+                    )
+                    eager_samples.append(eager_sample)
+                    if eager_logits is None:
+                        eager_logits = eager_sample_logits
+                    graph_cache = make_cache_and_fill_prefix(
+                        model, prefix_ids, cache_length,
+                    )
+                    try:
+                        graph_sample, _, graph_sample_logits, _ = measure_graph(
+                            model, token_ids, graph_cache, position,
+                            warmup, iterations,
+                        )
+                    except RuntimeError as exc:
+                        failure = exc
+                        break
+                    graph_samples.append(graph_sample)
+                    if graph_logits is None:
+                        graph_logits = graph_sample_logits
+                eager_ms = statistics.median(eager_samples)
+                if failure is not None:
                     records.append({
                         "backend": backend,
                         "batch_size": batch_size,
@@ -382,13 +403,16 @@ def trained_correction_backend_matrix(
                             if backend == "packed" else
                             "custom CUDA correction extension failed during graph replay"
                         ),
-                        "error": str(exc).splitlines()[0],
+                        "error": str(failure).splitlines()[0],
                     })
                     # A failed capture can leave the CUDA capture context in an
                     # implementation-dependent state; report it and stop this
                     # backend A/B rather than hiding the failure or continuing
                     # with corrupted timing state.
                     break
+                graph_ms = statistics.median(graph_samples)
+                if eager_logits is None or graph_logits is None:
+                    raise RuntimeError("backend timing produced no logits")
                 record = {
                     "backend": backend,
                     "batch_size": batch_size,
@@ -400,6 +424,9 @@ def trained_correction_backend_matrix(
                         (graph_logits - eager_logits).abs().max().item()
                     ),
                 }
+                if timing_repeats > 1:
+                    record["eager_ms_samples"] = eager_samples
+                    record["graph_ms_samples"] = graph_samples
                 if backend == "vectorized":
                     reference_eager_logits[batch_size] = eager_logits.clone()
                     reference_graph_logits[batch_size] = graph_logits.clone()
@@ -475,6 +502,127 @@ def trained_single_token_projection_matrix(
                 (graph_logits - eager_logits).abs().max().item()
             ),
         })
+    return records
+
+
+def interleaved_correction_backend_timing(
+    model: torch.nn.Module,
+    tokenizer,
+    layers: list[int],
+    children: list[torch.nn.Module],
+    device: torch.device,
+    warmup: int,
+    iterations: int,
+) -> list[dict[str, object]]:
+    """Compare correction graphs by alternating them on one CUDA stream.
+
+    Backend timings collected in separate blocks can be distorted by GPU
+    clock/thermal state. This probe captures vectorized and fused-full graphs
+    separately, then alternates them on the same stream and timing window.
+    """
+    if iterations < 1:
+        raise ValueError("interleaved timing iterations must be positive")
+    base_prefix = tokenizer(
+        "Neural Engine sparse circuits", return_tensors="pt",
+    ).input_ids[:, :4].to(device)
+    base_token = tokenizer(
+        " attention", return_tensors="pt",
+    ).input_ids[:, -1:].to(device)
+    model_layers = [model.model.layers[index] for index in layers]
+    mixers = [
+        nested
+        for child in children
+        for nested in child.modules()
+        if isinstance(nested, CrossGroupOutputMixRoutedQwenChild)
+    ]
+    records = []
+    original_limits = [mixer.max_dense_gather_bytes for mixer in mixers]
+    original_backends = [mixer.correction_dispatch_backend for mixer in mixers]
+    try:
+        for batch_size in (1, 8):
+            prefix_ids = base_prefix.repeat(batch_size, 1)
+            token_ids = base_token.repeat(batch_size, 1)
+            cache_length = max(32, int(prefix_ids.shape[1]) + 8)
+            position = torch.tensor([prefix_ids.shape[1]], device=device)
+            graphs: dict[
+                str, tuple[torch.cuda.CUDAGraph, torch.Tensor, FixedDecodeCache]
+            ] = {}
+            for backend in ("vectorized", "cuda-fused-full"):
+                for mixer in mixers:
+                    mixer.max_dense_gather_bytes = (
+                        128 * 1024 * 1024 if backend == "vectorized" else 0
+                    )
+                    mixer.correction_dispatch_backend = backend
+                for layer, child in zip(model_layers, children):
+                    route_base = next(
+                        nested for nested in child.modules()
+                        if isinstance(nested, TransferredRoutedQwenChild)
+                    )
+                    route_base.single_token_fast_path = True
+                    route_base.single_token_output_weight = None
+                    route_base.single_token_full_correction = None
+                    layer.mlp = child
+                cache = make_cache_and_fill_prefix(
+                    model, prefix_ids, cache_length,
+                )
+                with torch.inference_mode():
+                    for _ in range(warmup):
+                        forward_logits(model, token_ids, cache, position)
+                    torch.cuda.synchronize()
+                    graph = torch.cuda.CUDAGraph()
+                    with torch.cuda.graph(graph):
+                        graph_logits = forward_logits(
+                            model, token_ids, cache, position,
+                        )
+                    graph.replay()
+                    torch.cuda.synchronize()
+                # Keep the cache alive for the lifetime of its graph. CUDA
+                # Graph replay stores raw tensor addresses and cannot protect
+                # a Python object that has gone out of scope.
+                graphs[backend] = (graph, graph_logits, cache)
+
+            vectorized_graph, vectorized_logits, _ = graphs["vectorized"]
+            fused_graph, fused_logits, _ = graphs["cuda-fused-full"]
+            with torch.inference_mode():
+                for _ in range(max(2, warmup // 2)):
+                    vectorized_graph.replay()
+                    torch.cuda.synchronize()
+                    fused_graph.replay()
+                    torch.cuda.synchronize()
+                vectorized_total = 0.0
+                fused_total = 0.0
+                for _ in range(iterations):
+                    start = time.perf_counter()
+                    vectorized_graph.replay()
+                    torch.cuda.synchronize()
+                    vectorized_total += time.perf_counter() - start
+                    start = time.perf_counter()
+                    fused_graph.replay()
+                    torch.cuda.synchronize()
+                    fused_total += time.perf_counter() - start
+                vectorized_graph.replay()
+                fused_graph.replay()
+                torch.cuda.synchronize()
+                vectorized_result = vectorized_logits.clone()
+                fused_result = fused_logits.clone()
+            vectorized_ms = vectorized_total * 1000.0 / iterations
+            fused_ms = fused_total * 1000.0 / iterations
+            records.append({
+                "batch_size": batch_size,
+                "status": "PARITY_PASS",
+                "paired_vectorized_ms": vectorized_ms,
+                "paired_fused_full_ms": fused_ms,
+                "paired_full_over_vectorized": fused_ms / max(vectorized_ms, 1e-9),
+                "max_graph_logit_error": float(
+                    (fused_result - vectorized_result).abs().max().item()
+                ),
+            })
+    finally:
+        for mixer, original_limit, original_backend in zip(
+            mixers, original_limits, original_backends,
+        ):
+            mixer.max_dense_gather_bytes = original_limit
+            mixer.correction_dispatch_backend = original_backend
     return records
 
 
@@ -657,15 +805,23 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         model, tokenizer, layers, children, device, args.warmup,
         args.compiled_child_iterations,
     )
+    interleaved_correction_timing = (
+        interleaved_correction_backend_timing(
+            model, tokenizer, layers, children, device, args.warmup,
+            args.interleaved_timing_iterations,
+        )
+        if args.interleaved_timing_iterations > 0 else []
+    )
     # Keep the intentionally failing packed-capture probe last: a CUDA Graph
-    # capture failure can poison the current CUDA context for later work.
+    # capture failure can poison the CUDA context for later work.
     trained_correction_backends = trained_correction_backend_matrix(
         model, tokenizer, layers, children, device, args.warmup,
         args.correction_backend_iterations,
+        args.correction_timing_repeats,
     )
 
     result = {
-        "experiment": "V0.215_fused_base_correction_batch_sweep",
+        "experiment": "V0.217_fused_correction_interleaved_timing",
         "status": "PARITY_PASS" if max(replay_error, alternate_error) <= 1e-3 else "PARITY_FAIL",
         "model": args.model,
         "seed": args.seed,
@@ -684,6 +840,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "child_steps": args.child_steps,
             "hard_steps": args.hard_steps,
             "router_steps": args.router_steps,
+            "correction_timing_repeats": args.correction_timing_repeats,
+            "interleaved_timing_iterations": args.interleaved_timing_iterations,
         },
         "teacher_ce": teacher_ce,
         "sparse_quality": sparse_quality,
@@ -710,6 +868,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         },
         "trained_batch_runtime": trained_batch_runtime,
         "trained_correction_backends": trained_correction_backends,
+        "interleaved_correction_timing": interleaved_correction_timing,
         "trained_single_token_projections": trained_single_token_projections,
         "trained_compiled_children": trained_compiled_children,
     }
@@ -742,6 +901,8 @@ def main() -> None:
     parser.add_argument("--iterations", type=int, default=100)
     parser.add_argument("--batch-sizes", type=int, nargs="+", default=[1, 2, 4, 8])
     parser.add_argument("--correction-backend-iterations", type=int, default=30)
+    parser.add_argument("--correction-timing-repeats", type=int, default=1)
+    parser.add_argument("--interleaved-timing-iterations", type=int, default=0)
     parser.add_argument("--single-token-backend-iterations", type=int, default=30)
     parser.add_argument("--compiled-child-iterations", type=int, default=30)
     parser.add_argument("--calibration-rank", type=int, default=64)

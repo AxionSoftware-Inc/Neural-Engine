@@ -141,6 +141,11 @@ V0.215 sweeps that backend at batch 1 and 8. B8 remains faster in both seeds,
 but batch-1 ratios are inconsistent (`1.276x` and `0.720x`), so no automatic
 batch policy is accepted. Vectorized remains the default; repeated interleaved
 timing and fused router/top-k dispatch are the next runtime targets.
+V0.217 performs that interleaved timing on two seeds. Batch-1 fused/vectorized
+ratios are `1.478x/1.468x`; B8 ratios are only `0.978x/0.975x`, with final-logit
+error below `1.6e-5`. The fused-full implementation is parity-safe but its
+large speed claim is rejected; the default stays vectorized and the next real
+target is router/top-k/dispatch fusion.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

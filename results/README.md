@@ -267,6 +267,12 @@ but batch-1 ratios disagree (`1.276x` and `0.720x`), so no automatic batch
 policy is added; vectorized remains the default. See
 `RUNTIME_QWEN_FULL_CORRECTION_BATCH_SWEEP_AUDIT_20260909.md`.
 
+V0.217 uses interleaved graph timing on two seeds. Fused-full is slower at B1
+(`1.478x/1.468x`) and only marginally faster at B8 (`0.978x/0.975x`), while
+final-logit error remains below `1.6e-5`. Its large speed claim is rejected;
+the parity-safe implementation remains opt-in and vectorized stays default.
+See `RUNTIME_QWEN_FULL_CORRECTION_INTERLEAVED_AUDIT_20260909.md`.
+
 V0.194 rejects the eight-layer K=4 pairwise-cost router with three-round
 on-policy aggregation: learned CE is `+0.06822/+0.07745` across seeds, worse
 than the direct-hard subset-router control (`+0.06462/+0.06165`). The route
