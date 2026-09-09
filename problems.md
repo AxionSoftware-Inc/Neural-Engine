@@ -534,7 +534,14 @@ quality claim emas. `ACCEPTED OPT-IN`; trained K=5/K=6, `use_cache`, input
 buffer update (fixed-shape `use_cache=False` parity o‘tdi) va dynamic shape
 auditlari hali ochiq. Generic Transformers `StaticCache` bilan `use_cache=True`
 graph screen parent-only nazoratda ham max capture/replay xatosi `12.78/1.74`
-berdi va `UNSAFE` deb rad qilindi; custom fixed KV buffer yo‘li hali ochiq.
+berdi va `UNSAFE` deb rad qilindi. **V0.196 custom fixed-KV replay** esa
+`use_cache=True` bilan K=5’da 200 iteratsiyada `14.703 ms` (`0.516x` dense
+parent), K=6’da `17.084 ms` (`0.595x`) berdi; replay max logit xatosi
+`1.22e-5`, alternate-token xatosi `9.66e-6` ichida qoldi. Bu custom cache
+yo‘li uchun `POSITIVE OPT-IN`, lekin child’lar runtime smoke uchun
+o‘qitilmagan; trained quality, prefill, `generate()`, dynamic shape va
+defaultga olish hali ochiq. Batafsil:
+`results/RUNTIME_QWEN_CUSTOM_KV_CUDA_GRAPH.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 

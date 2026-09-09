@@ -62,7 +62,10 @@ of the dense parent at K=5 and `0.588x` at K=6, with max eager-logit error
 `1.6e-5`. This is a positive opt-in runtime result, not yet a trained
 `use_cache` serving claim. Input-buffer replacement inside the fixed shape
 also matched eager within `1.1e-5`. The next milestone is a trained K=5 graph
-audit with `use_cache` and a small shape cache. Native's stats-free
+audit with a custom fixed-KV cache, `use_cache` and a small shape cache. The
+custom fixed-KV replay now passes `use_cache=True` with K=5 at `0.516x` of the
+dense parent and K=6 at `0.595x`, while generic `StaticCache` remains unsafe.
+Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is
 wired to it.
