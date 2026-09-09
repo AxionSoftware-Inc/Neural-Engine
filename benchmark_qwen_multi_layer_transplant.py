@@ -642,6 +642,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             "grouped-adaptive-nozero", "grouped-adaptive-effective-output",
             "grouped-adaptive-atomic-pack",
             "grouped-adaptive-atomic-effective-output",
+            "grouped-adaptive-atomic-finalize",
             "packed", "packed-fused", "packed-fp16",
             "fused", "fused-effective-output", "token-loop",
         }:
@@ -651,6 +652,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 "grouped-optimized, grouped-adaptive, grouped-adaptive-nozero, "
                 "grouped-adaptive-effective-output, packed, packed-fused, "
                 "grouped-adaptive-atomic-pack, grouped-adaptive-atomic-effective-output, "
+                "grouped-adaptive-atomic-finalize, "
                 "packed, packed-fused, packed-fp16, "
                 "fused, fused-effective-output, or token-loop"
             )
@@ -1025,6 +1027,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         tiled_projections: bool = False,
         uninitialized_pack: bool = False,
         atomic_pack: bool = False,
+        finalize_output: bool = False,
     ) -> torch.Tensor:
         flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
         flat_ids = top_ids.reshape(-1, self.active_experts)
@@ -1154,6 +1157,29 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                     grouped_gate * grouped_value,
                     output_weight,
                 )
+        if finalize_output:
+            if self.grouped_effective_output_weight is None:
+                raise RuntimeError(
+                    "grouped finalization requires folded effective output weights"
+                )
+            from neural_engine.qwen_grouped_finalize import grouped_finalize
+
+            with record_function("neural_engine.grouped.finalize"):
+                flat_output = grouped_finalize(
+                    grouped_output.reshape(
+                        self.num_experts * max_count, flat_hidden.shape[-1],
+                    ).contiguous(),
+                    grouped_indices.contiguous(),
+                    sorted_token_ids.contiguous(),
+                    sorted_slots.contiguous(),
+                    flat_weights.contiguous(),
+                    self.hard_route_scale,
+                )
+            self.last_selected_outputs = None
+            self.last_active_expert_fraction = pair_indices.numel() / max(
+                flat_hidden.shape[0] * self.num_experts, 1
+            )
+            return flat_output.reshape_as(hidden_states)
         with record_function("neural_engine.grouped.select_correction"):
             selected_output = grouped_output.reshape(
                 self.num_experts * max_count, flat_hidden.shape[-1],
@@ -1730,6 +1756,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             "grouped-adaptive-effective-output",
             "grouped-adaptive-atomic-pack",
             "grouped-adaptive-atomic-effective-output",
+            "grouped-adaptive-atomic-finalize",
         }:
             # Decode B=1 is launch/metadata bound; the extra cached layouts
             # only pay off once several rows can share the grouped work.
@@ -1745,7 +1772,9 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 atomic_pack=self.dispatch_mode in {
                     "grouped-adaptive-atomic-pack",
                     "grouped-adaptive-atomic-effective-output",
+                    "grouped-adaptive-atomic-finalize",
                 },
+                finalize_output=self.dispatch_mode == "grouped-adaptive-atomic-finalize",
             )
         if not self.training and self.dispatch_mode in {
             "grouped-fused", "grouped-prepacked-fused",
@@ -2289,6 +2318,7 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
             and self.base.dispatch_mode in {
                 "grouped-adaptive-effective-output",
                 "grouped-adaptive-atomic-effective-output",
+                "grouped-adaptive-atomic-finalize",
             }
             and not self.base.single_token_fast_path
         )
