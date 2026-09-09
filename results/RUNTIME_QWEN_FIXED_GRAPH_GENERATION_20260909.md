@@ -30,8 +30,9 @@ uncaptured or unsupported shapes.
 | generated token count | `8` |
 | graph vs eager exact token sequence | **true** |
 | graph vs reused-shape exact token sequence | **true** |
-| graph captures / same-shape cache hits | `1 / 1` |
+| graph captures / same-shape cache hits | `3 / 1` |
 | uncaptured budget eager fallback exact match | **true** |
+| evicted-shape eager fallback exact match | **true** |
 | status | `PARITY_PASS` |
 
 The graph and eager adapters generated the same complete token sequence. This
@@ -46,14 +47,16 @@ An uncaptured seven-token budget was then requested with
 `capture_on_miss=False`. The pool deliberately skipped graph capture and its
 eager fallback produced the same token sequence as an independent eager run.
 This establishes the safe-miss behavior for a shape that has not been
-captured.
+captured. Two further budgets filled the bounded pool and evicted the original
+eight-token entry; requesting that evicted shape with capture disabled also
+matched the independent eager output. The smoke therefore recorded three
+captures, one same-shape hit, and a successful eviction fallback.
 
 ## Decision and next step
 
 `V0.199` is accepted as an opt-in fixed-shape generation adapter. It does not
 change the default Qwen model or Hugging Face `generate()` behavior. Dynamic
-shape handling, shape-cache eviction under multiple shapes, and a repeat with
-the trained K=5 child remain open.
+shape handling and a repeat with the trained K=5 child remain open.
 
 ## Reproduction
 

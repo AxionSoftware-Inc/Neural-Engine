@@ -126,12 +126,13 @@ adapter and dynamic-shape fallback remain the next runtime work. See
 
 V0.199 adds the opt-in greedy-generation adapter. With a four-token prefix and
 eight generated tokens, the graph and eager paths produced an identical token
-sequence. A second request with the same shape reused the capture (`1` capture,
-`1` cache hit) and produced the same sequence. This confirms the generation
-state loop and basic shape-keyed reuse; it is a runtime parity smoke with
-copied, untrained children, not a new quality claim. An uncaptured seven-token
-budget with `capture_on_miss=false` correctly used eager fallback and matched
-an independent eager run. See
+sequence. A second request with the same shape reused the capture, and the
+bounded pool later evicted that entry after two other shapes were captured
+(`3` captures, `1` same-shape hit). The evicted shape correctly used eager
+fallback with `capture_on_miss=false` and matched an independent eager run.
+This confirms the generation state loop, basic shape-keyed reuse, and eviction
+fallback; it is a runtime parity smoke with copied, untrained children, not a
+new quality claim. See
 `RUNTIME_QWEN_FIXED_GRAPH_GENERATION_20260909.md`.
 
 V0.194 rejects the eight-layer K=4 pairwise-cost router with three-round

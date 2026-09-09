@@ -570,10 +570,12 @@ shape-cache siyosati va production kernel/stream validation.
 generation helper prefix prefill’dan keyin 8 ta tokenni graph va eager
 yo‘llarda bir xil chiqardi (`exact_token_match=true`, `PARITY_PASS`). Bu
 runtime state loop muammosini **SOLVED/ACCEPTED OPT-IN** qiladi. Child’lar
-ushbu smoke’da o‘qitilmagan; trained-child generation, shape-keyed capture
-cache, dynamic-shape handling va Hugging Face `generate()` bilan to‘liq
+ushbu smoke’da o‘qitilmagan; trained-child generation V0.197’da alohida
+o‘tdi. Dynamic-shape handling va Hugging Face `generate()` bilan to‘liq
 integratsiya hali ochiq. Qo‘shimcha control’da uncaptured budget uchun
 `capture_on_miss=False` eager fallback mustaqil eager run bilan aynan mos keldi.
+Bounded pool’da 3 ta shape capture qilinib, 1 ta shape eviction’dan keyin
+eager fallback ham aynan mos keldi.
 **Batafsil:** `results/RUNTIME_QWEN_FIXED_GRAPH_GENERATION_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.

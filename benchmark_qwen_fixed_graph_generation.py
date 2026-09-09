@@ -71,9 +71,22 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     fallback_eager_tokens = greedy_generate_fixed_shape(
         model, prompt, fallback_budget, use_cuda_graph=False,
     )
+    # Fill the bounded pool with two new shapes; the original shape is then
+    # evicted and must use the explicit eager fallback when capture is off.
+    pool.generate(prompt, max(2, args.new_tokens - 2), use_cuda_graph=True)
+    pool.generate(prompt, max(2, args.new_tokens - 3), use_cuda_graph=True)
+    evicted_tokens = pool.generate(
+        prompt, args.new_tokens, use_cuda_graph=True, capture_on_miss=False,
+    )
+    evicted_eager_tokens = greedy_generate_fixed_shape(
+        model, prompt, args.new_tokens, use_cuda_graph=False,
+    )
     equal = bool(torch.equal(graph_tokens, eager_tokens))
     reused_equal = bool(torch.equal(graph_tokens, graph_tokens_reused))
     fallback_equal = bool(torch.equal(fallback_tokens, fallback_eager_tokens))
+    eviction_fallback_equal = bool(
+        torch.equal(evicted_tokens, evicted_eager_tokens)
+    )
     result = {
         "experiment": "V0.199_qwen_fixed_graph_greedy_generation",
         "status": "PARITY_PASS" if equal else "PARITY_FAIL",
@@ -83,6 +96,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "exact_token_match": equal,
         "reused_shape_exact_token_match": reused_equal,
         "uncaptured_shape_eager_fallback_exact_token_match": fallback_equal,
+        "evicted_shape_eager_fallback_exact_token_match": eviction_fallback_equal,
         "fallback_budget": fallback_budget,
         "graph_capture_count": pool.capture_count,
         "graph_cache_hit_count": pool.hit_count,
