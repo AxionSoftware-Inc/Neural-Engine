@@ -1511,3 +1511,11 @@ The 3,000-step two-seed continuation confirms the quality gap: independent
 and mean CE is 0.99017 versus 1.05428. More optimization does not recover the
 virtual capacity; the factorized path is retained only as opt-in
 compression/runtime infrastructure.
+
+The global-router factorized scale audit is the strongest current native
+compression/capacity signal: at 3,000 steps the 300M virtual bank reaches
+68.932% mean accuracy versus 68.294% for the direct independent 300M control,
+while using 12.58M versus 299.54M parameters and 733 versus 5,735 MB peak
+VRAM. The 500M factorized arm regresses to 68.281%, so the effect is not a
+monotonic scaling law; 300M remains opt-in and P-003 stays open. See
+`P003_NATIVE_FACTORIZED_GLOBAL_SCALE_AUDIT_20260910.md`.

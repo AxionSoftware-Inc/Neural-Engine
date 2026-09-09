@@ -1223,6 +1223,17 @@ sifatida yakuniy rad qilindi, faqat compression/runtime opt-in qoldi.
 
 **Batafsil:** `results/P003_NATIVE_FACTORIZED_VIRTUAL_BANK_AUDIT_20260910.md`.
 
+Global hierarchical router bilan factorized bank qayta tekshirilganda 300M
+virtual bank ikki seedda `68.932%` accuracy / `0.97300` CE berdi va to‘g‘ridan-
+to‘g‘ri independent 300M controldan `+0.638 pp` ustun chiqdi. Total params
+`299.54M → 12.58M`, VRAM `5735 → 733 MB`, vaqt `458.65 → 142.74s` bo‘ldi.
+Lekin 500M factorized-global `68.281%` bilan 300Mdan `−0.651 pp` pastladi;
+scale monotonic emas. 300M variant `PROMISING OPT-IN`, lekin default yoki
+yakuniy capacity yechimi emas; P-003 ochiq qoladi va 500M/700M/1B blind
+expansion qilinmaydi.
+
+**Scale audit:** `results/P003_NATIVE_FACTORIZED_GLOBAL_SCALE_AUDIT_20260910.md`.
+
 ### C-P002-EXPOSURE-WARMUP-001 — Initial task-stable route exposure
 
 **Status:** `REJECTED`
