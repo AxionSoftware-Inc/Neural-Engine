@@ -104,6 +104,10 @@ def main() -> None:
         "--include-grouped-tiled", action="store_true",
         help="include the opt-in tiled CUDA grouped projection kernel",
     )
+    parser.add_argument(
+        "--include-grouped-optimized", action="store_true",
+        help="include the combined cached/prepacked/fused grouped path",
+    )
     parser.add_argument("--output")
     args = parser.parse_args()
     if not torch.cuda.is_available():
@@ -206,6 +210,10 @@ def main() -> None:
         ))
     if args.include_grouped_tiled:
         path_specs.append(("grouped-tiled", False, "grouped-tiled"))
+    if args.include_grouped_optimized:
+        path_specs.append((
+            "grouped-optimized", False, "grouped-optimized", True, True,
+        ))
     for path_spec in path_specs:
         if len(path_spec) == 3:
             path_name, single_token, dispatch_mode = path_spec
@@ -293,6 +301,8 @@ def main() -> None:
                 candidates.append("grouped-prepacked-fused")
             if args.include_grouped_tiled:
                 candidates.append("grouped-tiled")
+            if args.include_grouped_optimized:
+                candidates.append("grouped-optimized")
             for candidate in candidates:
                 candidate_row = rows_by_path[candidate][
                     (prefix_length, batch_size)
@@ -350,6 +360,15 @@ def main() -> None:
     if args.include_grouped_tiled:
         set_dispatch_path(children, False, "grouped-tiled")
         grouped_tiled_generation = greedy_generate_fixed_shape(
+            model, generation_prompt, 8, use_cuda_graph=True,
+        )
+    grouped_optimized_generation = None
+    if args.include_grouped_optimized:
+        set_dispatch_path(
+            children, False, "grouped-optimized",
+            fused_correction=True, uniform_accum=True,
+        )
+        grouped_optimized_generation = greedy_generate_fixed_shape(
             model, generation_prompt, 8, use_cuda_graph=True,
         )
     cached_grouped_generation = None
@@ -440,6 +459,13 @@ def main() -> None:
                     torch.equal(grouped_generation, grouped_tiled_generation)
                 ),
             } if grouped_tiled_generation is not None else {}),
+            **({
+                "grouped_vs_grouped_optimized_exact_token_match": bool(
+                    torch.equal(
+                        grouped_generation, grouped_optimized_generation,
+                    )
+                ),
+            } if grouped_optimized_generation is not None else {}),
         },
     }
     print(json.dumps(result, indent=2))

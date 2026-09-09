@@ -637,13 +637,14 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         if dispatch_mode not in {
             "grouped", "grouped-cached", "grouped-prepacked",
             "grouped-prepacked-fused", "grouped-fused",
-            "grouped-tiled",
+            "grouped-tiled", "grouped-optimized",
             "packed", "packed-fused", "packed-fp16",
             "fused", "token-loop",
         }:
             raise ValueError(
                 "transferred sparse child supports grouped, grouped-cached, grouped-prepacked, "
-                "grouped-prepacked-fused, grouped-fused, grouped-tiled, packed, "
+                "grouped-prepacked-fused, grouped-fused, grouped-tiled, "
+                "grouped-optimized, packed, "
                 "packed-fused, packed-fp16, fused, or token-loop"
             )
         self.dispatch_mode = dispatch_mode
@@ -1659,6 +1660,13 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 cache_pair_metadata=self.dispatch_mode == "grouped-cached",
                 prepacked_weights=self.dispatch_mode == "grouped-prepacked",
             )
+        if not self.training and self.dispatch_mode == "grouped-optimized":
+            return self._forward_grouped(
+                hidden_states, top_ids, weights,
+                fused_projections=True,
+                cache_pair_metadata=True,
+                prepacked_weights=True,
+            )
         if not self.training and self.dispatch_mode in {
             "grouped-fused", "grouped-prepacked-fused",
         }:
@@ -2177,7 +2185,7 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
             and self.base.dispatch_mode in {
                 "grouped", "grouped-fused", "grouped-cached",
                 "grouped-prepacked", "grouped-prepacked-fused",
-                "grouped-tiled",
+                "grouped-tiled", "grouped-optimized",
             }
             and not self.base.single_token_fast_path
         )
