@@ -739,9 +739,10 @@ to‘sardi. Capture vaqtida xavfsiz token-count upper bound qo‘llandi, eager
 prefillda esa dynamic bound saqlandi. Trained K=5 seed2026/2027’da grouped /
 single-token graph ratio B1 `0.963x/0.953x`, B8 `0.589x/0.589x`; B32 extension
 `0.423x`. Max logit xatosi `1.4e-5` dan kichik, 8-token generation exact
-match. Bu router fusiondan farqli ravishda selected FFN bottleneckga tegadigan
-eng kuchli runtime signal. **PROMISING; serving policy va production-shape
-validation ochiq.**
+match. Prefix 4/32/128 da B8 graph ratios `0.593x/0.600x/0.663x` bo‘lib,
+uzun contextda ham signal saqlanadi. Bu router fusiondan farqli ravishda
+selected FFN bottleneckga tegadigan eng kuchli runtime signal. **PROMISING;
+serving policy va production-shape validation ochiq.**
 **Batafsil:** `results/RUNTIME_QWEN_GROUPED_GRAPH_SAFE_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.

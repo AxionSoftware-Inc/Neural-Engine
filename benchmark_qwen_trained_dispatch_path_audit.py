@@ -55,6 +55,7 @@ def main() -> None:
     parser.add_argument("--warmup", type=int, default=10)
     parser.add_argument("--iterations", type=int, default=15)
     parser.add_argument("--batch-sizes", type=int, nargs="+", default=[1, 8])
+    parser.add_argument("--prefix-lengths", type=int, nargs="+", default=[4])
     parser.add_argument("--calibration-rank", type=int, default=64)
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--output")
@@ -93,9 +94,11 @@ def main() -> None:
         "trained_k5_dispatch_path_probe",
     )
 
-    prefix_ids = tokenizer(
-        "Neural Engine sparse circuits", return_tensors="pt",
-    ).input_ids[:, :4].to(device)
+    prefix_pool = tokenizer(
+        "Neural Engine sparse circuits " * 256, return_tensors="pt",
+    ).input_ids.to(device)
+    if max(args.prefix_lengths) > prefix_pool.shape[1]:
+        raise ValueError("prefix-length exceeds the generated prefix pool")
     token_ids = tokenizer(
         " attention", return_tensors="pt",
     ).input_ids[:, -1:].to(device)
@@ -104,57 +107,70 @@ def main() -> None:
     for path_name, single_token in (("single-token", True), ("grouped", False)):
         set_dispatch_path(children, single_token)
         rows = []
-        for batch_size in args.batch_sizes:
-            batch_prefix = prefix_ids.repeat(batch_size, 1)
-            batch_tokens = token_ids.repeat(batch_size, 1)
-            position = torch.tensor([batch_prefix.shape[1]], device=device)
-            cache_length = max(32, int(batch_prefix.shape[1]) + 8)
-            eager_cache = make_cache_and_fill_prefix(
-                model, batch_prefix, cache_length,
-            )
-            eager_ms, eager_logits = measure_eager(
-                model, batch_tokens, eager_cache, position,
-                args.warmup, args.iterations,
-            )
-            eager_logits_by_path[(path_name, batch_size)] = eager_logits.clone()
-            graph_cache = make_cache_and_fill_prefix(
-                model, batch_prefix, cache_length,
-            )
-            graph_ms, _, graph_logits, _ = measure_graph(
-                model, batch_tokens, graph_cache, position,
-                args.warmup, args.iterations,
-            )
-            rows.append({
-                "batch_size": batch_size,
-                "eager_ms": eager_ms,
-                "graph_ms": graph_ms,
-                "max_graph_vs_eager_logit_error": float(
-                    (graph_logits - eager_logits).abs().max().item()
-                ),
-            })
+        for prefix_length in args.prefix_lengths:
+            prefix_ids = prefix_pool[:, :prefix_length]
+            for batch_size in args.batch_sizes:
+                batch_prefix = prefix_ids.repeat(batch_size, 1)
+                batch_tokens = token_ids.repeat(batch_size, 1)
+                position = torch.tensor([batch_prefix.shape[1]], device=device)
+                cache_length = max(32, int(batch_prefix.shape[1]) + 8)
+                eager_cache = make_cache_and_fill_prefix(
+                    model, batch_prefix, cache_length,
+                )
+                eager_ms, eager_logits = measure_eager(
+                    model, batch_tokens, eager_cache, position,
+                    args.warmup, args.iterations,
+                )
+                eager_logits_by_path[(path_name, prefix_length, batch_size)] = (
+                    eager_logits.clone()
+                )
+                graph_cache = make_cache_and_fill_prefix(
+                    model, batch_prefix, cache_length,
+                )
+                graph_ms, _, graph_logits, _ = measure_graph(
+                    model, batch_tokens, graph_cache, position,
+                    args.warmup, args.iterations,
+                )
+                rows.append({
+                    "prefix_length": prefix_length,
+                    "batch_size": batch_size,
+                    "eager_ms": eager_ms,
+                    "graph_ms": graph_ms,
+                    "max_graph_vs_eager_logit_error": float(
+                        (graph_logits - eager_logits).abs().max().item()
+                    ),
+                })
         records.append({"path": path_name, "batches": rows})
 
-    single_rows = {row["batch_size"]: row for row in records[0]["batches"]}
-    grouped_rows = {row["batch_size"]: row for row in records[1]["batches"]}
+    single_rows = {
+        (row["prefix_length"], row["batch_size"]): row
+        for row in records[0]["batches"]
+    }
+    grouped_rows = {
+        (row["prefix_length"], row["batch_size"]): row
+        for row in records[1]["batches"]
+    }
     comparisons = []
-    for batch_size in args.batch_sizes:
-        comparisons.append({
-            "batch_size": batch_size,
-            "grouped_over_single_token_eager": (
-                grouped_rows[batch_size]["eager_ms"]
-                / max(single_rows[batch_size]["eager_ms"], 1e-9)
-            ),
-            "grouped_over_single_token_graph": (
-                grouped_rows[batch_size]["graph_ms"]
-                / max(single_rows[batch_size]["graph_ms"], 1e-9)
-            ),
-            "max_grouped_vs_single_token_eager_logit_error": float(
-                (
-                    eager_logits_by_path[("grouped", batch_size)]
-                    - eager_logits_by_path[("single-token", batch_size)]
-                ).abs().max().item()
-            ),
-        })
+    for prefix_length in args.prefix_lengths:
+        for batch_size in args.batch_sizes:
+            single = single_rows[(prefix_length, batch_size)]
+            grouped = grouped_rows[(prefix_length, batch_size)]
+            comparisons.append({
+                "prefix_length": prefix_length,
+                "batch_size": batch_size,
+                "grouped_over_single_token_eager": (
+                    grouped["eager_ms"] / max(single["eager_ms"], 1e-9)
+                ),
+                "grouped_over_single_token_graph": (
+                    grouped["graph_ms"] / max(single["graph_ms"], 1e-9)
+                ),
+                "max_grouped_vs_single_token_eager_logit_error": float(
+                    (
+                        eager_logits_by_path[("grouped", prefix_length, batch_size)]
+                        - eager_logits_by_path[("single-token", prefix_length, batch_size)]
+                    ).abs().max().item()
+                ),
+            })
 
     generation_prompt = tokenizer(
         "Explain why sparse circuits can reduce compute while preserving useful behavior.",
@@ -185,6 +201,8 @@ def main() -> None:
             "hard_steps": args.hard_steps,
             "router_steps": args.router_steps,
         },
+        "batch_sizes": args.batch_sizes,
+        "prefix_lengths": args.prefix_lengths,
         "teacher_ce": teacher_ce,
         "quality": quality,
         "layer_records": layer_records,

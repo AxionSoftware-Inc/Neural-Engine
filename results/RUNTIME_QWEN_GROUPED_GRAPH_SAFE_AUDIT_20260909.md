@@ -46,6 +46,17 @@ measured. Eight-token CUDA-Graph greedy generation produced an exact token
 match for both seeds. The remaining small logit differences are floating-point
 reduction-order differences and did not change the tested generation.
 
+An additional seed-2026 sweep varied the cached prefix length at B1 and B8:
+
+| Prefix length | B1 graph ratio | B8 graph ratio | Max logit error |
+|---:|---:|---:|---:|
+| 4 | `0.952x` | `0.593x` | `9.66e-6` |
+| 32 | `0.950x` | `0.600x` | `9.06e-6` |
+| 128 | `0.959x` | `0.663x` | `1.08e-5` |
+
+The gain persists with longer context, although attention increasingly
+dilutes the selected-FFN improvement.
+
 ## Decision
 
 - The grouped path is now graph-safe for the tested fixed-shape decode path.
@@ -64,6 +75,7 @@ reduction-order differences and did not change the tested generation.
 ```text
 python -u benchmark_qwen_trained_dispatch_path_audit.py --warmup 10 --iterations 20 --batch-sizes 1 8 32 --calibration-rank 64 --seed 2026 --output results/runs/v0_223_trained_qwen_dispatch_path_audit_b32.json
 python -u benchmark_qwen_trained_dispatch_path_audit.py --warmup 10 --iterations 30 --calibration-rank 64 --seed 2027 --output results/runs/v0_223_trained_qwen_dispatch_path_audit_seed2027.json
+python -u benchmark_qwen_trained_dispatch_path_audit.py --warmup 8 --iterations 10 --batch-sizes 1 8 --prefix-lengths 4 32 128 --calibration-rank 64 --seed 2026 --output results/runs/v0_223_trained_qwen_dispatch_path_audit_prefixes.json
 ```
 
 ## Artifacts
@@ -72,3 +84,4 @@ python -u benchmark_qwen_trained_dispatch_path_audit.py --warmup 10 --iterations
 - integration change in `benchmark_qwen_multi_layer_transplant.py`
 - `results/runs/v0_223_trained_qwen_dispatch_path_audit_b32.json`
 - `results/runs/v0_223_trained_qwen_dispatch_path_audit_seed2027.json`
+- `results/runs/v0_223_trained_qwen_dispatch_path_audit_prefixes.json`

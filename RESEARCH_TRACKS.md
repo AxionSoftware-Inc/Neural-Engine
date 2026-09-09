@@ -173,7 +173,9 @@ bound. On trained K=5 seeds 2026/2027, grouped-vs-single-token graph time is
 `0.963x/0.953x` at B1 and `0.589x/0.589x` at B8; a B32 extension reaches
 `0.423x`. It has exact eight-token generation parity and max logit error below
 `1.4e-5`. This is the first strong runtime result aimed at the selected FFN
-bottleneck; broader production-shape validation remains open.
+bottleneck. Prefix lengths 4/32/128 at B8 remain `0.593x/0.600x/0.663x`,
+so the signal persists with context even though attention dilutes it; broader
+production-shape validation remains open.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is
