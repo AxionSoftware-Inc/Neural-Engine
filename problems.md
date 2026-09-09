@@ -630,6 +630,12 @@ uchun bloklandi. Oddiy eager/graph yo‘l `PARITY_PASS`; Inductor **ENVIRONMENT-
 BLOCKED**, default o‘zgarmadi. Keyingi yo‘l Inductorga bog‘liq bo‘lmagan
 static-index/fused correction kernel.
 **Batafsil:** `results/RUNTIME_QWEN_INDUCTOR_PROBE_20260909.md`.
+**V0.208 correction ablation (2026-09-09):** correctionni butunlay olib
+tashlash (`rank=0`) B8 graph/dense `1.047x` va graph/sparse-eager `0.898x`
+berdi, lekin quality CE delta `+0.091023` bo‘lib `+0.05` gate’dan yiqildi.
+Demak correction capacity hozirgi K=5 quality uchun **ZARUR**; rank8 eng
+kichik viable candidate sifatida qoldi. Rank0 train bugi ham tuzatildi.
+**Batafsil:** `results/RUNTIME_QWEN_CORRECTION_ABLATION_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 

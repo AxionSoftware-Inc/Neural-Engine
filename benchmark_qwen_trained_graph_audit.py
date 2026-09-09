@@ -150,11 +150,17 @@ def train_k5_cascade(
         )
         frozen_router = freeze_subset_router(child)
         try:
-            child_history = train_child(
-                child, train_io, device, dtype, child_steps,
-                learning_rate, max_grad_norm, log_every,
-                hard_steps, hard_learning_rate, 0,
-            )
+            if calibration_rank > 0:
+                child_history = train_child(
+                    child, train_io, device, dtype, child_steps,
+                    learning_rate, max_grad_norm, log_every,
+                    hard_steps, hard_learning_rate, 0,
+                )
+            else:
+                # With no correction wrapper the copied circuit is fully
+                # frozen after router training; there is no autograd target
+                # for train_child to update.
+                child_history = []
         finally:
             restore_requires_grad(frozen_router)
         child.eval()
@@ -619,7 +625,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     )
 
     result = {
-        "experiment": "V0.207_trained_qwen_inductor_probe",
+        "experiment": "V0.208_trained_qwen_correction_ablation",
         "status": "PARITY_PASS" if max(replay_error, alternate_error) <= 1e-3 else "PARITY_FAIL",
         "model": args.model,
         "seed": args.seed,

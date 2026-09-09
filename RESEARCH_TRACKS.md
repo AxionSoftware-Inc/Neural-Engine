@@ -103,6 +103,10 @@ V0.207 Inductor fused-child probing is blocked by the local PyTorch/Triton
 toolchain (`Cannot find a working triton installation`), not by model parity.
 The next runtime experiment must therefore be a static-index/fused correction
 path independent of Inductor.
+V0.208 no-correction ablation fails the quality gate (`+0.091023`) despite
+near-dense B8 graph runtime (`1.047x`), confirming that correction capacity is
+necessary for the current K=5 quality point. Rank 8 remains the smallest
+viable tested candidate.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is
