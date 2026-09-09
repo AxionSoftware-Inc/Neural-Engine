@@ -178,6 +178,10 @@ so the signal persists with context even though attention dilutes it; broader
 production-shape validation remains open. Against the restored dense parent,
 grouped sparse graph is still `1.099x/1.146x/1.259x` at B1/B8/B32, so this is a
 strong sparse-path improvement but not yet a dense-serving win.
+V0.224 checks the `grouped-fused` one-BMM variant: it is parity-safe, but only
+`1.000x/0.993x/0.997x` of ordinary grouped graph time at B1/B8/B32. It helps
+eager B1/B8 and is neutral at B32, while the dense gap remains; no batch policy
+or default switch is added.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

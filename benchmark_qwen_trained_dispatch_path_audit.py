@@ -23,7 +23,9 @@ from benchmark_qwen_trained_graph_audit import train_k5_cascade
 from neural_engine.qwen_fixed_graph import greedy_generate_fixed_shape
 
 
-def set_dispatch_path(children, single_token: bool) -> None:
+def set_dispatch_path(
+    children, single_token: bool, dispatch_mode: str = "grouped",
+) -> None:
     for child in children:
         base = next(
             nested for nested in child.modules()
@@ -32,6 +34,7 @@ def set_dispatch_path(children, single_token: bool) -> None:
         base.single_token_fast_path = bool(single_token)
         base.single_token_router_backend = "torch"
         base.single_token_projection_backend = "einsum"
+        base.dispatch_mode = dispatch_mode
 
 
 def install_children(model, layers, children) -> None:
@@ -147,8 +150,13 @@ def main() -> None:
     install_children(model, layers, children)
     records = []
     eager_logits_by_path = {}
-    for path_name, single_token in (("single-token", True), ("grouped", False)):
-        set_dispatch_path(children, single_token)
+    path_specs = (
+        ("single-token", True, "grouped"),
+        ("grouped", False, "grouped"),
+        ("grouped-fused", False, "grouped-fused"),
+    )
+    for path_name, single_token, dispatch_mode in path_specs:
+        set_dispatch_path(children, single_token, dispatch_mode)
         rows = []
         for prefix_length in args.prefix_lengths:
             prefix_ids = prefix_pool[:, :prefix_length]
@@ -185,72 +193,69 @@ def main() -> None:
                 })
         records.append({"path": path_name, "batches": rows})
 
-    single_rows = {
-        (row["prefix_length"], row["batch_size"]): row
-        for row in records[0]["batches"]
-    }
-    grouped_rows = {
-        (row["prefix_length"], row["batch_size"]): row
-        for row in records[1]["batches"]
+    rows_by_path = {
+        record["path"]: {
+            (row["prefix_length"], row["batch_size"]): row
+            for row in record["batches"]
+        }
+        for record in records
     }
     comparisons = []
     for prefix_length in args.prefix_lengths:
         for batch_size in args.batch_sizes:
-            single = single_rows[(prefix_length, batch_size)]
-            grouped = grouped_rows[(prefix_length, batch_size)]
-            comparisons.append({
+            single = rows_by_path["single-token"][(prefix_length, batch_size)]
+            comparison = {
                 "prefix_length": prefix_length,
                 "batch_size": batch_size,
-                "grouped_over_single_token_eager": (
-                    grouped["eager_ms"] / max(single["eager_ms"], 1e-9)
-                ),
-                "grouped_over_single_token_graph": (
-                    grouped["graph_ms"] / max(single["graph_ms"], 1e-9)
-                ),
-                "max_grouped_vs_single_token_eager_logit_error": float(
-                    (
-                        eager_logits_by_path[("grouped", prefix_length, batch_size)]
-                        - eager_logits_by_path[("single-token", prefix_length, batch_size)]
-                    ).abs().max().item()
-                ),
-                "grouped_over_dense_eager": (
-                    grouped["eager_ms"]
-                    / max(
-                        next(
-                            row["eager_ms"] for row in dense_records
-                            if row["prefix_length"] == prefix_length
-                            and row["batch_size"] == batch_size
-                        ),
-                        1e-9,
-                    )
-                ),
-                "grouped_over_dense_graph": (
-                    grouped["graph_ms"]
-                    / max(
-                        next(
-                            row["graph_ms"] for row in dense_records
-                            if row["prefix_length"] == prefix_length
-                            and row["batch_size"] == batch_size
-                        ),
-                        1e-9,
-                    )
-                ),
-            })
+            }
+            dense = next(
+                row for row in dense_records
+                if row["prefix_length"] == prefix_length
+                and row["batch_size"] == batch_size
+            )
+            for candidate in ("grouped", "grouped-fused"):
+                candidate_row = rows_by_path[candidate][
+                    (prefix_length, batch_size)
+                ]
+                eager_error = (
+                    eager_logits_by_path[(candidate, prefix_length, batch_size)]
+                    - eager_logits_by_path[("single-token", prefix_length, batch_size)]
+                ).abs().max().item()
+                comparison[f"{candidate}_over_single_token_eager"] = (
+                    candidate_row["eager_ms"] / max(single["eager_ms"], 1e-9)
+                )
+                comparison[f"{candidate}_over_single_token_graph"] = (
+                    candidate_row["graph_ms"] / max(single["graph_ms"], 1e-9)
+                )
+                comparison[f"max_{candidate}_vs_single_token_eager_logit_error"] = (
+                    float(eager_error)
+                )
+                comparison[f"{candidate}_over_dense_eager"] = (
+                    candidate_row["eager_ms"] / max(dense["eager_ms"], 1e-9)
+                )
+                comparison[f"{candidate}_over_dense_graph"] = (
+                    candidate_row["graph_ms"] / max(dense["graph_ms"], 1e-9)
+                )
+            comparisons.append(comparison)
 
     generation_prompt = tokenizer(
         "Explain why sparse circuits can reduce compute while preserving useful behavior.",
         return_tensors="pt",
     ).input_ids.to(device)
-    set_dispatch_path(children, True)
+    set_dispatch_path(children, True, "grouped")
     single_generation = greedy_generate_fixed_shape(
         model, generation_prompt, 8, use_cuda_graph=True,
     )
-    set_dispatch_path(children, False)
+    set_dispatch_path(children, False, "grouped")
     grouped_generation = greedy_generate_fixed_shape(
         model, generation_prompt, 8, use_cuda_graph=True,
     )
+    set_dispatch_path(children, False, "grouped-fused")
+    grouped_fused_generation = greedy_generate_fixed_shape(
+        model, generation_prompt, 8, use_cuda_graph=True,
+    )
     result = {
-        "experiment": "V0.223_trained_qwen_dispatch_path_audit",
+        "experiment": "V0.224_trained_grouped_fused_audit",
         "status": "PARITY_PASS",
         "model": args.model,
         "seed": args.seed,
@@ -276,8 +281,11 @@ def main() -> None:
         "comparisons": comparisons,
         "generation": {
             "new_tokens": 8,
-            "exact_token_match": bool(
+            "single_vs_grouped_exact_token_match": bool(
                 torch.equal(single_generation, grouped_generation)
+            ),
+            "grouped_vs_grouped_fused_exact_token_match": bool(
+                torch.equal(grouped_generation, grouped_fused_generation)
             ),
         },
     }

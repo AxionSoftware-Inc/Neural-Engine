@@ -746,6 +746,13 @@ serving policy ochiq. Lekin dense parent bilan grouped sparse graph hali
 B1/B8/B32’da `1.099x/1.146x/1.259x`, ya’ni dense’dan sekin; production-shape
 validation va selected-FFN optimizatsiyasi ochiq.**
 **Batafsil:** `results/RUNTIME_QWEN_GROUPED_GRAPH_SAFE_AUDIT_20260909.md`.
+**V0.224 grouped-fused selected FFN (2026-09-09):** gate/value projectionni
+bitta BMMga birlashtirgan variant graphda oddiy groupedga nisbatan faqat
+B1/B8/B32’da `1.000x/0.993x/0.997x` bo‘ldi; eager B1/B8 foydali, B32 neytral.
+Generation exact parity saqlandi, lekin dense parentga nisbatan hali
+`1.108x/1.136x/1.257x` sekin. **PARITY-SAFE MICRO-OPTIMIZATION, DEFAULT
+UNCHANGED**; katta keyingi target selected FFN launch/packing overheadi.
+**Batafsil:** `results/RUNTIME_QWEN_GROUPED_FUSED_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 
