@@ -130,6 +130,24 @@ def test_grouped_adaptive_dispatch_matches_shape_specific_paths() -> None:
     assert torch.allclose(many_reference, many_adaptive, atol=1e-6, rtol=1e-6)
 
 
+def test_grouped_adaptive_nozero_pack_matches_grouped_adaptive() -> None:
+    torch.manual_seed(2041)
+    child = TransferredRoutedQwenChild(
+        TinyQwenMlp(), 4, 2, 1.0, "grouped-adaptive-nozero", "contiguous",
+        "router", 2.0,
+    ).eval()
+    one = torch.randn(1, 1, 8)
+    many = torch.randn(3, 5, 8)
+    child.dispatch_mode = "grouped-adaptive"
+    one_reference = child(one)
+    many_reference = child(many)
+    child.dispatch_mode = "grouped-adaptive-nozero"
+    one_probe = child(one)
+    many_probe = child(many)
+    assert torch.allclose(one_reference, one_probe, atol=1e-6, rtol=1e-6)
+    assert torch.allclose(many_reference, many_probe, atol=1e-6, rtol=1e-6)
+
+
 def test_grouped_cached_metadata_matches_grouped() -> None:
     torch.manual_seed(2026)
     child = TransferredRoutedQwenChild(

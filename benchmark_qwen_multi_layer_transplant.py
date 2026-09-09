@@ -9,6 +9,7 @@ from pathlib import Path
 
 import torch
 from torch.nn import functional as F
+from torch.profiler import record_function
 
 from benchmark_qwen_parent_transplant import EVAL_TEXT, TRAIN_TEXT
 from benchmark_qwen_two_layer_transplant import (
@@ -638,14 +639,15 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             "grouped", "grouped-cached", "grouped-prepacked",
             "grouped-prepacked-fused", "grouped-fused",
             "grouped-tiled", "grouped-optimized", "grouped-adaptive",
+            "grouped-adaptive-nozero",
             "packed", "packed-fused", "packed-fp16",
             "fused", "token-loop",
         }:
             raise ValueError(
                 "transferred sparse child supports grouped, grouped-cached, grouped-prepacked, "
                 "grouped-prepacked-fused, grouped-fused, grouped-tiled, "
-                "grouped-optimized, grouped-adaptive, packed, "
-                "packed-fused, packed-fp16, fused, or token-loop"
+                "grouped-optimized, grouped-adaptive, grouped-adaptive-nozero, "
+                "packed, packed-fused, packed-fp16, fused, or token-loop"
             )
         self.dispatch_mode = dispatch_mode
         chunk = inner_size // num_experts
@@ -1012,6 +1014,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         cache_pair_metadata: bool = False,
         prepacked_weights: bool = False,
         tiled_projections: bool = False,
+        uninitialized_pack: bool = False,
     ) -> torch.Tensor:
         flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
         flat_ids = top_ids.reshape(-1, self.active_experts)
@@ -1022,151 +1025,159 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 fused_projections=fused_projections,
             )
         flat_weights = weights.reshape(-1, self.active_experts)
-        if cache_pair_metadata:
-            metadata_key = (
-                int(flat_ids.shape[0]), self.active_experts, flat_ids.device,
-            )
-            metadata = self._grouped_pair_metadata_cache.get(metadata_key)
-            if metadata is None:
+        with record_function("neural_engine.grouped.metadata"):
+            if cache_pair_metadata:
+                metadata_key = (
+                    int(flat_ids.shape[0]), self.active_experts, flat_ids.device,
+                )
+                metadata = self._grouped_pair_metadata_cache.get(metadata_key)
+                if metadata is None:
+                    pair_indices = torch.arange(
+                        flat_ids.numel(), device=flat_ids.device,
+                    )
+                    token_ids = pair_indices // self.active_experts
+                    slots = pair_indices % self.active_experts
+                    metadata = (pair_indices, token_ids, slots)
+                    self._grouped_pair_metadata_cache[metadata_key] = metadata
+                pair_indices, token_ids, slots = metadata
+            else:
                 pair_indices = torch.arange(
                     flat_ids.numel(), device=flat_ids.device,
                 )
                 token_ids = pair_indices // self.active_experts
                 slots = pair_indices % self.active_experts
-                metadata = (pair_indices, token_ids, slots)
-                self._grouped_pair_metadata_cache[metadata_key] = metadata
-            pair_indices, token_ids, slots = metadata
-        else:
-            pair_indices = torch.arange(flat_ids.numel(), device=flat_ids.device)
-            token_ids = pair_indices // self.active_experts
-            slots = pair_indices % self.active_experts
-        expert_ids = flat_ids[token_ids, slots]
-        sort_order = torch.argsort(expert_ids, stable=True)
-        sorted_experts = expert_ids[sort_order]
-        # ``bincount`` plus a host scalar read makes the grouped path
-        # unusable inside CUDA Graph capture.  A token can contribute at most
-        # once to each expert, so the number of flattened tokens is a safe
-        # graph-stable upper bound.  Keep the tighter dynamic bound on eager
-        # paths to avoid inflating prefill workspace.
-        counts = torch.zeros(
-            self.num_experts, device=sorted_experts.device, dtype=torch.long,
-        )
-        counts.scatter_add_(
-            0, sorted_experts, torch.ones_like(sorted_experts, dtype=torch.long),
-        )
-        if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
-            max_count = flat_hidden.shape[0]
-        else:
-            max_count = int(counts.max().item())
-        starts = counts.cumsum(dim=0) - counts
-        positions = torch.arange(
-            pair_indices.numel(), device=flat_ids.device,
-        ) - starts[sorted_experts]
-        grouped_indices = sorted_experts * max_count + positions
-        grouped_hidden = torch.zeros(
-            self.num_experts * max_count,
-            flat_hidden.shape[-1],
-            device=flat_hidden.device,
-            dtype=flat_hidden.dtype,
-        )
-        grouped_hidden.index_copy_(
-            0, grouped_indices, flat_hidden[token_ids[sort_order]],
-        )
-        grouped_hidden = grouped_hidden.reshape(
-            self.num_experts, max_count, flat_hidden.shape[-1],
-        )
-        if tiled_projections:
-            (
-                gate_weight,
-                value_weight,
-                output_weight,
-                _gate_value_weight,
-            ) = self._get_grouped_prepacked_weights()
-            from neural_engine.qwen_tiled_dispatch import tiled_grouped_dispatch
-
-            grouped_output = tiled_grouped_dispatch(
-                grouped_hidden, gate_weight, value_weight, output_weight,
+        with record_function("neural_engine.grouped.pack"):
+            expert_ids = flat_ids[token_ids, slots]
+            sort_order = torch.argsort(expert_ids, stable=True)
+            sorted_experts = expert_ids[sort_order]
+            # ``bincount`` plus a host scalar read makes the grouped path
+            # unusable inside CUDA Graph capture.  A token can contribute at most
+            # once to each expert, so the number of flattened tokens is a safe
+            # graph-stable upper bound.  Keep the tighter dynamic bound on eager
+            # paths to avoid inflating prefill workspace.
+            counts = torch.zeros(
+                self.num_experts, device=sorted_experts.device, dtype=torch.long,
             )
-        elif prepacked_weights:
-            (
-                gate_weight,
-                value_weight,
-                output_weight,
-                gate_value_weight,
-            ) = self._get_grouped_prepacked_weights()
-        else:
-            gate_weight = self.group_gate_weight.transpose(1, 2)
-            value_weight = self.group_value_weight.transpose(1, 2)
-            output_weight = self.group_output_weight.transpose(1, 2)
-            gate_value_weight = self.group_gate_value_weight.transpose(1, 2)
-        if not tiled_projections:
-            if fused_projections:
-                group_size = self.group_gate_weight.shape[1]
-                grouped_gate_value = torch.bmm(
-                    grouped_hidden, gate_value_weight,
-                )
-                grouped_gate = F.silu(grouped_gate_value[..., :group_size])
-                grouped_value = grouped_gate_value[..., group_size:]
+            counts.scatter_add_(
+                0, sorted_experts,
+                torch.ones_like(sorted_experts, dtype=torch.long),
+            )
+            if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+                max_count = flat_hidden.shape[0]
             else:
-                grouped_gate = F.silu(torch.bmm(
-                    grouped_hidden, gate_weight,
-                ))
-                grouped_value = torch.bmm(
-                    grouped_hidden, value_weight,
+                max_count = int(counts.max().item())
+            starts = counts.cumsum(dim=0) - counts
+            positions = torch.arange(
+                pair_indices.numel(), device=flat_ids.device,
+            ) - starts[sorted_experts]
+            grouped_indices = sorted_experts * max_count + positions
+            grouped_hidden = (torch.empty if uninitialized_pack else torch.zeros)(
+                self.num_experts * max_count,
+                flat_hidden.shape[-1],
+                device=flat_hidden.device,
+                dtype=flat_hidden.dtype,
+            )
+            grouped_hidden.index_copy_(
+                0, grouped_indices, flat_hidden[token_ids[sort_order]],
+            )
+            grouped_hidden = grouped_hidden.reshape(
+                self.num_experts, max_count, flat_hidden.shape[-1],
+            )
+        with record_function("neural_engine.grouped.projections"):
+            if tiled_projections:
+                (
+                    gate_weight,
+                    value_weight,
+                    output_weight,
+                    _gate_value_weight,
+                ) = self._get_grouped_prepacked_weights()
+                from neural_engine.qwen_tiled_dispatch import tiled_grouped_dispatch
+
+                grouped_output = tiled_grouped_dispatch(
+                    grouped_hidden, gate_weight, value_weight, output_weight,
                 )
-            grouped_output = torch.bmm(
-                grouped_gate * grouped_value,
-                output_weight,
+            elif prepacked_weights:
+                (
+                    gate_weight,
+                    value_weight,
+                    output_weight,
+                    gate_value_weight,
+                ) = self._get_grouped_prepacked_weights()
+            else:
+                gate_weight = self.group_gate_weight.transpose(1, 2)
+                value_weight = self.group_value_weight.transpose(1, 2)
+                output_weight = self.group_output_weight.transpose(1, 2)
+                gate_value_weight = self.group_gate_value_weight.transpose(1, 2)
+            if not tiled_projections:
+                if fused_projections:
+                    group_size = self.group_gate_weight.shape[1]
+                    grouped_gate_value = torch.bmm(
+                        grouped_hidden, gate_value_weight,
+                    )
+                    grouped_gate = F.silu(grouped_gate_value[..., :group_size])
+                    grouped_value = grouped_gate_value[..., group_size:]
+                else:
+                    grouped_gate = F.silu(torch.bmm(
+                        grouped_hidden, gate_weight,
+                    ))
+                    grouped_value = torch.bmm(
+                        grouped_hidden, value_weight,
+                    )
+                grouped_output = torch.bmm(
+                    grouped_gate * grouped_value,
+                    output_weight,
+                )
+        with record_function("neural_engine.grouped.select_correction"):
+            selected_output = grouped_output.reshape(
+                self.num_experts * max_count, flat_hidden.shape[-1],
+            ).index_select(0, grouped_indices)
+            sorted_token_ids = token_ids[sort_order]
+            sorted_slots = slots[sort_order]
+            fused_correction = self.grouped_fused_correction
+            if fused_correction is None:
+                selected_by_pair = torch.empty_like(selected_output)
+                pair_slots = sorted_token_ids * self.active_experts + sorted_slots
+                selected_by_pair.index_copy_(0, pair_slots, selected_output)
+                self.last_selected_outputs = selected_by_pair.reshape(
+                    flat_hidden.shape[0], self.active_experts, flat_hidden.shape[-1],
+                ).reshape(
+                    *hidden_states.shape[:-1], self.active_experts,
+                    hidden_states.shape[-1],
+                )
+            else:
+                # Apply the correction while the selected output is still in the
+                # expert-major order produced by grouped dispatch.  This preserves
+                # the selected-only contract and avoids the pair reorder plus
+                # a second wrapper-side correction pass.
+                mix_in, mix_out = fused_correction
+                selected_mix_in = mix_in[sorted_experts]
+                selected_mix_out = mix_out[sorted_experts]
+                latent = torch.einsum(
+                    "ph,prh->pr", selected_output, selected_mix_in,
+                )
+                selected_output = selected_output + torch.einsum(
+                    "pr,phr->ph", latent, selected_mix_out,
+                )
+                self.last_selected_outputs = None
+        with record_function("neural_engine.grouped.accumulate"):
+            if self.grouped_uniform_accum and self.route_source == "subset-router":
+                # The hard subset router assigns the same top-k score to every
+                # member of the chosen subset.  Its softmax is therefore exactly
+                # 1/K, and the accepted K=5 contract uses hard_route_scale=K.
+                # Keep this shortcut opt-in because other route sources can have
+                # non-uniform weights.
+                contribution = selected_output
+                accumulation_scale = self.hard_route_scale / self.active_experts
+            else:
+                contribution = selected_output * flat_weights[
+                    sorted_token_ids, sorted_slots,
+                ].unsqueeze(-1)
+                accumulation_scale = self.hard_route_scale
+            flat_output = torch.zeros_like(flat_hidden)
+            flat_output.index_add_(0, sorted_token_ids, contribution)
+            self.last_active_expert_fraction = pair_indices.numel() / max(
+                flat_hidden.shape[0] * self.num_experts, 1
             )
-        selected_output = grouped_output.reshape(
-            self.num_experts * max_count, flat_hidden.shape[-1],
-        ).index_select(0, grouped_indices)
-        sorted_token_ids = token_ids[sort_order]
-        sorted_slots = slots[sort_order]
-        fused_correction = self.grouped_fused_correction
-        if fused_correction is None:
-            selected_by_pair = torch.empty_like(selected_output)
-            pair_slots = sorted_token_ids * self.active_experts + sorted_slots
-            selected_by_pair.index_copy_(0, pair_slots, selected_output)
-            self.last_selected_outputs = selected_by_pair.reshape(
-                flat_hidden.shape[0], self.active_experts, flat_hidden.shape[-1],
-            ).reshape(
-                *hidden_states.shape[:-1], self.active_experts,
-                hidden_states.shape[-1],
-            )
-        else:
-            # Apply the correction while the selected output is still in the
-            # expert-major order produced by grouped dispatch.  This preserves
-            # the selected-only contract and avoids the pair reorder plus a
-            # second wrapper-side correction pass.
-            mix_in, mix_out = fused_correction
-            selected_mix_in = mix_in[sorted_experts]
-            selected_mix_out = mix_out[sorted_experts]
-            latent = torch.einsum(
-                "ph,prh->pr", selected_output, selected_mix_in,
-            )
-            selected_output = selected_output + torch.einsum(
-                "pr,phr->ph", latent, selected_mix_out,
-            )
-            self.last_selected_outputs = None
-        if self.grouped_uniform_accum and self.route_source == "subset-router":
-            # The hard subset router assigns the same top-k score to every
-            # member of the chosen subset.  Its softmax is therefore exactly
-            # 1/K, and the accepted K=5 contract uses hard_route_scale=K.
-            # Keep this shortcut opt-in because other route sources can have
-            # non-uniform weights.
-            contribution = selected_output
-            accumulation_scale = self.hard_route_scale / self.active_experts
-        else:
-            contribution = selected_output * flat_weights[
-                sorted_token_ids, sorted_slots,
-            ].unsqueeze(-1)
-            accumulation_scale = self.hard_route_scale
-        flat_output = torch.zeros_like(flat_hidden)
-        flat_output.index_add_(0, sorted_token_ids, contribution)
-        self.last_active_expert_fraction = pair_indices.numel() / max(
-            flat_hidden.shape[0] * self.num_experts, 1
-        )
         # The router selects contribution-heavy groups rather than a random
         # subset, so the empirical stable scale is E/K, not an unbiased E
         # estimator that over-corrects the selected high-energy groups.
@@ -1667,7 +1678,9 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 cache_pair_metadata=True,
                 prepacked_weights=True,
             )
-        if not self.training and self.dispatch_mode == "grouped-adaptive":
+        if not self.training and self.dispatch_mode in {
+            "grouped-adaptive", "grouped-adaptive-nozero",
+        }:
             # Decode B=1 is launch/metadata bound; the extra cached layouts
             # only pay off once several rows can share the grouped work.
             use_optimized = (
@@ -1678,6 +1691,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 fused_projections=use_optimized,
                 cache_pair_metadata=use_optimized,
                 prepacked_weights=use_optimized,
+                uninitialized_pack=self.dispatch_mode == "grouped-adaptive-nozero",
             )
         if not self.training and self.dispatch_mode in {
             "grouped-fused", "grouped-prepacked-fused",
@@ -2198,7 +2212,7 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
                 "grouped", "grouped-fused", "grouped-cached",
                 "grouped-prepacked", "grouped-prepacked-fused",
                 "grouped-tiled", "grouped-optimized",
-                "grouped-adaptive",
+                "grouped-adaptive", "grouped-adaptive-nozero",
             }
             and not self.base.single_token_fast_path
         )

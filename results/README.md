@@ -38,6 +38,8 @@
 - [Runtime — Qwen combined grouped-path long repeat](RUNTIME_QWEN_GROUPED_OPTIMIZED_LONG_AUDIT_20260909.md)
 - [Runtime — Qwen shape-aware adaptive grouped audit](RUNTIME_QWEN_GROUPED_ADAPTIVE_AUDIT_20260909.md)
 - [Runtime — Qwen adaptive grouped prefix sweep](RUNTIME_QWEN_GROUPED_ADAPTIVE_PREFIX_SWEEP_20260909.md)
+- [Runtime — Qwen grouped selected-FFN stage profile](RUNTIME_QWEN_GROUPED_STAGE_PROFILE_20260909.md)
+- [Runtime — Qwen grouped no-zero workspace audit](RUNTIME_QWEN_GROUPED_NOZERO_AUDIT_20260909.md)
 - [Runtime — Qwen fixed-shape CUDA Graph replay](RUNTIME_QWEN_CUDA_GRAPH.md)
 - [Runtime — Qwen custom fixed-KV CUDA Graph decode](RUNTIME_QWEN_CUSTOM_KV_CUDA_GRAPH.md)
 - [Runtime — Qwen trained custom fixed-KV Graph audit](RUNTIME_QWEN_TRAINED_CUSTOM_KV_GRAPH_AUDIT_20260909.md)
