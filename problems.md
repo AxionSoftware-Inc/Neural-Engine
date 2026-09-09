@@ -636,13 +636,13 @@ berdi, lekin quality CE delta `+0.091023` bo‘lib `+0.05` gate’dan yiqildi.
 Demak correction capacity hozirgi K=5 quality uchun **ZARUR**; rank8 eng
 kichik viable candidate sifatida qoldi. Rank0 train bugi ham tuzatildi.
 **Batafsil:** `results/RUNTIME_QWEN_CORRECTION_ABLATION_20260909.md`.
-**V0.209 rank4 natijasi (2026-09-09):** correction rank4 ikki seedda ham
-quality gate’dan o‘tdi: CE delta `+0.037330/+0.040037`; B8 graph/dense
-`1.339x/1.330x`, graph/sparse-eager `0.887x/0.927x`, parity `1.05e-5/8.58e-6`.
-Generation graph/eager va reused-shape parity ikkala seedda ham exact. Rank4
-hozirgi eng kichik **ACCEPTED OPT-IN** candidate; default rank64 saqlandi.
-Uzoqroq training, uchinchi seed va fused/static-index correction kernel hali
-ochiq.
+**V0.209 rank4 natijasi (2026-09-09):** correction rank4 uch seedda ham
+quality gate’dan o‘tdi: CE delta `+0.037330/+0.040037/+0.040855`; B8
+graph/dense `1.339x/1.330x/1.337x`, graph/sparse-eager
+`0.887x/0.927x/0.899x`, parity `1.05e-5/8.58e-6/9.06e-6`. Generation
+graph/eager va reused-shape parity uchala seedda ham exact. Rank4 hozirgi eng
+kichik **ACCEPTED OPT-IN** candidate; default rank64 saqlandi. Uzunroq
+training budget va fused/static-index correction kernel hali ochiq.
 **Batafsil:** `results/RUNTIME_QWEN_CORRECTION_RANK4_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.

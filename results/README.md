@@ -211,11 +211,12 @@ tested viable correction candidate. See
 `RUNTIME_QWEN_CORRECTION_ABLATION_20260909.md`.
 
 V0.209 validates correction rank 4 on the same trained K=5 recipe. It passes
-the quality gate on seeds 2026/17 with CE deltas `+0.03733/+0.04004` and gives
-B8 graph/dense `1.339x/1.330x`; graph/sparse-eager is `0.887x/0.927x`.
+the quality gate on seeds 2026/17/42 with CE deltas
+`+0.03733/+0.04004/+0.04086` and gives B8 graph/dense
+`1.339x/1.330x/1.337x`; graph/sparse-eager is `0.887x/0.927x/0.899x`.
 Graph replay and reused-shape generation are exact within the audit tolerance.
 Rank 4 is the smallest tested viable opt-in, while rank 64 remains the default
-until longer and third-seed validation is complete. See
+until longer-budget validation is complete. See
 `RUNTIME_QWEN_CORRECTION_RANK4_AUDIT_20260909.md`.
 
 V0.194 rejects the eight-layer K=4 pairwise-cost router with three-round
