@@ -127,6 +127,7 @@ class FactorizedMicroCircuitBank(nn.Module):
                  factor_pair_scale: float = 1.0,
                  factor_product_scale: float = 0.0,
                  factor_hidden_product_scale: float = 0.0,
+                 factor_hidden_gate_scale: float = 0.0,
                  factor_composition_mode: str = "additive",
                  address_residual_rank: int = 0,
                  address_residual_scale: float = 1.0):
@@ -160,6 +161,9 @@ class FactorizedMicroCircuitBank(nn.Module):
         self.factor_hidden_product_scale = float(factor_hidden_product_scale)
         if self.factor_hidden_product_scale < 0.0:
             raise ValueError("factor_hidden_product_scale must be non-negative")
+        self.factor_hidden_gate_scale = float(factor_hidden_gate_scale)
+        if self.factor_hidden_gate_scale < 0.0:
+            raise ValueError("factor_hidden_gate_scale must be non-negative")
         if factor_composition_mode not in {"additive", "serial"}:
             raise ValueError("factor_composition_mode must be additive or serial")
         self.factor_composition_mode = factor_composition_mode
@@ -211,6 +215,7 @@ class FactorizedMicroCircuitBank(nn.Module):
         # without restoring a full independent matrix for every virtual row.
         mix_shape = (num_circuits, 2) if factor_mix_mode == "per_address" else (2,)
         self.factor_mix = nn.Parameter(torch.full(mix_shape, 0.5))
+        self.factor_hidden_gates = nn.Parameter(torch.zeros(*factor_shape, rank))
         nn.init.normal_(self.down_factors, std=0.02)
         nn.init.normal_(self.up_factors, std=0.02)
         self.cache = None
@@ -364,6 +369,12 @@ class FactorizedMicroCircuitBank(nn.Module):
             scale * self.address_residual_bias[circuit_ids],
         )
 
+    def _gather_hidden_gate(self, circuit_ids: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        first, second = self._factor_ids(circuit_ids)
+        if self.ordered_factor_slots:
+            return self.factor_hidden_gates[0, first], self.factor_hidden_gates[1, second]
+        return self.factor_hidden_gates[first], self.factor_hidden_gates[second]
+
     def forward(self, state: torch.Tensor, circuit_ids: torch.Tensor,
                 weights: torch.Tensor) -> torch.Tensor:
         if self.factor_composition_mode == "serial":
@@ -371,9 +382,18 @@ class FactorizedMicroCircuitBank(nn.Module):
                 self._gather_factor_slots(circuit_ids, state)
             )
             first_hidden = F.gelu(torch.einsum("bd,bkdr->bkr", state, first_down))
+            if self.factor_hidden_gate_scale:
+                first_gate, second_gate = self._gather_hidden_gate(circuit_ids)
+                first_hidden = first_hidden * (
+                    1.0 + self.factor_hidden_gate_scale * torch.tanh(first_gate)
+                )
             first_output = torch.einsum("bkr,bkrd->bkd", first_hidden, first_up) + first_bias
             middle = state.unsqueeze(1) + first_output
             second_hidden = F.gelu(torch.einsum("bkd,bkdr->bkr", middle, second_down))
+            if self.factor_hidden_gate_scale:
+                second_hidden = second_hidden * (
+                    1.0 + self.factor_hidden_gate_scale * torch.tanh(second_gate)
+                )
             outputs = torch.einsum("bkr,bkrd->bkd", second_hidden, second_up) + second_bias
             outputs = first_output + outputs
             if self.factor_hidden_product_scale:
@@ -386,6 +406,11 @@ class FactorizedMicroCircuitBank(nn.Module):
         down, up, bias = self._gather(circuit_ids, state)
         hidden = torch.einsum("bd,bkdr->bkr", state, down)
         hidden = F.gelu(hidden)
+        if self.factor_hidden_gate_scale:
+            first_gate, second_gate = self._gather_hidden_gate(circuit_ids)
+            hidden = hidden * (
+                1.0 + self.factor_hidden_gate_scale * torch.tanh(first_gate + second_gate)
+            )
         outputs = torch.einsum("bkr,bkrd->bkd", hidden, up) + bias
         if self.factor_hidden_product_scale:
             (first_down, first_up, _first_bias,
@@ -421,9 +446,18 @@ class FactorizedMicroCircuitBank(nn.Module):
                     circuit_ids[:, slot], current
                 )
                 first_hidden = F.gelu(torch.einsum("bd,bdr->br", current, first_down))
+                if self.factor_hidden_gate_scale:
+                    first_gate, second_gate = self._gather_hidden_gate(circuit_ids[:, slot])
+                    first_hidden = first_hidden * (
+                        1.0 + self.factor_hidden_gate_scale * torch.tanh(first_gate)
+                    )
                 first_output = torch.einsum("br,brd->bd", first_hidden, first_up) + first_bias
                 middle = current + first_output
                 second_hidden = F.gelu(torch.einsum("bd,bdr->br", middle, second_down))
+                if self.factor_hidden_gate_scale:
+                    second_hidden = second_hidden * (
+                        1.0 + self.factor_hidden_gate_scale * torch.tanh(second_gate)
+                    )
                 output = torch.einsum("br,brd->bd", second_hidden, second_up) + second_bias
                 output = first_output + output
                 if self.factor_hidden_product_scale:
@@ -437,6 +471,11 @@ class FactorizedMicroCircuitBank(nn.Module):
             down, up, bias = self._gather(circuit_ids[:, slot], current)
             hidden = torch.einsum("bd,bdr->br", current, down)
             hidden = F.gelu(hidden)
+            if self.factor_hidden_gate_scale:
+                first_gate, second_gate = self._gather_hidden_gate(circuit_ids[:, slot])
+                hidden = hidden * (
+                    1.0 + self.factor_hidden_gate_scale * torch.tanh(first_gate + second_gate)
+                )
             output = torch.einsum("br,brd->bd", hidden, up) + bias
             if self.factor_hidden_product_scale:
                 (first_down, first_up, _first_bias,

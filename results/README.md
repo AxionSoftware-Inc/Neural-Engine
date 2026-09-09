@@ -1579,6 +1579,11 @@ keys. It also raised VRAM by 44% and did not reduce selected circuit
 redundancy, so it remains opt-in only. See
 `P003_NATIVE_FACTORIZED_HIDDEN_PRODUCT_AUDIT_20260910.md`.
 
+The reusable factor-level hidden gate also lost its 1,000-step gain at 3,000
+steps: 68.060% versus 68.594% for ordered shared route keys. It adds only
+6,304 parameters and negligible VRAM, but does not fix scaling quality. See
+`P003_NATIVE_FACTORIZED_HIDDEN_GATE_AUDIT_20260910.md`.
+
 The matched 500M seed17 specialization diagnostic confirms a structural effect:
 shared factor-derived route keys reduce candidate/selected pair cosine from
 `0.37746/0.38004` to `0.26475/0.27034` and dead-circuit traffic from `46.05%`

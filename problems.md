@@ -1356,6 +1356,15 @@ sifatida qoldi.
 
 **Hidden-product audit:** `results/P003_NATIVE_FACTORIZED_HIDDEN_PRODUCT_AUDIT_20260910.md`.
 
+Factor-level hidden gate ham tekshirildi. 1,000 qadamda ikki seed mean
+`59.410%` bo‘lib kichik ijobiy signal berdi, lekin 3,000 qadamda `68.060%`
+gacha tushdi; ordered shared-route-key baseline `68.594%` edi. Parametr faqat
+`+6,304`, VRAM deyarli o‘zgarmadi, ammo sifat yaxshilanmadi. Shuning uchun
+hidden gate scaling yechimi sifatida rad qilindi, opt-in control sifatida
+saqlandi.
+
+**Hidden-gate audit:** `results/P003_NATIVE_FACTORIZED_HIDDEN_GATE_AUDIT_20260910.md`.
+
 500M ordered-slotning birinchi varianti `d_model=512` bilan ishga tushgani
 aniqlandi, holbuki shared 500M baseline `d_model=384` edi; `69.818%` natija
 shu sabab fair taqqoslash dalili emas va confounded deb belgilandi. Teng

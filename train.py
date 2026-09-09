@@ -65,6 +65,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["query_factor_mix_scale"] = config.get("query_factor_mix_scale", 0.0)
     model_kwargs["factor_product_scale"] = config.get("factor_product_scale", 0.0)
     model_kwargs["factor_hidden_product_scale"] = config.get("factor_hidden_product_scale", 0.0)
+    model_kwargs["factor_hidden_gate_scale"] = config.get("factor_hidden_gate_scale", 0.0)
     model_kwargs["factor_composition_mode"] = config.get("factor_composition_mode", "additive")
     model_kwargs["address_residual_rank"] = config.get("address_residual_rank", 0)
     model_kwargs["address_residual_scale"] = config.get("address_residual_scale", 1.0)
@@ -95,6 +96,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
                     "memory_write_mode", "post_correction_residual_scale", "router_variant",
                     "factor_candidate_layout", "factor_pair_interaction_scale",
                     "factor_hidden_product_scale",
+                    "factor_hidden_gate_scale",
                     "soft_routing_temperature", "route_target_supervision",
                     "routing_reuse_weight", "routing_reuse_start_level",
                     "input_reinjection_schedule"):

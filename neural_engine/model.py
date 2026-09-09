@@ -39,6 +39,7 @@ class NeuralEngineV0(nn.Module):
                  query_factor_mix_scale: float = 0.0,
                  factor_product_scale: float = 0.0,
                  factor_hidden_product_scale: float = 0.0,
+                 factor_hidden_gate_scale: float = 0.0,
                  factor_composition_mode: str = "additive",
                  address_residual_rank: int = 0,
                  address_residual_scale: float = 1.0,
@@ -82,6 +83,7 @@ class NeuralEngineV0(nn.Module):
         self.query_factor_mix_scale = float(query_factor_mix_scale)
         self.factor_product_scale = float(factor_product_scale)
         self.factor_hidden_product_scale = float(factor_hidden_product_scale)
+        self.factor_hidden_gate_scale = float(factor_hidden_gate_scale)
         self.factor_composition_mode = factor_composition_mode
         self.address_residual_rank = int(address_residual_rank)
         self.address_residual_scale = float(address_residual_scale)
@@ -199,6 +201,7 @@ class NeuralEngineV0(nn.Module):
                 factor_pair_scale=factor_pair_scale,
                 factor_product_scale=factor_product_scale,
                 factor_hidden_product_scale=factor_hidden_product_scale,
+                factor_hidden_gate_scale=factor_hidden_gate_scale,
                 factor_composition_mode=factor_composition_mode,
                 address_residual_rank=address_residual_rank,
                 address_residual_scale=address_residual_scale,
@@ -542,6 +545,12 @@ class NeuralEngineV0(nn.Module):
                 factor_row = (self.circuits.down_factors[0].numel()
                               + self.circuits.up_factors[0].numel()
                               + self.circuits.bias_factors[0].numel())
+            if self.circuits.ordered_factor_slots:
+                gate_row = self.circuits.factor_hidden_gates[0, 0].numel()
+            else:
+                gate_row = self.circuits.factor_hidden_gates[0].numel()
+            if self.circuits.factor_hidden_gate_scale:
+                factor_row += gate_row
             active_circuit_params = factor_row * self.active_circuits * 2
             if self.circuits.factor_mix_mode == "per_address":
                 active_circuit_params += self.active_circuits * self.circuits.factor_mix[0].numel()
@@ -589,4 +598,5 @@ class NeuralEngineV0(nn.Module):
             "factor_candidate_layout": self.factor_candidate_layout,
             "factor_pair_interaction_scale": self.factor_pair_interaction_scale,
             "factor_hidden_product_scale": self.factor_hidden_product_scale,
+            "factor_hidden_gate_scale": self.factor_hidden_gate_scale,
         }
