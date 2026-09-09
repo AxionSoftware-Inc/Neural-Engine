@@ -1215,7 +1215,11 @@ ishlatilmaydi. Rank-32 pair basis ikki seedda `58.203%` mean accuracy va
 `1.51172` mean CE berdi; plain factorizeddan ham yomon bo‘lgani uchun u ham
 rad qilindi. Plain factorized smoke factor row’larning `86/87`tasini ishlatdi,
 shuning uchun muammo factor row exposure emas, kombinatsiya representation’i
-va final task-loss alignment tomonida.
+va final task-loss alignment tomonida. 3,000 qadamlik ikki-seed continuation’da
+mustaqil 7,552 bank `68.620%` accuracy / `0.99017` CE, factorized bank esa
+`66.888%` / `1.05428` berdi; factorized keyinroq yetib olmadi, farq `−1.732 pp`
+gacha kengaydi. Shu sabab factorized virtual-capacity yo‘li sifat yechimi
+sifatida yakuniy rad qilindi, faqat compression/runtime opt-in qoldi.
 
 **Batafsil:** `results/P003_NATIVE_FACTORIZED_VIRTUAL_BANK_AUDIT_20260910.md`.
 

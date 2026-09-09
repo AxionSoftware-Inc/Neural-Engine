@@ -1505,3 +1505,9 @@ a capacity solution. Widening the factor candidate pool from 8 to 32 is also
 slower and still below the independent control. Factor-row usage is now
 reported separately from virtual address usage. See
 `P003_NATIVE_FACTORIZED_VIRTUAL_BANK_AUDIT_20260910.md`.
+
+The 3,000-step two-seed continuation confirms the quality gap: independent
+7,552-bank mean accuracy is 68.620% versus 66.888% for factorized (`−1.732 pp`)
+and mean CE is 0.99017 versus 1.05428. More optimization does not recover the
+virtual capacity; the factorized path is retained only as opt-in
+compression/runtime infrastructure.

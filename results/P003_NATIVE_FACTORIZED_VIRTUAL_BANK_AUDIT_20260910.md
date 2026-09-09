@@ -70,6 +70,30 @@ Two-seed means:
   `1.51172` mean CE.  The pair basis therefore did not recover useful
   combination capacity in this protocol.
 
+### Longer convergence check
+
+Because the 1,000-step screen could in principle have been too early, both
+plain arms were trained from scratch for 3,000 steps under the same protocol:
+
+| Arm | Seed 17 accuracy / CE | Seed 18 accuracy / CE | Mean accuracy | Mean CE |
+|---|---:|---:|---:|---:|
+| Independent, 7,552 circuits | 68.542% / 0.98952 | 68.698% / 0.99082 | 68.620% | 0.99017 |
+| Factorized, 7,552 virtual addresses | 66.719% / 1.04476 | 67.057% / 1.06380 | 66.888% | 1.05428 |
+
+The gap widens to `−1.732 pp` accuracy and `+0.06411` CE for factorized.  It
+does not catch up with more optimization.  The factorized arm remains about
+`49.5%` faster and uses the same `680 MB` peak VRAM, but that runtime saving is
+coming from its much smaller learned basis, not from a successful 7,552-address
+capacity expansion.
+
+For an additional parameter-budget control, a 1,000-step independent bank with
+87 real circuits has `3,002,985` parameters and mean `58.229%` accuracy / `1.43779`
+CE, while the factorized 87-row bank has `3,002,690` parameters and mean
+`58.594%` / `1.47470`.  The virtual combinations provide a small early accuracy
+benefit over the same-row-count independent control, but the 174-circuit
+independent control reaches `58.997%` / `1.43180`, showing that the benefit is
+not equivalent to the full independent 7,552-bank capacity.
+
 ## Decision
 
 **REJECTED as a quality/capacity fix.  RETAINED as an opt-in compression and
@@ -83,10 +107,9 @@ collapses onto a small subset of virtual addresses.  The pair interaction
 extension was also rejected in this first screen.
 
 The native defaults and independent bank were not changed.  No 300M/500M
-factorized expansion is justified by this result until the route-collapse
-problem has a positive intervention.  P-003 and P-007 remain open; the next
-useful work should measure or improve factor-row exposure/specialization, not
-just increase the virtual address count.
+factorized expansion is justified by this result.  P-003 and P-007 remain
+open; the next useful work should improve the combination representation or
+final-loss alignment, not just increase the virtual address count.
 
 ## Reproduction
 
@@ -101,6 +124,10 @@ python -u train.py --config configs/ne_100_v12_factorized_explore10.yaml --steps
 python -u train.py --config configs/ne_100_v12_factorized_explore10.yaml --steps 1000 --device cuda --balanced-train --log-every 500 --run-id native_factorized_explore10_corrected_s18_1000 --output results/runs --seed 18
 python -u train.py --config configs/ne_100_v12_factorized_pair32.yaml --steps 1000 --device cuda --balanced-train --log-every 500 --run-id native_factorized_pair32_s17_1000 --output results/runs --seed 17
 python -u train.py --config configs/ne_100_v12_factorized_pair32.yaml --steps 1000 --device cuda --balanced-train --log-every 500 --run-id native_factorized_pair32_s18_1000 --output results/runs --seed 18
+python -u train.py --config configs/ne_100_v12_coverage.yaml --steps 3000 --device cuda --balanced-train --log-every 1000 --run-id native_independent_s17_3000 --output results/runs --seed 17
+python -u train.py --config configs/ne_100_v12_coverage.yaml --steps 3000 --device cuda --balanced-train --log-every 1000 --run-id native_independent_s18_3000 --output results/runs --seed 18
+python -u train.py --config configs/ne_100_v12_factorized.yaml --steps 3000 --device cuda --balanced-train --log-every 1000 --run-id native_factorized_s17_3000 --output results/runs --seed 17
+python -u train.py --config configs/ne_100_v12_factorized.yaml --steps 3000 --device cuda --balanced-train --log-every 1000 --run-id native_factorized_s18_3000 --output results/runs --seed 18
 ```
 
 The JSON outputs are generated under `results/runs/` and are git-ignored.
