@@ -322,14 +322,21 @@ def trained_correction_backend_matrix(
             [mixer.correction_dispatch_backend for mixer in current_mixers]
         )
     try:
-        for backend in ("vectorized", "cuda-fused", "packed"):
+        for backend in ("vectorized", "effective-output", "cuda-fused", "packed"):
             for mixer in mixers:
                 mixer.max_dense_gather_bytes = (
                     128 * 1024 * 1024 if backend == "vectorized" else 0
                 )
                 mixer.correction_dispatch_backend = (
-                    "cuda-fused" if backend == "cuda-fused" else "vectorized"
+                    backend if backend in {"effective-output", "cuda-fused"}
+                    else "vectorized"
                 )
+            for child in children:
+                route_base = next(
+                    nested for nested in child.modules()
+                    if isinstance(nested, TransferredRoutedQwenChild)
+                )
+                route_base.single_token_output_weight = None
             batch_size = 8
             prefix_ids = base_prefix.repeat(batch_size, 1)
             token_ids = base_token.repeat(batch_size, 1)
@@ -653,7 +660,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     )
 
     result = {
-        "experiment": "V0.211_trained_qwen_correction_cuda_kernel",
+        "experiment": "V0.212_trained_qwen_effective_output_projection",
         "status": "PARITY_PASS" if max(replay_error, alternate_error) <= 1e-3 else "PARITY_FAIL",
         "model": args.model,
         "seed": args.seed,

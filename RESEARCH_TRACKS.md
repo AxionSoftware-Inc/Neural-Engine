@@ -120,6 +120,11 @@ the current stream, trained final-logit parity is `9.3e-6/9.5e-6` versus the
 vectorized backend; graph replay is safe. End-to-end graph timing changes only
 `49.36→48.88 ms` in the measured seed, so the kernel is retained opt-in and
 not promoted as a large speed breakthrough.
+V0.212 tests folding the linear correction into an effective output matrix
+(`W_eff = W_out + mix_out·mix_in·W_out`). It reduces one-token backend time
+slightly, but all-layer cascade final-logit parity versus vectorized is `1.45`,
+so route drift makes it unsafe. The algebra is retained as a rejected opt-in;
+the next fusion must preserve routing decisions or fuse the full layer.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

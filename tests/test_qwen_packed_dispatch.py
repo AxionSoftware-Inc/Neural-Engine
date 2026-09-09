@@ -156,6 +156,22 @@ def test_cross_group_single_token_batched_matmul_matches_reference() -> None:
     assert torch.allclose(actual, expected, atol=1e-6, rtol=1e-6)
 
 
+def test_cross_group_effective_output_projection_matches_correction() -> None:
+    torch.manual_seed(2034)
+    base = TransferredRoutedQwenChild(
+        TinyQwenMlp(), 4, 2, 1.0, "grouped", "contiguous",
+        "router", 2.0,
+    )
+    child = CrossGroupOutputMixRoutedQwenChild(base, 3).eval()
+    base.single_token_fast_path = True
+    inputs = torch.randn(3, 1, 8)
+    with torch.inference_mode():
+        expected = child(inputs)
+        child.correction_dispatch_backend = "effective-output"
+        actual = child(inputs)
+    assert torch.allclose(actual, expected, atol=1e-6, rtol=1e-6)
+
+
 def test_single_token_bmm_projection_matches_einsum() -> None:
     torch.manual_seed(2033)
     parent = TinyQwenMlp()

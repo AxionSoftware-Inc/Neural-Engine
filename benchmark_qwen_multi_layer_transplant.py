@@ -853,6 +853,9 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         # equivalence/quality audit approves its different reduction order.
         self.single_token_fast_path = False
         self.single_token_projection_backend = "einsum"
+        # Optional inference-only override used when a linear correction is
+        # folded into the selected output projection.
+        self.single_token_output_weight: torch.Tensor | None = None
 
     def _router_features(self, hidden_states: torch.Tensor) -> torch.Tensor:
         if self.router_input == "hidden":
@@ -1015,7 +1018,12 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         """
         selected_gate = self.group_gate_weight[flat_ids]
         selected_value = self.group_value_weight[flat_ids]
-        selected_output_weight = self.group_output_weight[flat_ids]
+        output_weight_bank = (
+            self.group_output_weight
+            if self.single_token_output_weight is None
+            else self.single_token_output_weight
+        )
+        selected_output_weight = output_weight_bank[flat_ids]
         if fused_projections:
             selected_gate_value = self.group_gate_value_weight[flat_ids]
             if self.single_token_projection_backend == "bmm":
@@ -1861,13 +1869,57 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
         # gathered projection tensors against a conservative memory bound.
         self.max_dense_gather_bytes = 128 * 1024 * 1024
         self.correction_dispatch_backend = "vectorized"
+        self._fused_output_weight_cache: torch.Tensor | None = None
+        self._fused_output_weight_cache_key: tuple[object, ...] | None = None
+
+    def _fused_output_weight(self) -> torch.Tensor:
+        """Build W_out + mix_out @ mix_in @ W_out for frozen inference."""
+        output_weight = self.base.group_output_weight
+        key = (
+            output_weight.device,
+            output_weight.dtype,
+            output_weight._version,
+            self.mix_in.device,
+            self.mix_in.dtype,
+            self.mix_in._version,
+            self.mix_out.device,
+            self.mix_out.dtype,
+            self.mix_out._version,
+        )
+        if (
+            self._fused_output_weight_cache is None
+            or self._fused_output_weight_cache_key != key
+        ):
+            with torch.no_grad():
+                correction_weight = torch.einsum(
+                    "ehr,erh,ehg->ehg",
+                    self.mix_out,
+                    self.mix_in,
+                    output_weight,
+                )
+                self._fused_output_weight_cache = (
+                    output_weight + correction_weight
+                ).contiguous()
+            self._fused_output_weight_cache_key = key
+        return self._fused_output_weight_cache
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        use_fused_output = (
+            self.correction_dispatch_backend == "effective-output"
+            and not self.replace_base_output
+            and hidden_states.shape[-2] == 1
+        )
+        if use_fused_output:
+            self.base.single_token_output_weight = self._fused_output_weight()
+        else:
+            self.base.single_token_output_weight = None
         base_output = self.base(hidden_states)
         route_weights = self.base.last_route_weights
         selected = self.base.last_selected
         if route_weights is None or selected is None:
             raise RuntimeError("base route state was not populated")
+        if use_fused_output:
+            return base_output
         if self.base.training and not self.base.hard_train:
             all_outputs = self.base.last_all_outputs
             if all_outputs is None:

@@ -660,6 +660,14 @@ bo‘ldi. Trained B8 A/B’da vectorized→CUDA kernel eager `44.48→44.78 ms`,
 Quality va model body o‘zgarmadi; keyingi katta yutuq uchun fused base+correction
 dispatch yoki kernel fusion kerak.
 **Batafsil:** `results/RUNTIME_QWEN_CORRECTION_CUDA_KERNEL_AUDIT_20260909.md`.
+**V0.212 effective-output folding (2026-09-09):** correctionni
+`W_eff = W_out + mix_out·mix_in·W_out` ga oldindan birlashtirish local formula
+va CPU paritydan o‘tdi. Ammo barcha 8 layer cascade’da vectorized final logitsga
+nisbatan max error `1.45` chiqdi; kichik floating farqlar keyingi layer routingini
+o‘zgartirdi. **REJECTED FOR ADOPTION**; default va quality yo‘li o‘zgarmadi.
+Bu yo‘l faqat route freeze qilingan yoki butun layer fused qilingan holatda qayta
+ko‘rilishi mumkin.
+**Batafsil:** `results/RUNTIME_QWEN_EFFECTIVE_OUTPUT_FOLDING_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 
