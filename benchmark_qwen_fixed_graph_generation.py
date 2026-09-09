@@ -7,7 +7,10 @@ import json
 
 import torch
 
-from neural_engine.qwen_fixed_graph import greedy_generate_fixed_shape
+from neural_engine.qwen_fixed_graph import (
+    FixedShapeGreedyGraphPool,
+    greedy_generate_fixed_shape,
+)
 from benchmark_qwen_multi_layer_transplant import (
     TransferredRoutedQwenChild,
     make_transferred_routed_qwen_child,
@@ -53,13 +56,24 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     prompt = tokenizer(
         "Neural Engine sparse circuits", return_tensors="pt",
     ).input_ids[:, :args.prefix_tokens].to(device)
-    graph_tokens = greedy_generate_fixed_shape(
-        model, prompt, args.new_tokens, use_cuda_graph=True,
+    pool = FixedShapeGreedyGraphPool(model, max_entries=2)
+    graph_tokens = pool.generate(prompt, args.new_tokens, use_cuda_graph=True)
+    graph_tokens_reused = pool.generate(
+        prompt, args.new_tokens, use_cuda_graph=True,
     )
     eager_tokens = greedy_generate_fixed_shape(
         model, prompt, args.new_tokens, use_cuda_graph=False,
     )
+    fallback_budget = max(2, args.new_tokens - 1)
+    fallback_tokens = pool.generate(
+        prompt, fallback_budget, use_cuda_graph=True, capture_on_miss=False,
+    )
+    fallback_eager_tokens = greedy_generate_fixed_shape(
+        model, prompt, fallback_budget, use_cuda_graph=False,
+    )
     equal = bool(torch.equal(graph_tokens, eager_tokens))
+    reused_equal = bool(torch.equal(graph_tokens, graph_tokens_reused))
+    fallback_equal = bool(torch.equal(fallback_tokens, fallback_eager_tokens))
     result = {
         "experiment": "V0.199_qwen_fixed_graph_greedy_generation",
         "status": "PARITY_PASS" if equal else "PARITY_FAIL",
@@ -67,6 +81,11 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "prefix_tokens": int(prompt.shape[1]),
         "new_tokens": args.new_tokens,
         "exact_token_match": equal,
+        "reused_shape_exact_token_match": reused_equal,
+        "uncaptured_shape_eager_fallback_exact_token_match": fallback_equal,
+        "fallback_budget": fallback_budget,
+        "graph_capture_count": pool.capture_count,
+        "graph_cache_hit_count": pool.hit_count,
         "generated_ids": graph_tokens.cpu().tolist(),
     }
     print(json.dumps(result, indent=2))

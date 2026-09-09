@@ -72,8 +72,10 @@ error `7.63e-6`. This closes the trained fixed-shape proof point; prefill,
 four-step prefill-to-decode replay also passes with maximum error `5.72e-6`,
 so the next milestone is now a small generation adapter plus safe fallback for
 uncaptured shapes. The opt-in greedy adapter now reproduces an eight-token
-sequence exactly between graph and eager paths; trained-child generation and
-shape-keyed capture management remain open.
+sequence exactly between graph and eager paths, and a repeated request reuses
+one captured shape entry. Trained-child generation and multi-shape fallback
+management remain open; an uncaptured shape now has an explicit eager fallback
+control that matches an independent eager run.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is
