@@ -154,3 +154,23 @@ def test_cross_group_single_token_batched_matmul_matches_reference() -> None:
         selected_corrections * route_weights.unsqueeze(-1)
     ).sum(dim=-2)
     assert torch.allclose(actual, expected, atol=1e-6, rtol=1e-6)
+
+
+def test_single_token_bmm_projection_matches_einsum() -> None:
+    torch.manual_seed(2033)
+    parent = TinyQwenMlp()
+    einsum_child = TransferredRoutedQwenChild(
+        parent, 4, 2, 1.0, "grouped", "contiguous", "router", 2.0,
+    ).eval()
+    bmm_child = TransferredRoutedQwenChild(
+        parent, 4, 2, 1.0, "grouped", "contiguous", "router", 2.0,
+    ).eval()
+    bmm_child.load_state_dict(einsum_child.state_dict())
+    einsum_child.single_token_fast_path = True
+    bmm_child.single_token_fast_path = True
+    bmm_child.single_token_projection_backend = "bmm"
+    inputs = torch.randn(3, 1, 8)
+    with torch.inference_mode():
+        expected = einsum_child(inputs)
+        actual = bmm_child(inputs)
+    assert torch.allclose(actual, expected, atol=1e-6, rtol=1e-6)

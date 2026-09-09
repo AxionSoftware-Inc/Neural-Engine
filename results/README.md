@@ -32,6 +32,7 @@
 - [Runtime — Qwen trained correction BMM audit](RUNTIME_QWEN_TRAINED_CORRECTION_BMM_AUDIT_20260909.md)
 - [Runtime — Qwen trained correction-rank audit](RUNTIME_QWEN_CORRECTION_RANK_AUDIT_20260909.md)
 - [Runtime — Qwen rank-8 correction audit](RUNTIME_QWEN_CORRECTION_RANK8_AUDIT_20260909.md)
+- [Runtime — Qwen single-token projection audit](RUNTIME_QWEN_SINGLE_TOKEN_PROJECTION_AUDIT_20260909.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
@@ -186,6 +187,13 @@ graph/sparse-eager is `0.924x` and `0.965x`, while CE delta is `+0.02412` and
 `+0.02997`. Rank 8 is the fastest current opt-in, but rank 64 remains the
 default until the fused/static-index kernel and longer validation are done.
 See `RUNTIME_QWEN_CORRECTION_RANK8_AUDIT_20260909.md`.
+
+V0.206 compares an opt-in BMM base projection backend with the existing
+single-token einsum path. On trained rank-8 B8, BMM is slightly faster eager
+(`37.238` vs `37.626 ms`) but slower in graph replay (`35.494` vs `34.974 ms`),
+so einsum remains the default. The audit also orders the intentionally failing
+packed-capture probe last so it cannot poison later measurements. See
+`RUNTIME_QWEN_SINGLE_TOKEN_PROJECTION_AUDIT_20260909.md`.
 
 V0.194 rejects the eight-layer K=4 pairwise-cost router with three-round
 on-policy aggregation: learned CE is `+0.06822/+0.07745` across seeds, worse

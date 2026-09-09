@@ -95,6 +95,10 @@ V0.205 rank 8 is a stronger runtime candidate: with long timing it gives B8
 graph/dense `1.390x/1.008x` and graph/sparse-eager `0.924x/0.965x` on seeds
 2026/17, with CE deltas `+0.02412/+0.02997`. Keep it opt-in because timing
 variance and fused-kernel validation remain open.
+V0.206 base-child BMM projection is parity-safe but not a graph speedup:
+trained B8 is `35.494 ms` versus einsum `34.974 ms`, so einsum stays default.
+The audit now places the known failing packed-capture probe last to preserve
+CUDA benchmark state.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

@@ -618,6 +618,12 @@ bo‘ldi; parity `1e-5` ichida. Rank8 **ACCEPTED OPT-IN**, hozirgi eng tez
 candidate; default rank64 saqlandi. GPU timing variance va fused/static-index
 correction kernel hali ochiq muammo.
 **Batafsil:** `results/RUNTIME_QWEN_CORRECTION_RANK8_AUDIT_20260909.md`.
+**V0.206 base BMM natijasi (2026-09-09):** single-token base projectionda
+BMM eager `37.238 ms`, graph `35.494 ms`; einsum eager `37.626 ms`, graph
+`34.974 ms`. BMM parity-safe bo‘lsa ham graph’da tezlashtirmadi, shuning uchun
+**REJECTED AS DEFAULT**, einsum saqlandi. Packed capture probe’dan keyingi
+CUDA context muammosi ham audit tartibini o‘zgartirib tuzatildi.
+**Batafsil:** `results/RUNTIME_QWEN_SINGLE_TOKEN_PROJECTION_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 

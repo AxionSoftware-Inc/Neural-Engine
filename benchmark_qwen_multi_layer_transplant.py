@@ -852,6 +852,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         # One-token dispatch is kept opt-in until a full-model numerical
         # equivalence/quality audit approves its different reduction order.
         self.single_token_fast_path = False
+        self.single_token_projection_backend = "einsum"
 
     def _router_features(self, hidden_states: torch.Tensor) -> torch.Tensor:
         if self.router_input == "hidden":
@@ -1017,23 +1018,61 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         selected_output_weight = self.group_output_weight[flat_ids]
         if fused_projections:
             selected_gate_value = self.group_gate_value_weight[flat_ids]
-            projected = torch.einsum(
-                "nh,nqgh->nqg", flat_hidden, selected_gate_value,
-            )
+            if self.single_token_projection_backend == "bmm":
+                pair_hidden = flat_hidden.unsqueeze(1).expand(
+                    -1, self.active_experts, -1,
+                ).reshape(-1, 1, flat_hidden.shape[-1])
+                projected = torch.bmm(
+                    pair_hidden,
+                    selected_gate_value.reshape(
+                        -1, selected_gate_value.shape[-2],
+                        selected_gate_value.shape[-1],
+                    ).transpose(1, 2),
+                ).reshape(flat_hidden.shape[0], self.active_experts, -1)
+            else:
+                projected = torch.einsum(
+                    "nh,nqgh->nqg", flat_hidden, selected_gate_value,
+                )
             group_size = self.group_gate_weight.shape[1]
             gate = F.silu(projected[..., :group_size])
             value = projected[..., group_size:]
         else:
-            gate = F.silu(torch.einsum(
-                "nh,nqgh->nqg", flat_hidden, selected_gate,
-            ))
-            value = torch.einsum(
-                "nh,nqgh->nqg", flat_hidden, selected_value,
-            )
+            if self.single_token_projection_backend == "bmm":
+                pair_hidden = flat_hidden.unsqueeze(1).expand(
+                    -1, self.active_experts, -1,
+                ).reshape(-1, 1, flat_hidden.shape[-1])
+                pair_gate = selected_gate.reshape(
+                    -1, selected_gate.shape[-2], selected_gate.shape[-1],
+                ).transpose(1, 2)
+                pair_value = selected_value.reshape(
+                    -1, selected_value.shape[-2], selected_value.shape[-1],
+                ).transpose(1, 2)
+                gate = F.silu(torch.bmm(pair_hidden, pair_gate)).reshape(
+                    flat_hidden.shape[0], self.active_experts, -1,
+                )
+                value = torch.bmm(pair_hidden, pair_value).reshape(
+                    flat_hidden.shape[0], self.active_experts, -1,
+                )
+            else:
+                gate = F.silu(torch.einsum(
+                    "nh,nqgh->nqg", flat_hidden, selected_gate,
+                ))
+                value = torch.einsum(
+                    "nh,nqgh->nqg", flat_hidden, selected_value,
+                )
         coefficient = gate * value
-        selected = torch.einsum(
-            "nqg,nqhg->nqh", coefficient, selected_output_weight,
-        )
+        if self.single_token_projection_backend == "bmm":
+            selected = torch.bmm(
+                coefficient.reshape(-1, 1, coefficient.shape[-1]),
+                selected_output_weight.reshape(
+                    -1, selected_output_weight.shape[-2],
+                    selected_output_weight.shape[-1],
+                ).transpose(1, 2),
+            ).reshape(flat_hidden.shape[0], self.active_experts, -1)
+        else:
+            selected = torch.einsum(
+                "nqg,nqhg->nqh", coefficient, selected_output_weight,
+            )
         self.last_selected_outputs = selected.reshape(
             *hidden_states.shape[:-1], self.active_experts, hidden_states.shape[-1],
         )
