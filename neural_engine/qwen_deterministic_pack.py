@@ -40,7 +40,7 @@ def deterministic_pack(
     top_ids: torch.Tensor,
     num_experts: int,
 ) -> torch.Tensor:
-    """Pack to [expert, token, hidden] without atomics or route sorting."""
+    """Pack to [expert, token, hidden] without atomics, scans, or sorting."""
     if hidden_states.device.type != "cuda":
         raise ValueError("deterministic pack requires CUDA hidden states")
     if hidden_states.dtype != torch.float32:

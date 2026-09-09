@@ -1417,3 +1417,11 @@ V0.177 tests task-aware routing. A task-context query gives a small two-seed
 gain at 32 circuits, but the full 8/16/32 screen is non-monotonic; route-target
 auxiliary supervision is rejected because it collapses router entropy without
 improving held-out hard selection. See `V0_177_TASK_AWARE_ROUTING.md`.
+
+V0.250 replaces V0.249's deterministic scan-and-zero pack kernel with one
+block per selected token/slot pair and direct fixed-layout writes. Two long
+seeds preserve parity and exact generation; the two-seed mean is 4.04% faster
+than adaptive packing at batch 1, 2.29% at batch 8, and 1.90% at batch 32.
+Against the atomic-finalize control it is effectively tied, so it remains
+opt-in and pack-only work is now low priority. See
+`RUNTIME_QWEN_PAIR_FIXED_PACK_AUDIT_20260909.md`.

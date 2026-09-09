@@ -6,10 +6,10 @@
 
 namespace {
 
-// One block owns one [expert, token] output row.  A selected route is copied
-// to its deterministic expert-token slot; unselected slots are zeroed.  No
-// expert-local counter or sort is needed, and the caller can map a pair to
-// expert*tokens + token directly.
+// One block owns one selected (token, slot) pair.  Top-k indices are unique
+// per token, so every selected pair has a unique fixed expert-token slot and
+// no expert-local counter or sort is needed.  Unselected slots are not read by
+// the grouped path and therefore do not need initialization.
 __global__ void deterministic_pack_kernel(
     const float* __restrict__ hidden,
     const int64_t* __restrict__ top_ids,
@@ -18,32 +18,16 @@ __global__ void deterministic_pack_kernel(
     int64_t active,
     int64_t experts,
     int64_t hidden_size) {
-    const int64_t row = static_cast<int64_t>(blockIdx.x);
-    const int64_t total_rows = experts * tokens;
-    if (row >= total_rows) return;
-    const int64_t expert = row / tokens;
-    const int64_t token = row - expert * tokens;
-    __shared__ int64_t selected;
-    if (threadIdx.x == 0) {
-        selected = -1;
-        for (int64_t slot = 0; slot < active; ++slot) {
-            if (top_ids[token * active + slot] == expert) {
-                selected = slot;
-                break;
-            }
-        }
-    }
-    __syncthreads();
+    const int64_t pair = static_cast<int64_t>(blockIdx.x);
+    const int64_t pair_count = tokens * active;
+    if (pair >= pair_count) return;
+    const int64_t token = pair / active;
+    const int64_t expert = top_ids[pair];
+    if (expert < 0 || expert >= experts) return;
     const float* source = hidden + token * hidden_size;
-    float* target = grouped_hidden + row * hidden_size;
-    if (selected >= 0) {
-        for (int64_t h = threadIdx.x; h < hidden_size; h += blockDim.x) {
-            target[h] = source[h];
-        }
-    } else {
-        for (int64_t h = threadIdx.x; h < hidden_size; h += blockDim.x) {
-            target[h] = 0.0f;
-        }
+    float* target = grouped_hidden + (expert * tokens + token) * hidden_size;
+    for (int64_t h = threadIdx.x; h < hidden_size; h += blockDim.x) {
+        target[h] = source[h];
     }
 }
 
@@ -71,7 +55,7 @@ torch::Tensor qwen_deterministic_pack_cuda(
     if (tokens == 0 || active == 0) return grouped_hidden;
     const auto stream = at::cuda::getCurrentCUDAStream();
     deterministic_pack_kernel<<<
-        static_cast<unsigned int>(experts * tokens), 256, 0, stream
+        static_cast<unsigned int>(tokens * active), 256, 0, stream
     >>>(
         hidden.data_ptr<float>(), top_ids.data_ptr<int64_t>(),
         grouped_hidden.data_ptr<float>(), tokens, active, experts,
