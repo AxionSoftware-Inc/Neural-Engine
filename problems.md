@@ -753,6 +753,19 @@ Generation exact parity saqlandi, lekin dense parentga nisbatan hali
 `1.108x/1.136x/1.257x` sekin. **PARITY-SAFE MICRO-OPTIMIZATION, DEFAULT
 UNCHANGED**; katta keyingi target selected FFN launch/packing overheadi.
 **Batafsil:** `results/RUNTIME_QWEN_GROUPED_FUSED_AUDIT_20260909.md`.
+
+**V0.229 rank-1 long-budget audit (2026-09-09):** correction ranki `1`ga
+tushirilgan trained K=5 grouped-fused yo‘l child/hard/router `600/600/200`
+protokolida seed2026/17 bilan qayta o‘lchandi. CE delta `+0.045878/+0.035236`
+bo‘lib, ikki seedda ham `+0.05` quality gate’dan o‘tdi; mean delta `+0.040557`.
+B8 CUDA Graph’da grouped-fused/dense `1.048x/1.044x`, grouped-fused/grouped
+`1.000x/0.997x` bo‘ldi. Ikkala seedda 8-token generation exact parity va
+`1.1e-5`dan kichik logit parity saqlandi. Rank-1 hozirgi eng kichik viable
+opt-in runtime candidate, lekin dense parentdan hali 4–5% sekin; rank64
+default o‘zgarmadi. Keyingi asosiy ish rankni yana qisqartirish emas, selected
+FFN launch/packing overheadini static-index yoki to‘liq fused dispatch bilan
+olib tashlash.
+**Batafsil:** `results/RUNTIME_QWEN_RANK1_LONG_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 

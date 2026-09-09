@@ -182,6 +182,13 @@ V0.224 checks the `grouped-fused` one-BMM variant: it is parity-safe, but only
 `1.000x/0.993x/0.997x` of ordinary grouped graph time at B1/B8/B32. It helps
 eager B1/B8 and is neutral at B32, while the dense gap remains; no batch policy
 or default switch is added.
+V0.229 extends the correction-rank sweep to a longer `600/600/200` trained
+recipe at rank 1. Seeds 2026/17 pass the quality gate with CE deltas
+`+0.045878/+0.035236`; B8 grouped-fused graph/dense is `1.048x/1.044x`, and
+both eight-token generation checks are exact. Rank 1 is therefore the smallest
+tested viable opt-in candidate, but the dense-serving gap remains open and the
+rank-64 compatibility default is unchanged. The next runtime target is
+selected-FFN launch/packing fusion, not further router work.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

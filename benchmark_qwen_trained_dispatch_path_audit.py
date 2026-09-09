@@ -71,6 +71,7 @@ def main() -> None:
     parser.add_argument("--prefix-lengths", type=int, nargs="+", default=[4])
     parser.add_argument("--calibration-rank", type=int, default=64)
     parser.add_argument("--seed", type=int, default=2026)
+    parser.add_argument("--experiment", default="V0.224_trained_grouped_fused_audit")
     parser.add_argument("--output")
     args = parser.parse_args()
     if not torch.cuda.is_available():
@@ -255,7 +256,7 @@ def main() -> None:
         model, generation_prompt, 8, use_cuda_graph=True,
     )
     result = {
-        "experiment": "V0.224_trained_grouped_fused_audit",
+        "experiment": args.experiment,
         "status": "PARITY_PASS",
         "model": args.model,
         "seed": args.seed,
