@@ -33,6 +33,7 @@
 - [Runtime — Qwen grouped correction-fused audit](RUNTIME_QWEN_GROUPED_CORRECTION_FUSED_AUDIT_20260909.md)
 - [Runtime — Qwen uniform K-subset accumulation audit](RUNTIME_QWEN_GROUPED_UNIFORM_ACCUM_AUDIT_20260909.md)
 - [Runtime — Qwen grouped prepacked-weight audit](RUNTIME_QWEN_GROUPED_PREPACKED_AUDIT_20260909.md)
+- [Runtime — Qwen grouped tiled-kernel audit](RUNTIME_QWEN_GROUPED_TILED_KERNEL_AUDIT_20260909.md)
 - [Runtime — Qwen fixed-shape CUDA Graph replay](RUNTIME_QWEN_CUDA_GRAPH.md)
 - [Runtime — Qwen custom fixed-KV CUDA Graph decode](RUNTIME_QWEN_CUSTOM_KV_CUDA_GRAPH.md)
 - [Runtime — Qwen trained custom fixed-KV Graph audit](RUNTIME_QWEN_TRAINED_CUSTOM_KV_GRAPH_AUDIT_20260909.md)
