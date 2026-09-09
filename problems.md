@@ -787,6 +787,17 @@ material speedup emas, lekin xavfsiz opt-in micro-optimization sifatida
 saqlandi. Route metadata qayta yaratish keyingi asosiy bottleneck emas; selected
 FFN packing/projection/scatter uchun tiled yoki full fused kernel kerak.
 **Batafsil:** `results/RUNTIME_QWEN_GROUPED_CACHED_METADATA_AUDIT_20260909.md`.
+
+**V0.232 grouped correction fusion (2026-09-09):** selected FFN outputni
+wrapperga qayta joylashtirib correctionni alohida hisoblash o‘rniga, correction
+grouped accumulation ichiga qo‘shildi. Trained K=5 rank-1 seed2026/17da
+grouped baselinega nisbatan B1/B8/B32 ratio mos ravishda `0.997x/0.988x/0.992x`
+va `0.991x/0.989x/0.993x` bo‘ldi. Dense parentga nisbatan hali
+`1.081x/1.039x/1.066x` va `1.072x/1.037x/1.061x`; quality delta
+`+0.045226/+0.040347`, generation parity exact. Demak kichik, izchil
+micro-optimization bor, lekin katta speedup yo‘q; backend faqat opt-in, keyingi
+target packing/projection/accumulationni tiled yoki full fused kernelda birlashtirish.
+**Batafsil:** `results/RUNTIME_QWEN_GROUPED_CORRECTION_FUSED_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 

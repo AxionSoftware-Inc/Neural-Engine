@@ -200,6 +200,13 @@ two seeds and B1/B8/B32, cached/grouped graph ratios range from `0.994x` to
 `1.002x`; exact generation and logit parity remain intact. This is retained as
 a safe opt-in micro-optimization, not a speed claim. Metadata reuse is no
 longer the priority; selected-FFN packing/projection/scatter fusion is.
+V0.232 folds the rank-1 cross-group correction into grouped selected-output
+accumulation, avoiding the wrapper-side selected-output reorder and second
+correction pass. Across two seeds and B1/B8/B32 it is `0.991x–0.997x` of
+ordinary grouped graph time, with exact generation parity and quality deltas
+`+0.045226/+0.040347`. The gain is consistent but small; the dense gap remains
+`1.037x–1.081x`, so this stays opt-in and the next target is deeper tiled/full
+selected-FFN fusion.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

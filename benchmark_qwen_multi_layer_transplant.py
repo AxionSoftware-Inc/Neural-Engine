@@ -848,6 +848,13 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self.last_all_outputs: torch.Tensor | None = None
         self.last_selected_outputs: torch.Tensor | None = None
         self.last_active_expert_fraction = 1.0
+        # Optional inference-only hook used by the cross-group correction
+        # wrapper.  When set, grouped dispatch folds the correction into the
+        # selected pair accumulation so the wrapper need not reorder and
+        # project the selected outputs a second time.
+        self.grouped_fused_correction: tuple[
+            torch.Tensor, torch.Tensor,
+        ] | None = None
         self._grouped_pair_metadata_cache: dict[
             tuple[int, int, torch.device],
             tuple[torch.Tensor, torch.Tensor, torch.Tensor],
@@ -1074,12 +1081,32 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         ).index_select(0, grouped_indices)
         sorted_token_ids = token_ids[sort_order]
         sorted_slots = slots[sort_order]
-        selected_by_pair = torch.empty_like(selected_output)
-        pair_slots = sorted_token_ids * self.active_experts + sorted_slots
-        selected_by_pair.index_copy_(0, pair_slots, selected_output)
-        self.last_selected_outputs = selected_by_pair.reshape(
-            flat_hidden.shape[0], self.active_experts, flat_hidden.shape[-1],
-        ).reshape(*hidden_states.shape[:-1], self.active_experts, hidden_states.shape[-1])
+        fused_correction = self.grouped_fused_correction
+        if fused_correction is None:
+            selected_by_pair = torch.empty_like(selected_output)
+            pair_slots = sorted_token_ids * self.active_experts + sorted_slots
+            selected_by_pair.index_copy_(0, pair_slots, selected_output)
+            self.last_selected_outputs = selected_by_pair.reshape(
+                flat_hidden.shape[0], self.active_experts, flat_hidden.shape[-1],
+            ).reshape(
+                *hidden_states.shape[:-1], self.active_experts,
+                hidden_states.shape[-1],
+            )
+        else:
+            # Apply the correction while the selected output is still in the
+            # expert-major order produced by grouped dispatch.  This preserves
+            # the selected-only contract and avoids the pair reorder plus a
+            # second wrapper-side correction pass.
+            mix_in, mix_out = fused_correction
+            selected_mix_in = mix_in[sorted_experts]
+            selected_mix_out = mix_out[sorted_experts]
+            latent = torch.einsum(
+                "ph,prh->pr", selected_output, selected_mix_in,
+            )
+            selected_output = selected_output + torch.einsum(
+                "pr,phr->ph", latent, selected_mix_out,
+            )
+            self.last_selected_outputs = None
         contribution = selected_output * flat_weights[
             sorted_token_ids, sorted_slots,
         ].unsqueeze(-1)
@@ -2008,6 +2035,7 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
         self.correction_dispatch_backend = "vectorized"
         self._fused_output_weight_cache: torch.Tensor | None = None
         self._fused_output_weight_cache_key: tuple[object, ...] | None = None
+        self.grouped_fused_correction_backend = "grouped-fused-correction"
 
     def _fused_output_weight(self) -> torch.Tensor:
         """Build W_out + mix_out @ mix_in @ W_out for frozen inference."""
@@ -2054,6 +2082,15 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
             and not self.base.training
             and hidden_states.shape[-2] == 1
         )
+        use_grouped_fused_correction = (
+            self.correction_dispatch_backend == self.grouped_fused_correction_backend
+            and not self.replace_base_output
+            and not self.base.training
+            and self.base.dispatch_mode in {
+                "grouped", "grouped-fused", "grouped-cached",
+            }
+            and not self.base.single_token_fast_path
+        )
         if use_fused_output:
             self.base.single_token_output_weight = self._fused_output_weight()
         else:
@@ -2063,12 +2100,15 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
                 self.mix_in, self.mix_out, self.correction_dispatch_backend
             ) if use_fused_full else None
         )
+        self.base.grouped_fused_correction = (
+            (self.mix_in, self.mix_out) if use_grouped_fused_correction else None
+        )
         base_output = self.base(hidden_states)
         route_weights = self.base.last_route_weights
         selected = self.base.last_selected
         if route_weights is None or selected is None:
             raise RuntimeError("base route state was not populated")
-        if use_fused_output or use_fused_full:
+        if use_fused_output or use_fused_full or use_grouped_fused_correction:
             return base_output
         if self.base.training and not self.base.hard_train:
             all_outputs = self.base.last_all_outputs
