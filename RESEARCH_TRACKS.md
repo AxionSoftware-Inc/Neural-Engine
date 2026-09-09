@@ -167,6 +167,13 @@ graph replay was fixed and the rerun is parity-safe (`<=1.07e-5`
 fused-vs-PyTorch eager logit error). Keep it opt-in; graph serving sees no
 speed breakthrough, so selected FFN dispatch remains the active runtime
 target.
+V0.223 fixes the grouped selected-FFN path's CUDA Graph blocker by replacing
+capture-time `bincount`/host-shape logic with a graph-stable token-count upper
+bound. On trained K=5 seeds 2026/2027, grouped-vs-single-token graph time is
+`0.957x/0.953x` at B1 and `0.592x/0.589x` at B8, with exact eight-token
+generation parity and max logit error below `1.2e-5`. This is the first strong
+runtime result aimed at the selected FFN bottleneck; it remains pending B32
+and production-shape validation.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

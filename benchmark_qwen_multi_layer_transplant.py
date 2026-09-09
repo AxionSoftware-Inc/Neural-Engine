@@ -999,8 +999,21 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         expert_ids = flat_ids[token_ids, slots]
         sort_order = torch.argsort(expert_ids, stable=True)
         sorted_experts = expert_ids[sort_order]
-        counts = torch.bincount(sorted_experts, minlength=self.num_experts)
-        max_count = int(counts.max().item())
+        # ``bincount`` plus a host scalar read makes the grouped path
+        # unusable inside CUDA Graph capture.  A token can contribute at most
+        # once to each expert, so the number of flattened tokens is a safe
+        # graph-stable upper bound.  Keep the tighter dynamic bound on eager
+        # paths to avoid inflating prefill workspace.
+        counts = torch.zeros(
+            self.num_experts, device=sorted_experts.device, dtype=torch.long,
+        )
+        counts.scatter_add_(
+            0, sorted_experts, torch.ones_like(sorted_experts, dtype=torch.long),
+        )
+        if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+            max_count = flat_hidden.shape[0]
+        else:
+            max_count = int(counts.max().item())
         starts = counts.cumsum(dim=0) - counts
         positions = torch.arange(
             pair_indices.numel(), device=flat_ids.device,
