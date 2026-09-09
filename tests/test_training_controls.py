@@ -2,7 +2,8 @@ import pytest
 import torch
 
 from neural_engine.model import NeuralEngineV0
-from train import apply_routing_schedule, controlled_task_route_ids
+from train import (apply_routing_schedule, controlled_task_route_ids,
+                   freeze_growth_bank_prefix)
 
 
 def test_controlled_task_routes_are_fixed_and_grouped():
@@ -112,3 +113,33 @@ def test_route_bounded_correction_gate_starts_at_identity():
                           torch.zeros_like(model.correction_gate.weight))
     assert torch.allclose(model.correction_gate.bias,
                           torch.zeros_like(model.correction_gate.bias))
+
+
+def test_growth_prefix_restoration_survives_adamw_weight_decay():
+    torch.manual_seed(7)
+    model = NeuralEngineV0(
+        vocab_size=32, num_classes=8, seq_len=4, d_model=16, state_dim=16,
+        num_circuits=16, circuit_rank=4, router_branch=2, router_depth=3,
+        candidate_pool=4, active_circuits=2, internal_steps=2,
+    )
+    frozen = [
+        model.circuits.down[:4].detach().clone(),
+        model.circuits.up[:4].detach().clone(),
+        model.circuits.bias[:4].detach().clone(),
+        model.router.keys[:4].detach().clone(),
+    ]
+    restore = freeze_growth_bank_prefix(model, 4)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=0.1)
+    inputs = torch.randint(1, 16, (8, 4))
+    targets = torch.randint(0, 8, (8,))
+    logits, _stats = model(inputs, adaptive=False)
+    torch.nn.functional.cross_entropy(logits, targets).backward()
+    optimizer.step()
+    restore()
+    current = [
+        model.circuits.down[:4].detach(),
+        model.circuits.up[:4].detach(),
+        model.circuits.bias[:4].detach(),
+        model.router.keys[:4].detach(),
+    ]
+    assert all(torch.equal(before, after) for before, after in zip(frozen, current))

@@ -1483,3 +1483,11 @@ signal is real but does not generalize through the recurrent state, so both
 inference-only fixes are rejected. Further work must change training
 alignment/specialization, not add another scale or gate. See
 `P007_ADVANTAGE_GATE_AUDIT_20260909.md`.
+
+P-003 stable-prefix growth pilot freezes inherited 1408 circuit/key rows while
+training a full 7552-bank model, paired with the same-start unfrozen control.
+At 2000 steps, hard accuracy is tied at 80.47%, but frozen-prefix CE is
+0.00555 worse, training is 5.35% slower, and peak VRAM is 760 MB higher. The
+route-utilization change is not a quality gain, so prefix freezing is rejected
+and not extended to a full two-seed run. See
+`P003_STABLE_PREFIX_GROWTH_AUDIT_20260909.md`.

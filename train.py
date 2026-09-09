@@ -181,6 +181,45 @@ def apply_routing_schedule(model: nn.Module, schedule: list[dict[str, int]], ste
         model.router.set_routing_state(**kwargs)
 
 
+def freeze_growth_bank_prefix(model: nn.Module, prefix_capacity: int):
+    """Keep an inherited bank prefix fixed during opt-in capacity growth.
+
+    A tensor slice cannot be marked ``requires_grad=False`` independently, so
+    gradients are masked and the original prefix is restored after each
+    optimizer step.  Restoring is important for AdamW: zero gradients alone
+    would still apply weight decay to the supposedly frozen rows.
+    """
+    if not isinstance(model, NeuralEngineV0):
+        raise ValueError("growth-prefix freezing requires NeuralEngineV0")
+    if model.circuit_bank_mode != "independent":
+        raise ValueError("growth-prefix freezing currently requires an independent circuit bank")
+    if not 0 <= prefix_capacity <= model.circuits.num_circuits:
+        raise ValueError("growth prefix must be between zero and the bank size")
+    if prefix_capacity == 0:
+        return lambda: None
+    frozen_parameters = [
+        model.circuits.down,
+        model.circuits.up,
+        model.circuits.bias,
+        model.router.keys,
+    ]
+    masks = []
+    snapshots = []
+    for parameter in frozen_parameters:
+        mask = torch.ones_like(parameter)
+        mask[:prefix_capacity] = 0
+        parameter.register_hook(lambda gradient, mask=mask: gradient * mask)
+        masks.append(mask)
+        snapshots.append(parameter.detach().clone())
+
+    @torch.no_grad()
+    def restore() -> None:
+        for parameter, snapshot in zip(frozen_parameters, snapshots):
+            parameter[:prefix_capacity].copy_(snapshot[:prefix_capacity])
+
+    return restore
+
+
 @torch.no_grad()
 def evaluate(model: nn.Module, source: BatchSource, batches: int = 8) -> dict[str, Any]:
     model.eval()
@@ -273,6 +312,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     if args.init_checkpoint:
         initialization = torch.load(Path(args.init_checkpoint), map_location="cpu", weights_only=True)
         model.load_state_dict(initialization.get("model_state", initialization))
+    freeze_growth_prefix = (args.freeze_growth_prefix
+                            if args.freeze_growth_prefix is not None
+                            else int(config.get("freeze_growth_prefix", 0)))
+    restore_growth_prefix = (freeze_growth_bank_prefix(model, freeze_growth_prefix)
+                             if freeze_growth_prefix else lambda: None)
     optimizer = make_optimizer(model, config)
     composition_strength = (args.composition_strength
                             if args.composition_strength > 0
@@ -381,6 +425,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         loss.backward()
         nn.utils.clip_grad_norm_(model.parameters(), config["grad_clip"])
         optimizer.step()
+        restore_growth_prefix()
         losses.append(float(loss.detach().cpu()))
         if device.type == "cuda":
             peak_vram = max(peak_vram, torch.cuda.max_memory_allocated(device) // (1024 * 1024))
@@ -418,6 +463,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "soft_routing_temperature": float(config.get("soft_routing_temperature", 0.0)),
         "soft_routing_steps": soft_routing_steps,
         "route_target_weight": float(config.get("route_target_weight", 0.0)),
+        "freeze_growth_prefix": freeze_growth_prefix,
         "input_reinjection": float(config.get("input_reinjection", 1.0)),
         "input_reinjection_schedule": list(config.get("input_reinjection_schedule", [])),
         "memory_write_mode": str(config.get("memory_write_mode", "none")),
@@ -505,6 +551,8 @@ def main() -> None:
                         help="Use learned routing or fixed task-to-circuit allocation")
     parser.add_argument("--seed", type=int, default=None,
                         help="Override the config seed for multi-seed controls")
+    parser.add_argument("--freeze-growth-prefix", type=int, default=None,
+                        help="Freeze inherited circuit/key rows during opt-in bank growth")
     args = parser.parse_args()
     if args.model == "baseline":
         args.config = "configs/transformer_30m.yaml"

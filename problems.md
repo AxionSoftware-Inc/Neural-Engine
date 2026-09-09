@@ -1167,6 +1167,16 @@ training objective bilan barqaror align qilish muammosi.
 
 **Batafsil:** `results/P007_ADVANTAGE_GATE_AUDIT_20260909.md`.
 
+P-003 uchun “staged growthda inherited prefix drift qilyapti” gipotezasi ham
+one-seed 2000-step paired pilotda tekshirildi. 1408 circuit/key prefixini
+muzlatish unfrozen control bilan bir xil `80.47%` accuracy berdi, ammo CE
+`0.580555` vs `0.575009` (`+0.00555`) bo‘ldi; training `+5.35%`, peak VRAM
+`+760 MB`. Stable-prefix route coverage biroz yaxshilangan bo‘lsa ham quality
+gate bermadi va to‘liq screen’ga kengaytirilmadi. Bu variant **REJECTED**;
+P-003 capacity plateau’ni faqat prefix drift bilan tushuntirib bo‘lmaydi.
+
+**Batafsil:** `results/P003_STABLE_PREFIX_GROWTH_AUDIT_20260909.md`.
+
 Post-GRU correction residual (`post_correction_residual_scale=β`) ham
 inference-only tekshirildi. `β=1.0` seed17’da `+1.25 pp`, seed18’da
 `−0.42 pp` natural accuracy berdi; CE va route-replay sensitivity ham
