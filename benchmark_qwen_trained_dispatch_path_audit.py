@@ -31,8 +31,11 @@ def set_dispatch_path(
     effective_dispatch_mode = dispatch_mode
     inplace_swiglu = dispatch_mode == "grouped-adaptive-fixed-pack-inplace"
     token_finalize = dispatch_mode == "grouped-adaptive-fixed-pack-token-finalize"
-    if inplace_swiglu or token_finalize:
+    bucketed_projections = dispatch_mode == "grouped-adaptive-bucketed"
+    if inplace_swiglu or token_finalize or bucketed_projections:
         effective_dispatch_mode = "grouped-adaptive-fixed-pack"
+    if bucketed_projections:
+        effective_dispatch_mode = "grouped-adaptive"
     for child in children:
         base = next(
             nested for nested in child.modules()
@@ -45,6 +48,7 @@ def set_dispatch_path(
         base.grouped_uniform_accum = bool(uniform_accum)
         base.grouped_inplace_swiglu = bool(inplace_swiglu)
         base.grouped_token_finalize = bool(token_finalize)
+        base.grouped_bucketed_projections = bool(bucketed_projections)
         for nested in child.modules():
             if isinstance(nested, CrossGroupOutputMixRoutedQwenChild):
                 if effective_dispatch_mode == "fused-effective-output":
@@ -176,6 +180,10 @@ def main() -> None:
     parser.add_argument(
         "--include-grouped-adaptive-fixed-pack-token-finalize", action="store_true",
         help="include fixed-pack with atomics-free token-owned finalization",
+    )
+    parser.add_argument(
+        "--include-grouped-adaptive-bucketed", action="store_true",
+        help="include eager-only route-count bucketed grouped projections",
     )
     parser.add_argument("--output")
     args = parser.parse_args()
@@ -338,6 +346,11 @@ def main() -> None:
             "grouped-adaptive-fixed-pack-token-finalize", False,
             "grouped-adaptive-fixed-pack-token-finalize", False, True,
         ))
+    if args.include_grouped_adaptive_bucketed:
+        path_specs.append((
+            "grouped-adaptive-bucketed", False,
+            "grouped-adaptive-bucketed", True, True,
+        ))
     for path_spec in path_specs:
         if len(path_spec) == 3:
             path_name, single_token, dispatch_mode = path_spec
@@ -449,6 +462,8 @@ def main() -> None:
                 candidates.append("grouped-adaptive-fixed-pack-inplace")
             if args.include_grouped_adaptive_fixed_pack_token_finalize:
                 candidates.append("grouped-adaptive-fixed-pack-token-finalize")
+            if args.include_grouped_adaptive_bucketed:
+                candidates.append("grouped-adaptive-bucketed")
             for candidate in candidates:
                 candidate_row = rows_by_path[candidate][
                     (prefix_length, batch_size)
@@ -611,6 +626,15 @@ def main() -> None:
             uniform_accum=True,
         )
         grouped_adaptive_fixed_pack_token_finalize_generation = greedy_generate_fixed_shape(
+            model, generation_prompt, 8, use_cuda_graph=True,
+        )
+    grouped_adaptive_bucketed_generation = None
+    if args.include_grouped_adaptive_bucketed:
+        set_dispatch_path(
+            children, False, "grouped-adaptive-bucketed",
+            uniform_accum=True,
+        )
+        grouped_adaptive_bucketed_generation = greedy_generate_fixed_shape(
             model, generation_prompt, 8, use_cuda_graph=True,
         )
     cached_grouped_generation = None
@@ -813,6 +837,14 @@ def main() -> None:
                     )
                 ),
             } if grouped_adaptive_fixed_pack_token_finalize_generation is not None else {}),
+            **({
+                "grouped_vs_grouped_adaptive_bucketed_exact_token_match": bool(
+                    torch.equal(
+                        grouped_generation,
+                        grouped_adaptive_bucketed_generation,
+                    )
+                ),
+            } if grouped_adaptive_bucketed_generation is not None else {}),
         },
     }
     print(json.dumps(result, indent=2))

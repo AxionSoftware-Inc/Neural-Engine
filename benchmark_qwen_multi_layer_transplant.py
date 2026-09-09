@@ -879,6 +879,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self.grouped_uniform_accum = False
         self.grouped_inplace_swiglu = False
         self.grouped_token_finalize = False
+        self.grouped_bucketed_projections = False
         # Optional inference-only BMM layout probe.  The native buffers keep
         # Linear's [out, in] layout; grouped BMM consumes their transposes.
         # Caching contiguous transposes lets cuBLAS see the exact [E, in, out]
@@ -1036,6 +1037,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         fixed_pack: bool = False,
         inplace_swiglu: bool = False,
         token_finalize: bool = False,
+        bucketed_projections: bool = False,
     ) -> torch.Tensor:
         flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
         flat_ids = top_ids.reshape(-1, self.active_experts)
@@ -1068,6 +1070,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 token_ids = pair_indices // self.active_experts
                 slots = pair_indices % self.active_experts
         with record_function("neural_engine.grouped.pack"):
+            route_counts: torch.Tensor | None = None
             expert_ids = flat_ids[token_ids, slots]
             if fixed_pack:
                 from neural_engine.qwen_deterministic_pack import deterministic_pack
@@ -1114,6 +1117,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                     0, sorted_experts,
                     torch.ones_like(sorted_experts, dtype=torch.long),
                 )
+                route_counts = counts
                 if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
                     max_count = flat_hidden.shape[0]
                 else:
@@ -1165,7 +1169,22 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 ).transpose(1, 2)
                 gate_value_weight = self.group_gate_value_weight.transpose(1, 2)
             if not tiled_projections:
-                if fused_projections:
+                if (
+                    bucketed_projections
+                    and route_counts is not None
+                    and fused_projections
+                    and not (
+                        torch.cuda.is_available()
+                        and torch.cuda.is_current_stream_capturing()
+                    )
+                ):
+                    grouped_output = self._forward_bucketed_grouped_projection(
+                        grouped_hidden,
+                        route_counts,
+                        gate_value_weight,
+                        output_weight,
+                    )
+                elif fused_projections:
                     group_size = self.group_gate_weight.shape[1]
                     grouped_gate_value = torch.bmm(
                         grouped_hidden, gate_value_weight,
@@ -1360,12 +1379,60 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 self.active_experts,
                 self.hard_route_scale,
                 self.grouped_uniform_accum and self.route_source == "subset-router",
-            )
+        )
         self.last_selected_outputs = None
         self.last_active_expert_fraction = pair_indices.numel() / max(
             flat_hidden.shape[0] * self.num_experts, 1
         )
         return flat_output.reshape_as(hidden_states)
+
+    def _forward_bucketed_grouped_projection(
+        self,
+        grouped_hidden: torch.Tensor,
+        route_counts: torch.Tensor,
+        gate_value_weight: torch.Tensor,
+        output_weight: torch.Tensor,
+    ) -> torch.Tensor:
+        """Project only populated rows in eager count buckets.
+
+        This probe trades extra BMM launches and compacting copies for less
+        padded GEMM work. CUDA Graph capture falls back to the regular uniform
+        shape because bucket shapes are data-dependent.
+        """
+        experts, max_count, hidden_size = grouped_hidden.shape
+        grouped_output = torch.empty_like(grouped_hidden)
+        grouped_output_flat = grouped_output.reshape(
+            experts * max_count, hidden_size,
+        )
+        counts = {
+            int(value) for value in route_counts.detach().cpu().tolist()
+        }
+        for count in sorted(counts):
+            if count <= 0:
+                continue
+            expert_ids = (route_counts == count).nonzero(as_tuple=True)[0]
+            bucket_hidden = grouped_hidden.index_select(
+                0, expert_ids,
+            )[:, :count, :]
+            bucket_gate_value = torch.bmm(
+                bucket_hidden,
+                gate_value_weight.index_select(0, expert_ids),
+            )
+            group_size = bucket_gate_value.shape[-1] // 2
+            bucket_gate = F.silu(bucket_gate_value[..., :group_size])
+            bucket_value = bucket_gate_value[..., group_size:]
+            bucket_output = torch.bmm(
+                bucket_gate * bucket_value,
+                output_weight.index_select(0, expert_ids),
+            )
+            destination = (
+                expert_ids[:, None] * max_count
+                + torch.arange(count, device=grouped_hidden.device)[None, :]
+            ).reshape(-1)
+            grouped_output_flat.index_copy_(
+                0, destination, bucket_output.reshape(-1, hidden_size),
+            )
+        return grouped_output
 
     def _get_grouped_prepacked_weights(
         self,
@@ -1897,6 +1964,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                     "grouped-adaptive-atomic-finalize",
                 },
                 finalize_output=self.dispatch_mode == "grouped-adaptive-atomic-finalize",
+                bucketed_projections=self.grouped_bucketed_projections,
             )
         if not self.training and self.dispatch_mode == "grouped-adaptive-fixed-pack":
             return self._forward_grouped(

@@ -1444,3 +1444,9 @@ numerical parity and exact generation, but the two-seed change versus
 fixed-pack is only +0.15%/−0.15%/+0.00% at B1/B8/B32. It remains an opt-in
 reference implementation, not a serving breakthrough. See
 `RUNTIME_QWEN_TOKEN_FINALIZE_AUDIT_20260909.md`.
+
+V0.254 tests route-count bucketed grouped GEMMs. Eager mode is slower by
+3.25%/8.77%/4.41% at B1/B8/B32 across two seeds, while CUDA Graph capture
+falls back to uniform grouped projection and gains nothing. The path is
+rejected; variable-shape scheduling must be fused/autotuned in CUDA. See
+`RUNTIME_QWEN_BUCKETED_GEMM_AUDIT_20260909.md`.
