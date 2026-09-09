@@ -856,6 +856,11 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         # Optional inference-only override used when a linear correction is
         # folded into the selected output projection.
         self.single_token_output_weight: torch.Tensor | None = None
+        # Optional inference-only hook installed by the cross-group wrapper
+        # for a one-launch base-output plus low-rank correction dispatch.
+        self.single_token_full_correction: tuple[
+            torch.Tensor, torch.Tensor
+        ] | None = None
 
     def _router_features(self, hidden_states: torch.Tensor) -> torch.Tensor:
         if self.router_input == "hidden":
@@ -1016,6 +1021,31 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         only the K selected groups keeps the same hard route and output
         contract while using three small batched contractions.
         """
+        if self.single_token_full_correction is not None:
+            from neural_engine.qwen_full_correction_dispatch import (
+                fused_correction_dispatch,
+            )
+
+            mix_in, mix_out = self.single_token_full_correction
+            selected, combined = fused_correction_dispatch(
+                flat_hidden.contiguous(),
+                flat_ids.contiguous(),
+                flat_weights.contiguous(),
+                self.group_gate_weight.contiguous(),
+                self.group_value_weight.contiguous(),
+                self.group_output_weight.contiguous(),
+                mix_in,
+                mix_out,
+                self.hard_route_scale,
+            )
+            self.last_selected_outputs = selected.reshape(
+                *hidden_states.shape[:-1], self.active_experts,
+                hidden_states.shape[-1],
+            )
+            self.last_active_expert_fraction = flat_ids.numel() / max(
+                flat_hidden.shape[0] * self.num_experts, 1
+            )
+            return combined.reshape_as(hidden_states)
         selected_gate = self.group_gate_weight[flat_ids]
         selected_value = self.group_value_weight[flat_ids]
         output_weight_bank = (
@@ -1909,16 +1939,25 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
             and not self.replace_base_output
             and hidden_states.shape[-2] == 1
         )
+        use_fused_full = (
+            self.correction_dispatch_backend == "cuda-fused-full"
+            and not self.replace_base_output
+            and not self.base.training
+            and hidden_states.shape[-2] == 1
+        )
         if use_fused_output:
             self.base.single_token_output_weight = self._fused_output_weight()
         else:
             self.base.single_token_output_weight = None
+        self.base.single_token_full_correction = (
+            (self.mix_in, self.mix_out) if use_fused_full else None
+        )
         base_output = self.base(hidden_states)
         route_weights = self.base.last_route_weights
         selected = self.base.last_selected
         if route_weights is None or selected is None:
             raise RuntimeError("base route state was not populated")
-        if use_fused_output:
+        if use_fused_output or use_fused_full:
             return base_output
         if self.base.training and not self.base.hard_train:
             all_outputs = self.base.last_all_outputs

@@ -254,6 +254,14 @@ rank 64 stays the compatibility default and the remaining runtime work is
 fused/static-index correction dispatch. See
 `RUNTIME_QWEN_CORRECTION_LONG_BUDGET_20260909.md`.
 
+V0.214 fuses selected Qwen base output and low-rank correction in one
+fixed-shape CUDA dispatch. Two seeds measure `0.842x/0.859x` graph time versus
+the vectorized correction backend, with final-logit error below `1.7e-5`; the
+full sparse graph reaches `0.957x/1.000x` of the dense parent. It is accepted
+as an opt-in backend, while vectorized remains the default and the full
+one-token serving path remains open. See
+`RUNTIME_QWEN_FULL_CORRECTION_DISPATCH_AUDIT_20260909.md`.
+
 V0.194 rejects the eight-layer K=4 pairwise-cost router with three-round
 on-policy aggregation: learned CE is `+0.06822/+0.07745` across seeds, worse
 than the direct-hard subset-router control (`+0.06462/+0.06165`). The route

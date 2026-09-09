@@ -675,6 +675,14 @@ top-1 agreement `0.7976`, B8 graph/dense `1.234x`, graph/sparse-eager
 rank4 long-budget natijasi uch seedda takrorlandi; **ACCEPTED OPT-IN** dalili
 kuchaydi, ammo default rank64 saqlandi va katta runtime sakrashi hali yo‘q.
 **Batafsil:** `results/RUNTIME_QWEN_CORRECTION_LONG_BUDGET_20260909.md`.
+**V0.214 fused base+correction dispatch (2026-09-09):** yangi fixed-shape
+CUDA kernel selected Qwen output va rank4 correctionni bitta dispatchda
+hisoblaydi. Seed42/2026’da vectorized backendga nisbatan B8 graph
+`0.842x/0.859x`, final-logit farqi `1.62e-5/1.67e-5`; dense parentga nisbatan
+`0.957x/1.000x` bo‘ldi. **ACCEPTED OPT-IN**, default vectorized saqlandi:
+bu correction overheadini kamaytiradi, lekin router/top-k/attention va
+dynamic shape serving muammolari ochiq qoladi.
+**Batafsil:** `results/RUNTIME_QWEN_FULL_CORRECTION_DISPATCH_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 

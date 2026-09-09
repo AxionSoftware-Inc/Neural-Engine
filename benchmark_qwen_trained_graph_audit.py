@@ -322,13 +322,18 @@ def trained_correction_backend_matrix(
             [mixer.correction_dispatch_backend for mixer in current_mixers]
         )
     try:
-        for backend in ("vectorized", "effective-output", "cuda-fused", "packed"):
+        for backend in (
+            "vectorized", "effective-output", "cuda-fused",
+            "cuda-fused-full", "packed",
+        ):
             for mixer in mixers:
                 mixer.max_dense_gather_bytes = (
                     128 * 1024 * 1024 if backend == "vectorized" else 0
                 )
                 mixer.correction_dispatch_backend = (
-                    backend if backend in {"effective-output", "cuda-fused"}
+                    backend if backend in {
+                        "effective-output", "cuda-fused", "cuda-fused-full",
+                    }
                     else "vectorized"
                 )
             for child in children:
@@ -660,7 +665,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     )
 
     result = {
-        "experiment": "V0.213_trained_qwen_rank4_long_budget_three_seed",
+        "experiment": "V0.214_fused_base_correction_dispatch",
         "status": "PARITY_PASS" if max(replay_error, alternate_error) <= 1e-3 else "PARITY_FAIL",
         "model": args.model,
         "seed": args.seed,

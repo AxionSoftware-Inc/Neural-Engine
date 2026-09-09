@@ -131,6 +131,12 @@ graph/sparse-eager `0.871x`, and final-logit parity `8.34e-6`; generation
 remains exact. Rank 4 therefore has three-seed long-budget support as an
 opt-in, but rank 64 remains the compatibility default and correction dispatch
 is still the main runtime target.
+V0.214 fuses selected Qwen base output and low-rank correction in one fixed-
+shape CUDA dispatch. Two seeds give `0.842x/0.859x` graph time versus the
+vectorized correction backend, with final-logit error `1.62e-5/1.67e-5`;
+the full sparse graph reaches `0.957x/1.000x` of the dense parent. This is an
+`ACCEPTED OPT-IN` correction backend, not a default switch or a claim that
+the whole Qwen serving path is faster than dense.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is
