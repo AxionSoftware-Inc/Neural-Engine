@@ -26,6 +26,7 @@
 - [Runtime — Qwen trained custom fixed-KV Graph audit](RUNTIME_QWEN_TRAINED_CUSTOM_KV_GRAPH_AUDIT_20260909.md)
 - [Runtime — Qwen custom fixed-KV multi-step replay](RUNTIME_QWEN_CUSTOM_KV_MULTISTEP_20260909.md)
 - [Runtime — Qwen fixed-shape greedy generation adapter](RUNTIME_QWEN_FIXED_GRAPH_GENERATION_20260909.md)
+- [Runtime — Qwen fixed-graph prefix-shape audit](RUNTIME_QWEN_FIXED_GRAPH_PREFIX_SHAPES_20260909.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
@@ -134,6 +135,12 @@ This confirms the generation state loop, basic shape-keyed reuse, and eviction
 fallback; it is a runtime parity smoke with copied, untrained children, not a
 new quality claim. See
 `RUNTIME_QWEN_FIXED_GRAPH_GENERATION_20260909.md`.
+
+V0.200 tests prefix-shape separation: 4-token and 8-token prefixes use
+separate graph entries, both match independent eager generation exactly, and
+the 4-token entry is reused on a second request (`2` captures, `1` hit). This
+is a fixed batch-1 shape control; arbitrary batching and concurrent serving
+remain open. See `RUNTIME_QWEN_FIXED_GRAPH_PREFIX_SHAPES_20260909.md`.
 
 V0.194 rejects the eight-layer K=4 pairwise-cost router with three-round
 on-policy aggregation: learned CE is `+0.06822/+0.07745` across seeds, worse

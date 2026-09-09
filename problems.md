@@ -576,7 +576,10 @@ integratsiya hali ochiq. Qo‘shimcha control’da uncaptured budget uchun
 `capture_on_miss=False` eager fallback mustaqil eager run bilan aynan mos keldi.
 Bounded pool’da 3 ta shape capture qilinib, 1 ta shape eviction’dan keyin
 eager fallback ham aynan mos keldi.
+V0.200’da prefix uzunliklari 4 va 8 uchun alohida capture entry’lar yaratildi;
+ikkalasi ham eager bilan exact match berdi va 4-token entry qayta ishlatildi.
 **Batafsil:** `results/RUNTIME_QWEN_FIXED_GRAPH_GENERATION_20260909.md`.
+**V0.200 batafsil:** `results/RUNTIME_QWEN_FIXED_GRAPH_PREFIX_SHAPES_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 
