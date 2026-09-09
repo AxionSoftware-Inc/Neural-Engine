@@ -91,6 +91,10 @@ V0.204 rank control adds a useful bounded knob: rank 32 passes the quality
 gate on seeds 2026/17 and gives trained B8 graph/dense `1.411x/1.344x`, while
 rank 16 is `1.479x`. Keep rank 32 opt-in; rank 64 remains the compatibility
 default pending longer multi-seed validation.
+V0.205 rank 8 is a stronger runtime candidate: with long timing it gives B8
+graph/dense `1.390x/1.008x` and graph/sparse-eager `0.924x/0.965x` on seeds
+2026/17, with CE deltas `+0.02412/+0.02997`. Keep it opt-in because timing
+variance and fused-kernel validation remain open.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

@@ -611,6 +611,13 @@ B8 `1.479x`, ya’ni rank32’dan yaxshiroq emas. Rank32 **ACCEPTED OPT-IN**,
 default rank64 saqlandi; uzoqroq multi-seed audit va fused/static-index kernel
 hali ochiq.
 **Batafsil:** `results/RUNTIME_QWEN_CORRECTION_RANK_AUDIT_20260909.md`.
+**V0.205 rank8 natijasi (2026-09-09):** 40 warmup/100 iteratsiyali uzun
+o‘lchovda seed2026/17 uchun B8 graph/dense `1.390x/1.008x`,
+graph/sparse-eager `0.924x/0.965x`, quality CE delta `+0.024122/+0.029971`
+bo‘ldi; parity `1e-5` ichida. Rank8 **ACCEPTED OPT-IN**, hozirgi eng tez
+candidate; default rank64 saqlandi. GPU timing variance va fused/static-index
+correction kernel hali ochiq muammo.
+**Batafsil:** `results/RUNTIME_QWEN_CORRECTION_RANK8_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 

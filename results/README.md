@@ -31,6 +31,7 @@
 - [Runtime — Qwen trained correction backend A/B](RUNTIME_QWEN_TRAINED_CORRECTION_BACKEND_AUDIT_20260909.md)
 - [Runtime — Qwen trained correction BMM audit](RUNTIME_QWEN_TRAINED_CORRECTION_BMM_AUDIT_20260909.md)
 - [Runtime — Qwen trained correction-rank audit](RUNTIME_QWEN_CORRECTION_RANK_AUDIT_20260909.md)
+- [Runtime — Qwen rank-8 correction audit](RUNTIME_QWEN_CORRECTION_RANK8_AUDIT_20260909.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
@@ -178,6 +179,13 @@ passes the `+0.05` CE gate on seeds 2026 and 17 and improves the trained B8
 graph/dense ratio to `1.411x` and `1.344x` in the two runs; rank 16 is not
 better (`1.479x`). Rank 32 is retained as opt-in while rank 64 remains the
 default compatibility recipe. See `RUNTIME_QWEN_CORRECTION_RANK_AUDIT_20260909.md`.
+
+V0.205 extends the rank sweep to rank 8. With 40 warmup/100 measurement
+iterations, B8 graph/dense is `1.390x` and `1.008x` on seeds 2026 and 17;
+graph/sparse-eager is `0.924x` and `0.965x`, while CE delta is `+0.02412` and
+`+0.02997`. Rank 8 is the fastest current opt-in, but rank 64 remains the
+default until the fused/static-index kernel and longer validation are done.
+See `RUNTIME_QWEN_CORRECTION_RANK8_AUDIT_20260909.md`.
 
 V0.194 rejects the eight-layer K=4 pairwise-cost router with three-round
 on-policy aggregation: learned CE is `+0.06822/+0.07745` across seeds, worse
