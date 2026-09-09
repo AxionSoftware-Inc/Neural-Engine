@@ -137,6 +137,10 @@ vectorized correction backend, with final-logit error `1.62e-5/1.67e-5`;
 the full sparse graph reaches `0.957x/1.000x` of the dense parent. This is an
 `ACCEPTED OPT-IN` correction backend, not a default switch or a claim that
 the whole Qwen serving path is faster than dense.
+V0.215 sweeps that backend at batch 1 and 8. B8 remains faster in both seeds,
+but batch-1 ratios are inconsistent (`1.276x` and `0.720x`), so no automatic
+batch policy is accepted. Vectorized remains the default; repeated interleaved
+timing and fused router/top-k dispatch are the next runtime targets.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

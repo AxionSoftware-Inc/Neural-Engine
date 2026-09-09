@@ -307,8 +307,8 @@ def trained_correction_backend_matrix(
     original_limits = []
     original_backends = []
     mixers = []
-    reference_eager_logits = None
-    reference_graph_logits = None
+    reference_eager_logits: dict[int, torch.Tensor] = {}
+    reference_graph_logits: dict[int, torch.Tensor] = {}
     for child in children:
         current_mixers = [
             nested for nested in child.modules()
@@ -342,75 +342,75 @@ def trained_correction_backend_matrix(
                     if isinstance(nested, TransferredRoutedQwenChild)
                 )
                 route_base.single_token_output_weight = None
-            batch_size = 8
-            prefix_ids = base_prefix.repeat(batch_size, 1)
-            token_ids = base_token.repeat(batch_size, 1)
-            cache_length = max(32, int(prefix_ids.shape[1]) + 8)
-            position = torch.tensor([prefix_ids.shape[1]], device=device)
-            for layer, child in zip(model_layers, children):
-                route_base = next(
-                    nested for nested in child.modules()
-                    if isinstance(nested, TransferredRoutedQwenChild)
+            for batch_size in (1, 8):
+                prefix_ids = base_prefix.repeat(batch_size, 1)
+                token_ids = base_token.repeat(batch_size, 1)
+                cache_length = max(32, int(prefix_ids.shape[1]) + 8)
+                position = torch.tensor([prefix_ids.shape[1]], device=device)
+                for layer, child in zip(model_layers, children):
+                    route_base = next(
+                        nested for nested in child.modules()
+                        if isinstance(nested, TransferredRoutedQwenChild)
+                    )
+                    route_base.single_token_fast_path = True
+                    layer.mlp = child
+                eager_cache = make_cache_and_fill_prefix(
+                    model, prefix_ids, cache_length,
                 )
-                route_base.single_token_fast_path = True
-                layer.mlp = child
-            eager_cache = make_cache_and_fill_prefix(
-                model, prefix_ids, cache_length,
-            )
-            eager_ms, eager_logits = measure_eager(
-                model, token_ids, eager_cache, position, warmup, iterations,
-            )
-            graph_cache = make_cache_and_fill_prefix(
-                model, prefix_ids, cache_length,
-            )
-            try:
-                graph_ms, _, graph_logits, _ = measure_graph(
-                    model, token_ids, graph_cache, position, warmup, iterations,
+                eager_ms, eager_logits = measure_eager(
+                    model, token_ids, eager_cache, position, warmup, iterations,
                 )
-            except RuntimeError as exc:
-                records.append({
+                graph_cache = make_cache_and_fill_prefix(
+                    model, prefix_ids, cache_length,
+                )
+                try:
+                    graph_ms, _, graph_logits, _ = measure_graph(
+                        model, token_ids, graph_cache, position, warmup, iterations,
+                    )
+                except RuntimeError as exc:
+                    records.append({
+                        "backend": backend,
+                        "batch_size": batch_size,
+                        "status": (
+                            "GRAPH_CAPTURE_FAIL"
+                            if backend == "packed" else "BACKEND_FAIL"
+                        ),
+                        "eager_ms": eager_ms,
+                        "known_cause": (
+                            "packed correction calls torch.where over device routing "
+                            "indices during CUDA Graph capture"
+                            if backend == "packed" else
+                            "custom CUDA correction extension failed during graph replay"
+                        ),
+                        "error": str(exc).splitlines()[0],
+                    })
+                    # A failed capture can leave the CUDA capture context in an
+                    # implementation-dependent state; report it and stop this
+                    # backend A/B rather than hiding the failure or continuing
+                    # with corrupted timing state.
+                    break
+                record = {
                     "backend": backend,
                     "batch_size": batch_size,
-                    "status": (
-                        "GRAPH_CAPTURE_FAIL"
-                        if backend == "packed" else "BACKEND_FAIL"
-                    ),
+                    "status": "PARITY_PASS",
                     "eager_ms": eager_ms,
-                    "known_cause": (
-                        "packed correction calls torch.where over device routing "
-                        "indices during CUDA Graph capture"
-                        if backend == "packed" else
-                        "custom CUDA correction extension failed during graph replay"
+                    "graph_ms": graph_ms,
+                    "graph_over_eager": graph_ms / max(eager_ms, 1e-9),
+                    "max_graph_vs_eager_logit_error": float(
+                        (graph_logits - eager_logits).abs().max().item()
                     ),
-                    "error": str(exc).splitlines()[0],
-                })
-                # A failed capture can leave the CUDA capture context in an
-                # implementation-dependent state; report it and stop this
-                # backend A/B rather than hiding the failure or continuing
-                # with corrupted timing state.
-                break
-            record = {
-                "backend": backend,
-                "batch_size": batch_size,
-                "status": "PARITY_PASS",
-                "eager_ms": eager_ms,
-                "graph_ms": graph_ms,
-                "graph_over_eager": graph_ms / max(eager_ms, 1e-9),
-                "max_graph_vs_eager_logit_error": float(
-                    (graph_logits - eager_logits).abs().max().item()
-                ),
-            }
-            if backend == "vectorized":
-                reference_eager_logits = eager_logits.clone()
-                reference_graph_logits = graph_logits.clone()
-            elif reference_eager_logits is not None:
-                record["max_eager_vs_vectorized_logit_error"] = float(
-                    (eager_logits - reference_eager_logits).abs().max().item()
-                )
-                record["max_graph_vs_vectorized_logit_error"] = float(
-                    (graph_logits - reference_graph_logits).abs().max().item()
-                )
-            records.append(record)
+                }
+                if backend == "vectorized":
+                    reference_eager_logits[batch_size] = eager_logits.clone()
+                    reference_graph_logits[batch_size] = graph_logits.clone()
+                elif batch_size in reference_eager_logits:
+                    record["max_eager_vs_vectorized_logit_error"] = float(
+                        (eager_logits - reference_eager_logits[batch_size]).abs().max().item()
+                    )
+                    record["max_graph_vs_vectorized_logit_error"] = float(
+                        (graph_logits - reference_graph_logits[batch_size]).abs().max().item()
+                    )
+                records.append(record)
     finally:
         for mixer, original_limit, original_backend in zip(
             mixers, original_limits, original_backends,
@@ -665,7 +665,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     )
 
     result = {
-        "experiment": "V0.214_fused_base_correction_dispatch",
+        "experiment": "V0.215_fused_base_correction_batch_sweep",
         "status": "PARITY_PASS" if max(replay_error, alternate_error) <= 1e-3 else "PARITY_FAIL",
         "model": args.model,
         "seed": args.seed,

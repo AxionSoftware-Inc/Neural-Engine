@@ -262,6 +262,11 @@ as an opt-in backend, while vectorized remains the default and the full
 one-token serving path remains open. See
 `RUNTIME_QWEN_FULL_CORRECTION_DISPATCH_AUDIT_20260909.md`.
 
+V0.215 sweeps the fused backend at batch 1 and 8. B8 is faster in both seeds,
+but batch-1 ratios disagree (`1.276x` and `0.720x`), so no automatic batch
+policy is added; vectorized remains the default. See
+`RUNTIME_QWEN_FULL_CORRECTION_BATCH_SWEEP_AUDIT_20260909.md`.
+
 V0.194 rejects the eight-layer K=4 pairwise-cost router with three-round
 on-policy aggregation: learned CE is `+0.06822/+0.07745` across seeds, worse
 than the direct-hard subset-router control (`+0.06462/+0.06165`). The route

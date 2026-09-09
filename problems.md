@@ -683,6 +683,13 @@ hisoblaydi. Seed42/2026’da vectorized backendga nisbatan B8 graph
 bu correction overheadini kamaytiradi, lekin router/top-k/attention va
 dynamic shape serving muammolari ochiq qoladi.
 **Batafsil:** `results/RUNTIME_QWEN_FULL_CORRECTION_DISPATCH_AUDIT_20260909.md`.
+**V0.215 fused correction batch sweep (2026-09-09):** batch8’da full kernel
+ikkala seedda ham vectorizeddan tez (`0.862x/0.495x`), parity xatosi
+`1.53e-5/1.29e-5`. Batch1’da esa natija qarama-qarshi (`1.276x/0.720x`),
+shuning uchun avtomatik batch-size switch kiritilmadi; vectorized default
+saqlandi. Bu muammo **OPEN**: repeated interleaved timing va router/top-k
+fusion kerak.
+**Batafsil:** `results/RUNTIME_QWEN_FULL_CORRECTION_BATCH_SWEEP_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 
