@@ -106,7 +106,10 @@ path independent of Inductor.
 V0.208 no-correction ablation fails the quality gate (`+0.091023`) despite
 near-dense B8 graph runtime (`1.047x`), confirming that correction capacity is
 necessary for the current K=5 quality point. Rank 8 remains the smallest
-viable tested candidate.
+viable tested candidate. A two-seed rank-4 follow-up also passes the quality
+gate (`+0.03733/+0.04004`) and gives B8 graph/dense `1.339x/1.330x`; rank 4
+is now the smallest tested viable opt-in, but needs longer and third-seed
+validation before it can replace rank 64 as the compatibility default.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

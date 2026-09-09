@@ -35,6 +35,7 @@
 - [Runtime — Qwen single-token projection audit](RUNTIME_QWEN_SINGLE_TOKEN_PROJECTION_AUDIT_20260909.md)
 - [Runtime — Qwen Inductor fused-child probe](RUNTIME_QWEN_INDUCTOR_PROBE_20260909.md)
 - [Runtime — Qwen no-correction ablation](RUNTIME_QWEN_CORRECTION_ABLATION_20260909.md)
+- [Runtime — Qwen rank-4 correction audit](RUNTIME_QWEN_CORRECTION_RANK4_AUDIT_20260909.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
@@ -208,6 +209,14 @@ V0.208 removes correction entirely as a control. It nearly reaches dense at B8
 fundamentally needed for this K=5 quality point. Rank 8 remains the smallest
 tested viable correction candidate. See
 `RUNTIME_QWEN_CORRECTION_ABLATION_20260909.md`.
+
+V0.209 validates correction rank 4 on the same trained K=5 recipe. It passes
+the quality gate on seeds 2026/17 with CE deltas `+0.03733/+0.04004` and gives
+B8 graph/dense `1.339x/1.330x`; graph/sparse-eager is `0.887x/0.927x`.
+Graph replay and reused-shape generation are exact within the audit tolerance.
+Rank 4 is the smallest tested viable opt-in, while rank 64 remains the default
+until longer and third-seed validation is complete. See
+`RUNTIME_QWEN_CORRECTION_RANK4_AUDIT_20260909.md`.
 
 V0.194 rejects the eight-layer K=4 pairwise-cost router with three-round
 on-policy aggregation: learned CE is `+0.06822/+0.07745` across seeds, worse
