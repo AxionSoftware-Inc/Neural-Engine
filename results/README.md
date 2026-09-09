@@ -1473,3 +1473,13 @@ consistent by seed/model; scale 1.0 is +0.00167 worse on mean CE. No universal
 scale or capacity-only fix is accepted. The next P-007 experiment must connect
 the selected correction to final task loss through an opt-in bounded training
 objective. See `P007_STATE_PATH_SCALE_EXTENDED_AUDIT_20260909.md`.
+
+P-007 task-conditioned correction scales and a final-loss advantage gate were
+also screened on 100M seeds 17/18. Task-level scale selection regressed the
+separate evaluation batch by +0.00500/+0.00057 CE. A linear gate that fit
+per-example correction advantage perfectly on calibration still regressed eval
+CE by +0.00535/+0.00125 and lost 0.42 pp accuracy on seed18. The conditional
+signal is real but does not generalize through the recurrent state, so both
+inference-only fixes are rejected. Further work must change training
+alignment/specialization, not add another scale or gate. See
+`P007_ADVANTAGE_GATE_AUDIT_20260909.md`.

@@ -31,6 +31,57 @@ def _loss(logits: torch.Tensor, targets: torch.Tensor) -> float:
     return float(nn.functional.cross_entropy(logits, targets).cpu())
 
 
+def _per_example_loss(logits: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    return nn.functional.cross_entropy(logits, targets, reduction="none")
+
+
+def _correction_advantage_summary(
+    natural_logits: torch.Tensor,
+    no_circuit_logits: torch.Tensor,
+    targets: torch.Tensor,
+    task_ids: torch.Tensor,
+    natural_calls: list[tuple[torch.Tensor, torch.Tensor]],
+) -> dict[str, Any]:
+    """Summarize which examples benefit from the selected correction.
+
+    Positive advantage means the correction lowers final CE.  The per-example
+    split is useful before attempting a learned gate: a negative mean can hide
+    a conditional signal if correction helps some tasks and hurts others.
+    """
+    natural_loss = _per_example_loss(natural_logits, targets)
+    no_circuit_loss = _per_example_loss(no_circuit_logits, targets)
+    advantage = no_circuit_loss - natural_loss
+    task_summary: dict[str, dict[str, float]] = {}
+    for task_id in torch.unique(task_ids, sorted=True).tolist():
+        mask = task_ids.eq(task_id)
+        task_advantage = advantage[mask]
+        task_summary[str(int(task_id))] = {
+            "mean": float(task_advantage.mean().cpu()),
+            "positive_fraction": float(task_advantage.gt(0).float().mean().cpu()),
+        }
+    if natural_calls:
+        delta_norm = torch.stack([
+            delta.norm(dim=-1) for _, delta in natural_calls
+        ]).mean(dim=0)
+        if delta_norm.std(unbiased=False).item() > 1e-8 and advantage.std(unbiased=False).item() > 1e-8:
+            corr = torch.corrcoef(torch.stack((advantage, delta_norm)))[0, 1]
+            advantage_delta_norm_corr = float(corr.cpu())
+        else:
+            advantage_delta_norm_corr = 0.0
+    else:
+        advantage_delta_norm_corr = 0.0
+    return {
+        "mean": float(advantage.mean().cpu()),
+        "median": float(advantage.median().cpu()),
+        "p10": float(advantage.quantile(0.10).cpu()),
+        "p90": float(advantage.quantile(0.90).cpu()),
+        "positive_fraction": float(advantage.gt(0).float().mean().cpu()),
+        "negative_fraction": float(advantage.lt(0).float().mean().cpu()),
+        "advantage_delta_norm_pearson": advantage_delta_norm_corr,
+        "task_summary": task_summary,
+    }
+
+
 def _route_candidate_recall(
     candidates: torch.Tensor, selected: torch.Tensor,
 ) -> float:
@@ -165,6 +216,10 @@ def analyze_checkpoint(args: argparse.Namespace, checkpoint_path: Path) -> dict[
     no_circuit_acc = _accuracy(no_circuit_logits, batch.targets)
     no_circuit_loss = _loss(no_circuit_logits, batch.targets)
     no_circuit_path = _summarize_calls(no_circuit_calls, encoded)
+    correction_advantage = _correction_advantage_summary(
+        natural_logits, no_circuit_logits, batch.targets, batch.task_ids,
+        natural_calls,
+    )
 
     route_replay: dict[str, dict[str, float]] = {}
     for mode in ("global", "within_task"):
@@ -224,6 +279,7 @@ def analyze_checkpoint(args: argparse.Namespace, checkpoint_path: Path) -> dict[
             "loss_increase": no_circuit_loss - natural_loss,
             **no_circuit_path,
         },
+        "correction_advantage": correction_advantage,
         "route_replay": route_replay,
     }
     del model, payload, batch

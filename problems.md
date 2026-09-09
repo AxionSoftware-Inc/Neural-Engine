@@ -1152,6 +1152,21 @@ capacity-only scaling va yangi statik scale sweep hozircha to‘xtatiladi.
 
 **Batafsil:** `results/P007_STATE_PATH_SCALE_EXTENDED_AUDIT_20260909.md`.
 
+Keyingi ikki inference-only pilot ham yakunlandi. Per-example correction
+advantage aralash chiqdi (100M seed17/18 positive fraction `46.88%/52.08%`),
+lekin advantage bilan correction normasi korrelyatsiyasi kuchsiz
+(`−0.177/+0.031`). Calibration’da task-level scale tanlab, boshqa batchda
+tekshirish natural scale=1ni yengmadi: CE delta `+0.00500/+0.00057`.
+
+Final-loss advantage’dan feature gate fit qilish calibration targetini 100%
+eslab qoldi, ammo evalda CE `+0.00535/+0.00125` yomonlashdi va seed18 accuracy
+`−0.42 pp` tushdi. Shuning uchun task-conditioned scale ham, misol-darajasidagi
+oddiy linear advantage gate ham **REJECTED**. P-007 endi universal scale/gate
+muammosi emas; correction signalini circuit specialization va final output
+training objective bilan barqaror align qilish muammosi.
+
+**Batafsil:** `results/P007_ADVANTAGE_GATE_AUDIT_20260909.md`.
+
 Post-GRU correction residual (`post_correction_residual_scale=β`) ham
 inference-only tekshirildi. `β=1.0` seed17’da `+1.25 pp`, seed18’da
 `−0.42 pp` natural accuracy berdi; CE va route-replay sensitivity ham
