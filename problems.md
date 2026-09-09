@@ -1130,6 +1130,28 @@ training/default uchun rad qilindi.
 
 **Sweep audit:** `results/P007_CORRECTION_GAIN_SWEEP_AUDIT.md`.
 
+Kengaytirilgan state-path diagnostikasi va scale sweep 2026-09-09 kuni
+100M/300M/500M, seed17/18 checkpointlarda bajarildi. Correction delta route
+almashtirilganda haqiqatan o‘zgaradi (`~1.19–1.30x` natural delta), shuning
+uchun circuit output state yo‘liga butunlay ulanmagan degan gipoteza rad etildi.
+Lekin seed17dagi 100M/300M/500M diagnostikasida correctionni `scale=0` qilish
+CE’ni `−0.00865/−0.00472/−0.00622` ga yaxshiladi; 300M/500M hard accuracy
+`−0.42 pp` bo‘ldi. Demak correction foydali computationni ham olib keladi,
+ammo uning final lossga yo‘nalishi beqaror.
+
+Olti checkpointli inference-only sweepda mean natural CE scale `0/0.1/0.25/
+0.5/1.0` uchun `0.428571/0.428466/0.428340/0.428509/0.430237` chiqdi.
+Scale `0.25`ning `−0.00023` aggregate CE farqi turli seed/modelda universal
+emas; har checkpoint optimal scale’i turlicha. `scale=0.25` yoki correctionni
+butunlay o‘chirish default sifatida qabul qilinmadi.
+
+**Yangi qaror:** P-007ni oddiy amplitude/router retrieval muammosi deb yopish
+mumkin emas. Keyingi yo‘l correction contributionni final task loss bilan
+bog‘laydigan opt-in training objective va bounded state/output interface;
+capacity-only scaling va yangi statik scale sweep hozircha to‘xtatiladi.
+
+**Batafsil:** `results/P007_STATE_PATH_SCALE_EXTENDED_AUDIT_20260909.md`.
+
 Post-GRU correction residual (`post_correction_residual_scale=β`) ham
 inference-only tekshirildi. `β=1.0` seed17’da `+1.25 pp`, seed18’da
 `−0.42 pp` natural accuracy berdi; CE va route-replay sensitivity ham

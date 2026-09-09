@@ -1462,3 +1462,14 @@ grouped row inside the token finalizer. Exact parity and generation are
 preserved; two-seed graph change is only −0.86%/+0.03%/+0.05% at B1/B8/B32.
 It remains opt-in and is rejected as a material serving optimization. See
 `RUNTIME_QWEN_DERIVED_POSITION_AUDIT_20260909.md`.
+
+P-007 state-path diagnostics and an extended correction-scale sweep test the
+100M/300M/500M staged checkpoints on both seeds without retraining. Route replay
+changes the circuit delta itself, so the circuit path is not causally inert;
+however, disabling correction improves CE on the seed17 diagnostic while
+removing it costs 0.42 pp hard accuracy on 300M/500M. Across six checkpoints,
+scale 0.25 has only a −0.00023 mean CE difference versus scale 0 and is not
+consistent by seed/model; scale 1.0 is +0.00167 worse on mean CE. No universal
+scale or capacity-only fix is accepted. The next P-007 experiment must connect
+the selected correction to final task loss through an opt-in bounded training
+objective. See `P007_STATE_PATH_SCALE_EXTENDED_AUDIT_20260909.md`.
