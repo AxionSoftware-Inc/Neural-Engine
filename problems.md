@@ -604,6 +604,13 @@ explicit BMM qo‘llanganda trained B8 graph/eager `1.091x → 1.034x` bo‘ldi,
 parity xatosi `8.94e-6`, quality CE delta `+0.035745`. Bu kichik ijobiy
 optimallashtirish, dense B8 latency muammosining to‘liq yechimi emas.
 **Batafsil:** `results/RUNTIME_QWEN_TRAINED_CORRECTION_BMM_AUDIT_20260909.md`.
+**V0.204 rank natijasi (2026-09-09):** rank32 correction trained K=5 bilan
+seed2026/17’da quality CE delta `+0.031617/+0.039860` va B8 graph/dense
+`1.411x/1.344x` berdi; parity `1e-5` ichida. Rank16 quality gate’dan o‘tsa ham
+B8 `1.479x`, ya’ni rank32’dan yaxshiroq emas. Rank32 **ACCEPTED OPT-IN**,
+default rank64 saqlandi; uzoqroq multi-seed audit va fused/static-index kernel
+hali ochiq.
+**Batafsil:** `results/RUNTIME_QWEN_CORRECTION_RANK_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 

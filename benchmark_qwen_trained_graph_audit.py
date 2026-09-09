@@ -98,6 +98,7 @@ def train_k5_cascade(
     child_steps: int,
     hard_steps: int,
     router_steps: int,
+    calibration_rank: int,
     learning_rate: float,
     hard_learning_rate: float,
     max_grad_norm: float,
@@ -137,7 +138,7 @@ def train_k5_cascade(
             eval_batches, device, layer_index,
         )
         child = make_transferred_routed_qwen_child(
-            parent, 8, 5, 1.0, 64,
+            parent, 8, 5, 1.0, calibration_rank,
             "base-output", "cross-group", "grouped", "contiguous",
             "subset-router", 5.0, device, dtype,
             partition_io=train_io,
@@ -401,6 +402,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         model, tokenizer, calibration_text, eval_text, layers, device, dtype,
         args.batch_size, args.sequence_length, args.train_batches,
         args.eval_batches, args.child_steps, args.hard_steps, args.router_steps,
+        args.calibration_rank,
         args.learning_rate, args.hard_learning_rate, args.max_grad_norm,
         args.log_every,
     )
@@ -477,7 +479,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     )
 
     result = {
-        "experiment": "V0.197_trained_qwen_custom_fixed_kv_graph_audit",
+        "experiment": "V0.204_trained_qwen_correction_rank_audit",
         "status": "PARITY_PASS" if max(replay_error, alternate_error) <= 1e-3 else "PARITY_FAIL",
         "model": args.model,
         "seed": args.seed,
@@ -488,7 +490,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "num_experts": 8,
             "active_experts": 5,
             "hard_route_scale": 5.0,
-            "calibration_rank": 64,
+            "calibration_rank": args.calibration_rank,
             "calibration_mode": "cross-group",
             "route_source": "subset-router",
             "router_target": "subset-soft",
@@ -552,6 +554,7 @@ def main() -> None:
     parser.add_argument("--iterations", type=int, default=100)
     parser.add_argument("--batch-sizes", type=int, nargs="+", default=[1, 2, 4, 8])
     parser.add_argument("--correction-backend-iterations", type=int, default=30)
+    parser.add_argument("--calibration-rank", type=int, default=64)
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--device", choices=("cuda", "auto"), default="cuda")
     parser.add_argument("--local-files-only", action="store_true")

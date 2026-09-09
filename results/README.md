@@ -30,6 +30,7 @@
 - [Runtime — Qwen fixed-graph batched decode audit](RUNTIME_QWEN_FIXED_GRAPH_BATCH_SHAPE_20260909.md)
 - [Runtime — Qwen trained correction backend A/B](RUNTIME_QWEN_TRAINED_CORRECTION_BACKEND_AUDIT_20260909.md)
 - [Runtime — Qwen trained correction BMM audit](RUNTIME_QWEN_TRAINED_CORRECTION_BMM_AUDIT_20260909.md)
+- [Runtime — Qwen trained correction-rank audit](RUNTIME_QWEN_CORRECTION_RANK_AUDIT_20260909.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
@@ -171,6 +172,12 @@ On the trained B8 audit, graph/eager improves from `1.091x` to `1.034x` with
 not a large quality or dense-latency breakthrough; a fused/static-index
 correction kernel remains the next target. See
 `RUNTIME_QWEN_TRAINED_CORRECTION_BMM_AUDIT_20260909.md`.
+
+V0.204 tests correction rank as a controlled runtime/quality knob. Rank 32
+passes the `+0.05` CE gate on seeds 2026 and 17 and improves the trained B8
+graph/dense ratio to `1.411x` and `1.344x` in the two runs; rank 16 is not
+better (`1.479x`). Rank 32 is retained as opt-in while rank 64 remains the
+default compatibility recipe. See `RUNTIME_QWEN_CORRECTION_RANK_AUDIT_20260909.md`.
 
 V0.194 rejects the eight-layer K=4 pairwise-cost router with three-round
 on-policy aggregation: learned CE is `+0.06822/+0.07745` across seeds, worse
