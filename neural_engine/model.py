@@ -38,6 +38,7 @@ class NeuralEngineV0(nn.Module):
                  ordered_factor_slots: bool = False,
                  query_factor_mix_scale: float = 0.0,
                  factor_product_scale: float = 0.0,
+                 factor_hidden_product_scale: float = 0.0,
                  factor_composition_mode: str = "additive",
                  address_residual_rank: int = 0,
                  address_residual_scale: float = 1.0,
@@ -80,6 +81,7 @@ class NeuralEngineV0(nn.Module):
         self.ordered_factor_slots = bool(ordered_factor_slots)
         self.query_factor_mix_scale = float(query_factor_mix_scale)
         self.factor_product_scale = float(factor_product_scale)
+        self.factor_hidden_product_scale = float(factor_hidden_product_scale)
         self.factor_composition_mode = factor_composition_mode
         self.address_residual_rank = int(address_residual_rank)
         self.address_residual_scale = float(address_residual_scale)
@@ -196,6 +198,7 @@ class NeuralEngineV0(nn.Module):
                 factor_pair_rank=factor_pair_rank,
                 factor_pair_scale=factor_pair_scale,
                 factor_product_scale=factor_product_scale,
+                factor_hidden_product_scale=factor_hidden_product_scale,
                 factor_composition_mode=factor_composition_mode,
                 address_residual_rank=address_residual_rank,
                 address_residual_scale=address_residual_scale,
@@ -585,4 +588,5 @@ class NeuralEngineV0(nn.Module):
             "route_exploration_prob": self.route_exploration_prob,
             "factor_candidate_layout": self.factor_candidate_layout,
             "factor_pair_interaction_scale": self.factor_pair_interaction_scale,
+            "factor_hidden_product_scale": self.factor_hidden_product_scale,
         }

@@ -1,0 +1,27 @@
+[
+  {
+    "checkpoint": "results\\checkpoints\\ne500_shared_routekeys_hidden_product_s17_3000.pt",
+    "model": "ne_500m_v12_factorized_shared_routekeys_hidden_product",
+    "num_circuits": 38600,
+    "device": "cuda",
+    "examples_per_task": 16,
+    "rows": 720,
+    "natural_accuracy": 0.6916667222976685,
+    "candidate_pool": 32,
+    "selected_width": 8,
+    "candidate_mean_pair_cosine": 0.27228379249572754,
+    "candidate_p95_pair_cosine": 0.4722593426704407,
+    "selected_mean_pair_cosine": 0.273886501789093,
+    "selected_p95_pair_cosine": 0.47244736552238464,
+    "candidate_mean_individual_norm": 0.8237337470054626,
+    "route_mean_norm": 0.7142633199691772,
+    "route_to_candidate_norm_ratio": 0.8358391523361206,
+    "selected_not_in_candidate_rows": 0,
+    "selected_unique": 4894,
+    "selected_fraction_of_bank": 0.12678755819797516,
+    "selected_usage_entropy": 8.427274703979492,
+    "task_entropy_mean_used_circuits": 0.055444516241550446,
+    "task_entropy_p95_used_circuits": 0.6931471824645996,
+    "task_count_classes": 64
+  }
+]

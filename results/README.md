@@ -1573,6 +1573,12 @@ that hard subset selection remains the bottleneck. A parameter-free pair-score
 variant also failed its screen. See
 `P003_NATIVE_FACTORIZED_CANDIDATE_GRID_AUDIT_20260910.md`.
 
+The hidden factor-product composition arm gave a short 1,000-step gain but
+regressed at 3,000 steps to 68.307% versus 68.594% for ordered shared route
+keys. It also raised VRAM by 44% and did not reduce selected circuit
+redundancy, so it remains opt-in only. See
+`P003_NATIVE_FACTORIZED_HIDDEN_PRODUCT_AUDIT_20260910.md`.
+
 The matched 500M seed17 specialization diagnostic confirms a structural effect:
 shared factor-derived route keys reduce candidate/selected pair cosine from
 `0.37746/0.38004` to `0.26475/0.27034` and dead-circuit traffic from `46.05%`

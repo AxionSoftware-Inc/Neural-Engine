@@ -1346,6 +1346,16 @@ quality fix sifatida rad qilindi, opt-in nazorat sifatida saqlandi.
 
 **Candidate-grid audit:** `results/P003_NATIVE_FACTORIZED_CANDIDATE_GRID_AUDIT_20260910.md`.
 
+Hidden factor-product interaction ham tekshirildi: 1,000 qadamda mean
+`59.766%` bo‘lib `59.258%` baseline’dan kichik ijobiy signal berdi, ammo 3,000
+qadamda `68.307%`ga tushdi, ordered shared-route-key baseline esa `68.594%`
+bo‘ldi. VRAM `1,039 → 1,493 MB`, vaqt esa taxminan `30%` oshdi; selected
+cosine `0.27389` bo‘lib route redundancy kamaymadi. Shuning uchun bu yo‘l ham
+quality/scaling fix sifatida rad qilindi, faqat opt-in mathematical control
+sifatida qoldi.
+
+**Hidden-product audit:** `results/P003_NATIVE_FACTORIZED_HIDDEN_PRODUCT_AUDIT_20260910.md`.
+
 500M ordered-slotning birinchi varianti `d_model=512` bilan ishga tushgani
 aniqlandi, holbuki shared 500M baseline `d_model=384` edi; `69.818%` natija
 shu sabab fair taqqoslash dalili emas va confounded deb belgilandi. Teng

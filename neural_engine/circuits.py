@@ -126,6 +126,7 @@ class FactorizedMicroCircuitBank(nn.Module):
                  factor_pair_rank: int = 0,
                  factor_pair_scale: float = 1.0,
                  factor_product_scale: float = 0.0,
+                 factor_hidden_product_scale: float = 0.0,
                  factor_composition_mode: str = "additive",
                  address_residual_rank: int = 0,
                  address_residual_scale: float = 1.0):
@@ -156,6 +157,9 @@ class FactorizedMicroCircuitBank(nn.Module):
         self.factor_product_scale = float(factor_product_scale)
         if self.factor_product_scale < 0.0:
             raise ValueError("factor_product_scale must be non-negative")
+        self.factor_hidden_product_scale = float(factor_hidden_product_scale)
+        if self.factor_hidden_product_scale < 0.0:
+            raise ValueError("factor_hidden_product_scale must be non-negative")
         if factor_composition_mode not in {"additive", "serial"}:
             raise ValueError("factor_composition_mode must be additive or serial")
         self.factor_composition_mode = factor_composition_mode
@@ -372,11 +376,29 @@ class FactorizedMicroCircuitBank(nn.Module):
             second_hidden = F.gelu(torch.einsum("bkd,bkdr->bkr", middle, second_down))
             outputs = torch.einsum("bkr,bkrd->bkd", second_hidden, second_up) + second_bias
             outputs = first_output + outputs
+            if self.factor_hidden_product_scale:
+                interaction_hidden = first_hidden * second_hidden
+                interaction_up = 0.5 * (first_up + second_up)
+                outputs = outputs + self.factor_hidden_product_scale * torch.einsum(
+                    "bkr,bkrd->bkd", interaction_hidden, interaction_up
+                )
             return (outputs * weights.unsqueeze(-1)).sum(dim=1)
         down, up, bias = self._gather(circuit_ids, state)
         hidden = torch.einsum("bd,bkdr->bkr", state, down)
         hidden = F.gelu(hidden)
         outputs = torch.einsum("bkr,bkrd->bkd", hidden, up) + bias
+        if self.factor_hidden_product_scale:
+            (first_down, first_up, _first_bias,
+             second_down, second_up, _second_bias) = self._gather_factor_slots(
+                circuit_ids, state
+            )
+            first_hidden = F.gelu(torch.einsum("bd,bkdr->bkr", state, first_down))
+            second_hidden = F.gelu(torch.einsum("bd,bkdr->bkr", state, second_down))
+            interaction_hidden = first_hidden * second_hidden
+            interaction_up = 0.5 * (first_up + second_up)
+            outputs = outputs + self.factor_hidden_product_scale * torch.einsum(
+                "bkr,bkrd->bkd", interaction_hidden, interaction_up
+            )
         residual = self._gather_address_residual(circuit_ids)
         if residual is not None:
             residual_down, residual_up, residual_bias = residual
@@ -404,12 +426,30 @@ class FactorizedMicroCircuitBank(nn.Module):
                 second_hidden = F.gelu(torch.einsum("bd,bdr->br", middle, second_down))
                 output = torch.einsum("br,brd->bd", second_hidden, second_up) + second_bias
                 output = first_output + output
+                if self.factor_hidden_product_scale:
+                    interaction_hidden = first_hidden * second_hidden
+                    interaction_up = 0.5 * (first_up + second_up)
+                    output = output + self.factor_hidden_product_scale * torch.einsum(
+                        "br,brd->bd", interaction_hidden, interaction_up
+                    )
                 current = current + weights[:, slot].unsqueeze(-1) * output
                 continue
             down, up, bias = self._gather(circuit_ids[:, slot], current)
             hidden = torch.einsum("bd,bdr->br", current, down)
             hidden = F.gelu(hidden)
             output = torch.einsum("br,brd->bd", hidden, up) + bias
+            if self.factor_hidden_product_scale:
+                (first_down, first_up, _first_bias,
+                 second_down, second_up, _second_bias) = self._gather_factor_slots(
+                    circuit_ids[:, slot], current
+                )
+                first_hidden = F.gelu(torch.einsum("bd,bdr->br", current, first_down))
+                second_hidden = F.gelu(torch.einsum("bd,bdr->br", current, second_down))
+                interaction_hidden = first_hidden * second_hidden
+                interaction_up = 0.5 * (first_up + second_up)
+                output = output + self.factor_hidden_product_scale * torch.einsum(
+                    "br,brd->bd", interaction_hidden, interaction_up
+                )
             residual = self._gather_address_residual(circuit_ids[:, slot])
             if residual is not None:
                 residual_down, residual_up, residual_bias = residual
