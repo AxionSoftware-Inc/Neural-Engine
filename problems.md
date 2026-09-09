@@ -703,6 +703,25 @@ kernel sinovdan o‘tdi. Parity yaxshi (`9.54e-6/1.62e-5`), ammo vectorizedga
 nisbatan B1 `4.661x`, B8 `1.726x` sekin. Atomics asosiy bottleneck emas,
 serial FFN hisoblash parallel GEMMdan yutqazadi; **REJECTED FOR SPEED**.
 **Batafsil:** `results/RUNTIME_QWEN_TOKEN_BLOCK_CORRECTION_AUDIT_20260909.md`.
+**V0.219 router/top-k/dispatch stage profile (2026-09-09):** fixed hidden
+state o‘lchovida sakkiz child uchun B1 router+top-k `1.391 ms`, selected FFN
+dispatch `2.553 ms`, full child `3.578 ms`; B8’da mos ravishda `1.008 ms`,
+`17.925 ms`, `18.236 ms`; B32’da `1.180 ms`, `70.951 ms`, `71.547 ms` bo‘ldi.
+Demak B8+da router emas, selected FFN dispatch asosiy xarajat; fusionning
+end-to-end ceiling’i cheklangan. **DIAGNOSTIC BASELINE**.
+**Batafsil:** `results/RUNTIME_QWEN_ROUTER_TOPK_DISPATCH_PROFILE_20260909.md`.
+**V0.220 fused router (2026-09-09):** ikkita linear+SiLU router, top-k va
+softmax bitta opt-in CUDA kernelga yig‘ildi. Tied bo‘lmagan deterministic
+routerda route-stage B1 `0.636x`, B8 `0.675x`, B32 `1.085x` bo‘ldi; child
+forward B1 `0.913x`, B8 `1.024x`, B32 `1.014x`; full-model one-token smoke esa
+B1 `1.000x`, B8 `1.020x` bo‘ldi. ID mismatch `0`, child output max xatosi
+`4.77e-7/9.54e-7/1.91e-6`, full-model max xatosi `3.81e-6/9.54e-6`.
+B1’da kichik ijobiy mikro-optimallashtirish bor, lekin universal yoki
+end-to-end speedup emas; **ACCEPTED OPT-IN MICRO-OPTIMIZATION, DEFAULT
+UNCHANGED**. Tied fresh routerlar uchun PyTorch GPU top-k tartibi aniq route
+contract sifatida belgilanmagani sabab custom kernel faqat auditdan o‘tgan
+trained/non-tied routerda ishlatiladi.
+**Batafsil:** `results/RUNTIME_QWEN_FUSED_ROUTER_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 

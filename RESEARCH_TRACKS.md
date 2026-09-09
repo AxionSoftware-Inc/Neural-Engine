@@ -150,6 +150,13 @@ V0.218 tests a one-block-per-token correction kernel intended to remove
 atomic accumulation. It is parity-safe (`9.5e-6/1.6e-5`) but slower than
 vectorized by `4.661x` at B1 and `1.726x` at B8, so the hypothesis is rejected;
 the loss is serialized FFN work, not atomics.
+V0.219 profiles the child stages directly: at B1 router+top-k is `1.391 ms`
+versus `2.553 ms` selected FFN dispatch; at B8 they are `1.008 ms` versus
+`17.925 ms`. V0.220 fuses the router projections, top-k and softmax. It is
+parity-safe on non-tied routes and improves the route stage to `0.636x/0.675x`
+at B1/B8, but child end-to-end is only `0.913x/1.024x`; B32 regresses to
+`1.014x`. Keep it opt-in and unchanged by default. This confirms router
+fusion is a bounded small-batch optimization, not the main dispatch solution.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

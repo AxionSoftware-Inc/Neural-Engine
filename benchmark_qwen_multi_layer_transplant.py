@@ -852,6 +852,10 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         # One-token dispatch is kept opt-in until a full-model numerical
         # equivalence/quality audit approves its different reduction order.
         self.single_token_fast_path = False
+        # The fused router is an inference-only CUDA probe.  PyTorch remains
+        # the default because trained-router tie/order and numerical parity
+        # must be audited before changing serving behavior.
+        self.single_token_router_backend = "torch"
         self.single_token_projection_backend = "einsum"
         # Optional inference-only override used when a linear correction is
         # folded into the selected output projection.
@@ -917,6 +921,38 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         return torch.zeros(
             *hidden_states.shape[:-1], self.subset_membership.shape[0],
             device=hidden_states.device, dtype=hidden_states.dtype,
+        )
+
+    def _single_token_route(
+        self, hidden_states: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor] | None:
+        """Optionally fuse the standard router and hard top-k for decode."""
+        if (
+            self.training
+            or self.route_source != "router"
+            or self.single_token_router_backend != "cuda-fused"
+            or hidden_states.shape[-2] != 1
+            or hidden_states.device.type != "cuda"
+            or hidden_states.dtype != torch.float32
+        ):
+            return None
+        if not isinstance(self.router, torch.nn.Sequential) or len(self.router) != 3:
+            raise ValueError("cuda-fused router requires Linear-SiLU-Linear")
+        from neural_engine.qwen_router_dispatch import fused_router
+
+        flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1]).contiguous()
+        top_ids, weights = fused_router(
+            flat_hidden,
+            self.router[0].weight,
+            self.router[0].bias,
+            self.router[2].weight,
+            self.router[2].bias,
+            self.active_experts,
+            self.temperature,
+        )
+        return (
+            top_ids.reshape(*hidden_states.shape[:-1], self.active_experts),
+            weights.reshape(*hidden_states.shape[:-1], self.active_experts),
         )
 
     def _forward_grouped(
@@ -1325,6 +1361,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         soft_output = None
         hard_blend = 1.0
+        fused_route = None
         if self.route_source in {
             "subset-router", "oracle-subset", "pairwise-cost-router",
         }:
@@ -1365,7 +1402,8 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                     -torch.ones_like(selected_membership),
                 )
         else:
-            scores = self.router(hidden_states)
+            fused_route = self._single_token_route(hidden_states)
+            scores = None if fused_route is not None else self.router(hidden_states)
         oracle_outputs = None
         if not self.training and self.route_source in {
             "oracle-dot", "oracle-energy", "oracle-subset",
@@ -1433,8 +1471,11 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             self.last_active_expert_fraction = 1.0
             # At uniform routing, this exactly reconstructs the sum of slices.
             return self.num_experts * (outputs * weights.unsqueeze(-1)).sum(dim=-2)
-        top_values, top_ids = scores.topk(self.active_experts, dim=-1)
-        weights = F.softmax(top_values / self.temperature, dim=-1)
+        if fused_route is None:
+            top_values, top_ids = scores.topk(self.active_experts, dim=-1)
+            weights = F.softmax(top_values / self.temperature, dim=-1)
+        else:
+            top_ids, weights = fused_route
         self.last_selected = top_ids.detach()
         self.last_route_weights = weights
         self.last_all_outputs = None
