@@ -878,6 +878,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self.grouped_effective_output_weight: torch.Tensor | None = None
         self.grouped_uniform_accum = False
         self.grouped_inplace_swiglu = False
+        self.grouped_token_finalize = False
         # Optional inference-only BMM layout probe.  The native buffers keep
         # Linear's [out, in] layout; grouped BMM consumes their transposes.
         # Caching contiguous transposes lets cuBLAS see the exact [E, in, out]
@@ -1034,6 +1035,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         finalize_output: bool = False,
         fixed_pack: bool = False,
         inplace_swiglu: bool = False,
+        token_finalize: bool = False,
     ) -> torch.Tensor:
         flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
         flat_ids = top_ids.reshape(-1, self.active_experts)
@@ -1204,19 +1206,33 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 raise RuntimeError(
                     "grouped finalization requires folded effective output weights"
                 )
-            from neural_engine.qwen_grouped_finalize import grouped_finalize
+            if token_finalize:
+                from neural_engine.qwen_grouped_finalize import (
+                    grouped_finalize_token,
+                )
+            else:
+                from neural_engine.qwen_grouped_finalize import grouped_finalize
 
             with record_function("neural_engine.grouped.finalize"):
-                flat_output = grouped_finalize(
-                    grouped_output.reshape(
-                        self.num_experts * max_count, flat_hidden.shape[-1],
-                    ).contiguous(),
-                    grouped_indices.contiguous(),
-                    sorted_token_ids.contiguous(),
-                    sorted_slots.contiguous(),
-                    flat_weights.contiguous(),
-                    self.hard_route_scale,
-                )
+                grouped_output_flat = grouped_output.reshape(
+                    self.num_experts * max_count, flat_hidden.shape[-1],
+                ).contiguous()
+                if token_finalize:
+                    flat_output = grouped_finalize_token(
+                        grouped_output_flat,
+                        grouped_indices.contiguous(),
+                        flat_weights.contiguous(),
+                        self.hard_route_scale,
+                    )
+                else:
+                    flat_output = grouped_finalize(
+                        grouped_output_flat,
+                        grouped_indices.contiguous(),
+                        sorted_token_ids.contiguous(),
+                        sorted_slots.contiguous(),
+                        flat_weights.contiguous(),
+                        self.hard_route_scale,
+                    )
             self.last_selected_outputs = None
             self.last_active_expert_fraction = pair_indices.numel() / max(
                 flat_hidden.shape[0] * self.num_experts, 1
@@ -1891,6 +1907,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 fixed_pack=True,
                 finalize_output=True,
                 inplace_swiglu=self.grouped_inplace_swiglu,
+                token_finalize=self.grouped_token_finalize,
             )
         if not self.training and self.dispatch_mode == "grouped-adaptive-direct-tiled":
             return self._forward_direct_tiled(hidden_states, top_ids, weights)

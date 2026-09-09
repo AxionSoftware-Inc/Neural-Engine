@@ -1438,3 +1438,9 @@ seeds preserve numerical parity and exact generation, but the two-seed timing
 change versus fixed-pack is only -0.48%/+0.50%/+0.16% at B1/B8/B32. It is
 rejected as a material serving optimization. See
 `RUNTIME_QWEN_INPLACE_SWIGLU_AUDIT_20260909.md`.
+
+V0.253 tests a token-owned atomics-free grouped finalizer. Both seeds pass
+numerical parity and exact generation, but the two-seed change versus
+fixed-pack is only +0.15%/−0.15%/+0.00% at B1/B8/B32. It remains an opt-in
+reference implementation, not a serving breakthrough. See
+`RUNTIME_QWEN_TOKEN_FINALIZE_AUDIT_20260909.md`.

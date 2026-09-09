@@ -33,6 +33,34 @@ __global__ void finalize_kernel(
     }
 }
 
+// One block owns one token and reduces all K selected expert outputs in a
+// fixed slot order. This avoids K competing atomicAdd writers per token.
+__global__ void token_finalize_kernel(
+    const float* __restrict__ grouped_output,
+    const int64_t* __restrict__ packed_positions,
+    const float* __restrict__ route_weights,
+    float* __restrict__ output,
+    int64_t tokens,
+    int64_t active,
+    int64_t hidden_size,
+    float hard_route_scale) {
+    const int64_t token = static_cast<int64_t>(blockIdx.x);
+    if (token >= tokens) return;
+    float* target = output + token * hidden_size;
+    for (int64_t h = threadIdx.x; h < hidden_size; h += blockDim.x) {
+        float sum = 0.0f;
+        for (int64_t slot = 0; slot < active; ++slot) {
+            const int64_t pair = token * active + slot;
+            const float scale =
+                hard_route_scale * route_weights[pair];
+            const float* source =
+                grouped_output + packed_positions[pair] * hidden_size;
+            sum += scale * source[h];
+        }
+        target[h] = sum;
+    }
+}
+
 }  // namespace
 
 torch::Tensor qwen_grouped_finalize_cuda(
@@ -80,6 +108,46 @@ torch::Tensor qwen_grouped_finalize_cuda(
         grouped_output.data_ptr<float>(), packed_positions.data_ptr<int64_t>(),
         token_ids.data_ptr<int64_t>(), slots.data_ptr<int64_t>(),
         route_weights.data_ptr<float>(), output.data_ptr<float>(), pairs,
+        active, hidden_size, static_cast<float>(hard_route_scale));
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+    return output;
+}
+
+torch::Tensor qwen_grouped_finalize_token_cuda(
+    torch::Tensor grouped_output,
+    torch::Tensor packed_positions,
+    torch::Tensor route_weights,
+    double hard_route_scale) {
+    TORCH_CHECK(grouped_output.scalar_type() == torch::kFloat32,
+                "grouped output must be float32");
+    TORCH_CHECK(packed_positions.scalar_type() == torch::kInt64,
+                "packed positions must be int64");
+    TORCH_CHECK(route_weights.scalar_type() == torch::kFloat32,
+                "route weights must be float32");
+    TORCH_CHECK(grouped_output.dim() == 2,
+                "grouped output must be [packed rows, hidden]");
+    TORCH_CHECK(packed_positions.dim() == 1,
+                "packed positions must be rank-1");
+    TORCH_CHECK(route_weights.dim() == 2,
+                "route weights must be [tokens, active]");
+    const int64_t tokens = route_weights.size(0);
+    const int64_t active = route_weights.size(1);
+    const int64_t hidden_size = grouped_output.size(1);
+    TORCH_CHECK(packed_positions.numel() == tokens * active,
+                "packed positions size mismatch");
+    TORCH_CHECK(grouped_output.is_contiguous() &&
+                    packed_positions.is_contiguous() &&
+                    route_weights.is_contiguous(),
+                "grouped token finalize inputs must be contiguous");
+
+    auto output = torch::empty({tokens, hidden_size}, grouped_output.options());
+    if (tokens == 0 || active == 0 || hidden_size == 0) {
+        return output.zero_();
+    }
+    const auto stream = at::cuda::getCurrentCUDAStream();
+    token_finalize_kernel<<<static_cast<unsigned int>(tokens), 256, 0, stream>>>(
+        grouped_output.data_ptr<float>(), packed_positions.data_ptr<int64_t>(),
+        route_weights.data_ptr<float>(), output.data_ptr<float>(), tokens,
         active, hidden_size, static_cast<float>(hard_route_scale));
     C10_CUDA_KERNEL_LAUNCH_CHECK();
     return output;

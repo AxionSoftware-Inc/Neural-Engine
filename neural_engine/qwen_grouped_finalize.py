@@ -59,3 +59,27 @@ def grouped_finalize(
         grouped_output, packed_positions, token_ids, slots, route_weights,
         float(hard_route_scale),
     )
+
+
+def grouped_finalize_token(
+    grouped_output: torch.Tensor,
+    packed_positions: torch.Tensor,
+    route_weights: torch.Tensor,
+    hard_route_scale: float,
+) -> torch.Tensor:
+    """Fuse grouped output reduction with one atomics-free block per token."""
+    tensors = grouped_output, packed_positions, route_weights
+    if any(tensor.device.type != "cuda" for tensor in tensors):
+        raise ValueError("grouped token finalization requires CUDA tensors")
+    if grouped_output.dtype != torch.float32 or route_weights.dtype != torch.float32:
+        raise ValueError("grouped token finalization currently supports float32")
+    if packed_positions.dtype != torch.int64:
+        raise ValueError("grouped token finalization positions must be int64")
+    if any(not tensor.is_contiguous() for tensor in tensors):
+        raise ValueError("grouped token finalization inputs must be contiguous")
+    if route_weights.dim() != 2:
+        raise ValueError("grouped token finalization weights must be [tokens, active]")
+    return _extension().forward_token(
+        grouped_output, packed_positions, route_weights,
+        float(hard_route_scale),
+    )
