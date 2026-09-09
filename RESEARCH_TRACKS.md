@@ -115,6 +115,11 @@ V0.210 doubles child/hard/router steps for rank 4; seeds 2026/17 still pass
 (`+0.02795/+0.03825`) and B8 graph/dense improves to `1.280x/1.265x`.
 This removes short-budget fragility as the leading explanation, but the fused
 correction kernel remains the real latency target.
+V0.211 adds a fixed-shape custom CUDA correction kernel. After binding it to
+the current stream, trained final-logit parity is `9.3e-6/9.5e-6` versus the
+vectorized backend; graph replay is safe. End-to-end graph timing changes only
+`49.36→48.88 ms` in the measured seed, so the kernel is retained opt-in and
+not promoted as a large speed breakthrough.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

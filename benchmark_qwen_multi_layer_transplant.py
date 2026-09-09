@@ -1860,6 +1860,7 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
         # the indexed weights become prohibitive for prefill. Count both
         # gathered projection tensors against a conservative memory bound.
         self.max_dense_gather_bytes = 128 * 1024 * 1024
+        self.correction_dispatch_backend = "vectorized"
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         base_output = self.base(hidden_states)
@@ -1884,6 +1885,23 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
             selected_outputs = self.base.last_selected_outputs
             if selected_outputs is None:
                 raise RuntimeError("hard route outputs were not populated")
+            if (
+                self.correction_dispatch_backend == "cuda-fused"
+                and selected_outputs.shape[-3] == 1
+            ):
+                from neural_engine.qwen_correction_dispatch import correction_dispatch
+
+                correction = correction_dispatch(
+                    selected_outputs.reshape(
+                        -1, selected_outputs.shape[-2], selected_outputs.shape[-1],
+                    ),
+                    selected.reshape(-1, selected.shape[-1]),
+                    route_weights.reshape(-1, route_weights.shape[-1]),
+                    self.mix_in,
+                    self.mix_out,
+                    self.base.hard_route_scale,
+                ).reshape(*selected_outputs.shape[:-2], selected_outputs.shape[-1])
+                return correction if self.replace_base_output else base_output + correction
             gather_elements = (
                 selected_outputs.shape[0]
                 * selected_outputs.shape[1]

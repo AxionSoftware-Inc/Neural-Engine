@@ -295,7 +295,7 @@ def trained_correction_backend_matrix(
     warmup: int,
     iterations: int,
 ) -> list[dict[str, object]]:
-    """Compare vectorized and packed rank-64 correction on trained children."""
+    """Compare PyTorch, custom CUDA, and packed correction on trained children."""
     base_prefix = tokenizer(
         "Neural Engine sparse circuits", return_tensors="pt",
     ).input_ids[:, :4].to(device)
@@ -305,7 +305,10 @@ def trained_correction_backend_matrix(
     model_layers = [model.model.layers[index] for index in layers]
     records = []
     original_limits = []
+    original_backends = []
     mixers = []
+    reference_eager_logits = None
+    reference_graph_logits = None
     for child in children:
         current_mixers = [
             nested for nested in child.modules()
@@ -315,11 +318,17 @@ def trained_correction_backend_matrix(
         original_limits.extend(
             [mixer.max_dense_gather_bytes for mixer in current_mixers]
         )
+        original_backends.extend(
+            [mixer.correction_dispatch_backend for mixer in current_mixers]
+        )
     try:
-        for backend in ("vectorized", "packed"):
+        for backend in ("vectorized", "cuda-fused", "packed"):
             for mixer in mixers:
                 mixer.max_dense_gather_bytes = (
                     128 * 1024 * 1024 if backend == "vectorized" else 0
+                )
+                mixer.correction_dispatch_backend = (
+                    "cuda-fused" if backend == "cuda-fused" else "vectorized"
                 )
             batch_size = 8
             prefix_ids = base_prefix.repeat(batch_size, 1)
@@ -350,11 +359,16 @@ def trained_correction_backend_matrix(
                 records.append({
                     "backend": backend,
                     "batch_size": batch_size,
-                    "status": "GRAPH_CAPTURE_FAIL",
+                    "status": (
+                        "GRAPH_CAPTURE_FAIL"
+                        if backend == "packed" else "BACKEND_FAIL"
+                    ),
                     "eager_ms": eager_ms,
                     "known_cause": (
                         "packed correction calls torch.where over device routing "
                         "indices during CUDA Graph capture"
+                        if backend == "packed" else
+                        "custom CUDA correction extension failed during graph replay"
                     ),
                     "error": str(exc).splitlines()[0],
                 })
@@ -363,7 +377,7 @@ def trained_correction_backend_matrix(
                 # backend A/B rather than hiding the failure or continuing
                 # with corrupted timing state.
                 break
-            records.append({
+            record = {
                 "backend": backend,
                 "batch_size": batch_size,
                 "status": "PARITY_PASS",
@@ -373,10 +387,24 @@ def trained_correction_backend_matrix(
                 "max_graph_vs_eager_logit_error": float(
                     (graph_logits - eager_logits).abs().max().item()
                 ),
-            })
+            }
+            if backend == "vectorized":
+                reference_eager_logits = eager_logits.clone()
+                reference_graph_logits = graph_logits.clone()
+            elif reference_eager_logits is not None:
+                record["max_eager_vs_vectorized_logit_error"] = float(
+                    (eager_logits - reference_eager_logits).abs().max().item()
+                )
+                record["max_graph_vs_vectorized_logit_error"] = float(
+                    (graph_logits - reference_graph_logits).abs().max().item()
+                )
+            records.append(record)
     finally:
-        for mixer, original_limit in zip(mixers, original_limits):
+        for mixer, original_limit, original_backend in zip(
+            mixers, original_limits, original_backends,
+        ):
             mixer.max_dense_gather_bytes = original_limit
+            mixer.correction_dispatch_backend = original_backend
     return records
 
 
@@ -625,7 +653,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     )
 
     result = {
-        "experiment": "V0.210_trained_qwen_correction_long_budget",
+        "experiment": "V0.211_trained_qwen_correction_cuda_kernel",
         "status": "PARITY_PASS" if max(replay_error, alternate_error) <= 1e-3 else "PARITY_FAIL",
         "model": args.model,
         "seed": args.seed,

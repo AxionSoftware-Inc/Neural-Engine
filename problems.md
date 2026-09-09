@@ -652,6 +652,14 @@ Generation parity ikkala seedda exact. Qisqa budgetga xos tasodifiy signal
 ehtimoli kamaydi, lekin rank4 defaultga ko‘tarilmadi; fused/static-index
 correction kernel hali asosiy runtime muammosi.
 **Batafsil:** `results/RUNTIME_QWEN_CORRECTION_LONG_BUDGET_20260909.md`.
+**V0.211 custom CUDA correction (2026-09-09):** tanlangan K=5 correction uchun
+fixed-shape CUDA kernel qo‘shildi. Dastlab default stream bugi graph capture’ni
+bo‘sh qoldirdi; current streamga o‘tkazilgach graph/eager parity `9.3e-6/9.5e-6`
+bo‘ldi. Trained B8 A/B’da vectorized→CUDA kernel eager `44.48→44.78 ms`, graph
+`49.36→48.88 ms`; demak katta tezlik sakrashi yo‘q, **DEFAULT EMAS, OPT-IN**.
+Quality va model body o‘zgarmadi; keyingi katta yutuq uchun fused base+correction
+dispatch yoki kernel fusion kerak.
+**Batafsil:** `results/RUNTIME_QWEN_CORRECTION_CUDA_KERNEL_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 

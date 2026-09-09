@@ -37,6 +37,7 @@
 - [Runtime — Qwen no-correction ablation](RUNTIME_QWEN_CORRECTION_ABLATION_20260909.md)
 - [Runtime — Qwen rank-4 correction audit](RUNTIME_QWEN_CORRECTION_RANK4_AUDIT_20260909.md)
 - [Runtime — Qwen rank-4 long-budget audit](RUNTIME_QWEN_CORRECTION_LONG_BUDGET_20260909.md)
+- [Runtime — Qwen custom CUDA correction kernel audit](RUNTIME_QWEN_CORRECTION_CUDA_KERNEL_AUDIT_20260909.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
@@ -227,6 +228,14 @@ eager is `0.904x/0.873x`. Exact generation and graph parity remain intact.
 This supports rank 4 beyond the short budget, but does not change the default;
 the remaining speed issue is fused/static-index correction overhead. See
 `RUNTIME_QWEN_CORRECTION_LONG_BUDGET_20260909.md`.
+
+V0.211 adds an opt-in fixed-shape CUDA kernel for the selected low-rank
+correction. The first attempt exposed a stream-binding bug that made graph
+capture empty; the current-stream fix gives trained final-logit parity below
+`1e-5` against vectorized correction. On the trained B8 A/B, eager timing was
+`44.48→44.78 ms` and graph timing `49.36→48.88 ms`, so the kernel is not a
+large end-to-end speed breakthrough and remains opt-in. See
+`RUNTIME_QWEN_CORRECTION_CUDA_KERNEL_AUDIT_20260909.md`.
 
 V0.194 rejects the eight-layer K=4 pairwise-cost router with three-round
 on-policy aggregation: learned CE is `+0.06822/+0.07745` across seeds, worse
