@@ -643,7 +643,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             "grouped-adaptive-atomic-pack",
             "grouped-adaptive-atomic-effective-output",
             "packed", "packed-fused", "packed-fp16",
-            "fused", "token-loop",
+            "fused", "fused-effective-output", "token-loop",
         }:
             raise ValueError(
                 "transferred sparse child supports grouped, grouped-cached, grouped-prepacked, "
@@ -652,7 +652,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 "grouped-adaptive-effective-output, packed, packed-fused, "
                 "grouped-adaptive-atomic-pack, grouped-adaptive-atomic-effective-output, "
                 "packed, packed-fused, packed-fp16, "
-                "fused, or token-loop"
+                "fused, fused-effective-output, or token-loop"
             )
         self.dispatch_mode = dispatch_mode
         chunk = inner_size // num_experts
@@ -1441,13 +1441,18 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1]).contiguous()
         flat_ids = top_ids.reshape(-1, self.active_experts).contiguous()
         flat_weights = weights.reshape(-1, self.active_experts).contiguous()
+        output_weight = (
+            self.grouped_effective_output_weight
+            if self.grouped_effective_output_weight is not None
+            else self.group_output_weight
+        )
         selected_outputs, flat_output = fused_dispatch(
             flat_hidden,
             flat_ids,
             flat_weights,
             self.group_gate_weight.contiguous(),
             self.group_value_weight.contiguous(),
-            self.group_output_weight.contiguous(),
+            output_weight.contiguous(),
             self.hard_route_scale,
         )
         self.last_selected_outputs = selected_outputs.reshape(
@@ -1760,7 +1765,9 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             return self._forward_packed_fused(hidden_states, top_ids, weights)
         if not self.training and self.dispatch_mode == "packed-fp16":
             return self._forward_packed_fp16(hidden_states, top_ids, weights)
-        if not self.training and self.dispatch_mode == "fused":
+        if not self.training and self.dispatch_mode in {
+            "fused", "fused-effective-output",
+        }:
             return self._forward_fused(hidden_states, top_ids, weights)
         flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
         flat_ids = top_ids.reshape(-1, self.active_experts)
@@ -2253,6 +2260,13 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
             and not self.base.training
             and hidden_states.shape[-2] == 1
         )
+        use_fused_effective_output = (
+            self.correction_dispatch_backend == "cuda-fused-effective-output"
+            and not self.replace_base_output
+            and not self.base.training
+            and self.base.dispatch_mode == "fused-effective-output"
+            and hidden_states.shape[-2] == 1
+        )
         use_grouped_fused_correction = (
             self.correction_dispatch_backend == self.grouped_fused_correction_backend
             and not self.replace_base_output
@@ -2288,7 +2302,9 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
             ) if use_fused_full else None
         )
         self.base.grouped_effective_output_weight = (
-            self._fused_output_weight() if use_grouped_effective_output else None
+            self._fused_output_weight()
+            if use_grouped_effective_output or use_fused_effective_output
+            else None
         )
         self.base.grouped_fused_correction = (
             (self.mix_in, self.mix_out) if use_grouped_fused_correction else None
@@ -2301,6 +2317,7 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
         if (
             use_fused_output
             or use_fused_full
+            or use_fused_effective_output
             or use_grouped_fused_correction
             or use_grouped_effective_output
         ):

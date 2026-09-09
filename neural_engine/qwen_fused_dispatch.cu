@@ -112,7 +112,10 @@ std::tuple<torch::Tensor, torch::Tensor> qwen_fused_dispatch_cuda(
     }
     const int threads = 256;
     const auto blocks = static_cast<unsigned int>(tokens * active);
-    const auto stream = at::cuda::getDefaultCUDAStream();
+    // Bind the launch to the caller's stream.  The dispatch path can run
+    // inside a CUDA Graph capture, where using the default stream can leave
+    // the graph and kernel on different streams and stall replay.
+    const auto stream = at::cuda::getCurrentCUDAStream();
     dispatch_kernel<<<blocks, threads, group_size * sizeof(float), stream>>>(
         hidden.data_ptr<float>(), top_ids.data_ptr<int64_t>(),
         route_weights.data_ptr<float>(), gate_weight.data_ptr<float>(),
@@ -122,4 +125,3 @@ std::tuple<torch::Tensor, torch::Tensor> qwen_fused_dispatch_cuda(
     C10_CUDA_KERNEL_LAUNCH_CHECK();
     return std::make_tuple(selected, output);
 }
-
