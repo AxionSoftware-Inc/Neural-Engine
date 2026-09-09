@@ -880,6 +880,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self.grouped_inplace_swiglu = False
         self.grouped_token_finalize = False
         self.grouped_bucketed_projections = False
+        self.grouped_vectorized_pack = False
         # Optional inference-only BMM layout probe.  The native buffers keep
         # Linear's [out, in] layout; grouped BMM consumes their transposes.
         # Caching contiguous transposes lets cuBLAS see the exact [E, in, out]
@@ -1035,6 +1036,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         atomic_pack: bool = False,
         finalize_output: bool = False,
         fixed_pack: bool = False,
+        vectorized_pack: bool = False,
         inplace_swiglu: bool = False,
         token_finalize: bool = False,
         bucketed_projections: bool = False,
@@ -1073,7 +1075,16 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             route_counts: torch.Tensor | None = None
             expert_ids = flat_ids[token_ids, slots]
             if fixed_pack:
-                from neural_engine.qwen_deterministic_pack import deterministic_pack
+                # The vectorized kernel improves the multi-token pack, but its
+                # extra launch/register shape loses at decode B=1.  Keep the
+                # scalar kernel for that case inside the same adaptive probe.
+                use_vectorized_pack = vectorized_pack and flat_hidden.shape[0] > 1
+                if use_vectorized_pack:
+                    from neural_engine.qwen_deterministic_pack import (
+                        deterministic_pack_vectorized as deterministic_pack,
+                    )
+                else:
+                    from neural_engine.qwen_deterministic_pack import deterministic_pack
 
                 grouped_hidden = deterministic_pack(
                     flat_hidden.contiguous(),
@@ -1974,6 +1985,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 prepacked_weights=True,
                 fixed_pack=True,
                 finalize_output=True,
+                vectorized_pack=self.grouped_vectorized_pack,
                 inplace_swiglu=self.grouped_inplace_swiglu,
                 token_finalize=self.grouped_token_finalize,
             )

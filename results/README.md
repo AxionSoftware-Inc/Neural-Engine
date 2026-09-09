@@ -1450,3 +1450,9 @@ V0.254 tests route-count bucketed grouped GEMMs. Eager mode is slower by
 falls back to uniform grouped projection and gains nothing. The path is
 rejected; variable-shape scheduling must be fused/autotuned in CUDA. See
 `RUNTIME_QWEN_BUCKETED_GEMM_AUDIT_20260909.md`.
+
+V0.255 tests float4 vectorized writes in the fixed-layout route pack. Selected
+rows are exactly preserved and full generation remains identical, but the
+two-seed full-cascade graph change is only −0.19%/−0.05%/+0.06% at B1/B8/B32.
+It remains opt-in and is rejected as a material serving optimization. See
+`RUNTIME_QWEN_VEC4_FIXED_PACK_AUDIT_20260909.md`.

@@ -1156,3 +1156,15 @@ qabul qilinmadi. Opt-in API saqlandi.
 **Status:** `REJECTED`
 **Muammo:** P-002 / P-003 / P-007
 **Natija:** seed17/18 shared-residual held-out mean accuracy delta `-0.299 pp`; counterfactual NMI/specialization/positive-advantage deltas `-0.02001`/`-0.00632`/`-0.02865`; dead fraction delta `+0.00000`. Shared rank-8 primitive V0’ga opt-in sifatida qo‘shildi, mustaqil per-circuit residual va router saqlandi.
+
+### C-RUNTIME-VEC4-PACK-001 — Fixed-pack xotira ko‘chirishini vektorlashtirish
+
+**Status:** `REJECTED AS MATERIAL OPTIMIZATION`
+**Muammo:** runtime bottleneck; P-007 sifat muammosini yechmaydi
+**Natija:** `float4` CUDA pack selected rows uchun exact parity berdi va ikki
+seedli full-cascade graph timing o‘zgarishi B=1/B=8/B=32 da
+`-0.19%/-0.05%/+0.06%` bo‘ldi. Eager mean `-0.91%/-1.25%/+0.14%`; bu graph
+servingda material yutuq emas. Decode B=1 dagi pack-only penalty sabab adaptiv
+fallback qo‘shildi. Variant opt-in benchmark sifatida saqlandi, default
+o‘zgarmadi.
+**Batafsil:** `results/RUNTIME_QWEN_VEC4_FIXED_PACK_AUDIT_20260909.md`.

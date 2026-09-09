@@ -56,3 +56,28 @@ def deterministic_pack(
     if num_experts < 1:
         raise ValueError("num_experts must be positive")
     return _extension().forward(hidden_states, top_ids, int(num_experts))
+
+
+def deterministic_pack_vectorized(
+    hidden_states: torch.Tensor,
+    top_ids: torch.Tensor,
+    num_experts: int,
+) -> torch.Tensor:
+    """Pack with four-float vector loads/stores for a memory-instruction probe."""
+    if hidden_states.device.type != "cuda":
+        raise ValueError("deterministic pack requires CUDA hidden states")
+    if hidden_states.dtype != torch.float32:
+        raise ValueError("deterministic pack currently supports float32 only")
+    if top_ids.dtype != torch.int64:
+        raise ValueError("top_ids must be int64")
+    if hidden_states.dim() != 2 or top_ids.dim() != 2:
+        raise ValueError("hidden states and top_ids must be rank-2")
+    if hidden_states.shape[0] != top_ids.shape[0]:
+        raise ValueError("hidden/top_ids token dimension mismatch")
+    if hidden_states.shape[1] % 4 != 0:
+        raise ValueError("vectorized deterministic pack requires hidden size divisible by 4")
+    if not hidden_states.is_contiguous() or not top_ids.is_contiguous():
+        raise ValueError("deterministic pack inputs must be contiguous")
+    if num_experts < 1:
+        raise ValueError("num_experts must be positive")
+    return _extension().forward_vec4(hidden_states, top_ids, int(num_experts))
