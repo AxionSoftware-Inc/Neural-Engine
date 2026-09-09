@@ -143,11 +143,12 @@ the 4-token entry is reused on a second request (`2` captures, `1` hit). This
 is a fixed batch-1 shape control; arbitrary batching and concurrent serving
 remain open. See `RUNTIME_QWEN_FIXED_GRAPH_PREFIX_SHAPES_20260909.md`.
 
-V0.201 extends the single-token fast path to batch 2 by recognizing a single
-sequence-token dimension rather than requiring one flattened token. Graph and
-eager generation match exactly; repeated graph reuse is `156.52 ms` versus
-`293.34 ms` eager (`0.534x`) over the measured loop. Batch sizes above 2 and
-trained-child batch quality remain open. See
+V0.201 extends the single-token fast path to batched decode by recognizing a
+single sequence-token dimension rather than requiring one flattened token.
+Batch 2/4/8 graph and eager generation all match exactly; graph reuse is
+`0.534x/0.594x/0.601x` of eager (`156.52/189.64/261.79 ms` graph versus
+`293.34/319.06/435.81 ms` eager). Batch sizes above 8 and trained-child batch
+quality remain open. See
 `RUNTIME_QWEN_FIXED_GRAPH_BATCH_SHAPE_20260909.md`.
 
 V0.194 rejects the eight-layer K=4 pairwise-cost router with three-round

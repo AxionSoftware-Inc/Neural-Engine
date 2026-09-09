@@ -16,38 +16,39 @@ rows, so the guard was changed to detect a single sequence-token dimension.
 
 - local `Qwen/Qwen3-0.6B`, float32 CUDA;
 - layers `19–26`, E=8/K=5 copied sparse children;
-- batch size 2, four-token prefix, eight generated tokens;
+- batch sizes 2, 4, and 8, four-token prefix, eight generated tokens;
 - one graph capture followed by a same-shape reuse;
 - independent eager custom-cache generation for comparison;
 - 2 warmup and 10 timed reuse iterations.
 
 ## Result
 
-| check | result |
-|---|---:|
-| graph vs eager exact token sequence | **true** |
-| reused-shape exact token sequence | **true** |
-| graph captures / cache hits | `1 / 13` |
-| graph reuse latency | `156.52 ms` |
-| eager latency | `293.34 ms` |
-| graph / eager | `0.534x` |
-| status | `PARITY_PASS` |
+| batch | graph reuse | eager | graph / eager | parity / reuse |
+|---:|---:|---:|---:|---|
+| 2 | `156.52 ms` | `293.34 ms` | `0.534x` | exact / exact |
+| 4 | `189.64 ms` | `319.06 ms` | `0.594x` | exact / exact |
+| 8 | `261.79 ms` | `435.81 ms` | `0.601x` | exact / exact |
 
-The batch-2 path no longer reaches `bincount` during capture. It is both
+Each batch size used one graph capture and thirteen same-shape cache hits in
+the timed run. Overall status: `PARITY_PASS`.
+
+The batch-2/4/8 paths no longer reach `bincount` during capture. They are
 numerically exact at the token level and substantially faster than the
-repeated eager generation loop in this measurement.
+repeated eager generation loop in these measurements.
 
 ## Decision and next step
 
-`V0.201` is accepted as an opt-in batch-2 fixed-shape runtime result. The
-default model remains unchanged. Batch sizes above 2, concurrent request
+`V0.201` is accepted as an opt-in batch-2/4/8 fixed-shape runtime result. The
+default model remains unchanged. Batch sizes above 8, concurrent request
 isolation, trained-child batch quality/runtime, and production stream safety
 remain open.
 
 ## Reproduction
 
 ```text
-python -u benchmark_qwen_fixed_graph_batch_shape.py --local-files-only --iterations 10
+python -u benchmark_qwen_fixed_graph_batch_shape.py --local-files-only --batch-size 2 --iterations 10
+python -u benchmark_qwen_fixed_graph_batch_shape.py --local-files-only --batch-size 4 --iterations 10
+python -u benchmark_qwen_fixed_graph_batch_shape.py --local-files-only --batch-size 8 --iterations 10
 ```
 
 ## Artifacts

@@ -50,7 +50,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     single_prompt = tokenizer(
         "Neural Engine sparse circuits", return_tensors="pt",
     ).input_ids[:, :4].to(device)
-    batch_prompt = single_prompt.repeat(2, 1)
+    batch_prompt = single_prompt.repeat(args.batch_size, 1)
     pool = FixedShapeGreedyGraphPool(model, max_entries=2)
     graph_tokens = pool.generate(batch_prompt, args.new_tokens, use_cuda_graph=True)
     reused_tokens = pool.generate(batch_prompt, args.new_tokens, use_cuda_graph=True)
@@ -103,6 +103,7 @@ def main() -> None:
     parser.add_argument("--model", default="Qwen/Qwen3-0.6B")
     parser.add_argument("--tokenizer", default=None)
     parser.add_argument("--layers", default="19,20,21,22,23,24,25,26")
+    parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--new-tokens", type=int, default=8)
     parser.add_argument("--warmup", type=int, default=2)
     parser.add_argument("--iterations", type=int, default=10)

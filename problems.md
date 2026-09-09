@@ -582,10 +582,11 @@ ikkalasi ham eager bilan exact match berdi va 4-token entry qayta ishlatildi.
 **V0.200 batafsil:** `results/RUNTIME_QWEN_FIXED_GRAPH_PREFIX_SHAPES_20260909.md`.
 **V0.201 batch-2 result (2026-09-09):** fast-path guard bitta flattened
 tokenni emas, `sequence_length=1`ni tekshiradigan qilib tuzatildi. Batch=2’da
-graph/eager generation exact match berdi; graph reuse `156.52 ms`, eager
-`293.34 ms`, ratio `0.534x`, `1 capture / 13 hits`. Batch-2 fixed-shape
-muammosi **SOLVED/ACCEPTED OPT-IN**. Batch>2, trained batch quality,
-concurrency va production stream isolation hali ochiq.
+graph/eager generation batch 2/4/8’da exact match berdi; graph/eager ratios
+`0.534x/0.594x/0.601x` bo‘ldi (`156.52/189.64/261.79 ms` graph va
+`293.34/319.06/435.81 ms` eager). Har birida `1 capture / 13 hits` qayd
+etildi. Batch 2–8 fixed-shape muammosi **SOLVED/ACCEPTED OPT-IN**. Batch>8,
+trained batch quality, concurrency va production stream isolation hali ochiq.
 **Batafsil:** `results/RUNTIME_QWEN_FIXED_GRAPH_BATCH_SHAPE_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
