@@ -1565,3 +1565,10 @@ parameters and lower VRAM. Its 700M short screen fell to 58.815% with 63.44%
 virtual dead traffic, so the combination remains opt-in and does not justify
 blind larger expansion. See
 `P003_NATIVE_FACTORIZED_SHARED_ROUTEKEY_AUDIT_20260910.md`.
+
+The matched 500M seed17 specialization diagnostic confirms a structural effect:
+shared factor-derived route keys reduce candidate/selected pair cosine from
+`0.37746/0.38004` to `0.26475/0.27034` and dead-circuit traffic from `46.05%`
+to `43.74%`. Hard accuracy rises only `+0.182 pp` on that seed, so this is a
+routing-alignment signal rather than a solved capacity ceiling. The diagnostic
+is recorded in the shared-route-key audit.

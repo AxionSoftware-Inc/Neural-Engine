@@ -65,6 +65,23 @@ The combined 300→500 improvement is only `+0.143 pp` at equal 3,000-step
 protocols, and the 700M short screen falls sharply while virtual dead traffic
 rises. This does not justify a 700M long run or a 1B expansion.
 
+### Matched 500M specialization diagnostic
+
+To test whether the routing representation changed the bank geometry, both
+500M seed17 checkpoints were evaluated with the same 720-row diagnostic set.
+
+| Arm | Candidate pair cosine | Selected pair cosine | Dead circuits | Selected unique |
+|---|---:|---:|---:|---:|
+| Ordinary global keys | 0.37746 | 0.38004 | 46.05% | 4,603 |
+| Ordered bank + shared factor keys | 0.26475 | 0.27034 | 43.74% | 4,742 |
+
+The route-key alignment therefore has a real structural effect: selected
+circuit similarity falls by about `29%` relative, dead traffic falls by `2.31`
+percentage points, and the selected-bank fraction rises from `11.92%` to
+`12.28%`. The corresponding held-out hard accuracy improvement for this seed
+is only `68.047% → 68.229%` (`+0.182 pp`), so this is a useful mechanism signal,
+not evidence that the capacity ceiling is solved.
+
 ## Decision
 
 Shared factor-derived route keys are a useful compression/alignment mechanism,

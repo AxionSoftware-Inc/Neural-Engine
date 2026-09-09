@@ -1325,6 +1325,14 @@ ammo bu ikki o‘zgarishning combined effect’i. U 300Mda `68.451%`, 500Mda
 variant opt-in saqlanadi, 700M/1B blind expansion rad qilinadi. Asosiy ochiq
 muammo virtual-address candidate assignment/fragmentation bo‘lib qolmoqda.
 
+Bir xil 500M seed17 specialization diagnostikasida oddiy global key uchun
+candidate/selected pair cosine `0.37746/0.38004`, dead circuit `46.05%` va
+`4,603` unique selected circuit chiqdi. Ordered bank + shared factor-key uchun
+bu `0.26475/0.27034`, `43.74%` va `4,742` bo‘ldi. Demak route-key alignment
+fragmentatsiya va ortiqcha o‘xshashlikni kamaytiryapti, lekin hard accuracy
+faqat `68.047% → 68.229%` (`+0.182 pp`) oshdi; capacity muammosi yechildi deb
+bo‘lmaydi.
+
 **Shared-route-key audit:** `results/P003_NATIVE_FACTORIZED_SHARED_ROUTEKEY_AUDIT_20260910.md`.
 
 500M ordered-slotning birinchi varianti `d_model=512` bilan ishga tushgani
