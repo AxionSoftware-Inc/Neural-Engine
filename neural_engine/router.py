@@ -15,7 +15,9 @@ class HierarchicalRouter(nn.Module):
                  routing_capacity: int | None = None, routing_depth: int | None = None,
                  soft_routing_temperature: float = 0.0,
                  factor_key_count: int | None = None,
-                 ordered_factor_slots: bool = False):
+                 ordered_factor_slots: bool = False,
+                 factor_candidate_layout: str = "flat",
+                 factor_pair_interaction_scale: float = 0.0):
         super().__init__()
         if active_circuits > candidate_pool:
             raise ValueError("active_circuits cannot exceed candidate_pool")
@@ -43,6 +45,26 @@ class HierarchicalRouter(nn.Module):
         self.level_bias = nn.Parameter(torch.zeros(num_addresses, depth, branch))
         self.factor_key_count = None if factor_key_count is None else int(factor_key_count)
         self.ordered_factor_slots = bool(ordered_factor_slots)
+        if factor_candidate_layout not in {"flat", "factor_grid"}:
+            raise ValueError("factor_candidate_layout must be flat or factor_grid")
+        if factor_candidate_layout == "factor_grid" and self.factor_key_count is None:
+            raise ValueError("factor_grid candidate layout requires factor-derived keys")
+        if factor_candidate_layout == "factor_grid" and num_addresses != 1:
+            raise ValueError("factor_grid candidate layout currently requires one address")
+        self.factor_candidate_layout = factor_candidate_layout
+        self.factor_pair_interaction_scale = float(factor_pair_interaction_scale)
+        if self.factor_pair_interaction_scale < 0.0:
+            raise ValueError("factor_pair_interaction_scale must be non-negative")
+        self.factor_grid_shape = None
+        if factor_candidate_layout == "factor_grid":
+            best = None
+            for first_width in range(1, candidate_pool + 1):
+                second_width = math.ceil(candidate_pool / first_width)
+                shape = (first_width, second_width)
+                score = (first_width * second_width, abs(first_width - second_width))
+                if best is None or score < best[0]:
+                    best = (score, shape)
+            self.factor_grid_shape = best[1]
         if self.factor_key_count is not None:
             if self.factor_key_count < 1 or self.factor_key_count * self.factor_key_count < num_circuits:
                 raise ValueError("factor_key_count must provide every virtual circuit ID")
@@ -62,6 +84,35 @@ class HierarchicalRouter(nn.Module):
         if self.ordered_factor_slots:
             return self.factor_keys[0, first] + self.factor_keys[1, second]
         return self.factor_keys[first] + self.factor_keys[second]
+
+    def _lookup_factor_key_parts(self, circuit_ids: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        if self.factor_key_count is None:
+            raise RuntimeError("factor key parts require factor-derived keys")
+        first = circuit_ids.remainder(self.factor_key_count)
+        second = circuit_ids.div(self.factor_key_count, rounding_mode="floor")
+        if self.ordered_factor_slots:
+            return self.factor_keys[0, first], self.factor_keys[1, second]
+        return self.factor_keys[first], self.factor_keys[second]
+
+    def _factor_grid_candidates(self, base: torch.Tensor,
+                                local_capacity: int) -> torch.Tensor:
+        """Build a Cartesian local pool around the routed factor address."""
+        if self.factor_grid_shape is None or self.factor_key_count is None:
+            raise RuntimeError("factor-grid candidate layout is not configured")
+        first_width, second_width = self.factor_grid_shape
+        first_offsets = torch.arange(first_width, device=base.device)
+        second_offsets = torch.arange(second_width, device=base.device)
+        first_base = base.remainder(self.factor_key_count)
+        second_base = base.div(self.factor_key_count, rounding_mode="floor")
+        first_ids = (first_base.unsqueeze(-1) + first_offsets).remainder(self.factor_key_count)
+        second_ids = (second_base.unsqueeze(-1) + second_offsets).remainder(self.factor_key_count)
+        candidates = (
+            first_ids.unsqueeze(-1)
+            + self.factor_key_count * second_ids.unsqueeze(-2)
+        ).reshape(base.shape[0], -1)
+        # The configured bank can be a truncated factor_count**2 prefix.
+        # Wrapping preserves a fixed candidate width at the small tail.
+        return candidates[:, :self.candidate_pool].remainder(local_capacity)
 
     def set_routing_state(self, *, capacity: int | None = None,
                           depth: int | None = None) -> None:
@@ -144,6 +195,8 @@ class HierarchicalRouter(nn.Module):
             if (routing_windows < 0).any() or (
                     routing_windows + local_capacity > self.num_circuits).any():
                 raise ValueError("routing_windows must identify valid bank windows")
+            if self.factor_candidate_layout == "factor_grid":
+                raise ValueError("factor_grid candidate layout does not support routing windows")
         elif isinstance(routing_offset, int):
             if not 0 <= routing_offset <= self.num_circuits - local_capacity:
                 raise ValueError("routing_offset must identify a valid bank window")
@@ -202,12 +255,17 @@ class HierarchicalRouter(nn.Module):
 
         base = leaf.remainder(local_capacity)
         if routing_windows is None:
-            offsets = torch.arange(self.candidates_per_address, device=state.device).view(1, 1, -1)
-            candidate_ids = (base.unsqueeze(-1) + offsets).remainder(local_capacity)
-            if isinstance(routing_offset, int):
-                candidate_ids = candidate_ids + routing_offset
+            if self.factor_candidate_layout == "factor_grid":
+                if not isinstance(routing_offset, int) or routing_offset != 0:
+                    raise ValueError("factor_grid candidate layout requires the full bank window")
+                candidate_ids = self._factor_grid_candidates(base[:, 0], local_capacity)
             else:
-                candidate_ids = candidate_ids + routing_offset.to(state.device).view(batch, 1, 1)
+                offsets = torch.arange(self.candidates_per_address, device=state.device).view(1, 1, -1)
+                candidate_ids = (base.unsqueeze(-1) + offsets).remainder(local_capacity)
+                if isinstance(routing_offset, int):
+                    candidate_ids = candidate_ids + routing_offset
+                else:
+                    candidate_ids = candidate_ids + routing_offset.to(state.device).view(batch, 1, 1)
         else:
             window_pool = self.candidate_pool // routing_windows.shape[1]
             window_candidates_per_address = window_pool // self.num_addresses
@@ -217,6 +275,12 @@ class HierarchicalRouter(nn.Module):
         candidate_ids = candidate_ids.reshape(batch, self.candidate_pool)
         candidate_keys = self._lookup_keys(candidate_ids)
         candidate_logits = torch.einsum("bd,bkd->bk", state, candidate_keys) / math.sqrt(state.shape[-1])
+        if self.factor_pair_interaction_scale:
+            first_keys, second_keys = self._lookup_factor_key_parts(candidate_ids)
+            pair_logits = torch.einsum(
+                "bd,bkd->bk", state, first_keys * second_keys
+            ) / math.sqrt(state.shape[-1])
+            candidate_logits = candidate_logits + self.factor_pair_interaction_scale * pair_logits
         target_loss = None
         if target_bases is not None:
             target_offsets = torch.arange(self.active_circuits, device=state.device).view(1, -1)

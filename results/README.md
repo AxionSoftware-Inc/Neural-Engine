@@ -1566,6 +1566,13 @@ virtual dead traffic, so the combination remains opt-in and does not justify
 blind larger expansion. See
 `P003_NATIVE_FACTORIZED_SHARED_ROUTEKEY_AUDIT_20260910.md`.
 
+The follow-up factor-grid candidate pool looked positive at 1,000 steps but
+regressed at 3,000 steps: 68.047% versus 68.594% for ordered shared route
+keys. The grid lowered candidate cosine but increased selected cosine, showing
+that hard subset selection remains the bottleneck. A parameter-free pair-score
+variant also failed its screen. See
+`P003_NATIVE_FACTORIZED_CANDIDATE_GRID_AUDIT_20260910.md`.
+
 The matched 500M seed17 specialization diagnostic confirms a structural effect:
 shared factor-derived route keys reduce candidate/selected pair cosine from
 `0.37746/0.38004` to `0.26475/0.27034` and dead-circuit traffic from `46.05%`

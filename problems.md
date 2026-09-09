@@ -1335,6 +1335,17 @@ bo‘lmaydi.
 
 **Shared-route-key audit:** `results/P003_NATIVE_FACTORIZED_SHARED_ROUTEKEY_AUDIT_20260910.md`.
 
+Factor-grid candidate pool (`4x8`) qisqa screenda `59.440%` mean accuracy
+bergan bo‘lsa ham, 3,000 qadamda `68.047%`ga tushdi; ordered shared-route-key
+baseline `68.594%` edi. Seed17 diagnostikasida candidate cosine `0.19770`gacha
+pasaydi, ammo hard tanlangan subset cosine `0.32222`gacha oshdi. Shuning uchun
+candidate xilma-xilligi oshgani bilan foydali subset tanlash muammosi hal
+bo‘lmagan. Factor-pair interaction score (`scale=1`) ham 1,000 qadamda mean
+`59.232%` bo‘lib grid va baseline’dan foydali ustunlik bermadi. Ikkalasi ham
+quality fix sifatida rad qilindi, opt-in nazorat sifatida saqlandi.
+
+**Candidate-grid audit:** `results/P003_NATIVE_FACTORIZED_CANDIDATE_GRID_AUDIT_20260910.md`.
+
 500M ordered-slotning birinchi varianti `d_model=512` bilan ishga tushgani
 aniqlandi, holbuki shared 500M baseline `d_model=384` edi; `69.818%` natija
 shu sabab fair taqqoslash dalili emas va confounded deb belgilandi. Teng

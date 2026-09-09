@@ -57,6 +57,33 @@ def test_hierarchical_router_can_generate_global_keys_from_factor_rows():
     assert router._lookup_keys(ids).shape == (1, 4, 16)
 
 
+def test_hierarchical_router_can_build_factor_grid_candidates():
+    router = HierarchicalRouter(
+        16, num_circuits=16, branch=2, depth=4, candidate_pool=4,
+        active_circuits=2, factor_key_count=4, ordered_factor_slots=True,
+        factor_candidate_layout="factor_grid",
+    )
+    state = torch.randn(5, 16)
+    selected, weights, stats = router(state)
+    assert selected.shape == (5, 2)
+    assert weights.shape == (5, 2)
+    assert stats["candidate_ids"].shape == (5, 4)
+    assert torch.all(stats["candidate_ids"] < 16)
+
+
+def test_hierarchical_router_can_score_factor_pair_interactions():
+    router = HierarchicalRouter(
+        16, num_circuits=16, branch=2, depth=4, candidate_pool=4,
+        active_circuits=2, factor_key_count=4, ordered_factor_slots=True,
+        factor_pair_interaction_scale=1.0,
+    )
+    state = torch.randn(5, 16)
+    selected, weights, stats = router(state)
+    assert selected.shape == (5, 2)
+    assert weights.shape == (5, 2)
+    assert stats["candidate_ids"].shape == (5, 4)
+
+
 def test_flat_router_scores_full_bank_but_executes_topk():
     router = FlatRouter(32, num_circuits=32, candidate_pool=8, active_circuits=2)
     state = torch.randn(7, 32)

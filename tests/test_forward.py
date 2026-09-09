@@ -254,6 +254,19 @@ def test_factorized_bank_can_use_shared_factor_keys_with_global_router():
     assert stats["selected_ids"].shape == (4, 2, 2)
 
 
+def test_factorized_bank_can_use_factor_grid_candidates():
+    model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
+                           num_circuits=16, circuit_rank=4, router_branch=2, router_depth=4,
+                           candidate_pool=4, active_circuits=2, internal_steps=2,
+                           circuit_bank_mode="factorized", router_variant="global_factorized_keys",
+                           factor_count=4, ordered_factor_slots=True,
+                           factor_candidate_layout="factor_grid")
+    batch = SyntheticTaskGenerator(seed=155).batch(4)
+    logits, stats = model(batch.inputs)
+    assert logits.shape == (4, 64)
+    assert stats["candidate_ids"].shape == (4, 2, 4)
+
+
 def test_factorized_native_engine_supports_ordered_factor_slots():
     model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
                            num_circuits=16, circuit_rank=4, router_branch=2, router_depth=2,

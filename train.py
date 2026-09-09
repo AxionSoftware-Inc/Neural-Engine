@@ -56,6 +56,8 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["shared_rank"] = config.get("shared_rank", 8)
     model_kwargs["factor_count"] = config.get("factor_count")
     model_kwargs["factor_candidate_pool"] = config.get("factor_candidate_pool")
+    model_kwargs["factor_candidate_layout"] = config.get("factor_candidate_layout", "flat")
+    model_kwargs["factor_pair_interaction_scale"] = config.get("factor_pair_interaction_scale", 0.0)
     model_kwargs["factor_pair_rank"] = config.get("factor_pair_rank", 0)
     model_kwargs["factor_pair_scale"] = config.get("factor_pair_scale", 1.0)
     model_kwargs["factor_mix_mode"] = config.get("factor_mix_mode", "per_address")
@@ -90,6 +92,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
                     "halt_threshold", "routing_coverage_temperature",
                     "input_reinjection", "circuit_delta_scale", "correction_gate_mode",
                     "memory_write_mode", "post_correction_residual_scale", "router_variant",
+                    "factor_candidate_layout", "factor_pair_interaction_scale",
                     "soft_routing_temperature", "route_target_supervision",
                     "routing_reuse_weight", "routing_reuse_start_level",
                     "input_reinjection_schedule"):

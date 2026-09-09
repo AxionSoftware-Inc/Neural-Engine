@@ -31,6 +31,8 @@ class NeuralEngineV0(nn.Module):
                  circuit_bank_mode: str = "independent", shared_rank: int = 8,
                  factor_count: int | None = None,
                  factor_candidate_pool: int | None = None,
+                 factor_candidate_layout: str = "flat",
+                 factor_pair_interaction_scale: float = 0.0,
                  factor_pair_rank: int = 0, factor_pair_scale: float = 1.0,
                  factor_mix_mode: str = "per_address",
                  ordered_factor_slots: bool = False,
@@ -70,6 +72,8 @@ class NeuralEngineV0(nn.Module):
         self.shared_rank = int(shared_rank)
         self.factor_count = factor_count
         self.factor_candidate_pool = factor_candidate_pool
+        self.factor_candidate_layout = factor_candidate_layout
+        self.factor_pair_interaction_scale = float(factor_pair_interaction_scale)
         self.factor_pair_rank = int(factor_pair_rank)
         self.factor_pair_scale = float(factor_pair_scale)
         self.factor_mix_mode = factor_mix_mode
@@ -170,6 +174,8 @@ class NeuralEngineV0(nn.Module):
                 soft_routing_temperature=soft_routing_temperature,
                 factor_key_count=factor_count,
                 ordered_factor_slots=ordered_factor_slots,
+                factor_candidate_layout=factor_candidate_layout,
+                factor_pair_interaction_scale=factor_pair_interaction_scale,
             )
         else:
             self.router = HierarchicalRouter(
@@ -577,4 +583,6 @@ class NeuralEngineV0(nn.Module):
             "circuit_bank_mode": self.circuit_bank_mode,
             "shared_rank": self.shared_rank,
             "route_exploration_prob": self.route_exploration_prob,
+            "factor_candidate_layout": self.factor_candidate_layout,
+            "factor_pair_interaction_scale": self.factor_pair_interaction_scale,
         }
