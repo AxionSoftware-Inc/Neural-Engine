@@ -640,6 +640,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             "grouped-prepacked-fused", "grouped-fused",
             "grouped-tiled", "grouped-optimized", "grouped-adaptive",
             "grouped-adaptive-nozero", "grouped-adaptive-effective-output",
+            "grouped-adaptive-atomic-pack",
             "packed", "packed-fused", "packed-fp16",
             "fused", "token-loop",
         }:
@@ -648,7 +649,8 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 "grouped-prepacked-fused, grouped-fused, grouped-tiled, "
                 "grouped-optimized, grouped-adaptive, grouped-adaptive-nozero, "
                 "grouped-adaptive-effective-output, packed, packed-fused, "
-                "packed-fp16, fused, or token-loop"
+                "grouped-adaptive-atomic-pack, packed, packed-fused, packed-fp16, "
+                "fused, or token-loop"
             )
         self.dispatch_mode = dispatch_mode
         chunk = inner_size // num_experts
@@ -1020,6 +1022,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         prepacked_weights: bool = False,
         tiled_projections: bool = False,
         uninitialized_pack: bool = False,
+        atomic_pack: bool = False,
     ) -> torch.Tensor:
         flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
         flat_ids = top_ids.reshape(-1, self.active_experts)
@@ -1053,41 +1056,54 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 slots = pair_indices % self.active_experts
         with record_function("neural_engine.grouped.pack"):
             expert_ids = flat_ids[token_ids, slots]
-            sort_order = torch.argsort(expert_ids, stable=True)
-            sorted_experts = expert_ids[sort_order]
-            # ``bincount`` plus a host scalar read makes the grouped path
-            # unusable inside CUDA Graph capture.  A token can contribute at most
-            # once to each expert, so the number of flattened tokens is a safe
-            # graph-stable upper bound.  Keep the tighter dynamic bound on eager
-            # paths to avoid inflating prefill workspace.
-            counts = torch.zeros(
-                self.num_experts, device=sorted_experts.device, dtype=torch.long,
-            )
-            counts.scatter_add_(
-                0, sorted_experts,
-                torch.ones_like(sorted_experts, dtype=torch.long),
-            )
-            if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+            if atomic_pack:
+                from neural_engine.qwen_atomic_pack import atomic_pack as pack_rows
+
+                grouped_hidden, grouped_indices = pack_rows(
+                    flat_hidden.contiguous(),
+                    flat_ids.contiguous(),
+                    self.num_experts,
+                )
                 max_count = flat_hidden.shape[0]
+                sorted_experts = expert_ids
+                sorted_token_ids = token_ids
+                sorted_slots = slots
             else:
-                max_count = int(counts.max().item())
-            starts = counts.cumsum(dim=0) - counts
-            positions = torch.arange(
-                pair_indices.numel(), device=flat_ids.device,
-            ) - starts[sorted_experts]
-            grouped_indices = sorted_experts * max_count + positions
-            grouped_hidden = (torch.empty if uninitialized_pack else torch.zeros)(
-                self.num_experts * max_count,
-                flat_hidden.shape[-1],
-                device=flat_hidden.device,
-                dtype=flat_hidden.dtype,
-            )
-            grouped_hidden.index_copy_(
-                0, grouped_indices, flat_hidden[token_ids[sort_order]],
-            )
-            grouped_hidden = grouped_hidden.reshape(
-                self.num_experts, max_count, flat_hidden.shape[-1],
-            )
+                sort_order = torch.argsort(expert_ids, stable=True)
+                sorted_experts = expert_ids[sort_order]
+                # ``bincount`` plus a host scalar read makes the grouped path
+                # unusable inside CUDA Graph capture.  A token can contribute at most
+                # once to each expert, so the number of flattened tokens is a safe
+                # graph-stable upper bound.  Keep the tighter dynamic bound on eager
+                # paths to avoid inflating prefill workspace.
+                counts = torch.zeros(
+                    self.num_experts, device=sorted_experts.device, dtype=torch.long,
+                )
+                counts.scatter_add_(
+                    0, sorted_experts,
+                    torch.ones_like(sorted_experts, dtype=torch.long),
+                )
+                if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+                    max_count = flat_hidden.shape[0]
+                else:
+                    max_count = int(counts.max().item())
+                starts = counts.cumsum(dim=0) - counts
+                positions = torch.arange(
+                    pair_indices.numel(), device=flat_ids.device,
+                ) - starts[sorted_experts]
+                grouped_indices = sorted_experts * max_count + positions
+                grouped_hidden = (torch.empty if uninitialized_pack else torch.zeros)(
+                    self.num_experts * max_count,
+                    flat_hidden.shape[-1],
+                    device=flat_hidden.device,
+                    dtype=flat_hidden.dtype,
+                )
+                grouped_hidden.index_copy_(
+                    0, grouped_indices, flat_hidden[token_ids[sort_order]],
+                )
+                grouped_hidden = grouped_hidden.reshape(
+                    self.num_experts, max_count, flat_hidden.shape[-1],
+                )
         with record_function("neural_engine.grouped.projections"):
             if tiled_projections:
                 (
@@ -1140,8 +1156,9 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             selected_output = grouped_output.reshape(
                 self.num_experts * max_count, flat_hidden.shape[-1],
             ).index_select(0, grouped_indices)
-            sorted_token_ids = token_ids[sort_order]
-            sorted_slots = slots[sort_order]
+            if not atomic_pack:
+                sorted_token_ids = token_ids[sort_order]
+                sorted_slots = slots[sort_order]
             fused_correction = self.grouped_fused_correction
             if self.grouped_effective_output_weight is not None:
                 # The effective output projection already includes the exact
@@ -1704,6 +1721,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         if not self.training and self.dispatch_mode in {
             "grouped-adaptive", "grouped-adaptive-nozero",
             "grouped-adaptive-effective-output",
+            "grouped-adaptive-atomic-pack",
         }:
             # Decode B=1 is launch/metadata bound; the extra cached layouts
             # only pay off once several rows can share the grouped work.
@@ -1716,6 +1734,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 cache_pair_metadata=use_optimized,
                 prepacked_weights=use_optimized,
                 uninitialized_pack=self.dispatch_mode == "grouped-adaptive-nozero",
+                atomic_pack=self.dispatch_mode == "grouped-adaptive-atomic-pack",
             )
         if not self.training and self.dispatch_mode in {
             "grouped-fused", "grouped-prepacked-fused",
@@ -2238,6 +2257,7 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
                 "grouped-tiled", "grouped-optimized",
                 "grouped-adaptive", "grouped-adaptive-nozero",
                 "grouped-adaptive-effective-output",
+                "grouped-adaptive-atomic-pack",
             }
             and not self.base.single_token_fast_path
         )

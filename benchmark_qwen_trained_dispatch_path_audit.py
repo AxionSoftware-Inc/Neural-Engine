@@ -123,6 +123,10 @@ def main() -> None:
         "--include-grouped-adaptive-effective-output", action="store_true",
         help="include adaptive grouped dispatch with folded low-rank correction",
     )
+    parser.add_argument(
+        "--include-grouped-adaptive-atomic-pack", action="store_true",
+        help="include adaptive grouped dispatch with CUDA atomic route packing",
+    )
     parser.add_argument("--output")
     args = parser.parse_args()
     if not torch.cuda.is_available():
@@ -242,6 +246,11 @@ def main() -> None:
             "grouped-adaptive-effective-output", False,
             "grouped-adaptive-effective-output", False, True,
         ))
+    if args.include_grouped_adaptive_atomic_pack:
+        path_specs.append((
+            "grouped-adaptive-atomic-pack", False,
+            "grouped-adaptive-atomic-pack", True, True,
+        ))
     for path_spec in path_specs:
         if len(path_spec) == 3:
             path_name, single_token, dispatch_mode = path_spec
@@ -337,6 +346,8 @@ def main() -> None:
                 candidates.append("grouped-adaptive-nozero")
             if args.include_grouped_adaptive_effective_output:
                 candidates.append("grouped-adaptive-effective-output")
+            if args.include_grouped_adaptive_atomic_pack:
+                candidates.append("grouped-adaptive-atomic-pack")
             for candidate in candidates:
                 candidate_row = rows_by_path[candidate][
                     (prefix_length, batch_size)
@@ -430,6 +441,15 @@ def main() -> None:
             uniform_accum=True,
         )
         grouped_adaptive_effective_output_generation = greedy_generate_fixed_shape(
+            model, generation_prompt, 8, use_cuda_graph=True,
+        )
+    grouped_adaptive_atomic_pack_generation = None
+    if args.include_grouped_adaptive_atomic_pack:
+        set_dispatch_path(
+            children, False, "grouped-adaptive-atomic-pack",
+            fused_correction=True, uniform_accum=True,
+        )
+        grouped_adaptive_atomic_pack_generation = greedy_generate_fixed_shape(
             model, generation_prompt, 8, use_cuda_graph=True,
         )
     cached_grouped_generation = None
@@ -549,6 +569,14 @@ def main() -> None:
                     )
                 ),
             } if grouped_adaptive_effective_output_generation is not None else {}),
+            **({
+                "grouped_vs_grouped_adaptive_atomic_pack_exact_token_match": bool(
+                    torch.equal(
+                        grouped_generation,
+                        grouped_adaptive_atomic_pack_generation,
+                    )
+                ),
+            } if grouped_adaptive_atomic_pack_generation is not None else {}),
         },
     }
     print(json.dumps(result, indent=2))
