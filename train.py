@@ -54,6 +54,10 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["circuit_mode"] = config.get("circuit_mode", "parallel")
     model_kwargs["circuit_bank_mode"] = config.get("circuit_bank_mode", "independent")
     model_kwargs["shared_rank"] = config.get("shared_rank", 8)
+    model_kwargs["factor_count"] = config.get("factor_count")
+    model_kwargs["factor_candidate_pool"] = config.get("factor_candidate_pool")
+    model_kwargs["factor_pair_rank"] = config.get("factor_pair_rank", 0)
+    model_kwargs["factor_pair_scale"] = config.get("factor_pair_scale", 1.0)
     model_kwargs["numeric_value_encoding"] = config.get("numeric_value_encoding", False)
     model_kwargs["adaptive_halting"] = config.get("adaptive_halting", False)
     model_kwargs["halt_threshold"] = config.get("halt_threshold", 0.5)
@@ -266,6 +270,21 @@ def evaluate(model: nn.Module, source: BatchSource, batches: int = 8) -> dict[st
             "routing_entropy": float(-(probabilities[probabilities > 0] * probabilities[probabilities > 0].log()).sum()),
             "routing_max_load_fraction": float(probabilities.max()),
         })
+        if getattr(model, "circuit_bank_mode", None) == "factorized":
+            factor_count = int(model.router.factor_count)
+            first = routed.remainder(factor_count)
+            second = routed.div(factor_count, rounding_mode="floor")
+            factor_counts = torch.bincount(
+                torch.cat((first, second)), minlength=factor_count).float()
+            factor_probabilities = factor_counts / factor_counts.sum().clamp_min(1)
+            nonzero_factor_probabilities = factor_probabilities[factor_probabilities > 0]
+            result.update({
+                "factor_rows_used": int((factor_counts > 0).sum()),
+                "factor_dead_fraction": float((factor_counts == 0).float().mean()),
+                "factor_routing_entropy": float(
+                    -(nonzero_factor_probabilities * nonzero_factor_probabilities.log()).sum()),
+                "factor_routing_max_load_fraction": float(factor_probabilities.max()),
+            })
     if executed_step_values:
         executed = torch.cat(executed_step_values).float()
         depth_execution = {}

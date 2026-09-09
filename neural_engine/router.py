@@ -1169,6 +1169,11 @@ class FactorizedRouter(nn.Module):
             ]
             explore = torch.rand(state.shape[0], 1, device=state.device) < exploration_prob
             selected_ids = torch.where(explore, random_ids, selected_ids)
+            # The sampled IDs do not have the logits used above.  Use a
+            # uniform mixture for exploratory routes instead of pairing random
+            # circuits with weights belonging to the greedy route.
+            random_weights = torch.full_like(weights, 1.0 / self.active_circuits)
+            weights = torch.where(explore, random_weights, weights)
         stats = {
             "router_entropy": entropy,
             "router_decisions": torch.tensor(2, device=state.device),

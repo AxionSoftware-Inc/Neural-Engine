@@ -3,12 +3,13 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-from .circuits import MicroCircuitBank, SharedResidualMicroCircuitBank
+from .circuits import (FactorizedMicroCircuitBank, MicroCircuitBank,
+                        SharedResidualMicroCircuitBank)
 from .encoding import (VALUE_HARMONICS, VALUE_MODULUS, VALUE_TOKEN_OFFSET,
                        encode_tokens)
 from .instrumentation import count_parameters
-from .router import (FlatRouter, HierarchicalRouter, ProbeRouteRouter,
-                      StableFamilyRouter)
+from .router import (FactorizedRouter, FlatRouter, HierarchicalRouter,
+                      ProbeRouteRouter, StableFamilyRouter)
 from .state import PersistentState
 
 
@@ -28,6 +29,9 @@ class NeuralEngineV0(nn.Module):
                  correction_gate_mode: str = "none", memory_write_mode: str = "none",
                  post_correction_residual_scale: float = 0.0,
                  circuit_bank_mode: str = "independent", shared_rank: int = 8,
+                 factor_count: int | None = None,
+                 factor_candidate_pool: int | None = None,
+                 factor_pair_rank: int = 0, factor_pair_scale: float = 1.0,
                  routing_reuse_weight: float = 0.0, routing_reuse_start_level: int = 0,
                  route_exploration_prob: float = 0.0,
                  routing_capacity: int | None = None, routing_depth: int | None = None,
@@ -40,8 +44,12 @@ class NeuralEngineV0(nn.Module):
             raise ValueError("circuit_mode must be 'parallel' or 'serial'")
         if memory_write_mode not in {"none", "gated"}:
             raise ValueError("memory_write_mode must be 'none' or 'gated'")
-        if circuit_bank_mode not in {"independent", "shared_residual"}:
-            raise ValueError("circuit_bank_mode must be 'independent' or 'shared_residual'")
+        if circuit_bank_mode not in {"independent", "shared_residual", "factorized"}:
+            raise ValueError("circuit_bank_mode must be 'independent', 'shared_residual', or 'factorized'")
+        if circuit_bank_mode == "factorized" and router_variant != "factorized":
+            raise ValueError("factorized circuit banks require router_variant='factorized'")
+        if router_variant == "factorized" and circuit_bank_mode != "factorized":
+            raise ValueError("router_variant='factorized' requires circuit_bank_mode='factorized'")
         if shared_rank < 1:
             raise ValueError("shared_rank must be positive")
         if not 0.0 < halt_threshold < 1.0:
@@ -55,6 +63,10 @@ class NeuralEngineV0(nn.Module):
         self.circuit_mode = circuit_mode
         self.circuit_bank_mode = circuit_bank_mode
         self.shared_rank = int(shared_rank)
+        self.factor_count = factor_count
+        self.factor_candidate_pool = factor_candidate_pool
+        self.factor_pair_rank = int(factor_pair_rank)
+        self.factor_pair_scale = float(factor_pair_scale)
         self.numeric_value_encoding = numeric_value_encoding
         self.adaptive_halting = adaptive_halting
         self.adaptive_inference = adaptive_halting
@@ -87,8 +99,8 @@ class NeuralEngineV0(nn.Module):
             raise ValueError("post_correction_residual_scale must be non-negative")
         self.post_correction_residual_scale = float(post_correction_residual_scale)
         self.memory_write_mode = memory_write_mode
-        if router_variant not in {"global", "flat", "probe", "family_local", "family_conditioned"}:
-            raise ValueError("router_variant must be 'global', 'flat', 'probe', 'family_local', or 'family_conditioned'")
+        if router_variant not in {"global", "flat", "probe", "family_local", "family_conditioned", "factorized"}:
+            raise ValueError("router_variant must be 'global', 'flat', 'probe', 'family_local', 'family_conditioned', or 'factorized'")
         if router_variant in {"family_local", "family_conditioned"} and family_count < 2:
             raise ValueError("NeuralEngineV0 semantic family routing requires at least two families")
         self.router_variant = router_variant
@@ -112,7 +124,15 @@ class NeuralEngineV0(nn.Module):
         self.task_context_embedding = nn.Embedding(16, state_dim) if task_context else None
         self.halt_head = nn.Linear(state_dim, 1) if adaptive_halting else None
         self.family_embeddings = None
-        if router_variant == "family_local":
+        if router_variant == "factorized":
+            self.router = FactorizedRouter(
+                state_dim, num_circuits, router_branch, router_depth,
+                candidate_pool, active_circuits, router_addresses,
+                routing_capacity=routing_capacity, routing_depth=routing_depth,
+                factor_count=factor_count,
+                factor_candidate_pool=factor_candidate_pool,
+            )
+        elif router_variant == "family_local":
             self.router = StableFamilyRouter(
                 state_dim, num_circuits, router_branch, router_depth,
                 candidate_pool, active_circuits, router_addresses,
@@ -139,7 +159,14 @@ class NeuralEngineV0(nn.Module):
             if router_variant == "family_conditioned":
                 self.family_embeddings = nn.Parameter(torch.empty(family_count, state_dim))
                 nn.init.normal_(self.family_embeddings, std=0.02)
-        if circuit_bank_mode == "shared_residual":
+        if circuit_bank_mode == "factorized":
+            self.circuits = FactorizedMicroCircuitBank(
+                num_circuits, state_dim, circuit_rank,
+                factor_count=factor_count,
+                factor_pair_rank=factor_pair_rank,
+                factor_pair_scale=factor_pair_scale,
+            )
+        elif circuit_bank_mode == "shared_residual":
             self.circuits = SharedResidualMicroCircuitBank(
                 num_circuits, state_dim, circuit_rank, shared_rank
             )
@@ -469,14 +496,34 @@ class NeuralEngineV0(nn.Module):
             shared += self.circuits.shared_down.numel()
             shared += self.circuits.shared_up.numel()
             shared += self.circuits.shared_bias.numel()
-        one_circuit = self.circuits.down[0].numel() + self.circuits.up[0].numel() + self.circuits.bias[0].numel()
-        candidate_key_params = self.router.keys[0].numel() * self.router.candidate_pool
-        active = shared + candidate_key_params + one_circuit * self.active_circuits
+        if self.circuit_bank_mode == "factorized":
+            factor_row = (self.circuits.down_factors[0].numel()
+                          + self.circuits.up_factors[0].numel()
+                          + self.circuits.bias_factors[0].numel())
+            active_circuit_params = factor_row * self.active_circuits * 2
+            if self.circuits.factor_mix_mode == "per_address":
+                active_circuit_params += self.active_circuits * self.circuits.factor_mix[0].numel()
+            if self.circuits.factor_pair_rank:
+                active_circuit_params += (
+                    self.circuits.pair_down_basis.numel()
+                    + self.circuits.pair_up_basis.numel()
+                    + self.circuits.pair_bias_basis.numel()
+                    + 2 * self.active_circuits * self.circuits.factor_pair_rank
+                )
+            candidate_key_params = (self.router.keys[0].numel()
+                                    * self.router.factor_candidate_pool)
+        else:
+            one_circuit = (self.circuits.down[0].numel()
+                           + self.circuits.up[0].numel()
+                           + self.circuits.bias[0].numel())
+            active_circuit_params = one_circuit * self.active_circuits
+            candidate_key_params = self.router.keys[0].numel() * self.router.candidate_pool
+        active = shared + candidate_key_params + active_circuit_params
         return {
             "total_params": total,
             "active_params_estimate": active,
             "active_fraction": active / total,
-            "active_circuit_params": one_circuit * self.active_circuits,
+            "active_circuit_params": active_circuit_params,
             "circuit_bank_mode": self.circuit_bank_mode,
             "shared_rank": self.shared_rank,
             "route_exploration_prob": self.route_exploration_prob,

@@ -207,6 +207,27 @@ def test_family_conditioned_router_keeps_global_bank():
     assert model.router.num_circuits == 16
 
 
+def test_factorized_native_engine_uses_virtual_bank_and_reusable_routes():
+    model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
+                           num_circuits=16, circuit_rank=4, router_branch=2, router_depth=2,
+                           candidate_pool=4, active_circuits=2, internal_steps=2,
+                           circuit_bank_mode="factorized", router_variant="factorized",
+                           factor_count=4, factor_candidate_pool=2,
+                           factor_pair_rank=2)
+    batch = SyntheticTaskGenerator(seed=151).batch(4)
+    logits, stats = model(batch.inputs)
+    torch.nn.functional.cross_entropy(logits, batch.targets).backward()
+    assert logits.shape == (4, 64)
+    assert stats["selected_ids"].shape == (4, 2, 2)
+    assert bool(stats["selected_ids"].ge(0).all())
+    assert int(stats["selected_ids"].max()) < 16
+    assert model.circuits.down_factors.grad is not None
+    assert model.circuits.pair_codes.grad is not None
+    report = model.parameter_report()
+    assert report["circuit_bank_mode"] == "factorized"
+    assert report["active_circuit_params"] > 0
+
+
 def test_semantic_family_mapping_splits_four_domains():
     model = NeuralEngineV0(num_circuits=32, state_dim=16, d_model=16,
                            circuit_rank=2, router_branch=2, router_depth=2,

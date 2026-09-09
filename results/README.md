@@ -1491,3 +1491,17 @@ At 2000 steps, hard accuracy is tied at 80.47%, but frozen-prefix CE is
 route-utilization change is not a quality gain, so prefix freezing is rejected
 and not extended to a full two-seed run. See
 `P003_STABLE_PREFIX_GROWTH_AUDIT_20260909.md`.
+
+P-003 native factorized virtual-bank screening keeps the same 7,552 routed
+addresses while composing each address from reusable factor rows. Across two
+seeds at 1,000 steps, accuracy is 58.594% versus 58.789% for the independent
+control (`−0.195 pp`) and CE is 0.05699 worse, while training is 49.3% faster,
+stored parameters are 97.0% lower, and peak VRAM is 65.1% lower. Only about
+876 virtual addresses are used and about 88.4% are dead. A rank-4 pair basis
+also regresses the short-screen quality. A corrected 10% exploration arm
+reaches 58.294% mean accuracy and does not reduce virtual dead addresses. The
+path is retained as opt-in compression/runtime infrastructure, not accepted as
+a capacity solution. Widening the factor candidate pool from 8 to 32 is also
+slower and still below the independent control. Factor-row usage is now
+reported separately from virtual address usage. See
+`P003_NATIVE_FACTORIZED_VIRTUAL_BANK_AUDIT_20260910.md`.

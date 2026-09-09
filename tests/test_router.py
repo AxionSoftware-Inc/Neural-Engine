@@ -1,6 +1,7 @@
 import torch
 
-from neural_engine.router import FlatRouter, HierarchicalRouter, ProbeRouteRouter
+from neural_engine.router import (FactorizedRouter, FlatRouter, HierarchicalRouter,
+                                  ProbeRouteRouter)
 
 
 def test_router_returns_local_structured_selection():
@@ -72,6 +73,17 @@ def test_probe_router_retrieves_pool_and_scores_pairs():
     router.zero_grad(set_to_none=True)
     router.retriever_scores(state).mean().backward()
     assert router.retriever_query.weight.grad is not None
+
+
+def test_factorized_router_exploration_uses_uniform_weights_for_sampled_ids():
+    router = FactorizedRouter(16, num_circuits=16, factor_count=4,
+                              factor_candidate_pool=2, candidate_pool=4,
+                              active_circuits=2)
+    router.train()
+    torch.manual_seed(7)
+    selected, weights, _ = router(torch.randn(64, 16), exploration_prob=1.0)
+    assert selected.shape == (64, 2)
+    assert torch.allclose(weights, torch.full_like(weights, 0.5))
 
 
 def test_multi_address_router_keeps_total_candidate_budget_structured():

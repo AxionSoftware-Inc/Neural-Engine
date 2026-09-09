@@ -1186,6 +1186,39 @@ qabul qilinmadi. Opt-in API saqlandi.
 
 **Residual audit:** `results/P007_POST_CORRECTION_RESIDUAL_AUDIT.md`.
 
+### C-P003-NATIVE-FACTORIZED-001 — Virtual factor bank does not turn address count into quality
+
+**Status:** `REJECTED AS QUALITY/CAPACITY FIX; RETAINED OPT-IN FOR COMPRESSION/RUNTIME`
+**Muammo:** P-003 / P-007
+
+Native V0’da 7,552 virtual circuit addressini 87 reusable factor row orqali
+ifodalash 1,000 qadamlik ikki-seed screen’da mustaqil 100M bankdan `−0.195 pp`
+accuracy va `+0.05699` validation CE yomon chiqdi. Buning evaziga model
+`100.47M → 3.00M` parametrga, training `72.33s → 36.71s` ga va peak VRAM
+`1946 → 680 MB` ga tushdi. Factorized router o‘rtacha faqat `~876/7552`
+virtual addressni ishlatdi, dead-address fraction `~88.4%` bo‘ldi. Rank-4
+pair-basis qo‘shilishi ham plain factorized arm’dan `−0.69 pp` accuracy yomon
+chiqdi.
+
+Demak bu yo‘l hozircha sifat yoki sig‘im muammosini hal qilgani yo‘q; virtual
+manzillar sonini ko‘paytirish o‘z-o‘zidan o‘rganilgan capacity bermayapti.
+Compression/runtime opt-in sifatida saqlandi, default o‘zgarmadi. P-003 va
+P-007 ochiq qoladi; keyingi ish factor-row exposure/specialization va route
+collapse sababini o‘lchashi kerak. Virtual address dead fraction factor-row
+dead fraction bilan bir xil emas; `train.py evaluate()` endi reusable factor
+row usage’ni alohida chiqaradi. Toza 10% exploration screen ham mean accuracy’ni
+`58.294%`ga tushirdi va virtual dead fractionni hal qilmadi, shuning uchun u
+ham rad qilindi. Factor candidate pool’ni `8→32` qilish ham faqat `+0.065 pp`
+plain factorizedga berdi, mustaqil controldan `−0.130 pp` qoldi va xarajatni
+oshirdi. Oldingi exploration logidagi weight-shape bug natijasi dalil sifatida
+ishlatilmaydi. Rank-32 pair basis ikki seedda `58.203%` mean accuracy va
+`1.51172` mean CE berdi; plain factorizeddan ham yomon bo‘lgani uchun u ham
+rad qilindi. Plain factorized smoke factor row’larning `86/87`tasini ishlatdi,
+shuning uchun muammo factor row exposure emas, kombinatsiya representation’i
+va final task-loss alignment tomonida.
+
+**Batafsil:** `results/P003_NATIVE_FACTORIZED_VIRTUAL_BANK_AUDIT_20260910.md`.
+
 ### C-P002-EXPOSURE-WARMUP-001 — Initial task-stable route exposure
 
 **Status:** `REJECTED`
