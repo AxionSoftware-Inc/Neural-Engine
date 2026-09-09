@@ -46,8 +46,6 @@ class NeuralEngineV0(nn.Module):
             raise ValueError("memory_write_mode must be 'none' or 'gated'")
         if circuit_bank_mode not in {"independent", "shared_residual", "factorized"}:
             raise ValueError("circuit_bank_mode must be 'independent', 'shared_residual', or 'factorized'")
-        if circuit_bank_mode == "factorized" and router_variant != "factorized":
-            raise ValueError("factorized circuit banks require router_variant='factorized'")
         if router_variant == "factorized" and circuit_bank_mode != "factorized":
             raise ValueError("router_variant='factorized' requires circuit_bank_mode='factorized'")
         if shared_rank < 1:
@@ -510,8 +508,12 @@ class NeuralEngineV0(nn.Module):
                     + self.circuits.pair_bias_basis.numel()
                     + 2 * self.active_circuits * self.circuits.factor_pair_rank
                 )
-            candidate_key_params = (self.router.keys[0].numel()
-                                    * self.router.factor_candidate_pool)
+            if hasattr(self.router, "factor_candidate_pool"):
+                candidate_key_params = (self.router.keys[0].numel()
+                                        * self.router.factor_candidate_pool)
+            else:
+                candidate_key_params = (self.router.keys[0].numel()
+                                        * self.router.candidate_pool)
         else:
             one_circuit = (self.circuits.down[0].numel()
                            + self.circuits.up[0].numel()

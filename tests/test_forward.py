@@ -228,6 +228,19 @@ def test_factorized_native_engine_uses_virtual_bank_and_reusable_routes():
     assert report["active_circuit_params"] > 0
 
 
+def test_factorized_bank_can_be_screened_with_the_existing_global_router():
+    model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
+                           num_circuits=16, circuit_rank=4, router_branch=2, router_depth=2,
+                           candidate_pool=4, active_circuits=2, internal_steps=2,
+                           circuit_bank_mode="factorized", router_variant="global",
+                           factor_count=4)
+    batch = SyntheticTaskGenerator(seed=152).batch(4)
+    logits, stats = model(batch.inputs)
+    assert logits.shape == (4, 64)
+    assert stats["selected_ids"].shape == (4, 2, 2)
+    assert model.parameter_report()["circuit_bank_mode"] == "factorized"
+
+
 def test_semantic_family_mapping_splits_four_domains():
     model = NeuralEngineV0(num_circuits=32, state_dim=16, d_model=16,
                            circuit_rank=2, router_branch=2, router_depth=2,

@@ -271,7 +271,7 @@ def evaluate(model: nn.Module, source: BatchSource, batches: int = 8) -> dict[st
             "routing_max_load_fraction": float(probabilities.max()),
         })
         if getattr(model, "circuit_bank_mode", None) == "factorized":
-            factor_count = int(model.router.factor_count)
+            factor_count = int(model.circuits.factor_count)
             first = routed.remainder(factor_count)
             second = routed.div(factor_count, rounding_mode="floor")
             factor_counts = torch.bincount(
