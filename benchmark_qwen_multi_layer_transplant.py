@@ -643,6 +643,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             "grouped-adaptive-atomic-pack",
             "grouped-adaptive-atomic-effective-output",
             "grouped-adaptive-atomic-finalize",
+            "grouped-adaptive-direct-tiled",
             "packed", "packed-fused", "packed-fp16",
             "fused", "fused-effective-output", "token-loop",
         }:
@@ -652,7 +653,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 "grouped-optimized, grouped-adaptive, grouped-adaptive-nozero, "
                 "grouped-adaptive-effective-output, packed, packed-fused, "
                 "grouped-adaptive-atomic-pack, grouped-adaptive-atomic-effective-output, "
-                "grouped-adaptive-atomic-finalize, "
+                "grouped-adaptive-atomic-finalize, grouped-adaptive-direct-tiled, "
                 "packed, packed-fused, packed-fp16, "
                 "fused, fused-effective-output, or token-loop"
             )
@@ -1245,6 +1246,70 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             hidden_states,
         )
 
+    def _forward_direct_tiled(
+        self,
+        hidden_states: torch.Tensor,
+        top_ids: torch.Tensor,
+        weights: torch.Tensor,
+    ) -> torch.Tensor:
+        """Fuse expert-major route packing, FFN tiles, and token accumulation."""
+        if self.grouped_effective_output_weight is None:
+            raise RuntimeError(
+                "direct tiled dispatch requires folded effective output weights"
+            )
+        flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
+        flat_ids = top_ids.reshape(-1, self.active_experts)
+        flat_weights = weights.reshape(-1, self.active_experts)
+        with record_function("neural_engine.direct_tiled.metadata"):
+            pair_indices = torch.arange(
+                flat_ids.numel(), device=flat_ids.device,
+            )
+            token_ids = pair_indices // self.active_experts
+            slots = pair_indices % self.active_experts
+            expert_ids = flat_ids[token_ids, slots]
+            sort_order = torch.argsort(expert_ids, stable=True)
+            sorted_experts = expert_ids[sort_order]
+            sorted_token_ids = token_ids[sort_order]
+            sorted_slots = slots[sort_order]
+            counts = torch.zeros(
+                self.num_experts, device=sorted_experts.device, dtype=torch.long,
+            )
+            counts.scatter_add_(
+                0, sorted_experts,
+                torch.ones_like(sorted_experts, dtype=torch.long),
+            )
+            starts = counts.cumsum(dim=0) - counts
+        with record_function("neural_engine.direct_tiled.projection_accumulate"):
+            (
+                gate_weight,
+                value_weight,
+                output_weight,
+                _gate_value_weight,
+            ) = self._get_grouped_prepacked_weights()
+            from neural_engine.qwen_direct_tiled_dispatch import (
+                direct_tiled_dispatch,
+            )
+
+            flat_output = direct_tiled_dispatch(
+                flat_hidden.contiguous(),
+                sorted_token_ids.contiguous(),
+                sorted_slots.contiguous(),
+                starts.contiguous(),
+                counts.contiguous(),
+                flat_weights.contiguous(),
+                gate_weight,
+                value_weight,
+                output_weight,
+                self.active_experts,
+                self.hard_route_scale,
+                self.grouped_uniform_accum and self.route_source == "subset-router",
+            )
+        self.last_selected_outputs = None
+        self.last_active_expert_fraction = pair_indices.numel() / max(
+            flat_hidden.shape[0] * self.num_experts, 1
+        )
+        return flat_output.reshape_as(hidden_states)
+
     def _get_grouped_prepacked_weights(
         self,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -1776,6 +1841,8 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 },
                 finalize_output=self.dispatch_mode == "grouped-adaptive-atomic-finalize",
             )
+        if not self.training and self.dispatch_mode == "grouped-adaptive-direct-tiled":
+            return self._forward_direct_tiled(hidden_states, top_ids, weights)
         if not self.training and self.dispatch_mode in {
             "grouped-fused", "grouped-prepacked-fused",
         }:
@@ -2319,6 +2386,7 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
                 "grouped-adaptive-effective-output",
                 "grouped-adaptive-atomic-effective-output",
                 "grouped-adaptive-atomic-finalize",
+                "grouped-adaptive-direct-tiled",
             }
             and not self.base.single_token_fast_path
         )
