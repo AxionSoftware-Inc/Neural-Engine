@@ -49,6 +49,7 @@ def set_dispatch_path(
                     "grouped-adaptive-atomic-effective-output",
                     "grouped-adaptive-atomic-finalize",
                     "grouped-adaptive-direct-tiled",
+                    "grouped-adaptive-fixed-pack",
                 }:
                     nested.correction_dispatch_backend = "grouped-effective-output"
                 else:
@@ -151,6 +152,10 @@ def main() -> None:
     parser.add_argument(
         "--include-grouped-adaptive-direct-tiled", action="store_true",
         help="include route-aware tiled projection with fused accumulation",
+    )
+    parser.add_argument(
+        "--include-grouped-adaptive-fixed-pack", action="store_true",
+        help="include deterministic fixed-layout CUDA route packing",
     )
     parser.add_argument("--output")
     args = parser.parse_args()
@@ -295,6 +300,11 @@ def main() -> None:
             "grouped-adaptive-direct-tiled", False,
             "grouped-adaptive-direct-tiled", False, True,
         ))
+    if args.include_grouped_adaptive_fixed_pack:
+        path_specs.append((
+            "grouped-adaptive-fixed-pack", False,
+            "grouped-adaptive-fixed-pack", False, True,
+        ))
     for path_spec in path_specs:
         if len(path_spec) == 3:
             path_name, single_token, dispatch_mode = path_spec
@@ -400,6 +410,8 @@ def main() -> None:
                 candidates.append("grouped-adaptive-atomic-finalize")
             if args.include_grouped_adaptive_direct_tiled:
                 candidates.append("grouped-adaptive-direct-tiled")
+            if args.include_grouped_adaptive_fixed_pack:
+                candidates.append("grouped-adaptive-fixed-pack")
             for candidate in candidates:
                 candidate_row = rows_by_path[candidate][
                     (prefix_length, batch_size)
@@ -535,6 +547,15 @@ def main() -> None:
             uniform_accum=True,
         )
         grouped_adaptive_direct_tiled_generation = greedy_generate_fixed_shape(
+            model, generation_prompt, 8, use_cuda_graph=True,
+        )
+    grouped_adaptive_fixed_pack_generation = None
+    if args.include_grouped_adaptive_fixed_pack:
+        set_dispatch_path(
+            children, False, "grouped-adaptive-fixed-pack",
+            uniform_accum=True,
+        )
+        grouped_adaptive_fixed_pack_generation = greedy_generate_fixed_shape(
             model, generation_prompt, 8, use_cuda_graph=True,
         )
     cached_grouped_generation = None
@@ -691,6 +712,14 @@ def main() -> None:
                     )
                 ),
             } if grouped_adaptive_direct_tiled_generation is not None else {}),
+            **({
+                "grouped_vs_grouped_adaptive_fixed_pack_exact_token_match": bool(
+                    torch.equal(
+                        grouped_generation,
+                        grouped_adaptive_fixed_pack_generation,
+                    )
+                ),
+            } if grouped_adaptive_fixed_pack_generation is not None else {}),
         },
     }
     print(json.dumps(result, indent=2))

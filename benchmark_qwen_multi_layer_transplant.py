@@ -644,6 +644,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             "grouped-adaptive-atomic-effective-output",
             "grouped-adaptive-atomic-finalize",
             "grouped-adaptive-direct-tiled",
+            "grouped-adaptive-fixed-pack",
             "packed", "packed-fused", "packed-fp16",
             "fused", "fused-effective-output", "token-loop",
         }:
@@ -654,6 +655,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 "grouped-adaptive-effective-output, packed, packed-fused, "
                 "grouped-adaptive-atomic-pack, grouped-adaptive-atomic-effective-output, "
                 "grouped-adaptive-atomic-finalize, grouped-adaptive-direct-tiled, "
+                "grouped-adaptive-fixed-pack, "
                 "packed, packed-fused, packed-fp16, "
                 "fused, fused-effective-output, or token-loop"
             )
@@ -1029,6 +1031,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         uninitialized_pack: bool = False,
         atomic_pack: bool = False,
         finalize_output: bool = False,
+        fixed_pack: bool = False,
     ) -> torch.Tensor:
         flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
         flat_ids = top_ids.reshape(-1, self.active_experts)
@@ -1062,7 +1065,25 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 slots = pair_indices % self.active_experts
         with record_function("neural_engine.grouped.pack"):
             expert_ids = flat_ids[token_ids, slots]
-            if atomic_pack:
+            if fixed_pack:
+                from neural_engine.qwen_deterministic_pack import deterministic_pack
+
+                grouped_hidden = deterministic_pack(
+                    flat_hidden.contiguous(),
+                    flat_ids.contiguous(),
+                    self.num_experts,
+                )
+                max_count = flat_hidden.shape[0]
+                grouped_hidden = grouped_hidden.reshape(
+                    self.num_experts, max_count, flat_hidden.shape[-1],
+                )
+                sorted_experts = expert_ids
+                sorted_token_ids = token_ids
+                sorted_slots = slots
+                grouped_indices = (
+                    sorted_experts * max_count + sorted_token_ids
+                )
+            elif atomic_pack:
                 from neural_engine.qwen_atomic_pack import atomic_pack as pack_rows
 
                 grouped_hidden, grouped_indices = pack_rows(
@@ -1841,6 +1862,15 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 },
                 finalize_output=self.dispatch_mode == "grouped-adaptive-atomic-finalize",
             )
+        if not self.training and self.dispatch_mode == "grouped-adaptive-fixed-pack":
+            return self._forward_grouped(
+                hidden_states, top_ids, weights,
+                fused_projections=True,
+                cache_pair_metadata=True,
+                prepacked_weights=True,
+                fixed_pack=True,
+                finalize_output=True,
+            )
         if not self.training and self.dispatch_mode == "grouped-adaptive-direct-tiled":
             return self._forward_direct_tiled(hidden_states, top_ids, weights)
         if not self.training and self.dispatch_mode in {
@@ -2387,6 +2417,7 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
                 "grouped-adaptive-atomic-effective-output",
                 "grouped-adaptive-atomic-finalize",
                 "grouped-adaptive-direct-tiled",
+                "grouped-adaptive-fixed-pack",
             }
             and not self.base.single_token_fast_path
         )
