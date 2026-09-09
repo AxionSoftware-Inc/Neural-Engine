@@ -36,6 +36,7 @@
 - [Runtime — Qwen Inductor fused-child probe](RUNTIME_QWEN_INDUCTOR_PROBE_20260909.md)
 - [Runtime — Qwen no-correction ablation](RUNTIME_QWEN_CORRECTION_ABLATION_20260909.md)
 - [Runtime — Qwen rank-4 correction audit](RUNTIME_QWEN_CORRECTION_RANK4_AUDIT_20260909.md)
+- [Runtime — Qwen rank-4 long-budget audit](RUNTIME_QWEN_CORRECTION_LONG_BUDGET_20260909.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
@@ -218,6 +219,14 @@ Graph replay and reused-shape generation are exact within the audit tolerance.
 Rank 4 is the smallest tested viable opt-in, while rank 64 remains the default
 until longer-budget validation is complete. See
 `RUNTIME_QWEN_CORRECTION_RANK4_AUDIT_20260909.md`.
+
+V0.210 doubles the rank-4 child/hard training steps from 300 to 600 and router
+steps from 100 to 200. Seeds 2026/17 remain inside the quality gate with CE
+deltas `+0.02795/+0.03825`; B8 graph/dense is `1.280x/1.265x` and graph/sparse
+eager is `0.904x/0.873x`. Exact generation and graph parity remain intact.
+This supports rank 4 beyond the short budget, but does not change the default;
+the remaining speed issue is fused/static-index correction overhead. See
+`RUNTIME_QWEN_CORRECTION_LONG_BUDGET_20260909.md`.
 
 V0.194 rejects the eight-layer K=4 pairwise-cost router with three-round
 on-policy aggregation: learned CE is `+0.06822/+0.07745` across seeds, worse

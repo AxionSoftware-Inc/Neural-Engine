@@ -111,6 +111,10 @@ viable tested candidate. A three-seed rank-4 follow-up passes the quality gate
 `1.339x/1.330x/1.337x`; rank 4 is now the smallest tested viable opt-in.
 Longer-budget validation is still needed before it can replace rank 64 as the
 compatibility default.
+V0.210 doubles child/hard/router steps for rank 4; seeds 2026/17 still pass
+(`+0.02795/+0.03825`) and B8 graph/dense improves to `1.280x/1.265x`.
+This removes short-budget fragility as the leading explanation, but the fused
+correction kernel remains the real latency target.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

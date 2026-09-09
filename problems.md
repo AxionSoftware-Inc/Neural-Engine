@@ -644,6 +644,14 @@ graph/eager va reused-shape parity uchala seedda ham exact. Rank4 hozirgi eng
 kichik **ACCEPTED OPT-IN** candidate; default rank64 saqlandi. Uzunroq
 training budget va fused/static-index correction kernel hali ochiq.
 **Batafsil:** `results/RUNTIME_QWEN_CORRECTION_RANK4_AUDIT_20260909.md`.
+**V0.210 long-budget natijasi (2026-09-09):** rank4 uchun child/hard qadamlar
+`300→600`, router `100→200` qilindi. Seed2026/17 CE delta
+`+0.027947/+0.038252` bo‘lib gate ichida qoldi; B8 graph/dense
+`1.280x/1.265x`, graph/sparse-eager `0.904x/0.873x`, parity `9.54e-6/9.06e-6`.
+Generation parity ikkala seedda exact. Qisqa budgetga xos tasodifiy signal
+ehtimoli kamaydi, lekin rank4 defaultga ko‘tarilmadi; fused/static-index
+correction kernel hali asosiy runtime muammosi.
+**Batafsil:** `results/RUNTIME_QWEN_CORRECTION_LONG_BUDGET_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 
