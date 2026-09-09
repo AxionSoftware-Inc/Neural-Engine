@@ -592,6 +592,18 @@ graph/eager generation batch 2/4/8’da exact match berdi; graph/eager ratios
 etildi. Batch 2–8 fixed-shape muammosi **SOLVED/ACCEPTED OPT-IN**. Batch>8,
 trained batch quality, concurrency va production stream isolation hali ochiq.
 **Batafsil:** `results/RUNTIME_QWEN_FIXED_GRAPH_BATCH_SHAPE_20260909.md`.
+**V0.202 correction backend result (2026-09-09):** trained B8’da vectorized
+rank-64 correction graph-safe bo‘ldi, lekin graph/eager `1.091x`; packed
+accumulation eager’da `79.794 ms` bo‘ldi va capture vaqtida device
+`torch.where` sabab yiqildi. Packed backend graph uchun **REJECTED**,
+vectorized hozirgi safe backend sifatida qoldi. Katta batch’da dense’dan
+tezroq bo‘ladigan static-index/fused correction kernel hali ochiq.
+**Batafsil:** `results/RUNTIME_QWEN_TRAINED_CORRECTION_BACKEND_AUDIT_20260909.md`.
+**V0.203 BMM result (2026-09-09):** single-token rank-64 correction uchun
+explicit BMM qo‘llanganda trained B8 graph/eager `1.091x → 1.034x` bo‘ldi,
+parity xatosi `8.94e-6`, quality CE delta `+0.035745`. Bu kichik ijobiy
+optimallashtirish, dense B8 latency muammosining to‘liq yechimi emas.
+**Batafsil:** `results/RUNTIME_QWEN_TRAINED_CORRECTION_BMM_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 

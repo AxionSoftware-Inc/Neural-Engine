@@ -28,6 +28,8 @@
 - [Runtime — Qwen fixed-shape greedy generation adapter](RUNTIME_QWEN_FIXED_GRAPH_GENERATION_20260909.md)
 - [Runtime — Qwen fixed-graph prefix-shape audit](RUNTIME_QWEN_FIXED_GRAPH_PREFIX_SHAPES_20260909.md)
 - [Runtime — Qwen fixed-graph batched decode audit](RUNTIME_QWEN_FIXED_GRAPH_BATCH_SHAPE_20260909.md)
+- [Runtime — Qwen trained correction backend A/B](RUNTIME_QWEN_TRAINED_CORRECTION_BACKEND_AUDIT_20260909.md)
+- [Runtime — Qwen trained correction BMM audit](RUNTIME_QWEN_TRAINED_CORRECTION_BMM_AUDIT_20260909.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
@@ -153,9 +155,22 @@ V0.201 extends the single-token fast path to batched decode by recognizing a
 single sequence-token dimension rather than requiring one flattened token.
 Batch 2/4/8 graph and eager generation all match exactly; graph reuse is
 `0.534x/0.594x/0.601x` of eager (`156.52/189.64/261.79 ms` graph versus
-`293.34/319.06/435.81 ms` eager). Batch sizes above 8 and trained-child batch
-quality remain open. See
+`293.34/319.06/435.81 ms` eager). Batch sizes above 8 remain open. See
 `RUNTIME_QWEN_FIXED_GRAPH_BATCH_SHAPE_20260909.md`.
+
+V0.202 localizes the trained batch-8 bottleneck: vectorized rank-64 correction
+is graph-safe but `1.091x` of its eager path, while packed correction is
+`79.794 ms` eager and fails graph capture at device `torch.where`. Packed is
+therefore rejected for graph use; the next runtime target is a static-index or
+fused correction kernel. See
+`RUNTIME_QWEN_TRAINED_CORRECTION_BACKEND_AUDIT_20260909.md`.
+
+V0.203 specializes the single-token correction contraction with explicit BMM.
+On the trained B8 audit, graph/eager improves from `1.091x` to `1.034x` with
+`8.94e-6` parity error and CE delta `+0.035745`. This is a small optimization,
+not a large quality or dense-latency breakthrough; a fused/static-index
+correction kernel remains the next target. See
+`RUNTIME_QWEN_TRAINED_CORRECTION_BMM_AUDIT_20260909.md`.
 
 V0.194 rejects the eight-layer K=4 pairwise-cost router with three-round
 on-policy aggregation: learned CE is `+0.06822/+0.07745` across seeds, worse

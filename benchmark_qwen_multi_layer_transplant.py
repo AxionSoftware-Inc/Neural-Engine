@@ -1859,12 +1859,39 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
                 # prevents the old multi-hundred-MB/GB gather during prefill.
                 selected_mix_in = self.mix_in[selected]
                 selected_mix_out = self.mix_out[selected]
-                latent = torch.einsum(
-                    "...kh,...krh->...kr", selected_outputs, selected_mix_in,
-                )
-                selected_corrections = torch.einsum(
-                    "...kr,...khr->...kh", latent, selected_mix_out,
-                )
+                if selected_outputs.shape[-3] == 1:
+                    # Decode has one sequence token. Flattening batch×K into
+                    # independent tiny GEMMs avoids the generic ellipsis
+                    # einsum dispatch while preserving the exact contraction.
+                    batch_size = selected_outputs.shape[0]
+                    active_experts = selected_outputs.shape[-2]
+                    hidden_size = selected_outputs.shape[-1]
+                    rank = selected_mix_in.shape[-2]
+                    flat_outputs = selected_outputs.reshape(
+                        -1, 1, hidden_size,
+                    )
+                    flat_mix_in = selected_mix_in.reshape(
+                        -1, rank, hidden_size,
+                    )
+                    latent = torch.bmm(
+                        flat_outputs, flat_mix_in.transpose(1, 2),
+                    ).reshape(batch_size, 1, active_experts, rank)
+                    flat_mix_out = selected_mix_out.reshape(
+                        -1, hidden_size, rank,
+                    )
+                    selected_corrections = torch.bmm(
+                        latent.reshape(-1, 1, rank),
+                        flat_mix_out.transpose(1, 2),
+                    ).reshape(
+                        batch_size, 1, active_experts, hidden_size,
+                    )
+                else:
+                    latent = torch.einsum(
+                        "...kh,...krh->...kr", selected_outputs, selected_mix_in,
+                    )
+                    selected_corrections = torch.einsum(
+                        "...kr,...khr->...kh", latent, selected_mix_out,
+                    )
                 correction = self.base.hard_route_scale * (
                     selected_corrections * route_weights.unsqueeze(-1)
                 ).sum(dim=-2)

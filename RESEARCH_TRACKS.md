@@ -84,6 +84,9 @@ generation. Batch 2/4/8 all pass exact replay with graph/eager ratios
 and concurrent request management remain open. With the trained K=5 child,
 graph/parent was `0.737x/0.936x` at batch 1/2 but `1.109x/1.445x` at batch
 4/8, so larger-batch trained correction still needs a fused kernel.
+The single-token BMM specialization trims trained B8 graph/eager from
+`1.091x` to `1.034x` without quality or parity regression, but does not yet
+beat dense at B8.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

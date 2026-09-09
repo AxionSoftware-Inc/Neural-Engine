@@ -27,6 +27,7 @@ from neural_engine.qwen_fixed_graph import (
     greedy_generate_fixed_shape,
 )
 from benchmark_qwen_multi_layer_transplant import (
+    CrossGroupOutputMixRoutedQwenChild,
     TRAIN_TEXT,
     TransferredRoutedQwenChild,
     capture_batches,
@@ -278,6 +279,100 @@ def trained_batch_runtime_matrix(
     return rows
 
 
+def trained_correction_backend_matrix(
+    model: torch.nn.Module,
+    tokenizer,
+    layers: list[int],
+    children: list[torch.nn.Module],
+    device: torch.device,
+    warmup: int,
+    iterations: int,
+) -> list[dict[str, object]]:
+    """Compare vectorized and packed rank-64 correction on trained children."""
+    base_prefix = tokenizer(
+        "Neural Engine sparse circuits", return_tensors="pt",
+    ).input_ids[:, :4].to(device)
+    base_token = tokenizer(
+        " attention", return_tensors="pt",
+    ).input_ids[:, -1:].to(device)
+    model_layers = [model.model.layers[index] for index in layers]
+    records = []
+    original_limits = []
+    mixers = []
+    for child in children:
+        current_mixers = [
+            nested for nested in child.modules()
+            if isinstance(nested, CrossGroupOutputMixRoutedQwenChild)
+        ]
+        mixers.extend(current_mixers)
+        original_limits.extend(
+            [mixer.max_dense_gather_bytes for mixer in current_mixers]
+        )
+    try:
+        for backend in ("vectorized", "packed"):
+            for mixer in mixers:
+                mixer.max_dense_gather_bytes = (
+                    128 * 1024 * 1024 if backend == "vectorized" else 0
+                )
+            batch_size = 8
+            prefix_ids = base_prefix.repeat(batch_size, 1)
+            token_ids = base_token.repeat(batch_size, 1)
+            cache_length = max(32, int(prefix_ids.shape[1]) + 8)
+            position = torch.tensor([prefix_ids.shape[1]], device=device)
+            for layer, child in zip(model_layers, children):
+                route_base = next(
+                    nested for nested in child.modules()
+                    if isinstance(nested, TransferredRoutedQwenChild)
+                )
+                route_base.single_token_fast_path = True
+                layer.mlp = child
+            eager_cache = make_cache_and_fill_prefix(
+                model, prefix_ids, cache_length,
+            )
+            eager_ms, eager_logits = measure_eager(
+                model, token_ids, eager_cache, position, warmup, iterations,
+            )
+            graph_cache = make_cache_and_fill_prefix(
+                model, prefix_ids, cache_length,
+            )
+            try:
+                graph_ms, _, graph_logits, _ = measure_graph(
+                    model, token_ids, graph_cache, position, warmup, iterations,
+                )
+            except RuntimeError as exc:
+                records.append({
+                    "backend": backend,
+                    "batch_size": batch_size,
+                    "status": "GRAPH_CAPTURE_FAIL",
+                    "eager_ms": eager_ms,
+                    "known_cause": (
+                        "packed correction calls torch.where over device routing "
+                        "indices during CUDA Graph capture"
+                    ),
+                    "error": str(exc).splitlines()[0],
+                })
+                # A failed capture can leave the CUDA capture context in an
+                # implementation-dependent state; report it and stop this
+                # backend A/B rather than hiding the failure or continuing
+                # with corrupted timing state.
+                break
+            records.append({
+                "backend": backend,
+                "batch_size": batch_size,
+                "status": "PARITY_PASS",
+                "eager_ms": eager_ms,
+                "graph_ms": graph_ms,
+                "graph_over_eager": graph_ms / max(eager_ms, 1e-9),
+                "max_graph_vs_eager_logit_error": float(
+                    (graph_logits - eager_logits).abs().max().item()
+                ),
+            })
+    finally:
+        for mixer, original_limit in zip(mixers, original_limits):
+            mixer.max_dense_gather_bytes = original_limit
+    return records
+
+
 def run(args: argparse.Namespace) -> dict[str, object]:
     if not torch.cuda.is_available():
         raise RuntimeError("this audit requires CUDA")
@@ -376,6 +471,10 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         model, tokenizer, layers, parents, children, device,
         args.batch_sizes, args.warmup, args.iterations,
     )
+    trained_correction_backends = trained_correction_backend_matrix(
+        model, tokenizer, layers, children, device, args.warmup,
+        args.correction_backend_iterations,
+    )
 
     result = {
         "experiment": "V0.197_trained_qwen_custom_fixed_kv_graph_audit",
@@ -422,6 +521,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "graph_cache_hit_count": trained_pool.hit_count,
         },
         "trained_batch_runtime": trained_batch_runtime,
+        "trained_correction_backends": trained_correction_backends,
     }
     if args.output:
         output = Path(args.output)
@@ -451,6 +551,7 @@ def main() -> None:
     parser.add_argument("--warmup", type=int, default=20)
     parser.add_argument("--iterations", type=int, default=100)
     parser.add_argument("--batch-sizes", type=int, nargs="+", default=[1, 2, 4, 8])
+    parser.add_argument("--correction-backend-iterations", type=int, default=30)
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--device", choices=("cuda", "auto"), default="cuda")
     parser.add_argument("--local-files-only", action="store_true")

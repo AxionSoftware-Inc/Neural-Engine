@@ -126,3 +126,31 @@ def test_cross_group_hard_correction_matches_reference_formula() -> None:
     ).sum(dim=-2)
     assert torch.allclose(direct, expected, atol=1e-6, rtol=1e-6)
     assert torch.allclose(packed, expected, atol=1e-6, rtol=1e-6)
+
+
+def test_cross_group_single_token_batched_matmul_matches_reference() -> None:
+    torch.manual_seed(2032)
+    base = TransferredRoutedQwenChild(
+        TinyQwenMlp(), 4, 2, 1.0, "grouped", "contiguous",
+        "router", 2.0,
+    )
+    child = CrossGroupOutputMixRoutedQwenChild(base, 3).eval()
+    inputs = torch.randn(3, 1, 8)
+    actual = child(inputs)
+    selected_outputs = base.last_selected_outputs
+    selected = base.last_selected
+    route_weights = base.last_route_weights
+    assert selected_outputs is not None
+    assert selected is not None
+    assert route_weights is not None
+    base_output = base(inputs)
+    latent = torch.einsum(
+        "...kh,...krh->...kr", selected_outputs, child.mix_in[selected],
+    )
+    selected_corrections = torch.einsum(
+        "...kr,...khr->...kh", latent, child.mix_out[selected],
+    )
+    expected = base_output + base.hard_route_scale * (
+        selected_corrections * route_weights.unsqueeze(-1)
+    ).sum(dim=-2)
+    assert torch.allclose(actual, expected, atol=1e-6, rtol=1e-6)
