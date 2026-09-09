@@ -43,6 +43,7 @@
 - [Runtime — Qwen grouped folded correction audit](RUNTIME_QWEN_GROUPED_EFFECTIVE_OUTPUT_AUDIT_20260909.md)
 - [Runtime — Qwen CUDA atomic route-pack audit](RUNTIME_QWEN_GROUPED_ATOMIC_PACK_AUDIT_20260909.md)
 - [Runtime — Qwen CUDA atomic route-pack shape sweep](RUNTIME_QWEN_GROUPED_ATOMIC_PACK_SHAPE_AUDIT_20260909.md)
+- [Runtime — Qwen atomic pack plus folded-output combo](RUNTIME_QWEN_GROUPED_ATOMIC_EFFECTIVE_COMBO_AUDIT_20260909.md)
 - [Runtime — Qwen fixed-shape CUDA Graph replay](RUNTIME_QWEN_CUDA_GRAPH.md)
 - [Runtime — Qwen custom fixed-KV CUDA Graph decode](RUNTIME_QWEN_CUSTOM_KV_CUDA_GRAPH.md)
 - [Runtime — Qwen trained custom fixed-KV Graph audit](RUNTIME_QWEN_TRAINED_CUSTOM_KV_GRAPH_AUDIT_20260909.md)

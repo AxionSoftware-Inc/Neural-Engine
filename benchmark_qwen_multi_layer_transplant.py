@@ -641,6 +641,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             "grouped-tiled", "grouped-optimized", "grouped-adaptive",
             "grouped-adaptive-nozero", "grouped-adaptive-effective-output",
             "grouped-adaptive-atomic-pack",
+            "grouped-adaptive-atomic-effective-output",
             "packed", "packed-fused", "packed-fp16",
             "fused", "token-loop",
         }:
@@ -649,7 +650,8 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 "grouped-prepacked-fused, grouped-fused, grouped-tiled, "
                 "grouped-optimized, grouped-adaptive, grouped-adaptive-nozero, "
                 "grouped-adaptive-effective-output, packed, packed-fused, "
-                "grouped-adaptive-atomic-pack, packed, packed-fused, packed-fp16, "
+                "grouped-adaptive-atomic-pack, grouped-adaptive-atomic-effective-output, "
+                "packed, packed-fused, packed-fp16, "
                 "fused, or token-loop"
             )
         self.dispatch_mode = dispatch_mode
@@ -1722,6 +1724,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             "grouped-adaptive", "grouped-adaptive-nozero",
             "grouped-adaptive-effective-output",
             "grouped-adaptive-atomic-pack",
+            "grouped-adaptive-atomic-effective-output",
         }:
             # Decode B=1 is launch/metadata bound; the extra cached layouts
             # only pay off once several rows can share the grouped work.
@@ -1734,7 +1737,10 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 cache_pair_metadata=use_optimized,
                 prepacked_weights=use_optimized,
                 uninitialized_pack=self.dispatch_mode == "grouped-adaptive-nozero",
-                atomic_pack=self.dispatch_mode == "grouped-adaptive-atomic-pack",
+                atomic_pack=self.dispatch_mode in {
+                    "grouped-adaptive-atomic-pack",
+                    "grouped-adaptive-atomic-effective-output",
+                },
             )
         if not self.training and self.dispatch_mode in {
             "grouped-fused", "grouped-prepacked-fused",
@@ -2258,6 +2264,7 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
                 "grouped-adaptive", "grouped-adaptive-nozero",
                 "grouped-adaptive-effective-output",
                 "grouped-adaptive-atomic-pack",
+                "grouped-adaptive-atomic-effective-output",
             }
             and not self.base.single_token_fast_path
         )
@@ -2265,7 +2272,10 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
             self.correction_dispatch_backend == "grouped-effective-output"
             and not self.replace_base_output
             and not self.base.training
-            and self.base.dispatch_mode == "grouped-adaptive-effective-output"
+            and self.base.dispatch_mode in {
+                "grouped-adaptive-effective-output",
+                "grouped-adaptive-atomic-effective-output",
+            }
             and not self.base.single_token_fast_path
         )
         if use_fused_output:
