@@ -175,7 +175,9 @@ bound. On trained K=5 seeds 2026/2027, grouped-vs-single-token graph time is
 `1.4e-5`. This is the first strong runtime result aimed at the selected FFN
 bottleneck. Prefix lengths 4/32/128 at B8 remain `0.593x/0.600x/0.663x`,
 so the signal persists with context even though attention dilutes it; broader
-production-shape validation remains open.
+production-shape validation remains open. Against the restored dense parent,
+grouped sparse graph is still `1.099x/1.146x/1.259x` at B1/B8/B32, so this is a
+strong sparse-path improvement but not yet a dense-serving win.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

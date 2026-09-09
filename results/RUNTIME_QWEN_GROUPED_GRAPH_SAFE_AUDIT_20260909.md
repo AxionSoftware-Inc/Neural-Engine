@@ -1,7 +1,7 @@
 # V0.223 — Graph-safe grouped selected-FFN audit
 
 **Date:** 2026-09-09  
-**Status:** `PROMISING RUNTIME PATH; SERVING POLICY OPEN`
+**Status:** `STRONG INTERNAL SPARSE SPEEDUP; STILL SLOWER THAN DENSE`
 **Branch:** `exp/track-runtime`
 
 ## Question
@@ -57,16 +57,34 @@ An additional seed-2026 sweep varied the cached prefix length at B1 and B8:
 The gain persists with longer context, although attention increasingly
 dilutes the selected-FFN improvement.
 
+For the seed-2026 B32 extension, the same fixed-KV inputs were also measured
+with the original dense parent MLPs restored. Grouped sparse divided by dense
+was:
+
+| Batch | Eager grouped/dense | CUDA Graph grouped/dense |
+|---:|---:|---:|
+| 1 | `1.399x` | `1.099x` |
+| 8 | `1.449x` | `1.146x` |
+| 32 | `1.329x` | `1.259x` |
+
+Thus grouped dispatch substantially improves the sparse implementation over
+the single-token path, but the current eight-layer sparse model is still
+10–26% slower than the dense parent in CUDA Graph end-to-end time. This gap is
+the remaining runtime objective; router fusion alone cannot close it.
+
 ## Decision
 
 - The grouped path is now graph-safe for the tested fixed-shape decode path.
 - This is the strongest runtime signal in the current track and targets the
   real selected-FFN bottleneck, unlike router-only fusion.
+- It is not yet a dense-serving win: grouped sparse remains `1.099x–1.259x`
+  of dense graph time in the measured B1–B32 range.
 - The B32 extension is positive, but longer production-shape timing and a
   broader generation/evaluation audit are still required before a serving
   policy is changed.
-- Keep the eager policy conservative: grouped is slower at B1 but modestly
-  faster at B8. CUDA Graph serving is the promising use case.
+- Keep the eager policy conservative: grouped is slower than dense at all
+  tested eager sizes. CUDA Graph serving is the promising sparse use case,
+  but no dense-serving claim is accepted yet.
 - The static capture workspace grows with flattened token count, so prefill
   continues using the dynamic eager bound.
 
@@ -76,6 +94,7 @@ dilutes the selected-FFN improvement.
 python -u benchmark_qwen_trained_dispatch_path_audit.py --warmup 10 --iterations 20 --batch-sizes 1 8 32 --calibration-rank 64 --seed 2026 --output results/runs/v0_223_trained_qwen_dispatch_path_audit_b32.json
 python -u benchmark_qwen_trained_dispatch_path_audit.py --warmup 10 --iterations 30 --calibration-rank 64 --seed 2027 --output results/runs/v0_223_trained_qwen_dispatch_path_audit_seed2027.json
 python -u benchmark_qwen_trained_dispatch_path_audit.py --warmup 8 --iterations 10 --batch-sizes 1 8 --prefix-lengths 4 32 128 --calibration-rank 64 --seed 2026 --output results/runs/v0_223_trained_qwen_dispatch_path_audit_prefixes.json
+python -u benchmark_qwen_trained_dispatch_path_audit.py --warmup 10 --iterations 15 --batch-sizes 1 8 32 --prefix-lengths 4 --calibration-rank 64 --seed 2026 --output results/runs/v0_223_trained_qwen_dispatch_path_audit_dense.json
 ```
 
 ## Artifacts
@@ -85,3 +104,4 @@ python -u benchmark_qwen_trained_dispatch_path_audit.py --warmup 8 --iterations 
 - `results/runs/v0_223_trained_qwen_dispatch_path_audit_b32.json`
 - `results/runs/v0_223_trained_qwen_dispatch_path_audit_seed2027.json`
 - `results/runs/v0_223_trained_qwen_dispatch_path_audit_prefixes.json`
+- `results/runs/v0_223_trained_qwen_dispatch_path_audit_dense.json`

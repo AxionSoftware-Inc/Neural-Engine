@@ -742,7 +742,9 @@ single-token graph ratio B1 `0.963x/0.953x`, B8 `0.589x/0.589x`; B32 extension
 match. Prefix 4/32/128 da B8 graph ratios `0.593x/0.600x/0.663x` bo‘lib,
 uzun contextda ham signal saqlanadi. Bu router fusiondan farqli ravishda
 selected FFN bottleneckga tegadigan eng kuchli runtime signal. **PROMISING;
-serving policy va production-shape validation ochiq.**
+serving policy ochiq. Lekin dense parent bilan grouped sparse graph hali
+B1/B8/B32’da `1.099x/1.146x/1.259x`, ya’ni dense’dan sekin; production-shape
+validation va selected-FFN optimizatsiyasi ochiq.**
 **Batafsil:** `results/RUNTIME_QWEN_GROUPED_GRAPH_SAFE_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.

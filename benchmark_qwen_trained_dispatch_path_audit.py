@@ -34,6 +34,16 @@ def set_dispatch_path(children, single_token: bool) -> None:
         base.single_token_projection_backend = "einsum"
 
 
+def install_children(model, layers, children) -> None:
+    for layer_index, child in zip(layers, children):
+        model.model.layers[layer_index].mlp = child
+
+
+def install_parents(model, layers, parents) -> None:
+    for layer_index, parent in zip(layers, parents):
+        model.model.layers[layer_index].mlp = parent
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="Qwen/Qwen3-0.6B")
@@ -102,6 +112,39 @@ def main() -> None:
     token_ids = tokenizer(
         " attention", return_tensors="pt",
     ).input_ids[:, -1:].to(device)
+    dense_records = []
+    install_parents(model, layers, _parents)
+    for prefix_length in args.prefix_lengths:
+        prefix_ids = prefix_pool[:, :prefix_length]
+        for batch_size in args.batch_sizes:
+            batch_prefix = prefix_ids.repeat(batch_size, 1)
+            batch_tokens = token_ids.repeat(batch_size, 1)
+            position = torch.tensor([batch_prefix.shape[1]], device=device)
+            cache_length = max(32, int(batch_prefix.shape[1]) + 8)
+            eager_cache = make_cache_and_fill_prefix(
+                model, batch_prefix, cache_length,
+            )
+            eager_ms, eager_logits = measure_eager(
+                model, batch_tokens, eager_cache, position,
+                args.warmup, args.iterations,
+            )
+            graph_cache = make_cache_and_fill_prefix(
+                model, batch_prefix, cache_length,
+            )
+            graph_ms, _, graph_logits, _ = measure_graph(
+                model, batch_tokens, graph_cache, position,
+                args.warmup, args.iterations,
+            )
+            dense_records.append({
+                "prefix_length": prefix_length,
+                "batch_size": batch_size,
+                "eager_ms": eager_ms,
+                "graph_ms": graph_ms,
+                "max_graph_vs_eager_logit_error": float(
+                    (graph_logits - eager_logits).abs().max().item()
+                ),
+            })
+    install_children(model, layers, children)
     records = []
     eager_logits_by_path = {}
     for path_name, single_token in (("single-token", True), ("grouped", False)):
@@ -170,6 +213,28 @@ def main() -> None:
                         - eager_logits_by_path[("single-token", prefix_length, batch_size)]
                     ).abs().max().item()
                 ),
+                "grouped_over_dense_eager": (
+                    grouped["eager_ms"]
+                    / max(
+                        next(
+                            row["eager_ms"] for row in dense_records
+                            if row["prefix_length"] == prefix_length
+                            and row["batch_size"] == batch_size
+                        ),
+                        1e-9,
+                    )
+                ),
+                "grouped_over_dense_graph": (
+                    grouped["graph_ms"]
+                    / max(
+                        next(
+                            row["graph_ms"] for row in dense_records
+                            if row["prefix_length"] == prefix_length
+                            and row["batch_size"] == batch_size
+                        ),
+                        1e-9,
+                    )
+                ),
             })
 
     generation_prompt = tokenizer(
@@ -206,6 +271,7 @@ def main() -> None:
         "teacher_ce": teacher_ce,
         "quality": quality,
         "layer_records": layer_records,
+        "dense_records": dense_records,
         "records": records,
         "comparisons": comparisons,
         "generation": {
