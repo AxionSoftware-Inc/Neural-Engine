@@ -92,6 +92,11 @@ def main() -> None:
     parser.add_argument("--prefix-lengths", type=int, nargs="+", default=[4])
     parser.add_argument("--calibration-rank", type=int, default=64)
     parser.add_argument("--seed", type=int, default=2026)
+    parser.add_argument(
+        "--matmul-precision", choices=("highest", "high", "medium"),
+        default="highest",
+        help="float32 CUDA matmul precision used during evaluation",
+    )
     parser.add_argument("--experiment", default="V0.224_trained_grouped_fused_audit")
     parser.add_argument(
         "--include-cached-grouped", action="store_true",
@@ -188,6 +193,9 @@ def main() -> None:
         args.learning_rate, args.hard_learning_rate, args.max_grad_norm,
         args.log_every,
     )
+    # Keep the training recipe identical across precision A/B runs; the
+    # selected precision applies only to evaluation and serving measurements.
+    torch.set_float32_matmul_precision(args.matmul_precision)
     quality = evaluate_current(
         model, eval_ids, teacher_logits, teacher_ce,
         "trained_k5_dispatch_path_probe",
@@ -581,13 +589,35 @@ def main() -> None:
         uniform_correction_fused_generation = greedy_generate_fixed_shape(
             model, generation_prompt, 8, use_cuda_graph=True,
         )
+    graph_eager_errors = [
+        row["max_graph_vs_eager_logit_error"]
+        for row in dense_records
+    ]
+    graph_eager_errors.extend(
+        row["max_graph_vs_eager_logit_error"]
+        for record in records
+        for row in record["batches"]
+    )
+    max_graph_eager_error = max(graph_eager_errors, default=0.0)
+    graph_eager_tolerance = 1e-3
     result = {
         "experiment": args.experiment,
-        "status": "PARITY_PASS",
+        "status": (
+            "PARITY_PASS"
+            if max_graph_eager_error <= graph_eager_tolerance
+            else "PARITY_FAIL"
+        ),
         "model": args.model,
         "seed": args.seed,
         "layers": layers,
         "dtype": "float32",
+        "matmul_precision": args.matmul_precision,
+        "numerical_gate": {
+            "name": "max_graph_vs_eager_logit_error",
+            "value": max_graph_eager_error,
+            "tolerance": graph_eager_tolerance,
+            "pass": max_graph_eager_error <= graph_eager_tolerance,
+        },
         "recipe": {
             "num_experts": 8,
             "active_experts": 5,

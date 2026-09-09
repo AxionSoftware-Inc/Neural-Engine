@@ -1425,3 +1425,10 @@ than adaptive packing at batch 1, 2.29% at batch 8, and 1.90% at batch 32.
 Against the atomic-finalize control it is effectively tied, so it remains
 opt-in and pack-only work is now low priority. See
 `RUNTIME_QWEN_PAIR_FIXED_PACK_AUDIT_20260909.md`.
+
+V0.251 tests CUDA float32 matmul precision `high` only during evaluation.
+Both seeds show about 7% B8 and 20% B32 speed improvement versus strict
+`highest`, but the graph/eager numerical gate fails at roughly 0.0077--0.0078
+against a 0.001 limit. It is retained as explicit opt-in only; strict
+benchmarks remain at `highest`. See
+`RUNTIME_QWEN_MATMUL_HIGH_AUDIT_20260909.md`.
