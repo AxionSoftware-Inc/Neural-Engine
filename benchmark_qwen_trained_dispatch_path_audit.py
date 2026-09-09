@@ -28,6 +28,10 @@ def set_dispatch_path(
     children, single_token: bool, dispatch_mode: str = "grouped",
     fused_correction: bool = False, uniform_accum: bool = False,
 ) -> None:
+    effective_dispatch_mode = dispatch_mode
+    inplace_swiglu = dispatch_mode == "grouped-adaptive-fixed-pack-inplace"
+    if inplace_swiglu:
+        effective_dispatch_mode = "grouped-adaptive-fixed-pack"
     for child in children:
         base = next(
             nested for nested in child.modules()
@@ -36,15 +40,16 @@ def set_dispatch_path(
         base.single_token_fast_path = bool(single_token)
         base.single_token_router_backend = "torch"
         base.single_token_projection_backend = "einsum"
-        base.dispatch_mode = dispatch_mode
+        base.dispatch_mode = effective_dispatch_mode
         base.grouped_uniform_accum = bool(uniform_accum)
+        base.grouped_inplace_swiglu = bool(inplace_swiglu)
         for nested in child.modules():
             if isinstance(nested, CrossGroupOutputMixRoutedQwenChild):
-                if dispatch_mode == "fused-effective-output":
+                if effective_dispatch_mode == "fused-effective-output":
                     nested.correction_dispatch_backend = (
                         "cuda-fused-effective-output"
                     )
-                elif dispatch_mode in {
+                elif effective_dispatch_mode in {
                     "grouped-adaptive-effective-output",
                     "grouped-adaptive-atomic-effective-output",
                     "grouped-adaptive-atomic-finalize",
@@ -161,6 +166,10 @@ def main() -> None:
     parser.add_argument(
         "--include-grouped-adaptive-fixed-pack", action="store_true",
         help="include deterministic fixed-layout CUDA route packing",
+    )
+    parser.add_argument(
+        "--include-grouped-adaptive-fixed-pack-inplace", action="store_true",
+        help="include fixed-pack with in-place fused SwiGLU intermediates",
     )
     parser.add_argument("--output")
     args = parser.parse_args()
@@ -313,6 +322,11 @@ def main() -> None:
             "grouped-adaptive-fixed-pack", False,
             "grouped-adaptive-fixed-pack", False, True,
         ))
+    if args.include_grouped_adaptive_fixed_pack_inplace:
+        path_specs.append((
+            "grouped-adaptive-fixed-pack-inplace", False,
+            "grouped-adaptive-fixed-pack-inplace", False, True,
+        ))
     for path_spec in path_specs:
         if len(path_spec) == 3:
             path_name, single_token, dispatch_mode = path_spec
@@ -420,6 +434,8 @@ def main() -> None:
                 candidates.append("grouped-adaptive-direct-tiled")
             if args.include_grouped_adaptive_fixed_pack:
                 candidates.append("grouped-adaptive-fixed-pack")
+            if args.include_grouped_adaptive_fixed_pack_inplace:
+                candidates.append("grouped-adaptive-fixed-pack-inplace")
             for candidate in candidates:
                 candidate_row = rows_by_path[candidate][
                     (prefix_length, batch_size)
@@ -564,6 +580,15 @@ def main() -> None:
             uniform_accum=True,
         )
         grouped_adaptive_fixed_pack_generation = greedy_generate_fixed_shape(
+            model, generation_prompt, 8, use_cuda_graph=True,
+        )
+    grouped_adaptive_fixed_pack_inplace_generation = None
+    if args.include_grouped_adaptive_fixed_pack_inplace:
+        set_dispatch_path(
+            children, False, "grouped-adaptive-fixed-pack-inplace",
+            uniform_accum=True,
+        )
+        grouped_adaptive_fixed_pack_inplace_generation = greedy_generate_fixed_shape(
             model, generation_prompt, 8, use_cuda_graph=True,
         )
     cached_grouped_generation = None
@@ -750,6 +775,14 @@ def main() -> None:
                     )
                 ),
             } if grouped_adaptive_fixed_pack_generation is not None else {}),
+            **({
+                "grouped_vs_grouped_adaptive_fixed_pack_inplace_exact_token_match": bool(
+                    torch.equal(
+                        grouped_generation,
+                        grouped_adaptive_fixed_pack_inplace_generation,
+                    )
+                ),
+            } if grouped_adaptive_fixed_pack_inplace_generation is not None else {}),
         },
     }
     print(json.dumps(result, indent=2))

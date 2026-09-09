@@ -877,6 +877,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         # grouped projection, removing the per-call low-rank correction pass.
         self.grouped_effective_output_weight: torch.Tensor | None = None
         self.grouped_uniform_accum = False
+        self.grouped_inplace_swiglu = False
         # Optional inference-only BMM layout probe.  The native buffers keep
         # Linear's [out, in] layout; grouped BMM consumes their transposes.
         # Caching contiguous transposes lets cuBLAS see the exact [E, in, out]
@@ -1032,6 +1033,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         atomic_pack: bool = False,
         finalize_output: bool = False,
         fixed_pack: bool = False,
+        inplace_swiglu: bool = False,
     ) -> torch.Tensor:
         flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
         flat_ids = top_ids.reshape(-1, self.active_experts)
@@ -1166,8 +1168,27 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                     grouped_gate_value = torch.bmm(
                         grouped_hidden, gate_value_weight,
                     )
-                    grouped_gate = F.silu(grouped_gate_value[..., :group_size])
-                    grouped_value = grouped_gate_value[..., group_size:]
+                    if inplace_swiglu:
+                        # The two halves are disjoint. Reuse the gate half for
+                        # SiLU and the product so the grouped path avoids two
+                        # intermediate allocations/kernels in inference.
+                        grouped_gate = F.silu(
+                            grouped_gate_value[..., :group_size], inplace=True,
+                        )
+                        grouped_gate.mul_(
+                            grouped_gate_value[..., group_size:]
+                        )
+                        grouped_output = torch.bmm(
+                            grouped_gate, output_weight,
+                        )
+                    else:
+                        grouped_gate = F.silu(
+                            grouped_gate_value[..., :group_size]
+                        )
+                        grouped_value = grouped_gate_value[..., group_size:]
+                        grouped_output = torch.bmm(
+                            grouped_gate * grouped_value, output_weight,
+                        )
                 else:
                     grouped_gate = F.silu(torch.bmm(
                         grouped_hidden, gate_weight,
@@ -1175,10 +1196,9 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                     grouped_value = torch.bmm(
                         grouped_hidden, value_weight,
                     )
-                grouped_output = torch.bmm(
-                    grouped_gate * grouped_value,
-                    output_weight,
-                )
+                    grouped_output = torch.bmm(
+                        grouped_gate * grouped_value, output_weight,
+                    )
         if finalize_output:
             if self.grouped_effective_output_weight is None:
                 raise RuntimeError(
@@ -1870,6 +1890,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 prepacked_weights=True,
                 fixed_pack=True,
                 finalize_output=True,
+                inplace_swiglu=self.grouped_inplace_swiglu,
             )
         if not self.training and self.dispatch_mode == "grouped-adaptive-direct-tiled":
             return self._forward_direct_tiled(hidden_states, top_ids, weights)

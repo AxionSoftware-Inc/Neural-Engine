@@ -1432,3 +1432,9 @@ Both seeds show about 7% B8 and 20% B32 speed improvement versus strict
 against a 0.001 limit. It is retained as explicit opt-in only; strict
 benchmarks remain at `highest`. See
 `RUNTIME_QWEN_MATMUL_HIGH_AUDIT_20260909.md`.
+
+V0.252 tests in-place reuse of the fused grouped SwiGLU gate buffer. Both
+seeds preserve numerical parity and exact generation, but the two-seed timing
+change versus fixed-pack is only -0.48%/+0.50%/+0.16% at B1/B8/B32. It is
+rejected as a material serving optimization. See
+`RUNTIME_QWEN_INPLACE_SWIGLU_AUDIT_20260909.md`.
