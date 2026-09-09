@@ -157,6 +157,16 @@ parity-safe on non-tied routes and improves the route stage to `0.636x/0.675x`
 at B1/B8, but child end-to-end is only `0.913x/1.024x`; B32 regresses to
 `1.014x`. Keep it opt-in and unchanged by default. This confirms router
 fusion is a bounded small-batch optimization, not the main dispatch solution.
+V0.221 applies the same idea to the real 56-way K=5 subset router; its
+non-trained probe reaches `0.358x/0.384x` route-stage time at B1/B8 with
+zero set mismatch. V0.222 repeats it on the accepted trained K=5 recipe:
+quality remains `+0.042135` CE, eager fused/PyTorch is `0.980x/1.020x`, and
+graph fused/PyTorch is `1.032x/1.011x` at B1/B8. An eight-token CUDA-Graph
+greedy generation also matches exactly. A current-stream bug found during
+graph replay was fixed and the rerun is parity-safe (`<=1.07e-5`
+fused-vs-PyTorch eager logit error). Keep it opt-in; graph serving sees no
+speed breakthrough, so selected FFN dispatch remains the active runtime
+target.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

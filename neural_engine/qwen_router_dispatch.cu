@@ -99,6 +99,69 @@ __global__ void router_kernel(
     }
 }
 
+__global__ void subset_router_kernel(
+    const float* __restrict__ hidden,
+    const float* __restrict__ first_weight,
+    const float* __restrict__ first_bias,
+    const float* __restrict__ second_weight,
+    const float* __restrict__ second_bias,
+    const float* __restrict__ subset_membership,
+    int64_t* __restrict__ selected_ids,
+    float* __restrict__ route_weights,
+    int64_t tokens,
+    int64_t hidden_size,
+    int64_t router_size,
+    int64_t subsets,
+    int64_t experts,
+    int64_t active) {
+    const int64_t token = static_cast<int64_t>(blockIdx.x);
+    if (token >= tokens) return;
+    extern __shared__ float shared[];
+    float* intermediate = shared;
+    float* scores = intermediate + router_size;
+    const float* hidden_row = hidden + token * hidden_size;
+    for (int64_t r = threadIdx.x; r < router_size; r += blockDim.x) {
+        float value = first_bias[r];
+        const float* weight_row = first_weight + r * hidden_size;
+        for (int64_t h = 0; h < hidden_size; ++h) {
+            value += hidden_row[h] * weight_row[h];
+        }
+        intermediate[r] = silu(value);
+    }
+    __syncthreads();
+    for (int64_t subset = threadIdx.x; subset < subsets; subset += blockDim.x) {
+        float value = second_bias[subset];
+        const float* weight_row = second_weight + subset * router_size;
+        for (int64_t r = 0; r < router_size; ++r) {
+            value += intermediate[r] * weight_row[r];
+        }
+        scores[subset] = value;
+    }
+    __syncthreads();
+    if (threadIdx.x == 0) {
+        float best_value = -FLT_MAX;
+        int64_t best_subset = 0;
+        for (int64_t subset = 0; subset < subsets; ++subset) {
+            if (scores[subset] > best_value) {
+                best_value = scores[subset];
+                best_subset = subset;
+            }
+        }
+        int64_t slot = 0;
+        for (int64_t expert = 0; expert < experts && slot < active; ++expert) {
+            if (subset_membership[best_subset * experts + expert] > 0.5f) {
+                selected_ids[token * active + slot] = expert;
+                route_weights[token * active + slot] = 1.0f / static_cast<float>(active);
+                ++slot;
+            }
+        }
+        for (; slot < active; ++slot) {
+            selected_ids[token * active + slot] = 0;
+            route_weights[token * active + slot] = 1.0f / static_cast<float>(active);
+        }
+    }
+}
+
 }  // namespace
 
 std::tuple<torch::Tensor, torch::Tensor> qwen_router_dispatch_cuda(
@@ -142,13 +205,64 @@ std::tuple<torch::Tensor, torch::Tensor> qwen_router_dispatch_cuda(
     const int64_t aligned_active = (active_experts + 1) & ~static_cast<int64_t>(1);
     const size_t shared_bytes = static_cast<size_t>(router_size + experts + aligned_active)
         * sizeof(float) + static_cast<size_t>(active_experts) * sizeof(int64_t);
-    const auto stream = at::cuda::getDefaultCUDAStream();
+    const auto stream = at::cuda::getCurrentCUDAStream();
     router_kernel<<<static_cast<unsigned int>(tokens), threads, shared_bytes, stream>>>(
         hidden.data_ptr<float>(), first_weight.data_ptr<float>(),
         first_bias.data_ptr<float>(), second_weight.data_ptr<float>(),
         second_bias.data_ptr<float>(), selected_ids.data_ptr<int64_t>(),
         route_weights.data_ptr<float>(), tokens, hidden_size, router_size,
         experts, active_experts, static_cast<float>(temperature)
+    );
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+    return std::make_tuple(selected_ids, route_weights);
+}
+
+std::tuple<torch::Tensor, torch::Tensor> qwen_subset_router_dispatch_cuda(
+    torch::Tensor hidden,
+    torch::Tensor first_weight,
+    torch::Tensor first_bias,
+    torch::Tensor second_weight,
+    torch::Tensor second_bias,
+    torch::Tensor subset_membership,
+    int64_t active_experts) {
+    TORCH_CHECK(hidden.scalar_type() == torch::kFloat32, "hidden must be float32");
+    TORCH_CHECK(first_weight.scalar_type() == torch::kFloat32, "first weight must be float32");
+    TORCH_CHECK(first_bias.scalar_type() == torch::kFloat32, "first bias must be float32");
+    TORCH_CHECK(second_weight.scalar_type() == torch::kFloat32, "second weight must be float32");
+    TORCH_CHECK(second_bias.scalar_type() == torch::kFloat32, "second bias must be float32");
+    TORCH_CHECK(subset_membership.scalar_type() == torch::kFloat32, "subset membership must be float32");
+    TORCH_CHECK(hidden.dim() == 2, "hidden must be [tokens, hidden]");
+    TORCH_CHECK(first_weight.dim() == 2 && first_bias.dim() == 1, "invalid first projection");
+    TORCH_CHECK(second_weight.dim() == 2 && second_bias.dim() == 1, "invalid second projection");
+    TORCH_CHECK(subset_membership.dim() == 2, "subset membership must be [subsets, experts]");
+    const int64_t tokens = hidden.size(0);
+    const int64_t hidden_size = hidden.size(1);
+    const int64_t router_size = first_weight.size(0);
+    const int64_t subsets = second_weight.size(0);
+    const int64_t experts = subset_membership.size(1);
+    TORCH_CHECK(first_weight.size(1) == hidden_size, "first hidden mismatch");
+    TORCH_CHECK(first_bias.size(0) == router_size, "first bias mismatch");
+    TORCH_CHECK(second_weight.size(1) == router_size, "second router mismatch");
+    TORCH_CHECK(second_bias.size(0) == subsets, "second bias mismatch");
+    TORCH_CHECK(subset_membership.size(0) == subsets, "subset count mismatch");
+    TORCH_CHECK(active_experts >= 1 && active_experts <= experts, "invalid active count");
+    TORCH_CHECK(tokens <= 65535, "token count exceeds fixed one-token launch bound");
+    auto selected_ids = torch::empty(
+        {tokens, active_experts}, hidden.options().dtype(torch::kInt64)
+    );
+    auto route_weights = torch::empty({tokens, active_experts}, hidden.options());
+    if (tokens == 0) {
+        return std::make_tuple(selected_ids, route_weights);
+    }
+    const int threads = 256;
+    const size_t shared_bytes = static_cast<size_t>(router_size + subsets) * sizeof(float);
+    const auto stream = at::cuda::getCurrentCUDAStream();
+    subset_router_kernel<<<static_cast<unsigned int>(tokens), threads, shared_bytes, stream>>>(
+        hidden.data_ptr<float>(), first_weight.data_ptr<float>(),
+        first_bias.data_ptr<float>(), second_weight.data_ptr<float>(),
+        second_bias.data_ptr<float>(), subset_membership.data_ptr<float>(),
+        selected_ids.data_ptr<int64_t>(), route_weights.data_ptr<float>(),
+        tokens, hidden_size, router_size, subsets, experts, active_experts
     );
     C10_CUDA_KERNEL_LAUNCH_CHECK();
     return std::make_tuple(selected_ids, route_weights);

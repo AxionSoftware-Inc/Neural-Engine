@@ -929,27 +929,49 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         """Optionally fuse the standard router and hard top-k for decode."""
         if (
             self.training
-            or self.route_source != "router"
-            or self.single_token_router_backend != "cuda-fused"
             or hidden_states.shape[-2] != 1
             or hidden_states.device.type != "cuda"
             or hidden_states.dtype != torch.float32
         ):
             return None
-        if not isinstance(self.router, torch.nn.Sequential) or len(self.router) != 3:
+        if self.route_source == "router":
+            if self.single_token_router_backend != "cuda-fused":
+                return None
+            router = self.router
+        elif self.route_source == "subset-router":
+            if self.single_token_router_backend != "cuda-fused-subset":
+                return None
+            router = self.subset_router
+        else:
+            return None
+        if not isinstance(router, torch.nn.Sequential) or len(router) != 3:
             raise ValueError("cuda-fused router requires Linear-SiLU-Linear")
-        from neural_engine.qwen_router_dispatch import fused_router
 
         flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1]).contiguous()
-        top_ids, weights = fused_router(
-            flat_hidden,
-            self.router[0].weight,
-            self.router[0].bias,
-            self.router[2].weight,
-            self.router[2].bias,
-            self.active_experts,
-            self.temperature,
-        )
+        if self.route_source == "router":
+            from neural_engine.qwen_router_dispatch import fused_router
+
+            top_ids, weights = fused_router(
+                flat_hidden,
+                router[0].weight,
+                router[0].bias,
+                router[2].weight,
+                router[2].bias,
+                self.active_experts,
+                self.temperature,
+            )
+        else:
+            from neural_engine.qwen_router_dispatch import fused_subset_router
+
+            top_ids, weights = fused_subset_router(
+                flat_hidden,
+                router[0].weight,
+                router[0].bias,
+                router[2].weight,
+                router[2].bias,
+                self.subset_membership,
+                self.active_experts,
+            )
         return (
             top_ids.reshape(*hidden_states.shape[:-1], self.active_experts),
             weights.reshape(*hidden_states.shape[:-1], self.active_experts),
@@ -1361,48 +1383,50 @@ class TransferredRoutedQwenChild(torch.nn.Module):
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         soft_output = None
         hard_blend = 1.0
-        fused_route = None
+        fused_route = self._single_token_route(hidden_states)
         if self.route_source in {
             "subset-router", "oracle-subset", "pairwise-cost-router",
         }:
-            subset_scores = self._subset_scores(hidden_states)
-            if self.training:
-                hard_blend = float(self.hard_train_blend)
-            if self.training and (not self.hard_train or hard_blend < 1.0):
-                scores = subset_scores @ self.subset_membership
-                outputs = torch.stack([
-                    expert(hidden_states) for expert in self.experts
-                ], dim=-2)
-                weights = F.softmax(scores / self.temperature, dim=-1)
-                soft_output = self.num_experts * (
-                    outputs * weights.unsqueeze(-1)
-                ).sum(dim=-2)
-                if not self.hard_train or hard_blend <= 0.0:
-                    self.last_selected = scores.detach().argmax(dim=-1)
-                    self.last_route_weights = weights
-                    self.last_all_outputs = outputs
-                    self.last_selected_outputs = None
-                    self.last_active_expert_fraction = 1.0
-                    return soft_output
-                # Continue below with the hard top-k path and blend its
-                # output with the soft operator during the transition.
-                hard_scores = subset_scores.argmax(dim=-1)
-                selected_membership = self.subset_membership[hard_scores]
-                scores = torch.where(
-                    selected_membership.bool(),
-                    torch.ones_like(selected_membership),
-                    -torch.ones_like(selected_membership),
-                )
+            if fused_route is None:
+                subset_scores = self._subset_scores(hidden_states)
+                if self.training:
+                    hard_blend = float(self.hard_train_blend)
+                if self.training and (not self.hard_train or hard_blend < 1.0):
+                    scores = subset_scores @ self.subset_membership
+                    outputs = torch.stack([
+                        expert(hidden_states) for expert in self.experts
+                    ], dim=-2)
+                    weights = F.softmax(scores / self.temperature, dim=-1)
+                    soft_output = self.num_experts * (
+                        outputs * weights.unsqueeze(-1)
+                    ).sum(dim=-2)
+                    if not self.hard_train or hard_blend <= 0.0:
+                        self.last_selected = scores.detach().argmax(dim=-1)
+                        self.last_route_weights = weights
+                        self.last_all_outputs = outputs
+                        self.last_selected_outputs = None
+                        self.last_active_expert_fraction = 1.0
+                        return soft_output
+                    # Continue below with the hard top-k path and blend its
+                    # output with the soft operator during the transition.
+                    hard_scores = subset_scores.argmax(dim=-1)
+                    selected_membership = self.subset_membership[hard_scores]
+                    scores = torch.where(
+                        selected_membership.bool(),
+                        torch.ones_like(selected_membership),
+                        -torch.ones_like(selected_membership),
+                    )
+                else:
+                    best_subset = subset_scores.argmax(dim=-1)
+                    selected_membership = self.subset_membership[best_subset]
+                    scores = torch.where(
+                        selected_membership.bool(),
+                        torch.ones_like(selected_membership),
+                        -torch.ones_like(selected_membership),
+                    )
             else:
-                best_subset = subset_scores.argmax(dim=-1)
-                selected_membership = self.subset_membership[best_subset]
-                scores = torch.where(
-                    selected_membership.bool(),
-                    torch.ones_like(selected_membership),
-                    -torch.ones_like(selected_membership),
-                )
+                scores = None
         else:
-            fused_route = self._single_token_route(hidden_states)
             scores = None if fused_route is not None else self.router(hidden_states)
         oracle_outputs = None
         if not self.training and self.route_source in {

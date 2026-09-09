@@ -722,6 +722,17 @@ UNCHANGED**. Tied fresh routerlar uchun PyTorch GPU top-k tartibi aniq route
 contract sifatida belgilanmagani sabab custom kernel faqat auditdan o‘tgan
 trained/non-tied routerda ishlatiladi.
 **Batafsil:** `results/RUNTIME_QWEN_FUSED_ROUTER_AUDIT_20260909.md`.
+**V0.222 trained fused subset-router (2026-09-09):** real accepted K=5
+`subset-router` va 56 subset bilan `300/300/100`, rank64 seed2026 qayta
+tekshirildi. Sifat `+0.042135` CE delta bo‘lib gate ichida qoldi. Fused subset
+route eager B1/B8’da `0.980x/1.020x`, graphda `1.032x/1.011x`; fused-vs-Torch
+eager max logit farqi `5.72e-6/1.07e-5`. Dastlab current-stream xatosi graphda
+invalid ID chiqardi, `getCurrentCUDAStream()` tuzatuvidan keyin graph parity
+`6.20e-6/1.10e-5` bilan o‘tdi. 8-token CUDA-Graph generation exact token
+match berdi. **PARITY-SAFE OPT-IN, DEFAULT UNCHANGED**; router fusion umumiy
+graph serving sakrashi bermadi, selected FFN dispatch asosiy keyingi target
+bo‘lib qoldi.
+**Batafsil:** `results/RUNTIME_QWEN_FUSED_SUBSET_ROUTER_TRAINED_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 

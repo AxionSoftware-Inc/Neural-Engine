@@ -79,3 +79,47 @@ def fused_router(
     return _extension().forward(
         *tensors, int(active_experts), float(temperature),
     )
+
+
+def fused_subset_router(
+    hidden_states: torch.Tensor,
+    first_weight: torch.Tensor,
+    first_bias: torch.Tensor,
+    second_weight: torch.Tensor,
+    second_bias: torch.Tensor,
+    subset_membership: torch.Tensor,
+    active_experts: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return the hard best-subset route for the trained Qwen K-subset path."""
+    tensors = (
+        hidden_states, first_weight, first_bias, second_weight, second_bias,
+        subset_membership,
+    )
+    if any(tensor.device.type != "cuda" for tensor in tensors):
+        raise ValueError("fused subset router requires CUDA tensors")
+    if any(tensor.dtype != torch.float32 for tensor in tensors):
+        raise ValueError("fused subset router currently supports float32 tensors")
+    if hidden_states.dim() != 2:
+        raise ValueError("hidden states must be [tokens, hidden]")
+    if first_weight.dim() != 2 or first_bias.dim() != 1:
+        raise ValueError("first router projection must be [router, hidden]")
+    if second_weight.dim() != 2 or second_bias.dim() != 1:
+        raise ValueError("second router projection must be [subsets, router]")
+    if subset_membership.dim() != 2:
+        raise ValueError("subset membership must be [subsets, experts]")
+    if first_weight.shape[1] != hidden_states.shape[1]:
+        raise ValueError("router hidden dimension mismatch")
+    if first_bias.shape[0] != first_weight.shape[0]:
+        raise ValueError("first router bias dimension mismatch")
+    if second_weight.shape[1] != first_weight.shape[0]:
+        raise ValueError("second router intermediate dimension mismatch")
+    if second_bias.shape[0] != second_weight.shape[0]:
+        raise ValueError("second router bias dimension mismatch")
+    if subset_membership.shape[0] != second_weight.shape[0]:
+        raise ValueError("subset count mismatch")
+    if not 1 <= active_experts <= subset_membership.shape[1]:
+        raise ValueError("active_experts must be within the expert count")
+    tensors = tuple(tensor.contiguous() for tensor in tensors)
+    return _extension().forward_subset(
+        *tensors, int(active_experts),
+    )

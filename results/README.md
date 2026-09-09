@@ -23,6 +23,8 @@
 - [Runtime — Qwen one-token router overhead ablation](RUNTIME_QWEN_ROUTER_OVERHEAD_20260908.md)
 - [Runtime — Qwen router/top-k stage profile](RUNTIME_QWEN_ROUTER_TOPK_DISPATCH_PROFILE_20260909.md)
 - [Runtime — Qwen fused router audit](RUNTIME_QWEN_FUSED_ROUTER_AUDIT_20260909.md)
+- [Runtime — Qwen fused subset-router audit](RUNTIME_QWEN_FUSED_SUBSET_ROUTER_AUDIT_20260909.md)
+- [Runtime — Qwen trained fused subset-router audit](RUNTIME_QWEN_FUSED_SUBSET_ROUTER_TRAINED_AUDIT_20260909.md)
 - [Runtime — Qwen fixed-shape CUDA Graph replay](RUNTIME_QWEN_CUDA_GRAPH.md)
 - [Runtime — Qwen custom fixed-KV CUDA Graph decode](RUNTIME_QWEN_CUSTOM_KV_CUDA_GRAPH.md)
 - [Runtime — Qwen trained custom fixed-KV Graph audit](RUNTIME_QWEN_TRAINED_CUSTOM_KV_GRAPH_AUDIT_20260909.md)
