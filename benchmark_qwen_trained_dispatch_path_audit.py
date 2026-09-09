@@ -108,6 +108,10 @@ def main() -> None:
         "--include-grouped-optimized", action="store_true",
         help="include the combined cached/prepacked/fused grouped path",
     )
+    parser.add_argument(
+        "--include-grouped-adaptive", action="store_true",
+        help="include the shape-aware grouped path (plain B1, optimized B>1)",
+    )
     parser.add_argument("--output")
     args = parser.parse_args()
     if not torch.cuda.is_available():
@@ -214,6 +218,10 @@ def main() -> None:
         path_specs.append((
             "grouped-optimized", False, "grouped-optimized", True, True,
         ))
+    if args.include_grouped_adaptive:
+        path_specs.append((
+            "grouped-adaptive", False, "grouped-adaptive", True, True,
+        ))
     for path_spec in path_specs:
         if len(path_spec) == 3:
             path_name, single_token, dispatch_mode = path_spec
@@ -303,6 +311,8 @@ def main() -> None:
                 candidates.append("grouped-tiled")
             if args.include_grouped_optimized:
                 candidates.append("grouped-optimized")
+            if args.include_grouped_adaptive:
+                candidates.append("grouped-adaptive")
             for candidate in candidates:
                 candidate_row = rows_by_path[candidate][
                     (prefix_length, batch_size)
@@ -369,6 +379,15 @@ def main() -> None:
             fused_correction=True, uniform_accum=True,
         )
         grouped_optimized_generation = greedy_generate_fixed_shape(
+            model, generation_prompt, 8, use_cuda_graph=True,
+        )
+    grouped_adaptive_generation = None
+    if args.include_grouped_adaptive:
+        set_dispatch_path(
+            children, False, "grouped-adaptive",
+            fused_correction=True, uniform_accum=True,
+        )
+        grouped_adaptive_generation = greedy_generate_fixed_shape(
             model, generation_prompt, 8, use_cuda_graph=True,
         )
     cached_grouped_generation = None
@@ -466,6 +485,13 @@ def main() -> None:
                     )
                 ),
             } if grouped_optimized_generation is not None else {}),
+            **({
+                "grouped_vs_grouped_adaptive_exact_token_match": bool(
+                    torch.equal(
+                        grouped_generation, grouped_adaptive_generation,
+                    )
+                ),
+            } if grouped_adaptive_generation is not None else {}),
         },
     }
     print(json.dumps(result, indent=2))

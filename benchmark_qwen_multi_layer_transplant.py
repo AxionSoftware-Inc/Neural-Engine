@@ -637,14 +637,14 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         if dispatch_mode not in {
             "grouped", "grouped-cached", "grouped-prepacked",
             "grouped-prepacked-fused", "grouped-fused",
-            "grouped-tiled", "grouped-optimized",
+            "grouped-tiled", "grouped-optimized", "grouped-adaptive",
             "packed", "packed-fused", "packed-fp16",
             "fused", "token-loop",
         }:
             raise ValueError(
                 "transferred sparse child supports grouped, grouped-cached, grouped-prepacked, "
                 "grouped-prepacked-fused, grouped-fused, grouped-tiled, "
-                "grouped-optimized, packed, "
+                "grouped-optimized, grouped-adaptive, packed, "
                 "packed-fused, packed-fp16, fused, or token-loop"
             )
         self.dispatch_mode = dispatch_mode
@@ -1667,6 +1667,18 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 cache_pair_metadata=True,
                 prepacked_weights=True,
             )
+        if not self.training and self.dispatch_mode == "grouped-adaptive":
+            # Decode B=1 is launch/metadata bound; the extra cached layouts
+            # only pay off once several rows can share the grouped work.
+            use_optimized = (
+                hidden_states.reshape(-1, hidden_states.shape[-1]).shape[0] > 1
+            )
+            return self._forward_grouped(
+                hidden_states, top_ids, weights,
+                fused_projections=use_optimized,
+                cache_pair_metadata=use_optimized,
+                prepacked_weights=use_optimized,
+            )
         if not self.training and self.dispatch_mode in {
             "grouped-fused", "grouped-prepacked-fused",
         }:
@@ -2186,6 +2198,7 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
                 "grouped", "grouped-fused", "grouped-cached",
                 "grouped-prepacked", "grouped-prepacked-fused",
                 "grouped-tiled", "grouped-optimized",
+                "grouped-adaptive",
             }
             and not self.base.single_token_fast_path
         )

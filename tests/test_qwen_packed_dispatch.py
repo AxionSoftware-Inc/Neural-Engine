@@ -110,6 +110,26 @@ def test_grouped_optimized_dispatch_matches_grouped_fused() -> None:
     assert child._grouped_prepacked_weights is not None
 
 
+def test_grouped_adaptive_dispatch_matches_shape_specific_paths() -> None:
+    torch.manual_seed(2040)
+    child = TransferredRoutedQwenChild(
+        TinyQwenMlp(), 4, 2, 1.0, "grouped-adaptive", "contiguous",
+        "router", 2.0,
+    ).eval()
+    one = torch.randn(1, 1, 8)
+    many = torch.randn(3, 5, 8)
+    child.dispatch_mode = "grouped"
+    one_reference = child(one)
+    child.dispatch_mode = "grouped-adaptive"
+    one_adaptive = child(one)
+    assert torch.allclose(one_reference, one_adaptive, atol=1e-6, rtol=1e-6)
+    child.dispatch_mode = "grouped-fused"
+    many_reference = child(many)
+    child.dispatch_mode = "grouped-adaptive"
+    many_adaptive = child(many)
+    assert torch.allclose(many_reference, many_adaptive, atol=1e-6, rtol=1e-6)
+
+
 def test_grouped_cached_metadata_matches_grouped() -> None:
     torch.manual_seed(2026)
     child = TransferredRoutedQwenChild(
