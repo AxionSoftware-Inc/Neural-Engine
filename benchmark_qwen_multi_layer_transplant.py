@@ -639,7 +639,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             "grouped", "grouped-cached", "grouped-prepacked",
             "grouped-prepacked-fused", "grouped-fused",
             "grouped-tiled", "grouped-optimized", "grouped-adaptive",
-            "grouped-adaptive-nozero",
+            "grouped-adaptive-nozero", "grouped-adaptive-effective-output",
             "packed", "packed-fused", "packed-fp16",
             "fused", "token-loop",
         }:
@@ -647,7 +647,8 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 "transferred sparse child supports grouped, grouped-cached, grouped-prepacked, "
                 "grouped-prepacked-fused, grouped-fused, grouped-tiled, "
                 "grouped-optimized, grouped-adaptive, grouped-adaptive-nozero, "
-                "packed, packed-fused, packed-fp16, fused, or token-loop"
+                "grouped-adaptive-effective-output, packed, packed-fused, "
+                "packed-fp16, fused, or token-loop"
             )
         self.dispatch_mode = dispatch_mode
         chunk = inner_size // num_experts
@@ -862,6 +863,10 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self.grouped_fused_correction: tuple[
             torch.Tensor, torch.Tensor,
         ] | None = None
+        # Optional inference-only effective output projection. A correction
+        # of the form W_out + mix_out @ mix_in @ W_out can be folded into the
+        # grouped projection, removing the per-call low-rank correction pass.
+        self.grouped_effective_output_weight: torch.Tensor | None = None
         self.grouped_uniform_accum = False
         # Optional inference-only BMM layout probe.  The native buffers keep
         # Linear's [out, in] layout; grouped BMM consumes their transposes.
@@ -1106,7 +1111,11 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             else:
                 gate_weight = self.group_gate_weight.transpose(1, 2)
                 value_weight = self.group_value_weight.transpose(1, 2)
-                output_weight = self.group_output_weight.transpose(1, 2)
+                output_weight = (
+                    self.grouped_effective_output_weight
+                    if self.grouped_effective_output_weight is not None
+                    else self.group_output_weight
+                ).transpose(1, 2)
                 gate_value_weight = self.group_gate_value_weight.transpose(1, 2)
             if not tiled_projections:
                 if fused_projections:
@@ -1134,7 +1143,13 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             sorted_token_ids = token_ids[sort_order]
             sorted_slots = slots[sort_order]
             fused_correction = self.grouped_fused_correction
-            if fused_correction is None:
+            if self.grouped_effective_output_weight is not None:
+                # The effective output projection already includes the exact
+                # per-expert low-rank correction. Accumulation can consume the
+                # expert-major selected rows directly; no pair reorder or
+                # second correction contraction is needed.
+                self.last_selected_outputs = None
+            elif fused_correction is None:
                 selected_by_pair = torch.empty_like(selected_output)
                 pair_slots = sorted_token_ids * self.active_experts + sorted_slots
                 selected_by_pair.index_copy_(0, pair_slots, selected_output)
@@ -1189,17 +1204,25 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Return contiguous BMM operands for the opt-in grouped probe."""
+        output_weight = (
+            self.grouped_effective_output_weight
+            if self.grouped_effective_output_weight is not None
+            else self.group_output_weight
+        )
         weights = (
             self.group_gate_weight,
             self.group_value_weight,
-            self.group_output_weight,
+            output_weight,
             self.group_gate_value_weight,
         )
         key = tuple(
             item
             for weight in weights
             for item in (
-                weight.device, weight.dtype, weight._version,
+                weight.device,
+                weight.dtype,
+                id(weight),
+                None if weight.is_inference() else weight._version,
             )
         )
         if (
@@ -1680,6 +1703,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             )
         if not self.training and self.dispatch_mode in {
             "grouped-adaptive", "grouped-adaptive-nozero",
+            "grouped-adaptive-effective-output",
         }:
             # Decode B=1 is launch/metadata bound; the extra cached layouts
             # only pay off once several rows can share the grouped work.
@@ -2179,7 +2203,7 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
         ):
             with torch.no_grad():
                 correction_weight = torch.einsum(
-                    "ehr,erh,ehg->ehg",
+                    "eor,eri,eig->eog",
                     self.mix_out,
                     self.mix_in,
                     output_weight,
@@ -2213,7 +2237,15 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
                 "grouped-prepacked", "grouped-prepacked-fused",
                 "grouped-tiled", "grouped-optimized",
                 "grouped-adaptive", "grouped-adaptive-nozero",
+                "grouped-adaptive-effective-output",
             }
+            and not self.base.single_token_fast_path
+        )
+        use_grouped_effective_output = (
+            self.correction_dispatch_backend == "grouped-effective-output"
+            and not self.replace_base_output
+            and not self.base.training
+            and self.base.dispatch_mode == "grouped-adaptive-effective-output"
             and not self.base.single_token_fast_path
         )
         if use_fused_output:
@@ -2225,6 +2257,9 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
                 self.mix_in, self.mix_out, self.correction_dispatch_backend
             ) if use_fused_full else None
         )
+        self.base.grouped_effective_output_weight = (
+            self._fused_output_weight() if use_grouped_effective_output else None
+        )
         self.base.grouped_fused_correction = (
             (self.mix_in, self.mix_out) if use_grouped_fused_correction else None
         )
@@ -2233,7 +2268,12 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
         selected = self.base.last_selected
         if route_weights is None or selected is None:
             raise RuntimeError("base route state was not populated")
-        if use_fused_output or use_fused_full or use_grouped_fused_correction:
+        if (
+            use_fused_output
+            or use_fused_full
+            or use_grouped_fused_correction
+            or use_grouped_effective_output
+        ):
             return base_output
         if self.base.training and not self.base.hard_train:
             all_outputs = self.base.last_all_outputs

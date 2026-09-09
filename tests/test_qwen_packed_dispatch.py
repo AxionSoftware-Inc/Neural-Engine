@@ -170,11 +170,35 @@ def test_grouped_correction_fusion_matches_vectorized_correction() -> None:
         "router", 2.0,
     )
     child = CrossGroupOutputMixRoutedQwenChild(base, 3).eval()
+    with torch.no_grad():
+        child.mix_in.normal_(0.0, 0.05)
+        child.mix_out.normal_(0.0, 0.05)
     inputs = torch.randn(3, 5, 8)
     child.correction_dispatch_backend = "vectorized"
     expected = child(inputs)
     child.correction_dispatch_backend = "grouped-fused-correction"
     actual = child(inputs)
+    assert torch.allclose(expected, actual, atol=1e-6, rtol=1e-6)
+    assert base.last_selected_outputs is None
+
+
+def test_grouped_effective_output_matches_vectorized_correction() -> None:
+    torch.manual_seed(2042)
+    base = TransferredRoutedQwenChild(
+        TinyQwenMlp(), 4, 2, 1.0,
+        "grouped-adaptive-effective-output", "contiguous",
+        "router", 2.0,
+    )
+    child = CrossGroupOutputMixRoutedQwenChild(base, 3).eval()
+    with torch.no_grad():
+        child.mix_in.normal_(0.0, 0.05)
+        child.mix_out.normal_(0.0, 0.05)
+    inputs = torch.randn(3, 5, 8)
+    with torch.inference_mode():
+        child.correction_dispatch_backend = "vectorized"
+        expected = child(inputs)
+        child.correction_dispatch_backend = "grouped-effective-output"
+        actual = child(inputs)
     assert torch.allclose(expected, actual, atol=1e-6, rtol=1e-6)
     assert base.last_selected_outputs is None
 

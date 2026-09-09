@@ -40,9 +40,12 @@ def set_dispatch_path(
         base.grouped_uniform_accum = bool(uniform_accum)
         for nested in child.modules():
             if isinstance(nested, CrossGroupOutputMixRoutedQwenChild):
-                nested.correction_dispatch_backend = (
-                    "grouped-fused-correction" if fused_correction else "vectorized"
-                )
+                if dispatch_mode == "grouped-adaptive-effective-output":
+                    nested.correction_dispatch_backend = "grouped-effective-output"
+                else:
+                    nested.correction_dispatch_backend = (
+                        "grouped-fused-correction" if fused_correction else "vectorized"
+                    )
 
 
 def install_children(model, layers, children) -> None:
@@ -115,6 +118,10 @@ def main() -> None:
     parser.add_argument(
         "--include-grouped-adaptive-nozero", action="store_true",
         help="include adaptive grouped dispatch without zero-filling padded rows",
+    )
+    parser.add_argument(
+        "--include-grouped-adaptive-effective-output", action="store_true",
+        help="include adaptive grouped dispatch with folded low-rank correction",
     )
     parser.add_argument("--output")
     args = parser.parse_args()
@@ -230,6 +237,11 @@ def main() -> None:
         path_specs.append((
             "grouped-adaptive-nozero", False, "grouped-adaptive-nozero", True, True,
         ))
+    if args.include_grouped_adaptive_effective_output:
+        path_specs.append((
+            "grouped-adaptive-effective-output", False,
+            "grouped-adaptive-effective-output", False, True,
+        ))
     for path_spec in path_specs:
         if len(path_spec) == 3:
             path_name, single_token, dispatch_mode = path_spec
@@ -323,6 +335,8 @@ def main() -> None:
                 candidates.append("grouped-adaptive")
             if args.include_grouped_adaptive_nozero:
                 candidates.append("grouped-adaptive-nozero")
+            if args.include_grouped_adaptive_effective_output:
+                candidates.append("grouped-adaptive-effective-output")
             for candidate in candidates:
                 candidate_row = rows_by_path[candidate][
                     (prefix_length, batch_size)
@@ -407,6 +421,15 @@ def main() -> None:
             fused_correction=True, uniform_accum=True,
         )
         grouped_adaptive_nozero_generation = greedy_generate_fixed_shape(
+            model, generation_prompt, 8, use_cuda_graph=True,
+        )
+    grouped_adaptive_effective_output_generation = None
+    if args.include_grouped_adaptive_effective_output:
+        set_dispatch_path(
+            children, False, "grouped-adaptive-effective-output",
+            uniform_accum=True,
+        )
+        grouped_adaptive_effective_output_generation = greedy_generate_fixed_shape(
             model, generation_prompt, 8, use_cuda_graph=True,
         )
     cached_grouped_generation = None
@@ -518,6 +541,14 @@ def main() -> None:
                     )
                 ),
             } if grouped_adaptive_nozero_generation is not None else {}),
+            **({
+                "grouped_vs_grouped_adaptive_effective_output_exact_token_match": bool(
+                    torch.equal(
+                        grouped_generation,
+                        grouped_adaptive_effective_output_generation,
+                    )
+                ),
+            } if grouped_adaptive_effective_output_generation is not None else {}),
         },
     }
     print(json.dumps(result, indent=2))
