@@ -213,7 +213,8 @@ def test_factorized_native_engine_uses_virtual_bank_and_reusable_routes():
                            candidate_pool=4, active_circuits=2, internal_steps=2,
                            circuit_bank_mode="factorized", router_variant="factorized",
                            factor_count=4, factor_candidate_pool=2,
-                           factor_pair_rank=2)
+                           factor_pair_rank=2, factor_product_scale=0.5,
+                           address_residual_rank=2)
     batch = SyntheticTaskGenerator(seed=151).batch(4)
     logits, stats = model(batch.inputs)
     torch.nn.functional.cross_entropy(logits, batch.targets).backward()
@@ -223,6 +224,7 @@ def test_factorized_native_engine_uses_virtual_bank_and_reusable_routes():
     assert int(stats["selected_ids"].max()) < 16
     assert model.circuits.down_factors.grad is not None
     assert model.circuits.pair_codes.grad is not None
+    assert model.circuits.address_residual_down.grad is not None
     report = model.parameter_report()
     assert report["circuit_bank_mode"] == "factorized"
     assert report["active_circuit_params"] > 0
@@ -238,6 +240,23 @@ def test_factorized_bank_can_be_screened_with_the_existing_global_router():
     logits, stats = model(batch.inputs)
     assert logits.shape == (4, 64)
     assert stats["selected_ids"].shape == (4, 2, 2)
+
+
+def test_factorized_native_engine_supports_ordered_factor_slots():
+    model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
+                           num_circuits=16, circuit_rank=4, router_branch=2, router_depth=2,
+                           candidate_pool=4, active_circuits=2, internal_steps=2,
+                           circuit_bank_mode="factorized", router_variant="global",
+                           factor_count=4, ordered_factor_slots=True,
+                           factor_composition_mode="serial")
+    batch = SyntheticTaskGenerator(seed=153).batch(4)
+    logits, stats = model(batch.inputs)
+    assert logits.shape == (4, 64)
+    assert stats["selected_ids"].shape == (4, 2, 2)
+    assert tuple(model.circuits.down_factors.shape[:2]) == (2, 4)
+    assert model.circuits.factor_composition_mode == "serial"
+    report = model.parameter_report()
+    assert report["active_circuit_params"] == 4 * (32 * 4 + 4 * 32 + 32) + 4
     assert model.parameter_report()["circuit_bank_mode"] == "factorized"
 
 

@@ -1234,6 +1234,93 @@ expansion qilinmaydi.
 
 **Scale audit:** `results/P003_NATIVE_FACTORIZED_GLOBAL_SCALE_AUDIT_20260910.md`.
 
+300M virtual address count fixed holda factor row’larni `151→256` oshirish
+ham sinab ko‘rildi: mean accuracy `59.232%→58.320%` tushdi, CE esa faqat
+`1.41985→1.41663` yaxshilandi. Bu hard-quality gate’dan o‘tmaydi; 151 row’li
+300M factorized-global variant saqlanadi, 256 row’li variant rad qilindi.
+
+Address residual gipotezasi ham tekshirildi: 300M factorized-global bankka har
+bir virtual address uchun rank-2 kichik residual MLP qo‘shildi. Ikki seed,
+1,000 qadamlik screen’da mean accuracy `58.828%` bo‘lib baseline
+`59.232%`dan `−0.404 pp` pastladi; mean CE `1.42390` bo‘lib baseline
+`1.41985`dan yomonlashdi. Total params `12.58M→56.36M`, VRAM `733→1,413 MB`
+va vaqt `48.06→67.83s` oshdi. Barcha `151/151` factor row ishlatilganiga
+qaramay quality yaxshilanmadi. Shuning uchun per-address residual
+**capacity/sifat yechimi sifatida rad qilindi**; opt-in API testlangan holda
+saqlandi. Bu natija muammoni faqat yangi mustaqil address-parametrlar bilan
+to‘ldirish emas, balki shared address-conditioned signal yoki assignment/
+distillation kerakligini ko‘rsatadi.
+
+**Address-residual audit:** `results/P003_NATIVE_FACTORIZED_ADDRESS_RESIDUAL_AUDIT_20260910.md`.
+
+Global router bilan shared rank-4 pair-basis ham 300M bankda 3,000 qadamga
+uzaytirib tekshirildi. Mean accuracy `68.125%` bo‘lib plain global baseline
+`68.242%`dan `−0.117 pp` past; mean CE `0.99293` bilan `0.99648`dan biroz
+yaxshi, lekin training vaqti `142.74→162.66s` oshdi. 1,000 qadam screen’da
+hard accuracy farqi `−0.313 pp` edi. Shuning uchun pair-basis ham sifat yoki
+sig‘im yechimi sifatida rad qilindi, opt-in component saqlandi. Keyingi sinov
+factor jadvalidagi first/second slot simmetriyasini alohida reusable jadvallar
+bilan yo‘qotadi.
+
+**Global pair audit:** `results/P003_NATIVE_FACTORIZED_GLOBAL_PAIR_AUDIT_20260910.md`.
+
+Factor bankdagi first/second slot simmetriyasini olib tashlash uchun ikki
+alohida reusable jadval (`ordered_factor_slots=true`) sinab ko‘rildi. 300M,
+3,000 qadam, ikki seedda mean accuracy `68.451%` bo‘lib shared-slot global
+baseline `68.242%`dan `+0.208 pp` yuqori; mean CE `0.98753` bo‘lib
+`0.99648`dan yaxshi chiqdi. Ikkala seed ham accuracy bo‘yicha baseline’dan
+yuqori. Parametr `12.58M→14.49M`, vaqt `142.74→146.89s`, VRAM `733→754 MB`
+oshdi; factor row exposure `151/151` bo‘lib qoldi. Bu hozirgi eng kuchli
+reusable representation candidate, lekin virtual-address fragmentation hali
+yuqori va 300→500 scale gate hali ochiq. Shuning uchun defaultga olinmadi,
+500M ordered screen keyingi qadam qilindi.
+
+**Ordered-slot audit:** `results/P003_NATIVE_FACTORIZED_ORDERED_SLOTS_AUDIT_20260910.md`.
+
+500M ordered-slotning birinchi varianti `d_model=512` bilan ishga tushgani
+aniqlandi, holbuki shared 500M baseline `d_model=384` edi; `69.818%` natija
+shu sabab fair taqqoslash dalili emas va confounded deb belgilandi. Teng
+`d_model=384` matched run’da ordered mean accuracy `68.073%`, CE `1.01038`
+bo‘lib shared baseline `68.281% / 0.99648`dan yomon chiqdi. Shunday qilib
+ordered slot 300Mda ijobiy, lekin 500M scaling muammosini mustaqil hal qilmaydi.
+Bu P-003ni yopmaydi; keyingi yo‘l query-conditioned shared factor mixing.
+
+Query-conditioned shared factor mixing (`scale=0.5`) ham 300Mda ikki seed,
+1,000 qadam sinovdan o‘tkazildi. Mean accuracy `59.206%` bo‘lib ordered
+baseline `59.036%`dan faqat `+0.169 pp`, shared-slot baseline `59.232%`dan esa
+`−0.026 pp` qoldi; seedlar `−0.312/+0.651 pp` qarama-qarshi yo‘nalishda bo‘ldi.
+Mean CE `1.41590` ordered baseline `1.41467`dan yomonlashdi. Shuning uchun
+query mix consistency hard-quality fix sifatida rad qilindi; keyingi gipoteza
+factor slot matritsalarining parametrsiz elementwise product interaction’idir.
+
+**Query-mix audit:** `results/P003_NATIVE_FACTORIZED_QUERY_MIX_AUDIT_20260910.md`.
+
+Parametrsiz elementwise product interaction (`scale=8`) ham 300M ordered
+bankda tekshirildi. Mean accuracy `58.971%` bo‘lib ordered baseline `59.036%`
+dan `−0.065 pp` past, mean CE `1.41736` bo‘lib yomonroq, VRAM esa
+`754→952 MB` oshdi. Product interaction rad qilindi.
+
+Factor1 state’ni o‘zgartirib, factor2 transformed state’da ishlaydigan serial
+composition ham tekshirildi. 300Mda mean `68.359% / 0.99285 CE`, ordered
+additive baseline `68.451% / 0.98753`dan past. Matched 500Mda mean
+`68.138% / 1.00212 CE` bo‘lib shared baseline `68.281% / 0.99648`dan ham
+past; VRAM `1,364 MB`. Serial composition scaling fix sifatida rad qilindi,
+opt-in sifatida saqlandi. Bu natijalar local combination algebra’sidan ko‘ra
+virtual-address routing/assignment fragmentation asosiy muammo bo‘lishi
+mumkinligini kuchaytiradi.
+
+**Product audit:** `results/P003_NATIVE_FACTORIZED_PRODUCT_AUDIT_20260910.md`.
+
+**Serial audit:** `results/P003_NATIVE_FACTORIZED_SERIAL_AUDIT_20260910.md`.
+
+500M ordered-slotning birinchi varianti `d_model=512` bilan ishga tushgani
+aniqlandi, holbuki shared 500M baseline `d_model=384` edi; `69.818%` natija
+shu sabab fair taqqoslash dalili emas va confounded deb belgilandi. Teng
+`d_model=384` matched run’da ordered mean accuracy `68.073%`, CE `1.01038`
+bo‘lib shared baseline `68.281% / 0.99648`dan yomon chiqdi. Shunday qilib
+ordered slot 300Mda ijobiy, lekin 500M scaling muammosini mustaqil hal qilmaydi.
+Bu P-003ni yopmaydi; keyingi yo‘l query-conditioned shared factor mixing.
+
 ### C-P002-EXPOSURE-WARMUP-001 — Initial task-stable route exposure
 
 **Status:** `REJECTED`

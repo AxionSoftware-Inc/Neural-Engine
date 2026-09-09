@@ -1,0 +1,27 @@
+[
+  {
+    "checkpoint": "results\\checkpoints\\ne300_factorized_global_best_s17_3000.pt",
+    "model": "ne_300m_v12_factorized_global",
+    "num_circuits": 22800,
+    "device": "cuda",
+    "examples_per_task": 16,
+    "rows": 720,
+    "natural_accuracy": 0.6666666865348816,
+    "candidate_pool": 32,
+    "selected_width": 8,
+    "candidate_mean_pair_cosine": 0.3962222933769226,
+    "candidate_p95_pair_cosine": 0.5988993644714355,
+    "selected_mean_pair_cosine": 0.3982521593570709,
+    "selected_p95_pair_cosine": 0.6154477000236511,
+    "candidate_mean_individual_norm": 0.6652961373329163,
+    "route_mean_norm": 0.5110562443733215,
+    "route_to_candidate_norm_ratio": 0.7345978021621704,
+    "selected_not_in_candidate_rows": 0,
+    "selected_unique": 4047,
+    "selected_fraction_of_bank": 0.17749999463558197,
+    "selected_usage_entropy": 8.177457809448242,
+    "task_entropy_mean_used_circuits": 0.12649685144424438,
+    "task_entropy_p95_used_circuits": 0.6931471824645996,
+    "task_count_classes": 64
+  }
+]

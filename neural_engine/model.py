@@ -32,6 +32,13 @@ class NeuralEngineV0(nn.Module):
                  factor_count: int | None = None,
                  factor_candidate_pool: int | None = None,
                  factor_pair_rank: int = 0, factor_pair_scale: float = 1.0,
+                 factor_mix_mode: str = "per_address",
+                 ordered_factor_slots: bool = False,
+                 query_factor_mix_scale: float = 0.0,
+                 factor_product_scale: float = 0.0,
+                 factor_composition_mode: str = "additive",
+                 address_residual_rank: int = 0,
+                 address_residual_scale: float = 1.0,
                  routing_reuse_weight: float = 0.0, routing_reuse_start_level: int = 0,
                  route_exploration_prob: float = 0.0,
                  routing_capacity: int | None = None, routing_depth: int | None = None,
@@ -65,6 +72,13 @@ class NeuralEngineV0(nn.Module):
         self.factor_candidate_pool = factor_candidate_pool
         self.factor_pair_rank = int(factor_pair_rank)
         self.factor_pair_scale = float(factor_pair_scale)
+        self.factor_mix_mode = factor_mix_mode
+        self.ordered_factor_slots = bool(ordered_factor_slots)
+        self.query_factor_mix_scale = float(query_factor_mix_scale)
+        self.factor_product_scale = float(factor_product_scale)
+        self.factor_composition_mode = factor_composition_mode
+        self.address_residual_rank = int(address_residual_rank)
+        self.address_residual_scale = float(address_residual_scale)
         self.numeric_value_encoding = numeric_value_encoding
         self.adaptive_halting = adaptive_halting
         self.adaptive_inference = adaptive_halting
@@ -161,8 +175,15 @@ class NeuralEngineV0(nn.Module):
             self.circuits = FactorizedMicroCircuitBank(
                 num_circuits, state_dim, circuit_rank,
                 factor_count=factor_count,
+                factor_mix_mode=factor_mix_mode,
+                ordered_factor_slots=ordered_factor_slots,
+                query_factor_mix_scale=query_factor_mix_scale,
                 factor_pair_rank=factor_pair_rank,
                 factor_pair_scale=factor_pair_scale,
+                factor_product_scale=factor_product_scale,
+                factor_composition_mode=factor_composition_mode,
+                address_residual_rank=address_residual_rank,
+                address_residual_scale=address_residual_scale,
             )
         elif circuit_bank_mode == "shared_residual":
             self.circuits = SharedResidualMicroCircuitBank(
@@ -495,9 +516,14 @@ class NeuralEngineV0(nn.Module):
             shared += self.circuits.shared_up.numel()
             shared += self.circuits.shared_bias.numel()
         if self.circuit_bank_mode == "factorized":
-            factor_row = (self.circuits.down_factors[0].numel()
-                          + self.circuits.up_factors[0].numel()
-                          + self.circuits.bias_factors[0].numel())
+            if self.circuits.ordered_factor_slots:
+                factor_row = (self.circuits.down_factors[0, 0].numel()
+                              + self.circuits.up_factors[0, 0].numel()
+                              + self.circuits.bias_factors[0, 0].numel())
+            else:
+                factor_row = (self.circuits.down_factors[0].numel()
+                              + self.circuits.up_factors[0].numel()
+                              + self.circuits.bias_factors[0].numel())
             active_circuit_params = factor_row * self.active_circuits * 2
             if self.circuits.factor_mix_mode == "per_address":
                 active_circuit_params += self.active_circuits * self.circuits.factor_mix[0].numel()
@@ -508,6 +534,13 @@ class NeuralEngineV0(nn.Module):
                     + self.circuits.pair_bias_basis.numel()
                     + 2 * self.active_circuits * self.circuits.factor_pair_rank
                 )
+            if self.circuits.address_residual_rank:
+                residual_row = (
+                    self.circuits.address_residual_down[0].numel()
+                    + self.circuits.address_residual_up[0].numel()
+                    + self.circuits.address_residual_bias[0].numel()
+                )
+                active_circuit_params += residual_row * self.active_circuits
             if hasattr(self.router, "factor_candidate_pool"):
                 candidate_key_params = (self.router.keys[0].numel()
                                         * self.router.factor_candidate_pool)

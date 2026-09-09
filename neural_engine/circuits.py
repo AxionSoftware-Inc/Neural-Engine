@@ -124,7 +124,11 @@ class FactorizedMicroCircuitBank(nn.Module):
                  ordered_factor_slots: bool = False,
                  query_factor_mix_scale: float = 0.0,
                  factor_pair_rank: int = 0,
-                 factor_pair_scale: float = 1.0):
+                 factor_pair_scale: float = 1.0,
+                 factor_product_scale: float = 0.0,
+                 factor_composition_mode: str = "additive",
+                 address_residual_rank: int = 0,
+                 address_residual_scale: float = 1.0):
         super().__init__()
         if num_circuits < 1:
             raise ValueError("num_circuits must be positive")
@@ -149,6 +153,18 @@ class FactorizedMicroCircuitBank(nn.Module):
             raise ValueError("factor_pair_rank must be non-negative")
         if self.factor_pair_scale < 0.0:
             raise ValueError("factor_pair_scale must be non-negative")
+        self.factor_product_scale = float(factor_product_scale)
+        if self.factor_product_scale < 0.0:
+            raise ValueError("factor_product_scale must be non-negative")
+        if factor_composition_mode not in {"additive", "serial"}:
+            raise ValueError("factor_composition_mode must be additive or serial")
+        self.factor_composition_mode = factor_composition_mode
+        self.address_residual_rank = int(address_residual_rank)
+        self.address_residual_scale = float(address_residual_scale)
+        if self.address_residual_rank < 0:
+            raise ValueError("address_residual_rank must be non-negative")
+        if self.address_residual_scale < 0.0:
+            raise ValueError("address_residual_scale must be non-negative")
         factor_shape = (2, factor_count) if self.ordered_factor_slots else (factor_count,)
         self.down_factors = nn.Parameter(torch.empty(*factor_shape, state_dim, rank))
         self.up_factors = nn.Parameter(torch.empty(*factor_shape, rank, state_dim))
@@ -175,6 +191,18 @@ class FactorizedMicroCircuitBank(nn.Module):
             nn.init.normal_(self.pair_down_basis, std=0.02)
             nn.init.normal_(self.pair_up_basis, std=0.02)
             nn.init.normal_(self.pair_bias_basis, std=0.02)
+        if self.address_residual_rank:
+            self.address_residual_down = nn.Parameter(
+                torch.empty(num_circuits, state_dim, self.address_residual_rank)
+            )
+            self.address_residual_up = nn.Parameter(
+                torch.empty(num_circuits, self.address_residual_rank, state_dim)
+            )
+            self.address_residual_bias = nn.Parameter(
+                torch.zeros(num_circuits, state_dim)
+            )
+            nn.init.normal_(self.address_residual_down, std=0.02)
+            nn.init.normal_(self.address_residual_up, std=0.02)
         # A tiny per-address code preserves distinctions between combinations
         # without restoring a full independent matrix for every virtual row.
         mix_shape = (num_circuits, 2) if factor_mix_mode == "per_address" else (2,)
@@ -257,23 +285,140 @@ class FactorizedMicroCircuitBank(nn.Module):
             bias = bias + self.factor_pair_scale * torch.einsum(
                 "...p,pd->...d", pair_code, self.pair_bias_basis
             )
+        if self.factor_product_scale:
+            down = down + self.factor_product_scale * first_down * second_down
+            up = up + self.factor_product_scale * first_up * second_up
+            bias = bias + self.factor_product_scale * first_bias * second_bias
         return down, up, bias
+
+    def _gather_factor_slots(self, circuit_ids: torch.Tensor,
+                             state: torch.Tensor | None = None):
+        """Gather the two reusable factor paths for serial composition."""
+        first, second = self._factor_ids(circuit_ids)
+        if self.factor_mix_mode == "per_address":
+            mix = self.factor_mix[circuit_ids]
+            first_mix = mix[..., 0, None, None]
+            second_mix = mix[..., 1, None, None]
+            first_bias_mix = mix[..., 0, None]
+            second_bias_mix = mix[..., 1, None]
+        else:
+            first_mix = self.factor_mix[0]
+            second_mix = self.factor_mix[1]
+            first_bias_mix = self.factor_mix[0]
+            second_bias_mix = self.factor_mix[1]
+        if self.query_factor_mix_scale:
+            if state is None:
+                raise ValueError("state is required for query-conditioned factor mixing")
+            if self.ordered_factor_slots:
+                first_gate_keys = self.factor_gate_keys[0, first]
+                second_gate_keys = self.factor_gate_keys[1, second]
+            else:
+                first_gate_keys = self.factor_gate_keys[first]
+                second_gate_keys = self.factor_gate_keys[second]
+            if first_gate_keys.ndim == 2:
+                first_score = torch.einsum("bd,bd->b", state, first_gate_keys)
+                second_score = torch.einsum("bd,bd->b", state, second_gate_keys)
+            else:
+                first_score = torch.einsum("bd,bkd->bk", state, first_gate_keys)
+                second_score = torch.einsum("bd,bkd->bk", state, second_gate_keys)
+            first_gate = torch.tanh(first_score / math.sqrt(self.state_dim))
+            second_gate = torch.tanh(second_score / math.sqrt(self.state_dim))
+            first_mix = first_mix + self.query_factor_mix_scale * first_gate[..., None, None]
+            second_mix = second_mix + self.query_factor_mix_scale * second_gate[..., None, None]
+            first_bias_mix = first_bias_mix + self.query_factor_mix_scale * first_gate[..., None]
+            second_bias_mix = second_bias_mix + self.query_factor_mix_scale * second_gate[..., None]
+        if self.ordered_factor_slots:
+            first_down = self.down_factors[0, first]
+            second_down = self.down_factors[1, second]
+            first_up = self.up_factors[0, first]
+            second_up = self.up_factors[1, second]
+            first_bias = self.bias_factors[0, first]
+            second_bias = self.bias_factors[1, second]
+        else:
+            first_down = self.down_factors[first]
+            second_down = self.down_factors[second]
+            first_up = self.up_factors[first]
+            second_up = self.up_factors[second]
+            first_bias = self.bias_factors[first]
+            second_bias = self.bias_factors[second]
+        return (
+            first_down * first_mix,
+            first_up * first_mix,
+            first_bias * first_bias_mix,
+            second_down * second_mix,
+            second_up * second_mix,
+            second_bias * second_bias_mix,
+        )
+
+    def _gather_address_residual(self, circuit_ids: torch.Tensor):
+        if not self.address_residual_rank:
+            return None
+        scale = self.address_residual_scale
+        return (
+            scale * self.address_residual_down[circuit_ids],
+            scale * self.address_residual_up[circuit_ids],
+            scale * self.address_residual_bias[circuit_ids],
+        )
 
     def forward(self, state: torch.Tensor, circuit_ids: torch.Tensor,
                 weights: torch.Tensor) -> torch.Tensor:
+        if self.factor_composition_mode == "serial":
+            first_down, first_up, first_bias, second_down, second_up, second_bias = (
+                self._gather_factor_slots(circuit_ids, state)
+            )
+            first_hidden = F.gelu(torch.einsum("bd,bkdr->bkr", state, first_down))
+            first_output = torch.einsum("bkr,bkrd->bkd", first_hidden, first_up) + first_bias
+            middle = state.unsqueeze(1) + first_output
+            second_hidden = F.gelu(torch.einsum("bkd,bkdr->bkr", middle, second_down))
+            outputs = torch.einsum("bkr,bkrd->bkd", second_hidden, second_up) + second_bias
+            outputs = first_output + outputs
+            return (outputs * weights.unsqueeze(-1)).sum(dim=1)
         down, up, bias = self._gather(circuit_ids, state)
         hidden = torch.einsum("bd,bkdr->bkr", state, down)
         hidden = F.gelu(hidden)
         outputs = torch.einsum("bkr,bkrd->bkd", hidden, up) + bias
+        residual = self._gather_address_residual(circuit_ids)
+        if residual is not None:
+            residual_down, residual_up, residual_bias = residual
+            residual_hidden = torch.einsum(
+                "bd,bkdr->bkr", state, residual_down
+            )
+            residual_hidden = F.gelu(residual_hidden)
+            outputs = outputs + torch.einsum(
+                "bkr,bkrd->bkd", residual_hidden, residual_up
+            ) + residual_bias
         return (outputs * weights.unsqueeze(-1)).sum(dim=1)
 
     def forward_serial(self, state: torch.Tensor, circuit_ids: torch.Tensor,
                        weights: torch.Tensor) -> torch.Tensor:
         current = state
         for slot in range(circuit_ids.shape[1]):
+            if self.factor_composition_mode == "serial":
+                (first_down, first_up, first_bias,
+                 second_down, second_up, second_bias) = self._gather_factor_slots(
+                    circuit_ids[:, slot], current
+                )
+                first_hidden = F.gelu(torch.einsum("bd,bdr->br", current, first_down))
+                first_output = torch.einsum("br,brd->bd", first_hidden, first_up) + first_bias
+                middle = current + first_output
+                second_hidden = F.gelu(torch.einsum("bd,bdr->br", middle, second_down))
+                output = torch.einsum("br,brd->bd", second_hidden, second_up) + second_bias
+                output = first_output + output
+                current = current + weights[:, slot].unsqueeze(-1) * output
+                continue
             down, up, bias = self._gather(circuit_ids[:, slot], current)
             hidden = torch.einsum("bd,bdr->br", current, down)
             hidden = F.gelu(hidden)
             output = torch.einsum("br,brd->bd", hidden, up) + bias
+            residual = self._gather_address_residual(circuit_ids[:, slot])
+            if residual is not None:
+                residual_down, residual_up, residual_bias = residual
+                residual_hidden = torch.einsum(
+                    "bd,bdr->br", current, residual_down
+                )
+                residual_hidden = F.gelu(residual_hidden)
+                output = output + torch.einsum(
+                    "br,brd->bd", residual_hidden, residual_up
+                ) + residual_bias
             current = current + weights[:, slot].unsqueeze(-1) * output
         return current - state

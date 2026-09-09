@@ -25,6 +25,13 @@ same virtual address counts and the same protocol.
 | 300M factorized + global, 22,800 | 68.932% | 0.97300 | 12,581,385 | 142.74s | 733 MB | 13,174 | 151/151 |
 | 500M factorized + global, 38,600 | 68.281% | 0.99648 | 19,266,177 | 215.75s | 1,225 MB | 20,340 | 197/197 |
 
+Representation-capacity control at fixed 300M virtual address count:
+
+| Arm | Mean accuracy | Mean CE | Total params | Mean time | Peak VRAM | Factor rows used |
+|---|---:|---:|---:|---:|---:|---:|
+| Factorized + global, 151 rows | 59.232% | 1.41985 | 12,581,385 | 48.06s | 733 MB | 151/151 |
+| Factorized + global, 256 rows | 58.320% | 1.41663 | 13,911,945 | 49.24s | 747 MB | 256/256 |
+
 Per-seed values for the new factorized scale arms:
 
 - 300M: seed17 `69.401% / 0.97207`, seed18 `68.464% / 0.97393`.
@@ -47,6 +54,9 @@ Per-seed values for the new factorized scale arms:
   a useful primitive.
 - The factorized router is materially worse than the old global router at
   3,000 steps, so the global-router form is the only factorized form retained.
+- At fixed 22,800 virtual addresses, increasing the factor basis from 151 to
+  256 rows slightly improves CE but loses `0.912 pp` hard accuracy.  More
+  factor rows are therefore not accepted as the representation fix.
 
 ## Decision
 

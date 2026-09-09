@@ -1519,3 +1519,41 @@ while using 12.58M versus 299.54M parameters and 733 versus 5,735 MB peak
 VRAM. The 500M factorized arm regresses to 68.281%, so the effect is not a
 monotonic scaling law; 300M remains opt-in and P-003 stays open. See
 `P003_NATIVE_FACTORIZED_GLOBAL_SCALE_AUDIT_20260910.md`.
+
+At fixed 300M virtual address count, expanding the factor basis from 151 to
+256 rows lowers hard accuracy by 0.912 points despite a small CE improvement;
+the 151-row configuration remains the retained candidate.
+
+Adding a rank-2 per-address residual MLP to the 300M factorized-global bank
+also failed the short-screen quality gate: mean accuracy fell from 59.232% to
+58.828%, CE worsened from 1.41985 to 1.42390, and peak VRAM rose from 733 MB
+to 1,413 MB. The residual mechanism is retained as opt-in code, but independent
+address-local parameters do not solve the specialization problem by
+themselves. See `P003_NATIVE_FACTORIZED_ADDRESS_RESIDUAL_AUDIT_20260910.md`.
+
+The shared rank-4 pair-basis variant was continued to 3,000 steps. It reached
+68.125% mean accuracy versus 68.242% for the no-pair baseline, with slightly
+better CE but about 14% more training time. It is retained as opt-in, not as a
+quality fix. See `P003_NATIVE_FACTORIZED_GLOBAL_PAIR_AUDIT_20260910.md`.
+
+Using separate reusable factor tables for the first and second virtual-address
+slots is the strongest current representation candidate. At 3,000 steps the
+300M ordered-slot bank reaches 68.451% mean accuracy versus 68.242% for the
+shared-slot baseline, with mean CE 0.98753 versus 0.99648. Both seeds improve
+in hard accuracy. A matched 500M run (`d_model=384`) regresses to 68.073% versus
+68.281% for the shared baseline, so ordered slots remain opt-in and do not yet
+solve scaling. See
+`P003_NATIVE_FACTORIZED_ORDERED_SLOTS_AUDIT_20260910.md`.
+
+Query-conditioned factor mixing added no consistent hard-quality gain: the
+1,000-step two-seed mean was 59.206% versus 59.036% for ordered slots and
+59.232% for the shared-slot baseline, with opposite seed deltas and worse CE
+than ordered slots. It remains opt-in only. See
+`P003_NATIVE_FACTORIZED_QUERY_MIX_AUDIT_20260910.md`.
+
+Parameter-free product interaction and serial factor composition were also
+screened. Product lost hard accuracy and increased VRAM; serial was slightly
+better than ordered additive at matched 500M but still below the shared-slot
+baseline. Both remain opt-in only. See
+`P003_NATIVE_FACTORIZED_PRODUCT_AUDIT_20260910.md` and
+`P003_NATIVE_FACTORIZED_SERIAL_AUDIT_20260910.md`.
