@@ -79,6 +79,24 @@ tokens. Graph versus eager greedy generation matched exactly. A second
 request reused the same captured shape entry and also matched exactly:
 `graph_capture_count=1`, `graph_cache_hit_count=1`.
 
+## Trained batch runtime follow-up
+
+The same trained children were measured at batch 1, 2, 4, and 8 with 50
+replay iterations. Graph/eager parity stayed below `1.1e-5` at every size.
+
+| batch | dense parent | trained sparse eager | trained sparse graph | graph / parent |
+|---:|---:|---:|---:|---:|
+| 1 | `26.115 ms` | `31.131 ms` | `19.235 ms` | `0.737x` |
+| 2 | `28.155 ms` | `36.743 ms` | `26.362 ms` | `0.936x` |
+| 4 | `29.915 ms` | `41.912 ms` | `33.177 ms` | `1.109x` |
+| 8 | `28.374 ms` | `41.601 ms` | `40.996 ms` | `1.445x` |
+
+The graph remains a clear improvement over trained sparse eager, but the
+dense-parent comparison reverses above batch 2. This is not a quality or
+correctness failure; it identifies a remaining performance bottleneck in
+trained correction/dispatch at larger batches. A dense-equivalent batched
+kernel is still open.
+
 ## Implementation note
 
 The first attempt exposed a wrapper bug: `single_token_fast_path` was set on

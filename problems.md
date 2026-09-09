@@ -555,6 +555,10 @@ serving muammosi tugadi degani emas: prefill-to-decode, `generate()`, dynamic
 shape, uzoq timing va production stream/kernel safety hali ochiq. Shu trained
 cascade bilan 13-token promptdan 8-token greedy generation ham graph/eager
 orasida exact match berdi; shape pool `1 capture / 1 hit` qayd etdi.
+Trained batch follow-up’da graph/eager parity barcha batch’da `1.1e-5`dan
+kichik qoldi, lekin dense-parent ratio batch 1/2’da `0.737x/0.936x`, batch
+4/8’da `1.109x/1.445x` bo‘ldi. Demak trained correction katta batch’da
+graph-safe bo‘lsa ham dense’dan tez emas; bu performance muammosi hali ochiq.
 **Batafsil:** `results/RUNTIME_QWEN_TRAINED_CUSTOM_KV_GRAPH_AUDIT_20260909.md`.
 
 **V0.198 multi-step cache-state result (2026-09-09):** bir prefix prefill’dan

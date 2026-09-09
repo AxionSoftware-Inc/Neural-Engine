@@ -211,6 +211,73 @@ def alternate_input_parity(
     return float((graph_result - eager_result).abs().max().item())
 
 
+def trained_batch_runtime_matrix(
+    model: torch.nn.Module,
+    tokenizer,
+    layers: list[int],
+    parents: list[torch.nn.Module],
+    children: list[torch.nn.Module],
+    device: torch.device,
+    batch_sizes: list[int],
+    warmup: int,
+    iterations: int,
+) -> list[dict[str, object]]:
+    """Measure trained sparse graph replay across several batch sizes."""
+    base_prefix = tokenizer(
+        "Neural Engine sparse circuits", return_tensors="pt",
+    ).input_ids[:, :4].to(device)
+    base_token = tokenizer(
+        " attention", return_tensors="pt",
+    ).input_ids[:, -1:].to(device)
+    rows = []
+    model_layers = [model.model.layers[index] for index in layers]
+    for batch_size in batch_sizes:
+        prefix_ids = base_prefix.repeat(batch_size, 1)
+        token_ids = base_token.repeat(batch_size, 1)
+        cache_length = max(32, int(prefix_ids.shape[1]) + 8)
+        position = torch.tensor([prefix_ids.shape[1]], device=device)
+        for layer, parent in zip(model_layers, parents):
+            layer.mlp = parent
+        parent_cache = make_cache_and_fill_prefix(
+            model, prefix_ids, cache_length,
+        )
+        parent_ms, _ = measure_eager(
+            model, token_ids, parent_cache, position, warmup, iterations,
+        )
+        for layer, child in zip(model_layers, children):
+            route_base = next(
+                nested for nested in child.modules()
+                if isinstance(nested, TransferredRoutedQwenChild)
+            )
+            route_base.single_token_fast_path = True
+            layer.mlp = child
+        sparse_cache = make_cache_and_fill_prefix(
+            model, prefix_ids, cache_length,
+        )
+        sparse_eager_ms, sparse_eager_logits = measure_eager(
+            model, token_ids, sparse_cache, position, warmup, iterations,
+        )
+        graph_cache = make_cache_and_fill_prefix(
+            model, prefix_ids, cache_length,
+        )
+        graph_ms, _, graph_logits, _ = measure_graph(
+            model, token_ids, graph_cache, position, warmup, iterations,
+        )
+        replay_error = float(
+            (graph_logits - sparse_eager_logits).abs().max().item()
+        )
+        rows.append({
+            "batch_size": batch_size,
+            "parent_ms": parent_ms,
+            "sparse_eager_ms": sparse_eager_ms,
+            "sparse_graph_ms": graph_ms,
+            "graph_over_parent": graph_ms / max(parent_ms, 1e-9),
+            "graph_over_sparse_eager": graph_ms / max(sparse_eager_ms, 1e-9),
+            "max_replay_vs_sparse_eager_logit_error": replay_error,
+        })
+    return rows
+
+
 def run(args: argparse.Namespace) -> dict[str, object]:
     if not torch.cuda.is_available():
         raise RuntimeError("this audit requires CUDA")
@@ -305,6 +372,10 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     trained_generation_reused_equal = bool(
         torch.equal(trained_graph_tokens, trained_reused_tokens)
     )
+    trained_batch_runtime = trained_batch_runtime_matrix(
+        model, tokenizer, layers, parents, children, device,
+        args.batch_sizes, args.warmup, args.iterations,
+    )
 
     result = {
         "experiment": "V0.197_trained_qwen_custom_fixed_kv_graph_audit",
@@ -350,6 +421,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "graph_capture_count": trained_pool.capture_count,
             "graph_cache_hit_count": trained_pool.hit_count,
         },
+        "trained_batch_runtime": trained_batch_runtime,
     }
     if args.output:
         output = Path(args.output)
@@ -378,6 +450,7 @@ def main() -> None:
     parser.add_argument("--log-every", type=int, default=100)
     parser.add_argument("--warmup", type=int, default=20)
     parser.add_argument("--iterations", type=int, default=100)
+    parser.add_argument("--batch-sizes", type=int, nargs="+", default=[1, 2, 4, 8])
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--device", choices=("cuda", "auto"), default="cuda")
     parser.add_argument("--local-files-only", action="store_true")

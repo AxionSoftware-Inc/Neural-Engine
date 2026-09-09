@@ -81,7 +81,9 @@ graph/eager generation parity; batch-size variation and concurrent request
 parity; batch-2 now also passes exact replay and measures `0.534x` of eager
 generation. Batch 2/4/8 all pass exact replay with graph/eager ratios
 `0.534x/0.594x/0.601x`. Batch sizes above 8, trained-child batch quality,
-and concurrent request management remain open.
+and concurrent request management remain open. With the trained K=5 child,
+graph/parent was `0.737x/0.936x` at batch 1/2 but `1.109x/1.445x` at batch
+4/8, so larger-batch trained correction still needs a fused kernel.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

@@ -119,6 +119,12 @@ an exact eight-token graph/eager greedy sequence with one shape-cache capture
 and one reuse hit. See
 `RUNTIME_QWEN_TRAINED_CUSTOM_KV_GRAPH_AUDIT_20260909.md`.
 
+The trained batch follow-up keeps graph/eager parity below `1.1e-5`, but its
+dense comparison is batch-dependent: graph/parent is `0.737x/0.936x` at
+batch 1/2 and `1.109x/1.445x` at batch 4/8. Thus the current runtime win is
+strongest at small batches; larger-batch trained correction still needs a
+fused kernel.
+
 V0.198 extends the cache-state check to one prefix prefill plus four
 successive one-token graph replays. Updating both the token buffer and decode
 position produced a maximum graph/eager logit error of `5.72e-6` across all
