@@ -45,6 +45,8 @@ def fused_correction_dispatch(
     mix_in: torch.Tensor,
     mix_out: torch.Tensor,
     hard_route_scale: float,
+    *,
+    token_block: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Return selected outputs and scaled base-plus-correction output.
 
@@ -75,4 +77,25 @@ def fused_correction_dispatch(
     if mix_in.dim() != 3 or mix_out.dim() != 3:
         raise ValueError("correction weights must be [experts, rank, hidden] and [experts, hidden, rank]")
     tensors = tuple(tensor.contiguous() for tensor in tensors)
-    return _extension().forward(*tensors, float(hard_route_scale))
+    extension = _extension()
+    forward = extension.forward_token if token_block else extension.forward
+    return forward(*tensors, float(hard_route_scale))
+
+
+def fused_token_correction_dispatch(
+    hidden_states: torch.Tensor,
+    selected_ids: torch.Tensor,
+    route_weights: torch.Tensor,
+    group_gate_weight: torch.Tensor,
+    group_value_weight: torch.Tensor,
+    group_output_weight: torch.Tensor,
+    mix_in: torch.Tensor,
+    mix_out: torch.Tensor,
+    hard_route_scale: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Use one CUDA block per token instead of one block per selected group."""
+    return fused_correction_dispatch(
+        hidden_states, selected_ids, route_weights, group_gate_weight,
+        group_value_weight, group_output_weight, mix_in, mix_out,
+        hard_route_scale, token_block=True,
+    )

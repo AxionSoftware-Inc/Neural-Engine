@@ -146,6 +146,10 @@ ratios are `1.478x/1.468x`; B8 ratios are only `0.978x/0.975x`, with final-logit
 error below `1.6e-5`. The fused-full implementation is parity-safe but its
 large speed claim is rejected; the default stays vectorized and the next real
 target is router/top-k/dispatch fusion.
+V0.218 tests a one-block-per-token correction kernel intended to remove
+atomic accumulation. It is parity-safe (`9.5e-6/1.6e-5`) but slower than
+vectorized by `4.661x` at B1 and `1.726x` at B8, so the hypothesis is rejected;
+the loss is serialized FFN work, not atomics.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

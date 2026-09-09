@@ -859,7 +859,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         # Optional inference-only hook installed by the cross-group wrapper
         # for a one-launch base-output plus low-rank correction dispatch.
         self.single_token_full_correction: tuple[
-            torch.Tensor, torch.Tensor
+            torch.Tensor, torch.Tensor, str
         ] | None = None
 
     def _router_features(self, hidden_states: torch.Tensor) -> torch.Tensor:
@@ -1022,12 +1022,16 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         contract while using three small batched contractions.
         """
         if self.single_token_full_correction is not None:
-            from neural_engine.qwen_full_correction_dispatch import (
-                fused_correction_dispatch,
-            )
-
-            mix_in, mix_out = self.single_token_full_correction
-            selected, combined = fused_correction_dispatch(
+            mix_in, mix_out, dispatch_backend = self.single_token_full_correction
+            if dispatch_backend == "cuda-fused-token":
+                from neural_engine.qwen_full_correction_dispatch import (
+                    fused_token_correction_dispatch as dispatch,
+                )
+            else:
+                from neural_engine.qwen_full_correction_dispatch import (
+                    fused_correction_dispatch as dispatch,
+                )
+            selected, combined = dispatch(
                 flat_hidden.contiguous(),
                 flat_ids.contiguous(),
                 flat_weights.contiguous(),
@@ -1940,7 +1944,9 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
             and hidden_states.shape[-2] == 1
         )
         use_fused_full = (
-            self.correction_dispatch_backend == "cuda-fused-full"
+            self.correction_dispatch_backend in {
+                "cuda-fused-full", "cuda-fused-token",
+            }
             and not self.replace_base_output
             and not self.base.training
             and hidden_states.shape[-2] == 1
@@ -1950,7 +1956,9 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
         else:
             self.base.single_token_output_weight = None
         self.base.single_token_full_correction = (
-            (self.mix_in, self.mix_out) if use_fused_full else None
+            (
+                self.mix_in, self.mix_out, self.correction_dispatch_backend
+            ) if use_fused_full else None
         )
         base_output = self.base(hidden_states)
         route_weights = self.base.last_route_weights

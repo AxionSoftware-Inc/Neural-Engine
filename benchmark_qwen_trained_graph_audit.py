@@ -328,7 +328,7 @@ def trained_correction_backend_matrix(
     try:
         for backend in (
             "vectorized", "effective-output", "cuda-fused",
-            "cuda-fused-full", "packed",
+            "cuda-fused-full", "cuda-fused-token", "packed",
         ):
             for mixer in mixers:
                 mixer.max_dense_gather_bytes = (
@@ -337,6 +337,7 @@ def trained_correction_backend_matrix(
                 mixer.correction_dispatch_backend = (
                     backend if backend in {
                         "effective-output", "cuda-fused", "cuda-fused-full",
+                        "cuda-fused-token",
                     }
                     else "vectorized"
                 )
@@ -547,7 +548,10 @@ def interleaved_correction_backend_timing(
             graphs: dict[
                 str, tuple[torch.cuda.CUDAGraph, torch.Tensor, FixedDecodeCache]
             ] = {}
-            for backend in ("vectorized", "cuda-fused-full"):
+            backend_names = (
+                "vectorized", "cuda-fused-full", "cuda-fused-token",
+            )
+            for backend in backend_names:
                 for mixer in mixers:
                     mixer.max_dense_gather_bytes = (
                         128 * 1024 * 1024 if backend == "vectorized" else 0
@@ -581,40 +585,50 @@ def interleaved_correction_backend_timing(
                 # a Python object that has gone out of scope.
                 graphs[backend] = (graph, graph_logits, cache)
 
-            vectorized_graph, vectorized_logits, _ = graphs["vectorized"]
-            fused_graph, fused_logits, _ = graphs["cuda-fused-full"]
             with torch.inference_mode():
                 for _ in range(max(2, warmup // 2)):
-                    vectorized_graph.replay()
-                    torch.cuda.synchronize()
-                    fused_graph.replay()
-                    torch.cuda.synchronize()
-                vectorized_total = 0.0
-                fused_total = 0.0
+                    for backend in backend_names:
+                        graphs[backend][0].replay()
+                        torch.cuda.synchronize()
+                totals = {backend: 0.0 for backend in backend_names}
                 for _ in range(iterations):
-                    start = time.perf_counter()
-                    vectorized_graph.replay()
-                    torch.cuda.synchronize()
-                    vectorized_total += time.perf_counter() - start
-                    start = time.perf_counter()
-                    fused_graph.replay()
-                    torch.cuda.synchronize()
-                    fused_total += time.perf_counter() - start
-                vectorized_graph.replay()
-                fused_graph.replay()
+                    for backend in backend_names:
+                        start = time.perf_counter()
+                        graphs[backend][0].replay()
+                        torch.cuda.synchronize()
+                        totals[backend] += time.perf_counter() - start
+                for backend in backend_names:
+                    graphs[backend][0].replay()
                 torch.cuda.synchronize()
-                vectorized_result = vectorized_logits.clone()
-                fused_result = fused_logits.clone()
-            vectorized_ms = vectorized_total * 1000.0 / iterations
-            fused_ms = fused_total * 1000.0 / iterations
+                results = {
+                    backend: graphs[backend][1].clone()
+                    for backend in backend_names
+                }
+            timings = {
+                backend: totals[backend] * 1000.0 / iterations
+                for backend in backend_names
+            }
             records.append({
                 "batch_size": batch_size,
                 "status": "PARITY_PASS",
-                "paired_vectorized_ms": vectorized_ms,
-                "paired_fused_full_ms": fused_ms,
-                "paired_full_over_vectorized": fused_ms / max(vectorized_ms, 1e-9),
+                "paired_vectorized_ms": timings["vectorized"],
+                "paired_fused_full_ms": timings["cuda-fused-full"],
+                "paired_fused_token_ms": timings["cuda-fused-token"],
+                "paired_full_over_vectorized": (
+                    timings["cuda-fused-full"]
+                    / max(timings["vectorized"], 1e-9)
+                ),
+                "paired_token_over_vectorized": (
+                    timings["cuda-fused-token"]
+                    / max(timings["vectorized"], 1e-9)
+                ),
                 "max_graph_logit_error": float(
-                    (fused_result - vectorized_result).abs().max().item()
+                    (results["cuda-fused-full"] - results["vectorized"])
+                    .abs().max().item()
+                ),
+                "max_token_graph_logit_error": float(
+                    (results["cuda-fused-token"] - results["vectorized"])
+                    .abs().max().item()
                 ),
             })
     finally:
@@ -821,7 +835,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     )
 
     result = {
-        "experiment": "V0.217_fused_correction_interleaved_timing",
+        "experiment": "V0.218_token_block_correction_dispatch",
         "status": "PARITY_PASS" if max(replay_error, alternate_error) <= 1e-3 else "PARITY_FAIL",
         "model": args.model,
         "seed": args.seed,

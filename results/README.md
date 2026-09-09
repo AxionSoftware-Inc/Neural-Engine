@@ -273,6 +273,11 @@ final-logit error remains below `1.6e-5`. Its large speed claim is rejected;
 the parity-safe implementation remains opt-in and vectorized stays default.
 See `RUNTIME_QWEN_FULL_CORRECTION_INTERLEAVED_AUDIT_20260909.md`.
 
+V0.218 tests one CUDA block per token to eliminate correction atomics. It is
+parity-safe but slower than vectorized by `4.661x` at B1 and `1.726x` at B8;
+the serialized K-group work loses GEMM parallelism, so the approach is
+rejected for speed. See `RUNTIME_QWEN_TOKEN_BLOCK_CORRECTION_AUDIT_20260909.md`.
+
 V0.194 rejects the eight-layer K=4 pairwise-cost router with three-round
 on-policy aggregation: learned CE is `+0.06822/+0.07745` across seeds, worse
 than the direct-hard subset-router control (`+0.06462/+0.06165`). The route

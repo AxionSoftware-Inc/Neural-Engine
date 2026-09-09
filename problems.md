@@ -697,6 +697,12 @@ Shuning uchun fused-fullning katta speed claim’i **REJECTED**, parity-safe
 opt-in kodi saqlandi, vectorized default o‘zgarmadi. Keyingi katta target —
 router+top-k+selected dispatch+correctionni bir kernelga birlashtirish.
 **Batafsil:** `results/RUNTIME_QWEN_FULL_CORRECTION_INTERLEAVED_AUDIT_20260909.md`.
+**V0.218 token-block correction (2026-09-09):** atomicAdd’ni olib tashlash
+uchun bitta token ichidagi K=5 groupni bitta blockda ketma-ket hisoblovchi
+kernel sinovdan o‘tdi. Parity yaxshi (`9.54e-6/1.62e-5`), ammo vectorizedga
+nisbatan B1 `4.661x`, B8 `1.726x` sekin. Atomics asosiy bottleneck emas,
+serial FFN hisoblash parallel GEMMdan yutqazadi; **REJECTED FOR SPEED**.
+**Batafsil:** `results/RUNTIME_QWEN_TOKEN_BLOCK_CORRECTION_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 
