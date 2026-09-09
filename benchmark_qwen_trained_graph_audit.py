@@ -660,7 +660,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     )
 
     result = {
-        "experiment": "V0.212_trained_qwen_effective_output_projection",
+        "experiment": "V0.213_trained_qwen_rank4_long_budget_three_seed",
         "status": "PARITY_PASS" if max(replay_error, alternate_error) <= 1e-3 else "PARITY_FAIL",
         "model": args.model,
         "seed": args.seed,

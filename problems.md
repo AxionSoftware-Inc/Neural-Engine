@@ -668,6 +668,13 @@ o‘zgartirdi. **REJECTED FOR ADOPTION**; default va quality yo‘li o‘zgarmad
 Bu yo‘l faqat route freeze qilingan yoki butun layer fused qilingan holatda qayta
 ko‘rilishi mumkin.
 **Batafsil:** `results/RUNTIME_QWEN_EFFECTIVE_OUTPUT_FOLDING_AUDIT_20260909.md`.
+**V0.213 rank4 third long-budget seed (2026-09-09):** seed42 ham bir xil
+`600/600/200` recipe bilan quality gate’dan o‘tdi: CE delta `+0.040236`,
+top-1 agreement `0.7976`, B8 graph/dense `1.234x`, graph/sparse-eager
+`0.871x`, final-logit parity `8.34e-6`, generation parity exact. Shu bilan
+rank4 long-budget natijasi uch seedda takrorlandi; **ACCEPTED OPT-IN** dalili
+kuchaydi, ammo default rank64 saqlandi va katta runtime sakrashi hali yo‘q.
+**Batafsil:** `results/RUNTIME_QWEN_CORRECTION_LONG_BUDGET_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 

@@ -125,6 +125,12 @@ V0.212 tests folding the linear correction into an effective output matrix
 slightly, but all-layer cascade final-logit parity versus vectorized is `1.45`,
 so route drift makes it unsafe. The algebra is retained as a rejected opt-in;
 the next fusion must preserve routing decisions or fuse the full layer.
+V0.213 reruns the rank-4 long-budget recipe on a third seed (42). It also
+passes the quality gate (`+0.040236`) with B8 graph/dense `1.234x`,
+graph/sparse-eager `0.871x`, and final-logit parity `8.34e-6`; generation
+remains exact. Rank 4 therefore has three-seed long-budget support as an
+opt-in, but rank 64 remains the compatibility default and correction dispatch
+is still the main runtime target.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

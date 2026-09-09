@@ -17,23 +17,34 @@ router, eight replaced layers, data, and evaluation protocol remain unchanged.
 |---:|---:|---:|---:|---:|---:|---:|---|
 | 2026 | `600/600/200` | `+0.027947` | `0.7937` | `1.280x` | `0.904x` | `9.54e-6` | exact |
 | 17 | `600/600/200` | `+0.038252` | `0.7944` | `1.265x` | `0.873x` | `9.06e-6` | exact |
+| 42 | `600/600/200` | `+0.040236` | `0.7976` | `1.234x` | `0.871x` | `8.34e-6` | exact |
 
-The quality gate is `CE delta < +0.05`; both seeds pass. Compared with the
-short-budget rank-4 runs, the CE delta changes from `+0.037330` to `+0.027947`
-on seed 2026 and from `+0.040037` to `+0.038252` on seed 17. This is not a
-quality regression. Graph replay remains well below the existing `1e-3`
-tolerance, and both graph/eager generation and reused-shape generation match
-exactly.
+The quality gate is `CE delta < +0.05`; all three seeds pass. Compared with
+the short-budget rank-4 runs, the CE delta changes from `+0.037330` to
+`+0.027947` on seed 2026, from `+0.040037` to `+0.038252` on seed 17, and
+the new seed 42 reaches `+0.040236`. This is not a quality regression.
+Graph replay remains well below the existing `1e-3` tolerance, and both
+graph/eager generation and reused-shape generation match exactly.
+
+## V0.213 third-seed confirmation
+
+Seed 42 independently reran the same long-budget recipe. It passes the CE
+gate with `+0.040236`, reaches `0.7976` top-1 agreement, and measures
+`1.234x` B8 graph/dense plus `0.871x` graph/sparse-eager. Final-logit graph
+parity is `8.34e-6`; generation parity is exact. The third seed strengthens
+the rank-4 opt-in result, but it does not justify changing the compatibility
+default or claim a large speed breakthrough.
 
 ## Decision
 
-- retain rank 4 as the smallest tested viable correction opt-in;
+- retain rank 4 as the smallest tested viable correction opt-in; the long
+  budget now has three passing seeds;
 - do not promote rank 4 to the default yet; rank 64 remains the compatibility
   default;
-- treat the short-budget artifact hypothesis as weakened by this two-seed
+- treat the short-budget artifact hypothesis as weakened by this three-seed
   long-budget pass;
 - continue toward a fused/static-index correction kernel, since B8 graph is
-  still `1.265x–1.280x` the dense parent.
+  still `1.234x–1.280x` the dense parent.
 
 The better quality under the longer budget is useful evidence about training,
 not a claim that rank 4 solves the architectural routing gap. The next quality
@@ -45,6 +56,7 @@ target correction dispatch rather than further reducing rank blindly.
 ```text
 python -u benchmark_qwen_trained_graph_audit.py --local-files-only --device cuda --calibration-rank 4 --child-steps 600 --hard-steps 600 --router-steps 200 --seed 2026 --warmup 40 --iterations 100 --correction-backend-iterations 15 --single-token-backend-iterations 30 --compiled-child-iterations 2 --batch-sizes 1 8 --output results/runs/v0_210_rank4_long_seed2026.json
 python -u benchmark_qwen_trained_graph_audit.py --local-files-only --device cuda --calibration-rank 4 --child-steps 600 --hard-steps 600 --router-steps 200 --seed 17 --warmup 40 --iterations 100 --correction-backend-iterations 15 --single-token-backend-iterations 30 --compiled-child-iterations 2 --batch-sizes 1 8 --output results/runs/v0_210_rank4_long_seed17.json
+python -u benchmark_qwen_trained_graph_audit.py --local-files-only --device cuda --calibration-rank 4 --child-steps 600 --hard-steps 600 --router-steps 200 --seed 42 --warmup 40 --iterations 100 --correction-backend-iterations 15 --single-token-backend-iterations 30 --compiled-child-iterations 2 --batch-sizes 1 8 --output results/runs/v0_213_rank4_long_seed42.json
 ```
 
 ## Artifacts

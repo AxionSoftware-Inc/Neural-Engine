@@ -246,6 +246,14 @@ hard routes. The fold is rejected for adoption and remains opt-in only for
 route-frozen experiments. See
 `RUNTIME_QWEN_EFFECTIVE_OUTPUT_FOLDING_AUDIT_20260909.md`.
 
+V0.213 reruns the V0.210 rank-4 long-budget recipe on seed 42. It also passes
+the quality gate with CE delta `+0.040236`, B8 graph/dense `1.234x`,
+graph/sparse-eager `0.871x`, final-logit parity `8.34e-6`, and exact
+generation. Rank 4 now has three long-budget passing seeds as an opt-in, but
+rank 64 stays the compatibility default and the remaining runtime work is
+fused/static-index correction dispatch. See
+`RUNTIME_QWEN_CORRECTION_LONG_BUDGET_20260909.md`.
+
 V0.194 rejects the eight-layer K=4 pairwise-cost router with three-round
 on-policy aggregation: learned CE is `+0.06822/+0.07745` across seeds, worse
 than the direct-hard subset-router control (`+0.06462/+0.06165`). The route
