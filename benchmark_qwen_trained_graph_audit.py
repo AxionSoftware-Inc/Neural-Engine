@@ -432,6 +432,78 @@ def trained_single_token_projection_matrix(
     return records
 
 
+def trained_compiled_child_matrix(
+    model: torch.nn.Module,
+    tokenizer,
+    layers: list[int],
+    children: list[torch.nn.Module],
+    device: torch.device,
+    warmup: int,
+    iterations: int,
+) -> list[dict[str, object]]:
+    """Probe an Inductor-compiled sparse child at trained batch 8."""
+    if not hasattr(torch, "compile"):
+        return [{"backend": "inductor", "status": "UNAVAILABLE"}]
+    base_prefix = tokenizer(
+        "Neural Engine sparse circuits", return_tensors="pt",
+    ).input_ids[:, :4].to(device)
+    base_token = tokenizer(
+        " attention", return_tensors="pt",
+    ).input_ids[:, -1:].to(device)
+    model_layers = [model.model.layers[index] for index in layers]
+    batch_size = 8
+    prefix_ids = base_prefix.repeat(batch_size, 1)
+    token_ids = base_token.repeat(batch_size, 1)
+    cache_length = max(32, int(prefix_ids.shape[1]) + 8)
+    position = torch.tensor([prefix_ids.shape[1]], device=device)
+    try:
+        compiled_children = []
+        for child in children:
+            route_base = next(
+                nested for nested in child.modules()
+                if isinstance(nested, TransferredRoutedQwenChild)
+            )
+            route_base.single_token_fast_path = True
+            route_base.single_token_projection_backend = "einsum"
+            compiled_children.append(torch.compile(
+                child, mode="max-autotune-no-cudagraphs", dynamic=False,
+                fullgraph=False,
+            ))
+        for layer, child in zip(model_layers, compiled_children):
+            layer.mlp = child
+        eager_cache = make_cache_and_fill_prefix(
+            model, prefix_ids, cache_length,
+        )
+        eager_ms, eager_logits = measure_eager(
+            model, token_ids, eager_cache, position, warmup, iterations,
+        )
+        graph_cache = make_cache_and_fill_prefix(
+            model, prefix_ids, cache_length,
+        )
+        graph_ms, _, graph_logits, _ = measure_graph(
+            model, token_ids, graph_cache, position, warmup, iterations,
+        )
+        return [{
+            "backend": "inductor",
+            "batch_size": batch_size,
+            "status": "PARITY_PASS",
+            "eager_ms": eager_ms,
+            "graph_ms": graph_ms,
+            "graph_over_eager": graph_ms / max(eager_ms, 1e-9),
+            "max_graph_vs_eager_logit_error": float(
+                (graph_logits - eager_logits).abs().max().item()
+            ),
+        }]
+    except Exception as exc:
+        error_text = str(exc) or repr(exc)
+        return [{
+            "backend": "inductor",
+            "batch_size": batch_size,
+            "status": "COMPILE_OR_GRAPH_FAIL",
+            "error": error_text[-4000:],
+        }]
+
+
 def run(args: argparse.Namespace) -> dict[str, object]:
     if not torch.cuda.is_available():
         raise RuntimeError("this audit requires CUDA")
@@ -535,6 +607,10 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         model, tokenizer, layers, children, device, args.warmup,
         args.single_token_backend_iterations,
     )
+    trained_compiled_children = trained_compiled_child_matrix(
+        model, tokenizer, layers, children, device, args.warmup,
+        args.compiled_child_iterations,
+    )
     # Keep the intentionally failing packed-capture probe last: a CUDA Graph
     # capture failure can poison the current CUDA context for later work.
     trained_correction_backends = trained_correction_backend_matrix(
@@ -543,7 +619,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     )
 
     result = {
-        "experiment": "V0.206_trained_qwen_single_token_projection_audit",
+        "experiment": "V0.207_trained_qwen_inductor_probe",
         "status": "PARITY_PASS" if max(replay_error, alternate_error) <= 1e-3 else "PARITY_FAIL",
         "model": args.model,
         "seed": args.seed,
@@ -589,6 +665,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "trained_batch_runtime": trained_batch_runtime,
         "trained_correction_backends": trained_correction_backends,
         "trained_single_token_projections": trained_single_token_projections,
+        "trained_compiled_children": trained_compiled_children,
     }
     if args.output:
         output = Path(args.output)
@@ -620,6 +697,7 @@ def main() -> None:
     parser.add_argument("--batch-sizes", type=int, nargs="+", default=[1, 2, 4, 8])
     parser.add_argument("--correction-backend-iterations", type=int, default=30)
     parser.add_argument("--single-token-backend-iterations", type=int, default=30)
+    parser.add_argument("--compiled-child-iterations", type=int, default=30)
     parser.add_argument("--calibration-rank", type=int, default=64)
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--device", choices=("cuda", "auto"), default="cuda")

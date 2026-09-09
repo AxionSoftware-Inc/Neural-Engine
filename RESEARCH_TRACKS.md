@@ -99,6 +99,10 @@ V0.206 base-child BMM projection is parity-safe but not a graph speedup:
 trained B8 is `35.494 ms` versus einsum `34.974 ms`, so einsum stays default.
 The audit now places the known failing packed-capture probe last to preserve
 CUDA benchmark state.
+V0.207 Inductor fused-child probing is blocked by the local PyTorch/Triton
+toolchain (`Cannot find a working triton installation`), not by model parity.
+The next runtime experiment must therefore be a static-index/fused correction
+path independent of Inductor.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

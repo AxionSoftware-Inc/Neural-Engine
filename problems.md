@@ -624,6 +624,12 @@ BMM eager `37.238 ms`, graph `35.494 ms`; einsum eager `37.626 ms`, graph
 **REJECTED AS DEFAULT**, einsum saqlandi. Packed capture probe’dan keyingi
 CUDA context muammosi ham audit tartibini o‘zgartirib tuzatildi.
 **Batafsil:** `results/RUNTIME_QWEN_SINGLE_TOKEN_PROJECTION_AUDIT_20260909.md`.
+**V0.207 Inductor muammosi (2026-09-09):** fused-child probe model parity
+emas, lokal PyTorch `2.6.0+cu124` muhitida ishlaydigan Triton topilmagani
+uchun bloklandi. Oddiy eager/graph yo‘l `PARITY_PASS`; Inductor **ENVIRONMENT-
+BLOCKED**, default o‘zgarmadi. Keyingi yo‘l Inductorga bog‘liq bo‘lmagan
+static-index/fused correction kernel.
+**Batafsil:** `results/RUNTIME_QWEN_INDUCTOR_PROBE_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 

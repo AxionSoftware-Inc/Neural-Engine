@@ -33,6 +33,7 @@
 - [Runtime — Qwen trained correction-rank audit](RUNTIME_QWEN_CORRECTION_RANK_AUDIT_20260909.md)
 - [Runtime — Qwen rank-8 correction audit](RUNTIME_QWEN_CORRECTION_RANK8_AUDIT_20260909.md)
 - [Runtime — Qwen single-token projection audit](RUNTIME_QWEN_SINGLE_TOKEN_PROJECTION_AUDIT_20260909.md)
+- [Runtime — Qwen Inductor fused-child probe](RUNTIME_QWEN_INDUCTOR_PROBE_20260909.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
@@ -194,6 +195,12 @@ single-token einsum path. On trained rank-8 B8, BMM is slightly faster eager
 so einsum remains the default. The audit also orders the intentionally failing
 packed-capture probe last so it cannot poison later measurements. See
 `RUNTIME_QWEN_SINGLE_TOKEN_PROJECTION_AUDIT_20260909.md`.
+
+V0.207 probes PyTorch Inductor as a possible fused child backend. It is
+environment-blocked because this PyTorch install cannot find a working Triton;
+the ordinary eager/graph audit still passes, so the sparse default is
+unchanged. A real static-index/fused correction implementation remains the
+next target. See `RUNTIME_QWEN_INDUCTOR_PROBE_20260909.md`.
 
 V0.194 rejects the eight-layer K=4 pairwise-cost router with three-round
 on-policy aggregation: learned CE is `+0.06822/+0.07745` across seeds, worse
