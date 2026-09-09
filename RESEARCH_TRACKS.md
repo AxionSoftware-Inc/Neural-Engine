@@ -65,6 +65,15 @@ also matched eager within `1.1e-5`. The next milestone is a trained K=5 graph
 audit with a custom fixed-KV cache, `use_cache` and a small shape cache. The
 custom fixed-KV replay now passes `use_cache=True` with K=5 at `0.516x` of the
 dense parent and K=6 at `0.595x`, while generic `StaticCache` remains unsafe.
+The trained K=5 audit now also passes: `17.550 ms` graph versus `26.653 ms`
+dense parent (`0.658x`), with CE delta `+0.036528` and alternate-token replay
+error `7.63e-6`. This closes the trained fixed-shape proof point; prefill,
+`generate()`, dynamic shapes and production kernel safety remain open. A
+four-step prefill-to-decode replay also passes with maximum error `5.72e-6`,
+so the next milestone is now a small generation adapter plus safe fallback for
+uncaptured shapes. The opt-in greedy adapter now reproduces an eight-token
+sequence exactly between graph and eager paths; trained-child generation and
+shape-keyed capture management remain open.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

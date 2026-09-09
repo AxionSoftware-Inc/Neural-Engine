@@ -542,6 +542,35 @@ yo‘li uchun `POSITIVE OPT-IN`, lekin child’lar runtime smoke uchun
 o‘qitilmagan; trained quality, prefill, `generate()`, dynamic shape va
 defaultga olish hali ochiq. Batafsil:
 `results/RUNTIME_QWEN_CUSTOM_KV_CUDA_GRAPH.md`.
+
+**V0.197 trained custom-KV result (2026-09-09):** accepted K=5 recipe bilan
+8 qatlam qayta o‘qitildi: teacher CE `4.785308`, sparse CE delta `+0.036528`,
+ya’ni `+0.05` quality gate’dan o‘tdi. Trained `use_cache=True` custom fixed-KV
+graph `17.550 ms`, dense parent `26.653 ms` (`0.658x`), sparse eager
+`32.175 ms` (`graph/eager=0.545x`) bo‘ldi. Replay-vs-eager max logit error
+`6.68e-6`, alternate-token error `7.63e-6`; `PARITY_PASS`. Shu bilan trained
+fixed-shape runtime proof point **SOLVED/ACCEPTED OPT-IN** bo‘ldi. Bu umumiy
+serving muammosi tugadi degani emas: prefill-to-decode, `generate()`, dynamic
+shape, uzoq timing va production stream/kernel safety hali ochiq.
+**Batafsil:** `results/RUNTIME_QWEN_TRAINED_CUSTOM_KV_GRAPH_AUDIT_20260909.md`.
+
+**V0.198 multi-step cache-state result (2026-09-09):** bir prefix prefill’dan
+keyin to‘rtta ketma-ket one-token graph replay’da token buffer va KV decode
+pozitsiyasi har qadam yangilandi. To‘rtta qadam bo‘yicha maksimum
+graph/eager logit xatosi `5.72e-6`, `PARITY_PASS`. Fixed-shape multi-step
+cache-state muammosi **SOLVED/ACCEPTED OPT-IN**. Qolgan muammo — buni
+`generate()` adapteriga ulash, dynamic shape uchun xavfsiz eager fallback,
+shape-cache siyosati va production kernel/stream validation.
+**Batafsil:** `results/RUNTIME_QWEN_CUSTOM_KV_MULTISTEP_20260909.md`.
+
+**V0.199 generation-adapter result (2026-09-09):** fixed-shape greedy
+generation helper prefix prefill’dan keyin 8 ta tokenni graph va eager
+yo‘llarda bir xil chiqardi (`exact_token_match=true`, `PARITY_PASS`). Bu
+runtime state loop muammosini **SOLVED/ACCEPTED OPT-IN** qiladi. Child’lar
+ushbu smoke’da o‘qitilmagan; trained-child generation, shape-keyed capture
+cache, dynamic-shape fallback va Hugging Face `generate()` bilan to‘liq
+integratsiya hali ochiq.
+**Batafsil:** `results/RUNTIME_QWEN_FIXED_GRAPH_GENERATION_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 

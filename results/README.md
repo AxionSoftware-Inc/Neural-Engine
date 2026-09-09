@@ -23,6 +23,9 @@
 - [Runtime — Qwen one-token router overhead ablation](RUNTIME_QWEN_ROUTER_OVERHEAD_20260908.md)
 - [Runtime — Qwen fixed-shape CUDA Graph replay](RUNTIME_QWEN_CUDA_GRAPH.md)
 - [Runtime — Qwen custom fixed-KV CUDA Graph decode](RUNTIME_QWEN_CUSTOM_KV_CUDA_GRAPH.md)
+- [Runtime — Qwen trained custom fixed-KV Graph audit](RUNTIME_QWEN_TRAINED_CUSTOM_KV_GRAPH_AUDIT_20260909.md)
+- [Runtime — Qwen custom fixed-KV multi-step replay](RUNTIME_QWEN_CUSTOM_KV_MULTISTEP_20260909.md)
+- [Runtime — Qwen fixed-shape greedy generation adapter](RUNTIME_QWEN_FIXED_GRAPH_GENERATION_20260909.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
@@ -102,6 +105,27 @@ two-seed quality pass remains (`+0.03881`/`+0.04036` CE), while timing falls
 from the old `1.91x` to `1.134x`/`1.129x` with five timing iterations. K=5
 (`62.5%` active) is now the preferred lower-budget operating point; K=6 is
 still the higher-margin reference.
+
+V0.197 closes the trained-runtime gap for that operating point. Repeating the
+accepted K=5 recipe on one fresh seed gives `+0.036528` CE delta, and the
+trained custom fixed-KV `use_cache=True` graph reaches `17.550 ms` versus
+`26.653 ms` for the dense parent (`0.658x`) with max alternate-token parity
+error `7.63e-6`. This is accepted as an opt-in fixed-shape runtime path, not
+yet as a `generate()`/dynamic-shape production integration. See
+`RUNTIME_QWEN_TRAINED_CUSTOM_KV_GRAPH_AUDIT_20260909.md`.
+
+V0.198 extends the cache-state check to one prefix prefill plus four
+successive one-token graph replays. Updating both the token buffer and decode
+position produced a maximum graph/eager logit error of `5.72e-6` across all
+four steps. The fixed-shape multi-step state contract passes; a generation
+adapter and dynamic-shape fallback remain the next runtime work. See
+`RUNTIME_QWEN_CUSTOM_KV_MULTISTEP_20260909.md`.
+
+V0.199 adds the opt-in greedy-generation adapter. With a four-token prefix and
+eight generated tokens, the graph and eager paths produced an identical token
+sequence. This confirms the generation state loop; it is a runtime parity
+smoke with copied, untrained children, not a new quality claim. See
+`RUNTIME_QWEN_FIXED_GRAPH_GENERATION_20260909.md`.
 
 V0.194 rejects the eight-layer K=4 pairwise-cost router with three-round
 on-policy aggregation: learned CE is `+0.06822/+0.07745` across seeds, worse
