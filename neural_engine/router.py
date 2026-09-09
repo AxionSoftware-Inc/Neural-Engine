@@ -13,7 +13,9 @@ class HierarchicalRouter(nn.Module):
     def __init__(self, state_dim: int, num_circuits: int, branch: int = 8, depth: int = 4,
                  candidate_pool: int = 32, active_circuits: int = 8, num_addresses: int = 1,
                  routing_capacity: int | None = None, routing_depth: int | None = None,
-                 soft_routing_temperature: float = 0.0):
+                 soft_routing_temperature: float = 0.0,
+                 factor_key_count: int | None = None,
+                 ordered_factor_slots: bool = False):
         super().__init__()
         if active_circuits > candidate_pool:
             raise ValueError("active_circuits cannot exceed candidate_pool")
@@ -39,9 +41,27 @@ class HierarchicalRouter(nn.Module):
             raise ValueError("routing_depth must be between 1 and depth")
         self.level_projections = nn.Parameter(torch.empty(num_addresses, depth, state_dim, branch))
         self.level_bias = nn.Parameter(torch.zeros(num_addresses, depth, branch))
-        self.keys = nn.Parameter(torch.empty(num_circuits, state_dim))
+        self.factor_key_count = None if factor_key_count is None else int(factor_key_count)
+        self.ordered_factor_slots = bool(ordered_factor_slots)
+        if self.factor_key_count is not None:
+            if self.factor_key_count < 1 or self.factor_key_count * self.factor_key_count < num_circuits:
+                raise ValueError("factor_key_count must provide every virtual circuit ID")
+            factor_shape = ((2, self.factor_key_count) if self.ordered_factor_slots
+                            else (self.factor_key_count,))
+            self.factor_keys = nn.Parameter(torch.empty(*factor_shape, state_dim))
+            nn.init.normal_(self.factor_keys, std=0.02)
+        else:
+            self.keys = nn.Parameter(torch.empty(num_circuits, state_dim))
         nn.init.normal_(self.level_projections, std=0.02)
-        nn.init.normal_(self.keys, std=0.02)
+
+    def _lookup_keys(self, circuit_ids: torch.Tensor) -> torch.Tensor:
+        if self.factor_key_count is None:
+            return self.keys[circuit_ids]
+        first = circuit_ids.remainder(self.factor_key_count)
+        second = circuit_ids.div(self.factor_key_count, rounding_mode="floor")
+        if self.ordered_factor_slots:
+            return self.factor_keys[0, first] + self.factor_keys[1, second]
+        return self.factor_keys[first] + self.factor_keys[second]
 
     def set_routing_state(self, *, capacity: int | None = None,
                           depth: int | None = None) -> None:
@@ -195,13 +215,13 @@ class HierarchicalRouter(nn.Module):
             candidate_ids = (base.unsqueeze(-1).unsqueeze(-1) + offsets).remainder(local_capacity)
             candidate_ids = candidate_ids + routing_windows.view(batch, 1, -1, 1)
         candidate_ids = candidate_ids.reshape(batch, self.candidate_pool)
-        candidate_keys = self.keys[candidate_ids]
+        candidate_keys = self._lookup_keys(candidate_ids)
         candidate_logits = torch.einsum("bd,bkd->bk", state, candidate_keys) / math.sqrt(state.shape[-1])
         target_loss = None
         if target_bases is not None:
             target_offsets = torch.arange(self.active_circuits, device=state.device).view(1, -1)
             target_ids = target_bases.view(-1, 1) + target_offsets
-            target_logits = torch.einsum("bd,bkd->bk", state, self.keys[target_ids]) / math.sqrt(state.shape[-1])
+            target_logits = torch.einsum("bd,bkd->bk", state, self._lookup_keys(target_ids)) / math.sqrt(state.shape[-1])
             target_score = target_logits.mean(dim=-1)
             key_loss = F.softplus(torch.logsumexp(candidate_logits, dim=-1) - target_score)
             tree_loss = torch.stack(target_path_losses, dim=-1).mean(dim=-1)

@@ -53,8 +53,8 @@ class NeuralEngineV0(nn.Module):
             raise ValueError("memory_write_mode must be 'none' or 'gated'")
         if circuit_bank_mode not in {"independent", "shared_residual", "factorized"}:
             raise ValueError("circuit_bank_mode must be 'independent', 'shared_residual', or 'factorized'")
-        if router_variant == "factorized" and circuit_bank_mode != "factorized":
-            raise ValueError("router_variant='factorized' requires circuit_bank_mode='factorized'")
+        if router_variant in {"factorized", "global_factorized_keys"} and circuit_bank_mode != "factorized":
+            raise ValueError("factorized routers require circuit_bank_mode='factorized'")
         if shared_rank < 1:
             raise ValueError("shared_rank must be positive")
         if not 0.0 < halt_threshold < 1.0:
@@ -111,8 +111,8 @@ class NeuralEngineV0(nn.Module):
             raise ValueError("post_correction_residual_scale must be non-negative")
         self.post_correction_residual_scale = float(post_correction_residual_scale)
         self.memory_write_mode = memory_write_mode
-        if router_variant not in {"global", "flat", "probe", "family_local", "family_conditioned", "factorized"}:
-            raise ValueError("router_variant must be 'global', 'flat', 'probe', 'family_local', 'family_conditioned', or 'factorized'")
+        if router_variant not in {"global", "global_factorized_keys", "flat", "probe", "family_local", "family_conditioned", "factorized"}:
+            raise ValueError("router_variant must be 'global', 'global_factorized_keys', 'flat', 'probe', 'family_local', 'family_conditioned', or 'factorized'")
         if router_variant in {"family_local", "family_conditioned"} and family_count < 2:
             raise ValueError("NeuralEngineV0 semantic family routing requires at least two families")
         self.router_variant = router_variant
@@ -162,6 +162,15 @@ class NeuralEngineV0(nn.Module):
                 state_dim, num_circuits, router_branch, router_depth,
                 candidate_pool, active_circuits, router_addresses,
                 routing_capacity=routing_capacity, routing_depth=1)
+        elif router_variant == "global_factorized_keys":
+            self.router = HierarchicalRouter(
+                state_dim, num_circuits, router_branch, router_depth,
+                candidate_pool, active_circuits, router_addresses,
+                routing_capacity=routing_capacity, routing_depth=routing_depth,
+                soft_routing_temperature=soft_routing_temperature,
+                factor_key_count=factor_count,
+                ordered_factor_slots=ordered_factor_slots,
+            )
         else:
             self.router = HierarchicalRouter(
                 state_dim, num_circuits, router_branch, router_depth,
@@ -544,6 +553,12 @@ class NeuralEngineV0(nn.Module):
             if hasattr(self.router, "factor_candidate_pool"):
                 candidate_key_params = (self.router.keys[0].numel()
                                         * self.router.factor_candidate_pool)
+            elif getattr(self.router, "factor_key_count", None) is not None:
+                if self.router.ordered_factor_slots:
+                    key_row = self.router.factor_keys[0, 0].numel()
+                else:
+                    key_row = self.router.factor_keys[0].numel()
+                candidate_key_params = key_row * self.active_circuits * 2
             else:
                 candidate_key_params = (self.router.keys[0].numel()
                                         * self.router.candidate_pool)

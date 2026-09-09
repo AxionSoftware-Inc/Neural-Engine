@@ -43,6 +43,20 @@ def test_router_target_supervision_reaches_tree_and_keys():
     assert router.keys.grad is not None
 
 
+def test_hierarchical_router_can_generate_global_keys_from_factor_rows():
+    router = HierarchicalRouter(
+        16, num_circuits=16, branch=2, depth=4, candidate_pool=4,
+        active_circuits=2, factor_key_count=4, ordered_factor_slots=True,
+    )
+    state = torch.randn(5, 16)
+    selected, weights, stats = router(state)
+    assert selected.shape == (5, 2)
+    assert weights.shape == (5, 2)
+    assert stats["candidate_ids"].shape == (5, 4)
+    ids = torch.tensor([[0, 5, 10, 15]])
+    assert router._lookup_keys(ids).shape == (1, 4, 16)
+
+
 def test_flat_router_scores_full_bank_but_executes_topk():
     router = FlatRouter(32, num_circuits=32, candidate_pool=8, active_circuits=2)
     state = torch.randn(7, 32)

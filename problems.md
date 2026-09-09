@@ -1313,6 +1313,20 @@ mumkinligini kuchaytiradi.
 
 **Serial audit:** `results/P003_NATIVE_FACTORIZED_SERIAL_AUDIT_20260910.md`.
 
+Router key representation ham bank bilan moslashtirib tekshirildi: global
+hierarchical router endi virtual address key’ini ikki reusable factor key’dan
+hosil qila oladi. Unordered route-key-only control 500M, 3,000 qadamda mean
+`68.138% / 0.99588 CE` bo‘lib oddiy global-key baseline
+`68.281% / 0.99648`dan accuracy bo‘yicha `−0.143 pp` qoldi. Ordered bank +
+shared route-key combined candidate esa `68.594% / 0.98665` berdi (`+0.313 pp`),
+ammo bu ikki o‘zgarishning combined effect’i. U 300Mda `68.451%`, 500Mda
+`68.594%`, 700M short screenda `58.815%` bo‘ldi; 700M virtual dead fraction
+`63.44%`gacha oshdi. Shuning uchun route-key alone quality fix emas, combined
+variant opt-in saqlanadi, 700M/1B blind expansion rad qilinadi. Asosiy ochiq
+muammo virtual-address candidate assignment/fragmentation bo‘lib qolmoqda.
+
+**Shared-route-key audit:** `results/P003_NATIVE_FACTORIZED_SHARED_ROUTEKEY_AUDIT_20260910.md`.
+
 500M ordered-slotning birinchi varianti `d_model=512` bilan ishga tushgani
 aniqlandi, holbuki shared 500M baseline `d_model=384` edi; `69.818%` natija
 shu sabab fair taqqoslash dalili emas va confounded deb belgilandi. Teng

@@ -1557,3 +1557,11 @@ better than ordered additive at matched 500M but still below the shared-slot
 baseline. Both remain opt-in only. See
 `P003_NATIVE_FACTORIZED_PRODUCT_AUDIT_20260910.md` and
 `P003_NATIVE_FACTORIZED_SERIAL_AUDIT_20260910.md`.
+
+Shared factor-derived route keys were also tested. The unordered route-key-only
+control did not beat the ordinary 500M global router at 3,000 steps, while the
+ordered-plus-route-key combination reached 68.594% versus 68.281% with fewer
+parameters and lower VRAM. Its 700M short screen fell to 58.815% with 63.44%
+virtual dead traffic, so the combination remains opt-in and does not justify
+blind larger expansion. See
+`P003_NATIVE_FACTORIZED_SHARED_ROUTEKEY_AUDIT_20260910.md`.
