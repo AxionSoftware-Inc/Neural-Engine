@@ -63,6 +63,21 @@ def test_grouped_fused_dispatch_matches_grouped() -> None:
     assert child.last_selected_outputs.shape == (3, 5, 2, 8)
 
 
+def test_grouped_cached_metadata_matches_grouped() -> None:
+    torch.manual_seed(2026)
+    child = TransferredRoutedQwenChild(
+        TinyQwenMlp(), 4, 2, 1.0, "grouped-cached", "contiguous",
+        "router", 2.0,
+    ).eval()
+    inputs = torch.randn(3, 5, 8)
+    child.dispatch_mode = "grouped"
+    grouped = child(inputs)
+    child.dispatch_mode = "grouped-cached"
+    cached = child(inputs)
+    assert torch.allclose(grouped, cached, atol=1e-6, rtol=1e-6)
+    assert len(child._grouped_pair_metadata_cache) == 1
+
+
 def test_grouped_single_token_fast_path_matches_token_loop() -> None:
     torch.manual_seed(2030)
     child = TransferredRoutedQwenChild(

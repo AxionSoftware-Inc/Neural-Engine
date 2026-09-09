@@ -72,6 +72,10 @@ def main() -> None:
     parser.add_argument("--calibration-rank", type=int, default=64)
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--experiment", default="V0.224_trained_grouped_fused_audit")
+    parser.add_argument(
+        "--include-cached-grouped", action="store_true",
+        help="include the opt-in route-independent grouped metadata cache",
+    )
     parser.add_argument("--output")
     args = parser.parse_args()
     if not torch.cuda.is_available():
@@ -151,11 +155,13 @@ def main() -> None:
     install_children(model, layers, children)
     records = []
     eager_logits_by_path = {}
-    path_specs = (
+    path_specs = [
         ("single-token", True, "grouped"),
         ("grouped", False, "grouped"),
         ("grouped-fused", False, "grouped-fused"),
-    )
+    ]
+    if args.include_cached_grouped:
+        path_specs.append(("grouped-cached", False, "grouped-cached"))
     for path_name, single_token, dispatch_mode in path_specs:
         set_dispatch_path(children, single_token, dispatch_mode)
         rows = []
@@ -214,7 +220,10 @@ def main() -> None:
                 if row["prefix_length"] == prefix_length
                 and row["batch_size"] == batch_size
             )
-            for candidate in ("grouped", "grouped-fused"):
+            candidates = ["grouped", "grouped-fused"]
+            if args.include_cached_grouped:
+                candidates.append("grouped-cached")
+            for candidate in candidates:
                 candidate_row = rows_by_path[candidate][
                     (prefix_length, batch_size)
                 ]
@@ -255,6 +264,12 @@ def main() -> None:
     grouped_fused_generation = greedy_generate_fixed_shape(
         model, generation_prompt, 8, use_cuda_graph=True,
     )
+    cached_grouped_generation = None
+    if args.include_cached_grouped:
+        set_dispatch_path(children, False, "grouped-cached")
+        cached_grouped_generation = greedy_generate_fixed_shape(
+            model, generation_prompt, 8, use_cuda_graph=True,
+        )
     result = {
         "experiment": args.experiment,
         "status": "PARITY_PASS",
@@ -288,6 +303,11 @@ def main() -> None:
             "grouped_vs_grouped_fused_exact_token_match": bool(
                 torch.equal(grouped_generation, grouped_fused_generation)
             ),
+            **({
+                "grouped_vs_grouped_cached_exact_token_match": bool(
+                    torch.equal(grouped_generation, cached_grouped_generation)
+                ),
+            } if cached_grouped_generation is not None else {}),
         },
     }
     print(json.dumps(result, indent=2))

@@ -778,6 +778,15 @@ emas; batch policy kiritilmadi. Keyingi ish router yoki rankni qisqartirish
 emas, selected FFN launch/packing overheadini static-index/tiled yoki full
 fused implementation bilan kamaytirish.
 **Batafsil:** `results/RUNTIME_QWEN_RANK1_SHAPE_SWEEP_20260909.md`.
+
+**V0.231 grouped metadata cache (2026-09-09):** route-independent
+`arange/token/slot` metadata fixed-shape cache qilindi va ikki seedda B1/B8/B32
+tekshirildi. Cached/grouped graph ratio seed2026 uchun `0.996x/1.000x/1.002x`,
+seed17 uchun `0.997x/0.994x/0.996x`; generation va logit parity exact. Bu
+material speedup emas, lekin xavfsiz opt-in micro-optimization sifatida
+saqlandi. Route metadata qayta yaratish keyingi asosiy bottleneck emas; selected
+FFN packing/projection/scatter uchun tiled yoki full fused kernel kerak.
+**Batafsil:** `results/RUNTIME_QWEN_GROUPED_CACHED_METADATA_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 

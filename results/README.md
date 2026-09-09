@@ -29,6 +29,7 @@
 - [Runtime — Qwen grouped-fused selected-FFN audit](RUNTIME_QWEN_GROUPED_FUSED_AUDIT_20260909.md)
 - [Runtime — Qwen trained rank-1 long-budget audit](RUNTIME_QWEN_RANK1_LONG_AUDIT_20260909.md)
 - [Runtime — Qwen trained rank-1 shape sweep](RUNTIME_QWEN_RANK1_SHAPE_SWEEP_20260909.md)
+- [Runtime — Qwen grouped cached metadata audit](RUNTIME_QWEN_GROUPED_CACHED_METADATA_AUDIT_20260909.md)
 - [Runtime — Qwen fixed-shape CUDA Graph replay](RUNTIME_QWEN_CUDA_GRAPH.md)
 - [Runtime — Qwen custom fixed-KV CUDA Graph decode](RUNTIME_QWEN_CUSTOM_KV_CUDA_GRAPH.md)
 - [Runtime — Qwen trained custom fixed-KV Graph audit](RUNTIME_QWEN_TRAINED_CUSTOM_KV_GRAPH_AUDIT_20260909.md)

@@ -635,11 +635,11 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             if hard_route_scale is None else float(hard_route_scale)
         )
         if dispatch_mode not in {
-            "grouped", "grouped-fused", "packed", "packed-fused", "packed-fp16",
+            "grouped", "grouped-cached", "grouped-fused", "packed", "packed-fused", "packed-fp16",
             "fused", "token-loop",
         }:
             raise ValueError(
-                "transferred sparse child supports grouped, grouped-fused, packed, "
+                "transferred sparse child supports grouped, grouped-cached, grouped-fused, packed, "
                 "packed-fused, packed-fp16, fused, or token-loop"
             )
         self.dispatch_mode = dispatch_mode
@@ -848,6 +848,10 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self.last_all_outputs: torch.Tensor | None = None
         self.last_selected_outputs: torch.Tensor | None = None
         self.last_active_expert_fraction = 1.0
+        self._grouped_pair_metadata_cache: dict[
+            tuple[int, int, torch.device],
+            tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+        ] = {}
         self._fp16_dispatch_weights: tuple[torch.Tensor, ...] | None = None
         # One-token dispatch is kept opt-in until a full-model numerical
         # equivalence/quality audit approves its different reduction order.
@@ -983,6 +987,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         top_ids: torch.Tensor,
         weights: torch.Tensor,
         fused_projections: bool = False,
+        cache_pair_metadata: bool = False,
     ) -> torch.Tensor:
         flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
         flat_ids = top_ids.reshape(-1, self.active_experts)
@@ -993,9 +998,24 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 fused_projections=fused_projections,
             )
         flat_weights = weights.reshape(-1, self.active_experts)
-        pair_indices = torch.arange(flat_ids.numel(), device=flat_ids.device)
-        token_ids = pair_indices // self.active_experts
-        slots = pair_indices % self.active_experts
+        if cache_pair_metadata:
+            metadata_key = (
+                int(flat_ids.shape[0]), self.active_experts, flat_ids.device,
+            )
+            metadata = self._grouped_pair_metadata_cache.get(metadata_key)
+            if metadata is None:
+                pair_indices = torch.arange(
+                    flat_ids.numel(), device=flat_ids.device,
+                )
+                token_ids = pair_indices // self.active_experts
+                slots = pair_indices % self.active_experts
+                metadata = (pair_indices, token_ids, slots)
+                self._grouped_pair_metadata_cache[metadata_key] = metadata
+            pair_indices, token_ids, slots = metadata
+        else:
+            pair_indices = torch.arange(flat_ids.numel(), device=flat_ids.device)
+            token_ids = pair_indices // self.active_experts
+            slots = pair_indices % self.active_experts
         expert_ids = flat_ids[token_ids, slots]
         sort_order = torch.argsort(expert_ids, stable=True)
         sorted_experts = expert_ids[sort_order]
@@ -1525,8 +1545,13 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             return self.hard_route_scale * (
                 selected * weights.unsqueeze(-1)
             ).sum(dim=-2)
-        if not self.training and self.dispatch_mode == "grouped":
-            return self._forward_grouped(hidden_states, top_ids, weights)
+        if not self.training and self.dispatch_mode in {
+            "grouped", "grouped-cached",
+        }:
+            return self._forward_grouped(
+                hidden_states, top_ids, weights,
+                cache_pair_metadata=self.dispatch_mode == "grouped-cached",
+            )
         if not self.training and self.dispatch_mode == "grouped-fused":
             return self._forward_grouped(
                 hidden_states, top_ids, weights, fused_projections=True,

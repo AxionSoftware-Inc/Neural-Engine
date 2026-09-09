@@ -195,6 +195,11 @@ grouped-fused graph/dense ratios are `1.080x/1.044x/1.065x` and
 parity is exact. This confirms shape robustness of the opt-in candidate but no
 dense-serving win. Grouped-fused is not promoted over ordinary grouped; the
 next target remains selected-FFN launch/packing fusion.
+V0.231 caches route-independent grouped pair metadata by fixed shape. Across
+two seeds and B1/B8/B32, cached/grouped graph ratios range from `0.994x` to
+`1.002x`; exact generation and logit parity remain intact. This is retained as
+a safe opt-in micro-optimization, not a speed claim. Metadata reuse is no
+longer the priority; selected-FFN packing/projection/scatter fusion is.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is
