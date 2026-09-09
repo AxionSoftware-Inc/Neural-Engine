@@ -1,7 +1,7 @@
 # V0.223 — Graph-safe grouped selected-FFN audit
 
 **Date:** 2026-09-09  
-**Status:** `PROMISING OPT-IN RUNTIME PATH; DEFAULT POLICY OPEN`  
+**Status:** `PROMISING RUNTIME PATH; SERVING POLICY OPEN`
 **Branch:** `exp/track-runtime`
 
 ## Question
@@ -25,33 +25,35 @@ runs:
 
 | Seed | Teacher CE | Sparse CE | CE delta | Top-1 agreement |
 |---:|---:|---:|---:|---:|
-| 2026 | 4.785308 | 4.825640 | `+0.040331` | 0.8037 |
+| 2026 | 4.785308 | 4.825062 | `+0.039754` | 0.8052 |
 | 2027 | 4.785308 | 4.825906 | `+0.040598` | 0.8091 |
 
-Each timing run used 10 warmups and 15 iterations for seed 2026, and 10
+Each timing run used 10 warmups and 20 iterations for seed 2026, and 10
 warmups and 30 iterations for seed 2027. Ratios are grouped divided by the
 single-token path:
 
 | Seed | Batch | Eager grouped/single | CUDA Graph grouped/single | Max logit error |
 |---:|---:|---:|---:|---:|
-| 2026 | 1 | `1.152x` | `0.957x` | `6.20e-6` |
-| 2026 | 8 | `0.949x` | `0.592x` | `1.12e-5` |
+| 2026 | 1 | `1.132x` | `0.963x` | `7.87e-6` |
+| 2026 | 8 | `0.919x` | `0.589x` | `9.42e-6` |
+| 2026 | 32 | `0.479x` | `0.423x` | `1.38e-5` |
 | 2027 | 1 | `1.167x` | `0.953x` | `5.72e-6` |
 | 2027 | 8 | `0.965x` | `0.589x` | `9.54e-6` |
 
 The grouped graph path therefore reduced measured decode graph time by about
-4.7% at B1 and 41% at B8 in both seeds. Eight-token CUDA-Graph greedy
-generation produced an exact token match for both seeds. The remaining
-small logit differences are floating-point reduction-order differences and
-did not change the tested generation.
+4–5% at B1, 41% at B8, and 58% at B32 in the runs where those batch sizes were
+measured. Eight-token CUDA-Graph greedy generation produced an exact token
+match for both seeds. The remaining small logit differences are floating-point
+reduction-order differences and did not change the tested generation.
 
 ## Decision
 
 - The grouped path is now graph-safe for the tested fixed-shape decode path.
 - This is the strongest runtime signal in the current track and targets the
   real selected-FFN bottleneck, unlike router-only fusion.
-- Keep the change opt-in until B32/longer production-shape timing and a
-  broader generation/evaluation audit are complete.
+- The B32 extension is positive, but longer production-shape timing and a
+  broader generation/evaluation audit are still required before a serving
+  policy is changed.
 - Keep the eager policy conservative: grouped is slower at B1 but modestly
   faster at B8. CUDA Graph serving is the promising use case.
 - The static capture workspace grows with flattened token count, so prefill
@@ -60,7 +62,7 @@ did not change the tested generation.
 ## Reproduction
 
 ```text
-python -u benchmark_qwen_trained_dispatch_path_audit.py --warmup 10 --iterations 15 --calibration-rank 64 --seed 2026 --output results/runs/v0_223_trained_qwen_dispatch_path_audit.json
+python -u benchmark_qwen_trained_dispatch_path_audit.py --warmup 10 --iterations 20 --batch-sizes 1 8 32 --calibration-rank 64 --seed 2026 --output results/runs/v0_223_trained_qwen_dispatch_path_audit_b32.json
 python -u benchmark_qwen_trained_dispatch_path_audit.py --warmup 10 --iterations 30 --calibration-rank 64 --seed 2027 --output results/runs/v0_223_trained_qwen_dispatch_path_audit_seed2027.json
 ```
 
@@ -68,5 +70,5 @@ python -u benchmark_qwen_trained_dispatch_path_audit.py --warmup 10 --iterations
 
 - `benchmark_qwen_trained_dispatch_path_audit.py`
 - integration change in `benchmark_qwen_multi_layer_transplant.py`
-- `results/runs/v0_223_trained_qwen_dispatch_path_audit.json`
+- `results/runs/v0_223_trained_qwen_dispatch_path_audit_b32.json`
 - `results/runs/v0_223_trained_qwen_dispatch_path_audit_seed2027.json`

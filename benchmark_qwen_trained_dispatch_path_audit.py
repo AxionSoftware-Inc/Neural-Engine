@@ -54,6 +54,7 @@ def main() -> None:
     parser.add_argument("--log-every", type=int, default=100)
     parser.add_argument("--warmup", type=int, default=10)
     parser.add_argument("--iterations", type=int, default=15)
+    parser.add_argument("--batch-sizes", type=int, nargs="+", default=[1, 8])
     parser.add_argument("--calibration-rank", type=int, default=64)
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--output")
@@ -103,7 +104,7 @@ def main() -> None:
     for path_name, single_token in (("single-token", True), ("grouped", False)):
         set_dispatch_path(children, single_token)
         rows = []
-        for batch_size in (1, 8):
+        for batch_size in args.batch_sizes:
             batch_prefix = prefix_ids.repeat(batch_size, 1)
             batch_tokens = token_ids.repeat(batch_size, 1)
             position = torch.tensor([batch_prefix.shape[1]], device=device)
@@ -136,7 +137,7 @@ def main() -> None:
     single_rows = {row["batch_size"]: row for row in records[0]["batches"]}
     grouped_rows = {row["batch_size"]: row for row in records[1]["batches"]}
     comparisons = []
-    for batch_size in (1, 8):
+    for batch_size in args.batch_sizes:
         comparisons.append({
             "batch_size": batch_size,
             "grouped_over_single_token_eager": (

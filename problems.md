@@ -737,10 +737,11 @@ bo‘lib qoldi.
 `torch.bincount` va host-side dynamic `max_count` CUDA Graph capture’ni
 to‘sardi. Capture vaqtida xavfsiz token-count upper bound qo‘llandi, eager
 prefillda esa dynamic bound saqlandi. Trained K=5 seed2026/2027’da grouped /
-single-token graph ratio B1 `0.957x/0.953x`, B8 `0.592x/0.589x`; max logit
-xatosi `1.12e-5` dan kichik, 8-token generation exact match. Bu router fusiondan
-farqli ravishda selected FFN bottleneckga tegadigan eng kuchli runtime signal.
-**PROMISING OPT-IN; B32 va production-shape validation ochiq.**
+single-token graph ratio B1 `0.963x/0.953x`, B8 `0.589x/0.589x`; B32 extension
+`0.423x`. Max logit xatosi `1.4e-5` dan kichik, 8-token generation exact
+match. Bu router fusiondan farqli ravishda selected FFN bottleneckga tegadigan
+eng kuchli runtime signal. **PROMISING; serving policy va production-shape
+validation ochiq.**
 **Batafsil:** `results/RUNTIME_QWEN_GROUPED_GRAPH_SAFE_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
