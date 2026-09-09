@@ -580,6 +580,13 @@ V0.200’da prefix uzunliklari 4 va 8 uchun alohida capture entry’lar yaratild
 ikkalasi ham eager bilan exact match berdi va 4-token entry qayta ishlatildi.
 **Batafsil:** `results/RUNTIME_QWEN_FIXED_GRAPH_GENERATION_20260909.md`.
 **V0.200 batafsil:** `results/RUNTIME_QWEN_FIXED_GRAPH_PREFIX_SHAPES_20260909.md`.
+**V0.201 batch-2 result (2026-09-09):** fast-path guard bitta flattened
+tokenni emas, `sequence_length=1`ni tekshiradigan qilib tuzatildi. Batch=2’da
+graph/eager generation exact match berdi; graph reuse `156.52 ms`, eager
+`293.34 ms`, ratio `0.534x`, `1 capture / 13 hits`. Batch-2 fixed-shape
+muammosi **SOLVED/ACCEPTED OPT-IN**. Batch>2, trained batch quality,
+concurrency va production stream isolation hali ochiq.
+**Batafsil:** `results/RUNTIME_QWEN_FIXED_GRAPH_BATCH_SHAPE_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 

@@ -78,7 +78,9 @@ management remain open; an uncaptured and an evicted shape now have explicit
 eager fallback controls that match independent eager runs.
 Prefix lengths 4 and 8 also receive separate entries and both pass exact
 graph/eager generation parity; batch-size variation and concurrent request
-management remain open.
+parity; batch-2 now also passes exact replay and measures `0.534x` of eager
+generation. Batch sizes above 2, trained-child batch quality, and concurrent
+request management remain open.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

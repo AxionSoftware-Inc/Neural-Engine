@@ -27,6 +27,7 @@
 - [Runtime — Qwen custom fixed-KV multi-step replay](RUNTIME_QWEN_CUSTOM_KV_MULTISTEP_20260909.md)
 - [Runtime — Qwen fixed-shape greedy generation adapter](RUNTIME_QWEN_FIXED_GRAPH_GENERATION_20260909.md)
 - [Runtime — Qwen fixed-graph prefix-shape audit](RUNTIME_QWEN_FIXED_GRAPH_PREFIX_SHAPES_20260909.md)
+- [Runtime — Qwen fixed-graph batched decode audit](RUNTIME_QWEN_FIXED_GRAPH_BATCH_SHAPE_20260909.md)
 - [V0.175 — Capacity signal: controlled allocation vs learned routing](V0_175_CAPACITY_SIGNAL_CONTROL.md)
 - [V0.176 — Routing specialization audit](V0_176_ROUTING_SPECIALIZATION_AUDIT.md)
 - [V0.177 — Task-aware routing and route-target audit](V0_177_TASK_AWARE_ROUTING.md)
@@ -141,6 +142,13 @@ separate graph entries, both match independent eager generation exactly, and
 the 4-token entry is reused on a second request (`2` captures, `1` hit). This
 is a fixed batch-1 shape control; arbitrary batching and concurrent serving
 remain open. See `RUNTIME_QWEN_FIXED_GRAPH_PREFIX_SHAPES_20260909.md`.
+
+V0.201 extends the single-token fast path to batch 2 by recognizing a single
+sequence-token dimension rather than requiring one flattened token. Graph and
+eager generation match exactly; repeated graph reuse is `156.52 ms` versus
+`293.34 ms` eager (`0.534x`) over the measured loop. Batch sizes above 2 and
+trained-child batch quality remain open. See
+`RUNTIME_QWEN_FIXED_GRAPH_BATCH_SHAPE_20260909.md`.
 
 V0.194 rejects the eight-layer K=4 pairwise-cost router with three-round
 on-policy aggregation: learned CE is `+0.06822/+0.07745` across seeds, worse

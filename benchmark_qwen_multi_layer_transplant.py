@@ -919,7 +919,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
     ) -> torch.Tensor:
         flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
         flat_ids = top_ids.reshape(-1, self.active_experts)
-        if self.single_token_fast_path and flat_hidden.shape[0] == 1:
+        if self.single_token_fast_path and hidden_states.shape[-2] == 1:
             return self._forward_single_token(
                 hidden_states, flat_hidden, flat_ids,
                 weights.reshape(-1, self.active_experts),
@@ -1004,12 +1004,13 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         *,
         fused_projections: bool = False,
     ) -> torch.Tensor:
-        """Avoid sort/bincount/scatter for the one-token decode shape.
+        """Avoid sort/bincount/scatter for a single-token decode shape.
 
         The regular grouped path is optimized for many tokens per expert.  At
-        one token, its packing work costs more than the selected projections.
-        Gathering only the K selected groups keeps the same hard route and
-        output contract while using three small batched contractions.
+        one sequence token, its packing work costs more than the selected
+        projections, including when the batch has multiple rows. Gathering
+        only the K selected groups keeps the same hard route and output
+        contract while using three small batched contractions.
         """
         selected_gate = self.group_gate_weight[flat_ids]
         selected_value = self.group_value_weight[flat_ids]
