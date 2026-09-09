@@ -544,14 +544,17 @@ defaultga olish hali ochiq. Batafsil:
 `results/RUNTIME_QWEN_CUSTOM_KV_CUDA_GRAPH.md`.
 
 **V0.197 trained custom-KV result (2026-09-09):** accepted K=5 recipe bilan
-8 qatlam qayta o‘qitildi: teacher CE `4.785308`, sparse CE delta `+0.036528`,
-ya’ni `+0.05` quality gate’dan o‘tdi. Trained `use_cache=True` custom fixed-KV
-graph `17.550 ms`, dense parent `26.653 ms` (`0.658x`), sparse eager
-`32.175 ms` (`graph/eager=0.545x`) bo‘ldi. Replay-vs-eager max logit error
-`6.68e-6`, alternate-token error `7.63e-6`; `PARITY_PASS`. Shu bilan trained
+8 qatlam qayta o‘qitildi: teacher CE `4.785308`, same-seed sparse CE deltalari
+`+0.036528` va repeat’da `+0.043563`, ikkalasi ham `+0.05` quality gate’dan
+o‘tdi. Trained `use_cache=True` custom fixed-KV graph repeat’da `17.391 ms`,
+dense parent `26.648 ms` (`0.653x`), sparse eager `31.496 ms`
+(`graph/eager=0.552x`) bo‘ldi. Replay-vs-eager max logit error `7.63e-6`,
+alternate-token error `5.49e-6`; `PARITY_PASS`. Shu bilan trained
 fixed-shape runtime proof point **SOLVED/ACCEPTED OPT-IN** bo‘ldi. Bu umumiy
 serving muammosi tugadi degani emas: prefill-to-decode, `generate()`, dynamic
-shape, uzoq timing va production stream/kernel safety hali ochiq.
+shape, uzoq timing va production stream/kernel safety hali ochiq. Shu trained
+cascade bilan 13-token promptdan 8-token greedy generation ham graph/eager
+orasida exact match berdi; shape pool `1 capture / 1 hit` qayd etdi.
 **Batafsil:** `results/RUNTIME_QWEN_TRAINED_CUSTOM_KV_GRAPH_AUDIT_20260909.md`.
 
 **V0.198 multi-step cache-state result (2026-09-09):** bir prefix prefill’dan

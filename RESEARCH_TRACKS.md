@@ -65,9 +65,9 @@ also matched eager within `1.1e-5`. The next milestone is a trained K=5 graph
 audit with a custom fixed-KV cache, `use_cache` and a small shape cache. The
 custom fixed-KV replay now passes `use_cache=True` with K=5 at `0.516x` of the
 dense parent and K=6 at `0.595x`, while generic `StaticCache` remains unsafe.
-The trained K=5 audit now also passes: `17.550 ms` graph versus `26.653 ms`
-dense parent (`0.658x`), with CE delta `+0.036528` and alternate-token replay
-error `7.63e-6`. This closes the trained fixed-shape proof point; prefill,
+The trained K=5 audit now also passes: repeat `17.391 ms` graph versus
+`26.648 ms` dense parent (`0.653x`), with same-seed CE deltas `+0.036528` and
+`+0.043563` and alternate-token replay error `5.49e-6`. This closes the trained fixed-shape proof point; prefill,
 `generate()`, dynamic shapes and production kernel safety remain open. A
 four-step prefill-to-decode replay also passes with maximum error `5.72e-6`,
 so the next milestone is now a small generation adapter plus safe fallback for

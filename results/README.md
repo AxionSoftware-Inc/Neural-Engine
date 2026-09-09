@@ -106,12 +106,15 @@ from the old `1.91x` to `1.134x`/`1.129x` with five timing iterations. K=5
 (`62.5%` active) is now the preferred lower-budget operating point; K=6 is
 still the higher-margin reference.
 
-V0.197 closes the trained-runtime gap for that operating point. Repeating the
-accepted K=5 recipe on one fresh seed gives `+0.036528` CE delta, and the
-trained custom fixed-KV `use_cache=True` graph reaches `17.550 ms` versus
-`26.653 ms` for the dense parent (`0.658x`) with max alternate-token parity
-error `7.63e-6`. This is accepted as an opt-in fixed-shape runtime path, not
-yet as a `generate()`/dynamic-shape production integration. See
+V0.197 closes the trained-runtime gap for that operating point. Two same-seed
+runs of the accepted K=5 recipe give `+0.036528` and `+0.043563` CE delta,
+both under the `+0.05` gate. The repeat trained custom fixed-KV
+`use_cache=True` graph reaches `17.391 ms` versus `26.648 ms` for the dense
+parent (`0.653x`) with max alternate-token parity error `5.49e-6`. This is
+accepted as an opt-in fixed-shape runtime path, not yet as a full
+dynamic-shape production integration. The same trained cascade also produces
+an exact eight-token graph/eager greedy sequence with one shape-cache capture
+and one reuse hit. See
 `RUNTIME_QWEN_TRAINED_CUSTOM_KV_GRAPH_AUDIT_20260909.md`.
 
 V0.198 extends the cache-state check to one prefix prefill plus four

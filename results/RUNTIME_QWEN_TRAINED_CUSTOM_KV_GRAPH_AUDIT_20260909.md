@@ -31,15 +31,18 @@ and measures the trained sparse cascade using the custom fixed-KV cache.
 | metric | result |
 |---|---:|
 | teacher CE | `4.785308` |
-| trained sparse CE | `4.821836` |
-| CE delta | `+0.036528` |
+| trained sparse CE (first run) | `4.821836` |
+| CE delta (first run) | `+0.036528` |
+| CE delta (repeat, same seed) | `+0.043563` |
 | quality gate (`<= +0.05`) | **pass** |
 | mean top-1 agreement to teacher logits | `80.47%` |
 
-The result is consistent with the previous two-seed K=5 pass (`+0.03881`
-and `+0.04036`) and does not show a quality regression from using the
-trained child in the runtime audit. This is one fresh seed, so it extends
-the existing quality evidence rather than replacing the two-seed claim.
+Both same-seed runs are consistent with the previous two-seed K=5 pass
+(`+0.03881` and `+0.04036`) and do not show a quality regression from using
+the trained child in the runtime audit. The `+0.0070` repeat spread is a
+small CUDA/training nondeterminism signal; the gate decision is unchanged.
+This remains one fresh seed for trained generation, so it extends the
+existing quality evidence rather than replacing the two-seed claim.
 
 The largest held-out local subset regrets were at layers 21 and 22:
 `0.1484`/`0.1728` mean regret and `0.6205`/`0.5393` p95. This confirms that
@@ -54,20 +57,27 @@ used the custom fixed-position KV cache and the trained sparse children.
 
 | path | mean latency |
 |---|---:|
-| dense parent eager | `26.653 ms` |
-| trained sparse eager | `32.175 ms` |
-| trained sparse CUDA Graph | `17.550 ms` |
+| dense parent eager | `26.648 ms` (repeat) |
+| trained sparse eager | `31.496 ms` (repeat) |
+| trained sparse CUDA Graph | `17.391 ms` (repeat) |
 
-- graph / dense parent: `0.658x`;
-- graph / sparse eager: `0.545x`;
-- replay-vs-eager max logit error: `6.68e-6`;
-- alternate-token graph-vs-eager max logit error: `7.63e-6`;
+- graph / dense parent: `0.653x` (first run `0.658x`);
+- graph / sparse eager: `0.552x` (first run `0.545x`);
+- replay-vs-eager max logit error: `7.63e-6`;
+- alternate-token graph-vs-eager max logit error: `5.49e-6`;
 - status: `PARITY_PASS` at the `1e-3` threshold.
 
 The trained graph is therefore faster than the dense parent in this fixed
 decode shape, while preserving the sparse eager result to float32 numerical
 noise. This is a meaningful runtime result, but it is not yet a full
 throughput or product-serving claim.
+
+## Trained generation result
+
+The same trained cascade was used with a 13-token prompt and eight generated
+tokens. Graph versus eager greedy generation matched exactly. A second
+request reused the same captured shape entry and also matched exactly:
+`graph_capture_count=1`, `graph_cache_hit_count=1`.
 
 ## Implementation note
 

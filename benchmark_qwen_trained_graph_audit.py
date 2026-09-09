@@ -22,6 +22,10 @@ from benchmark_qwen_custom_kv_graph import (
     measure_eager,
     measure_graph,
 )
+from neural_engine.qwen_fixed_graph import (
+    FixedShapeGreedyGraphPool,
+    greedy_generate_fixed_shape,
+)
 from benchmark_qwen_multi_layer_transplant import (
     TRAIN_TEXT,
     TransferredRoutedQwenChild,
@@ -281,6 +285,27 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         model, prefix_ids, token_ids, alternate_ids, cache_length,
     )
 
+    trained_generation_prompt = tokenizer(
+        "Explain why sparse circuits can reduce compute while preserving useful behavior.",
+        return_tensors="pt",
+    ).input_ids.to(device)
+    trained_pool = FixedShapeGreedyGraphPool(model, max_entries=2)
+    trained_graph_tokens = trained_pool.generate(
+        trained_generation_prompt, 8, use_cuda_graph=True,
+    )
+    trained_reused_tokens = trained_pool.generate(
+        trained_generation_prompt, 8, use_cuda_graph=True,
+    )
+    trained_eager_tokens = greedy_generate_fixed_shape(
+        model, trained_generation_prompt, 8, use_cuda_graph=False,
+    )
+    trained_generation_equal = bool(
+        torch.equal(trained_graph_tokens, trained_eager_tokens)
+    )
+    trained_generation_reused_equal = bool(
+        torch.equal(trained_graph_tokens, trained_reused_tokens)
+    )
+
     result = {
         "experiment": "V0.197_trained_qwen_custom_fixed_kv_graph_audit",
         "status": "PARITY_PASS" if max(replay_error, alternate_error) <= 1e-3 else "PARITY_FAIL",
@@ -316,6 +341,14 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "max_alternate_input_graph_vs_eager_logit_error": alternate_error,
             "warmup": args.warmup,
             "iterations": args.iterations,
+        },
+        "trained_generation": {
+            "prefix_length": int(trained_generation_prompt.shape[1]),
+            "new_tokens": 8,
+            "graph_vs_eager_exact_token_match": trained_generation_equal,
+            "reused_shape_exact_token_match": trained_generation_reused_equal,
+            "graph_capture_count": trained_pool.capture_count,
+            "graph_cache_hit_count": trained_pool.hit_count,
         },
     }
     if args.output:
