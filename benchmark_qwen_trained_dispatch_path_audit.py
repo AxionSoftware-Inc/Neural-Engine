@@ -92,6 +92,14 @@ def main() -> None:
         "--include-grouped-uniform-fused", action="store_true",
         help="include the opt-in uniform K-subset accumulation shortcut",
     )
+    parser.add_argument(
+        "--include-grouped-prepacked", action="store_true",
+        help="include the opt-in contiguous grouped-BMM weight layout probe",
+    )
+    parser.add_argument(
+        "--include-grouped-prepacked-fused", action="store_true",
+        help="include the fused-projection variant of the weight layout probe",
+    )
     parser.add_argument("--output")
     args = parser.parse_args()
     if not torch.cuda.is_available():
@@ -186,6 +194,12 @@ def main() -> None:
         path_specs.append((
             "grouped-uniform-correction-fused", False, "grouped", True, True,
         ))
+    if args.include_grouped_prepacked:
+        path_specs.append(("grouped-prepacked", False, "grouped-prepacked"))
+    if args.include_grouped_prepacked_fused:
+        path_specs.append((
+            "grouped-prepacked-fused", False, "grouped-prepacked-fused",
+        ))
     for path_spec in path_specs:
         if len(path_spec) == 3:
             path_name, single_token, dispatch_mode = path_spec
@@ -267,6 +281,10 @@ def main() -> None:
                 candidates.append("grouped-correction-fused")
             if args.include_grouped_uniform_fused:
                 candidates.append("grouped-uniform-correction-fused")
+            if args.include_grouped_prepacked:
+                candidates.append("grouped-prepacked")
+            if args.include_grouped_prepacked_fused:
+                candidates.append("grouped-prepacked-fused")
             for candidate in candidates:
                 candidate_row = rows_by_path[candidate][
                     (prefix_length, batch_size)
@@ -308,6 +326,18 @@ def main() -> None:
     grouped_fused_generation = greedy_generate_fixed_shape(
         model, generation_prompt, 8, use_cuda_graph=True,
     )
+    grouped_prepacked_generation = None
+    if args.include_grouped_prepacked:
+        set_dispatch_path(children, False, "grouped-prepacked")
+        grouped_prepacked_generation = greedy_generate_fixed_shape(
+            model, generation_prompt, 8, use_cuda_graph=True,
+        )
+    grouped_prepacked_fused_generation = None
+    if args.include_grouped_prepacked_fused:
+        set_dispatch_path(children, False, "grouped-prepacked-fused")
+        grouped_prepacked_fused_generation = greedy_generate_fixed_shape(
+            model, generation_prompt, 8, use_cuda_graph=True,
+        )
     cached_grouped_generation = None
     if args.include_cached_grouped:
         set_dispatch_path(children, False, "grouped-cached")
@@ -379,6 +409,18 @@ def main() -> None:
                     torch.equal(grouped_generation, uniform_correction_fused_generation)
                 ),
             } if uniform_correction_fused_generation is not None else {}),
+            **({
+                "grouped_vs_grouped_prepacked_exact_token_match": bool(
+                    torch.equal(grouped_generation, grouped_prepacked_generation)
+                ),
+            } if grouped_prepacked_generation is not None else {}),
+            **({
+                "grouped_vs_grouped_prepacked_fused_exact_token_match": bool(
+                    torch.equal(
+                        grouped_generation, grouped_prepacked_fused_generation,
+                    )
+                ),
+            } if grouped_prepacked_fused_generation is not None else {}),
         },
     }
     print(json.dumps(result, indent=2))

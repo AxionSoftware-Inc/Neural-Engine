@@ -63,6 +63,37 @@ def test_grouped_fused_dispatch_matches_grouped() -> None:
     assert child.last_selected_outputs.shape == (3, 5, 2, 8)
 
 
+def test_grouped_prepacked_dispatch_matches_grouped() -> None:
+    torch.manual_seed(2037)
+    child = TransferredRoutedQwenChild(
+        TinyQwenMlp(), 4, 2, 1.0, "grouped-prepacked", "contiguous",
+        "router", 2.0,
+    ).eval()
+    inputs = torch.randn(3, 5, 8)
+    child.dispatch_mode = "grouped"
+    grouped = child(inputs)
+    child.dispatch_mode = "grouped-prepacked"
+    prepacked = child(inputs)
+    assert torch.allclose(grouped, prepacked, atol=1e-6, rtol=1e-6)
+    assert child.last_selected_outputs is not None
+    assert child._grouped_prepacked_weights is not None
+    assert all(weight.is_contiguous() for weight in child._grouped_prepacked_weights)
+
+
+def test_grouped_prepacked_fused_dispatch_matches_grouped_fused() -> None:
+    torch.manual_seed(2038)
+    child = TransferredRoutedQwenChild(
+        TinyQwenMlp(), 4, 2, 1.0, "grouped-prepacked-fused", "contiguous",
+        "router", 2.0,
+    ).eval()
+    inputs = torch.randn(3, 5, 8)
+    child.dispatch_mode = "grouped-fused"
+    grouped_fused = child(inputs)
+    child.dispatch_mode = "grouped-prepacked-fused"
+    prepacked_fused = child(inputs)
+    assert torch.allclose(grouped_fused, prepacked_fused, atol=1e-6, rtol=1e-6)
+
+
 def test_grouped_cached_metadata_matches_grouped() -> None:
     torch.manual_seed(2026)
     child = TransferredRoutedQwenChild(

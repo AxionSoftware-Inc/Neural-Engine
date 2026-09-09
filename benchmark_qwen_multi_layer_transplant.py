@@ -635,11 +635,14 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             if hard_route_scale is None else float(hard_route_scale)
         )
         if dispatch_mode not in {
-            "grouped", "grouped-cached", "grouped-fused", "packed", "packed-fused", "packed-fp16",
+            "grouped", "grouped-cached", "grouped-prepacked",
+            "grouped-prepacked-fused", "grouped-fused",
+            "packed", "packed-fused", "packed-fp16",
             "fused", "token-loop",
         }:
             raise ValueError(
-                "transferred sparse child supports grouped, grouped-cached, grouped-fused, packed, "
+                "transferred sparse child supports grouped, grouped-cached, grouped-prepacked, "
+                "grouped-prepacked-fused, grouped-fused, packed, "
                 "packed-fused, packed-fp16, fused, or token-loop"
             )
         self.dispatch_mode = dispatch_mode
@@ -856,6 +859,15 @@ class TransferredRoutedQwenChild(torch.nn.Module):
             torch.Tensor, torch.Tensor,
         ] | None = None
         self.grouped_uniform_accum = False
+        # Optional inference-only BMM layout probe.  The native buffers keep
+        # Linear's [out, in] layout; grouped BMM consumes their transposes.
+        # Caching contiguous transposes lets cuBLAS see the exact [E, in, out]
+        # operands without rebuilding a strided view on every call.  It is
+        # deliberately opt-in because the extra copies cost device memory.
+        self._grouped_prepacked_weights: tuple[
+            torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor,
+        ] | None = None
+        self._grouped_prepacked_weights_key: tuple[object, ...] | None = None
         self._grouped_pair_metadata_cache: dict[
             tuple[int, int, torch.device],
             tuple[torch.Tensor, torch.Tensor, torch.Tensor],
@@ -996,6 +1008,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         weights: torch.Tensor,
         fused_projections: bool = False,
         cache_pair_metadata: bool = False,
+        prepacked_weights: bool = False,
     ) -> torch.Tensor:
         flat_hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
         flat_ids = top_ids.reshape(-1, self.active_experts)
@@ -1059,23 +1072,35 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         grouped_hidden = grouped_hidden.reshape(
             self.num_experts, max_count, flat_hidden.shape[-1],
         )
+        if prepacked_weights:
+            (
+                gate_weight,
+                value_weight,
+                output_weight,
+                gate_value_weight,
+            ) = self._get_grouped_prepacked_weights()
+        else:
+            gate_weight = self.group_gate_weight.transpose(1, 2)
+            value_weight = self.group_value_weight.transpose(1, 2)
+            output_weight = self.group_output_weight.transpose(1, 2)
+            gate_value_weight = self.group_gate_value_weight.transpose(1, 2)
         if fused_projections:
             group_size = self.group_gate_weight.shape[1]
             grouped_gate_value = torch.bmm(
-                grouped_hidden, self.group_gate_value_weight.transpose(1, 2),
+                grouped_hidden, gate_value_weight,
             )
             grouped_gate = F.silu(grouped_gate_value[..., :group_size])
             grouped_value = grouped_gate_value[..., group_size:]
         else:
             grouped_gate = F.silu(torch.bmm(
-                grouped_hidden, self.group_gate_weight.transpose(1, 2),
+                grouped_hidden, gate_weight,
             ))
             grouped_value = torch.bmm(
-                grouped_hidden, self.group_value_weight.transpose(1, 2),
+                grouped_hidden, value_weight,
             )
         grouped_output = torch.bmm(
             grouped_gate * grouped_value,
-            self.group_output_weight.transpose(1, 2),
+            output_weight,
         )
         selected_output = grouped_output.reshape(
             self.num_experts * max_count, flat_hidden.shape[-1],
@@ -1132,6 +1157,34 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         return accumulation_scale * flat_output.reshape_as(
             hidden_states,
         )
+
+    def _get_grouped_prepacked_weights(
+        self,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Return contiguous BMM operands for the opt-in grouped probe."""
+        weights = (
+            self.group_gate_weight,
+            self.group_value_weight,
+            self.group_output_weight,
+            self.group_gate_value_weight,
+        )
+        key = tuple(
+            item
+            for weight in weights
+            for item in (
+                weight.device, weight.dtype, weight._version,
+            )
+        )
+        if (
+            self._grouped_prepacked_weights is None
+            or self._grouped_prepacked_weights_key != key
+        ):
+            self._grouped_prepacked_weights = tuple(
+                weight.transpose(1, 2).contiguous()
+                for weight in weights
+            )
+            self._grouped_prepacked_weights_key = key
+        return self._grouped_prepacked_weights
 
     def _forward_single_token(
         self,
@@ -1584,15 +1637,20 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 selected * weights.unsqueeze(-1)
             ).sum(dim=-2)
         if not self.training and self.dispatch_mode in {
-            "grouped", "grouped-cached",
+            "grouped", "grouped-cached", "grouped-prepacked",
         }:
             return self._forward_grouped(
                 hidden_states, top_ids, weights,
                 cache_pair_metadata=self.dispatch_mode == "grouped-cached",
+                prepacked_weights=self.dispatch_mode == "grouped-prepacked",
             )
-        if not self.training and self.dispatch_mode == "grouped-fused":
+        if not self.training and self.dispatch_mode in {
+            "grouped-fused", "grouped-prepacked-fused",
+        }:
             return self._forward_grouped(
-                hidden_states, top_ids, weights, fused_projections=True,
+                hidden_states, top_ids, weights,
+                fused_projections=True,
+                prepacked_weights=self.dispatch_mode == "grouped-prepacked-fused",
             )
         if not self.training and self.dispatch_mode == "packed":
             return self._forward_packed(hidden_states, top_ids, weights)
@@ -2099,6 +2157,7 @@ class CrossGroupOutputMixRoutedQwenChild(torch.nn.Module):
             and not self.base.training
             and self.base.dispatch_mode in {
                 "grouped", "grouped-fused", "grouped-cached",
+                "grouped-prepacked", "grouped-prepacked-fused",
             }
             and not self.base.single_token_fast_path
         )
