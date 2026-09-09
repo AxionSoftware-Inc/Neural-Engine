@@ -798,6 +798,16 @@ va `0.991x/0.989x/0.993x` bo‘ldi. Dense parentga nisbatan hali
 micro-optimization bor, lekin katta speedup yo‘q; backend faqat opt-in, keyingi
 target packing/projection/accumulationni tiled yoki full fused kernelda birlashtirish.
 **Batafsil:** `results/RUNTIME_QWEN_GROUPED_CORRECTION_FUSED_AUDIT_20260909.md`.
+
+**V0.233 uniform K-subset accumulation (2026-09-09):** subset-router’dagi
+uniform `1/K` weight va `hard_route_scale=K` cancellationidan foydalanadigan
+shortcut sinab ko‘rildi. Uniform/correction-fused graph ratio seed2026 uchun
+B1/B8/B32 `0.996x/0.998x/1.000x`, seed17 uchun `1.002x/0.996x/0.995x` bo‘ldi;
+generation parity exact. Foyda kichik va shape/seed bo‘yicha izchil emas, shu
+sabab **REJECTED FOR ADOPTION**, faqat exact subset-router uchun diagnostik
+opt-in saqlandi. Keyingi target hanuz selected FFN packing/projection/scatter
+fusion.
+**Batafsil:** `results/RUNTIME_QWEN_GROUPED_UNIFORM_ACCUM_AUDIT_20260909.md`.
 Batafsil:
 `results/RUNTIME_QWEN_CUDA_GRAPH.md`.
 

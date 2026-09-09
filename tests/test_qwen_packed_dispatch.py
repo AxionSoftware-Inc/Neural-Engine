@@ -94,6 +94,20 @@ def test_grouped_correction_fusion_matches_vectorized_correction() -> None:
     assert base.last_selected_outputs is None
 
 
+def test_grouped_uniform_accumulation_matches_weighted_subset() -> None:
+    torch.manual_seed(2036)
+    base = TransferredRoutedQwenChild(
+        TinyQwenMlp(), 4, 2, 1.0, "grouped", "contiguous",
+        "subset-router", 2.0,
+    ).eval()
+    inputs = torch.randn(3, 5, 8)
+    base.grouped_uniform_accum = False
+    expected = base(inputs)
+    base.grouped_uniform_accum = True
+    actual = base(inputs)
+    assert torch.allclose(expected, actual, atol=1e-6, rtol=1e-6)
+
+
 def test_grouped_single_token_fast_path_matches_token_loop() -> None:
     torch.manual_seed(2030)
     child = TransferredRoutedQwenChild(

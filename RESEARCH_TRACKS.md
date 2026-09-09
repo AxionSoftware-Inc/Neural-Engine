@@ -207,6 +207,11 @@ ordinary grouped graph time, with exact generation parity and quality deltas
 `+0.045226/+0.040347`. The gain is consistent but small; the dense gap remains
 `1.037x–1.081x`, so this stays opt-in and the next target is deeper tiled/full
 selected-FFN fusion.
+V0.233 removes the uniform K-subset route weight multiply under an explicit
+subset-router contract. Across two seeds and B1/B8/B32 it is only `0.995x–1.002x`
+of the fused-correction path, with exact parity but no material or consistent
+gain. The shortcut is rejected for adoption and retained only as a diagnostic;
+selected-FFN tiled/full fusion remains the next target.
 Native's stats-free
 serving path already removes diagnostic tensor overhead (`23.5%` faster at
 batch-1 in the first smoke); it remains opt-in until a production caller is

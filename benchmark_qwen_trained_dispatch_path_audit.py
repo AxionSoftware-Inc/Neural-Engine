@@ -26,7 +26,7 @@ from neural_engine.qwen_fixed_graph import greedy_generate_fixed_shape
 
 def set_dispatch_path(
     children, single_token: bool, dispatch_mode: str = "grouped",
-    fused_correction: bool = False,
+    fused_correction: bool = False, uniform_accum: bool = False,
 ) -> None:
     for child in children:
         base = next(
@@ -37,6 +37,7 @@ def set_dispatch_path(
         base.single_token_router_backend = "torch"
         base.single_token_projection_backend = "einsum"
         base.dispatch_mode = dispatch_mode
+        base.grouped_uniform_accum = bool(uniform_accum)
         for nested in child.modules():
             if isinstance(nested, CrossGroupOutputMixRoutedQwenChild):
                 nested.correction_dispatch_backend = (
@@ -86,6 +87,10 @@ def main() -> None:
     parser.add_argument(
         "--include-grouped-correction-fused", action="store_true",
         help="include the opt-in grouped selected-output/correction fusion",
+    )
+    parser.add_argument(
+        "--include-grouped-uniform-fused", action="store_true",
+        help="include the opt-in uniform K-subset accumulation shortcut",
     )
     parser.add_argument("--output")
     args = parser.parse_args()
@@ -177,15 +182,27 @@ def main() -> None:
         path_specs.append((
             "grouped-correction-fused", False, "grouped", True,
         ))
+    if args.include_grouped_uniform_fused:
+        path_specs.append((
+            "grouped-uniform-correction-fused", False, "grouped", True, True,
+        ))
     for path_spec in path_specs:
         if len(path_spec) == 3:
             path_name, single_token, dispatch_mode = path_spec
             fused_correction = False
-        else:
+            uniform_accum = False
+        elif len(path_spec) == 4:
             path_name, single_token, dispatch_mode, fused_correction = path_spec
+            uniform_accum = False
+        else:
+            (
+                path_name, single_token, dispatch_mode, fused_correction,
+                uniform_accum,
+            ) = path_spec
         set_dispatch_path(
             children, single_token, dispatch_mode,
             fused_correction=fused_correction,
+            uniform_accum=uniform_accum,
         )
         rows = []
         for prefix_length in args.prefix_lengths:
@@ -248,6 +265,8 @@ def main() -> None:
                 candidates.append("grouped-cached")
             if args.include_grouped_correction_fused:
                 candidates.append("grouped-correction-fused")
+            if args.include_grouped_uniform_fused:
+                candidates.append("grouped-uniform-correction-fused")
             for candidate in candidates:
                 candidate_row = rows_by_path[candidate][
                     (prefix_length, batch_size)
@@ -303,6 +322,15 @@ def main() -> None:
         correction_fused_generation = greedy_generate_fixed_shape(
             model, generation_prompt, 8, use_cuda_graph=True,
         )
+    uniform_correction_fused_generation = None
+    if args.include_grouped_uniform_fused:
+        set_dispatch_path(
+            children, False, "grouped", fused_correction=True,
+            uniform_accum=True,
+        )
+        uniform_correction_fused_generation = greedy_generate_fixed_shape(
+            model, generation_prompt, 8, use_cuda_graph=True,
+        )
     result = {
         "experiment": args.experiment,
         "status": "PARITY_PASS",
@@ -346,6 +374,11 @@ def main() -> None:
                     torch.equal(grouped_generation, correction_fused_generation)
                 ),
             } if correction_fused_generation is not None else {}),
+            **({
+                "grouped_vs_grouped_uniform_correction_fused_exact_token_match": bool(
+                    torch.equal(grouped_generation, uniform_correction_fused_generation)
+                ),
+            } if uniform_correction_fused_generation is not None else {}),
         },
     }
     print(json.dumps(result, indent=2))

@@ -855,6 +855,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         self.grouped_fused_correction: tuple[
             torch.Tensor, torch.Tensor,
         ] | None = None
+        self.grouped_uniform_accum = False
         self._grouped_pair_metadata_cache: dict[
             tuple[int, int, torch.device],
             tuple[torch.Tensor, torch.Tensor, torch.Tensor],
@@ -1107,9 +1108,19 @@ class TransferredRoutedQwenChild(torch.nn.Module):
                 "pr,phr->ph", latent, selected_mix_out,
             )
             self.last_selected_outputs = None
-        contribution = selected_output * flat_weights[
-            sorted_token_ids, sorted_slots,
-        ].unsqueeze(-1)
+        if self.grouped_uniform_accum and self.route_source == "subset-router":
+            # The hard subset router assigns the same top-k score to every
+            # member of the chosen subset.  Its softmax is therefore exactly
+            # 1/K, and the accepted K=5 contract uses hard_route_scale=K.
+            # Keep this shortcut opt-in because other route sources can have
+            # non-uniform weights.
+            contribution = selected_output
+            accumulation_scale = self.hard_route_scale / self.active_experts
+        else:
+            contribution = selected_output * flat_weights[
+                sorted_token_ids, sorted_slots,
+            ].unsqueeze(-1)
+            accumulation_scale = self.hard_route_scale
         flat_output = torch.zeros_like(flat_hidden)
         flat_output.index_add_(0, sorted_token_ids, contribution)
         self.last_active_expert_fraction = pair_indices.numel() / max(
@@ -1118,7 +1129,7 @@ class TransferredRoutedQwenChild(torch.nn.Module):
         # The router selects contribution-heavy groups rather than a random
         # subset, so the empirical stable scale is E/K, not an unbiased E
         # estimator that over-corrects the selected high-energy groups.
-        return self.hard_route_scale * flat_output.reshape_as(
+        return accumulation_scale * flat_output.reshape_as(
             hidden_states,
         )
 
