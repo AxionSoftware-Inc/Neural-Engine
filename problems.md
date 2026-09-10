@@ -579,6 +579,13 @@ stream’da parallel ishlatgan serving smoke’da ham maksimal parity `5.72e-6`
 bo‘ldi; shape/state aralashuvi kuzatilmadi. Production shape-cache, eviction
 va server integration hali ochiq.
 
+Mustaqil uzoq quality control’da fused va torch backendlari uch seed/to‘rt
+condition bo‘yicha exact accuracy’da bir xil chiqdi, maksimal CE farqi
+`1.61e-8`. Seed19 uniform exact `66.61%` va hard mean `31.76%` bilan seed17/18
+dan ancha past, lekin torch control ham aynan shu raqamlarni berdi. Bu fused
+kernel regressiyasi emas, checkpoint/training seed barqarorligi alohida
+muammo ekanini ko‘rsatadi.
+
 **Keyingi tajriba:** production shape-cache/concurrency validation va mustaqil
 uzoq quality control. **Batafsil:**
 `results/P003_NATIVE_FUSED_DISPATCH_AUDIT_20260910.md`.

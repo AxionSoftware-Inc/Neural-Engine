@@ -122,6 +122,20 @@ difference was `1.12e-8`. This confirms that the small floating-point ordering
 difference from atomic accumulation did not change the recurrent route or the
 reported quality metrics in this audit.
 
+## Independent long quality control
+
+To separate a kernel regression from checkpoint variance, the three learned
+checkpoints were evaluated for 48 balanced batches per condition with both
+`native_cuda_fused` and `torch` backends. This is 1,536 examples per task per
+condition. Across all three seeds and all four conditions, exact-accuracy
+difference was `0`; the largest CE difference was `1.61e-8`.
+
+The fused three-seed means were uniform exact `77.56%`, combination-heldout
+`77.76%`, low-edge `95.76%`, and high-edge `95.20%`. Seed 19 itself was much
+weaker on the uniform/deep composition conditions than seeds 17/18, but the
+same weakness appeared in its torch control exactly. It is therefore a
+training/checkpoint-seed stability issue, not a native-kernel quality issue.
+
 ## CUDA Graph check
 
 Fixed K=16 with the native kernel captured successfully at batch 1 and 32.
@@ -148,6 +162,8 @@ configuration it does not support.
 - [Serving reuse/stream smoke JSON](diagnostic_native_fused_serving_smoke_all3_20260910.json)
 - [Seed17 fused runtime smoke JSON](diagnostic_native_fused_runtime_s17_480_20260910.json)
 - [Long fused learned-width OOD JSON](diagnostic_native_fused_learned_ood_long96_20260910.json)
+- [Independent long fused OOD JSON](diagnostic_native_fused_ood_long48_all3_20260910.json)
+- [Matching long torch OOD control JSON](diagnostic_native_torch_ood_long48_all3_20260910.json)
 - [Fused fixed K=16 Graph batch-1 JSON](diagnostic_native_cuda_graph_fused_fixed16_b1_20260910.json)
 - [Fused fixed K=16 Graph batch-32 JSON](diagnostic_native_cuda_graph_fused_fixed16_b32_20260910.json)
 - [Runtime benchmark](../benchmark_native_width_runtime.py)
