@@ -404,6 +404,7 @@ class FactorizedMicroCircuitBank(nn.Module):
             and not self.factor_hidden_gate_scale
             and self.factor_composition_mode == "additive"
             and not self.address_residual_rank
+            and self._address_factor_ids is not None
         )
 
     def forward(self, state: torch.Tensor, circuit_ids: torch.Tensor,

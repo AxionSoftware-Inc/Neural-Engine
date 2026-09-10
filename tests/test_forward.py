@@ -224,6 +224,7 @@ def test_prefix_split_dispatch_matches_grouped_additive_bank():
     {"factor_hidden_gate_scale": 0.1},
     {"factor_composition_mode": "serial"},
     {"address_residual_rank": 1},
+    {"factor_address_layout": "standard"},
 ])
 def test_native_fused_backend_falls_back_for_unsupported_features(monkeypatch, unsupported):
     bank_kwargs = dict(

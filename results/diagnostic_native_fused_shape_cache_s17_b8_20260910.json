@@ -1,0 +1,48 @@
+{
+  "experiment": "native_fused_shape_cache",
+  "checkpoint": "results\\checkpoints\\ne500_stable_prefix_active16_s17_3000.pt",
+  "device": "cuda",
+  "batch_size": 8,
+  "sequence_lengths": [
+    6,
+    32
+  ],
+  "max_shapes": 2,
+  "warmup_iters": 5,
+  "iterations": 20,
+  "requests": {
+    "b8_s6": {
+      "max_first_error_vs_eager": 1.9073486328125e-06,
+      "max_reuse_error": 1.9073486328125e-06,
+      "eager_ms": 5.9827750000295055,
+      "cached_ms": 2.416094999989582
+    },
+    "b8_s32": {
+      "max_first_error_vs_eager": 1.9073486328125e-06,
+      "max_reuse_error": 1.9073486328125e-06,
+      "eager_ms": 5.588054999952874,
+      "cached_ms": 2.549575000011828
+    }
+  },
+  "cache": {
+    "cached_shape_count": 2,
+    "cache_keys": [
+      {
+        "batch_size": 8,
+        "sequence_length": 6,
+        "stream": 0
+      },
+      {
+        "batch_size": 8,
+        "sequence_length": 32,
+        "stream": 0
+      }
+    ],
+    "capture_count": 2,
+    "cache_hit_count": 52,
+    "cache_miss_count": 2,
+    "eviction_count": 0,
+    "eager_fallback_count": 0,
+    "capture_failures": []
+  }
+}

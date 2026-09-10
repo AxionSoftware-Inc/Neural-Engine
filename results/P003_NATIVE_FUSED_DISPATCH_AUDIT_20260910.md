@@ -112,6 +112,26 @@ shape-switch or cross-stream output contamination was observed. This validates
 the kernel's current read-only serving contract, but it does not yet provide a
 request pool, shape-cache eviction policy, or a production server integration.
 
+## Shape-cache serving caller
+
+The opt-in `NativeFusedShapeCache` caller now provides a bounded LRU cache of
+fixed-shape CUDA Graph entries. Keys include batch size, sequence length, and
+CUDA stream, so separate streams do not share mutable graph input buffers.
+Dynamic-width requests, non-CUDA inputs, training mode, and graph-capture
+failures use the eager model and increment explicit fallback counters.
+
+On the real seed-17 500M checkpoint, B=1 with sequence lengths 6 and 32
+captured two shapes, produced 52 cache hits, and had zero eager fallbacks.
+Cached latency was `2.10/2.17 ms` versus eager `9.07/6.07 ms`; maximum graph
+versus eager logit error was `1.91e-6`. B=8 captured the same two shapes with
+zero fallbacks; cached latency was `2.42/2.55 ms` versus eager `5.98/5.59 ms`,
+with maximum error `1.91e-6`. Unit tests also cover LRU eviction, dynamic-width
+eager fallback, and synthetic graph-capture failure fallback.
+
+This is a reusable serving caller and a real-checkpoint smoke, not a complete
+multi-worker server. Request admission, cross-process ownership, and policy
+for concurrent requests on the same CUDA stream remain caller responsibilities.
+
 ## Long quality control
 
 The fused learned checkpoints were rerun through the 96-batch-per-condition
@@ -145,13 +165,14 @@ its route partition is variable; this kernel does not hide that separate issue.
 
 ## Decision
 
-`PROMISING OPT-IN — BATCH/SEQUENCE/FALLBACK/STREAM SMOKE VALIDATED; PRODUCTION INTEGRATION OPEN`.
+`PROMISING OPT-IN — SHAPE-CACHE SERVING SMOKE VALIDATED; PRODUCTION INTEGRATION OPEN`.
 
-Keep native fused dispatch opt-in and leave PyTorch as the default. Batch,
-sequence-shape, fallback, and stream-safety checks now pass, but a production
-request shape-cache/fallback integration and an independent longer quality run
-remain before any default switch. The kernel must never silently approximate a
-configuration it does not support.
+Keep native fused dispatch opt-in and leave PyTorch as the default. The
+shape-cache caller, batch/sequence parity, fallback, stream-safety, and long
+quality checks now pass, but full multi-worker production integration and an
+explicit policy for concurrent same-stream requests remain before any default
+switch. The kernel must never silently approximate a configuration it does not
+support.
 
 ## Raw evidence and reproduction
 
@@ -160,6 +181,8 @@ configuration it does not support.
 - [Batch-shape sweep JSON](diagnostic_native_fused_shape_sweep_all3_20260910.json)
 - [Sequence-shape sweep JSON](diagnostic_native_fused_sequence_sweep_all3_20260910.json)
 - [Serving reuse/stream smoke JSON](diagnostic_native_fused_serving_smoke_all3_20260910.json)
+- [Shape-cache B=1 JSON](diagnostic_native_fused_shape_cache_s17_b1_20260910.json)
+- [Shape-cache B=8 JSON](diagnostic_native_fused_shape_cache_s17_b8_20260910.json)
 - [Seed17 fused runtime smoke JSON](diagnostic_native_fused_runtime_s17_480_20260910.json)
 - [Long fused learned-width OOD JSON](diagnostic_native_fused_learned_ood_long96_20260910.json)
 - [Independent long fused OOD JSON](diagnostic_native_fused_ood_long48_all3_20260910.json)
@@ -168,6 +191,8 @@ configuration it does not support.
 - [Fused fixed K=16 Graph batch-32 JSON](diagnostic_native_cuda_graph_fused_fixed16_b32_20260910.json)
 - [Runtime benchmark](../benchmark_native_width_runtime.py)
 - [CUDA Graph benchmark](../benchmark_native_cuda_graph.py)
+- [Shape-cache serving caller](../neural_engine/native_fused_serving.py)
+- [Shape-cache benchmark](../benchmark_native_fused_shape_cache.py)
 - [Python wrapper](../neural_engine/native_fused_dispatch.py)
 - [CUDA kernel](../neural_engine/native_fused_dispatch.cu)
 - [Batch-shape sweep](../benchmark_native_fused_shape_sweep.py)
