@@ -292,6 +292,17 @@ xil qilish qabul qilinmaydi.
 oshirmadi; ayrim testlarda sifat o‘zgarmadi yoki pasaydi. Shuning uchun hozir
 katta modelga o‘tish ilmiy jihatdan asoslanmagan.
 
+2026-09-10 distribution-shift auditida 10k qadamli ordered shared-route-key
+checkpointlar qayta tekshirildi. Ikki seed o‘rtachasida 500M 300Mdan oddiy
+balanced streamda `+0.417 pp`, combination hold-outda `+0.434 pp` yaxshi chiqdi.
+Lekin low-edge `[0,7]` probe’da `−0.204 pp`, high-edge `[56,63]` probe’da
+`−0.490 pp` bo‘ldi. Edge probe’larda ikkala modelda ham dead traffic
+`~46–55%`gacha oshdi. Demak 500M sig‘imi foydali signal bera oladi, ammo yangi
+capacity distribution shift ostida barqaror specializationga aylanmayapti;
+P-003 yechilgan emas.
+
+**Batafsil:** `results/P003_NATIVE_OOD_DISTRIBUTION_AUDIT_20260910.md`.
+
 #### Muammo ta’rifi
 
 Model capacity'si ko‘payganda yangi parametrlar foydali, kirish-dependent

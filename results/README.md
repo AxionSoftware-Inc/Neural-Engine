@@ -1597,3 +1597,12 @@ shared factor-derived route keys reduce candidate/selected pair cosine from
 to `43.74%`. Hard accuracy rises only `+0.182 pp` on that seed, so this is a
 routing-alignment signal rather than a solved capacity ceiling. The diagnostic
 is recorded in the shared-route-key audit.
+
+The follow-up distribution-shift audit used the matched 10k 300M/500M
+checkpoints on ordinary, combination-holdout, low-edge, and high-edge value
+probes. Two-seed 500M accuracy improved `+0.417/+0.434 pp` on the first two
+probes, but regressed `−0.204/−0.490 pp` on low/high edge values. Dead traffic
+rose sharply on edge probes for both scales. This confirms that 500M has a
+small real capacity gain on the ordinary stream, but not distribution-robust
+specialization; P-003 stays active and blind 700M/1B expansion remains
+deferred. See `P003_NATIVE_OOD_DISTRIBUTION_AUDIT_20260910.md`.
