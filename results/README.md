@@ -45,6 +45,7 @@
 - [P-003 — Native fused grouped microbatch JSON](diagnostic_native_fused_microbatch_s17_20260910_32req.json)
 - [P-003 — Native fused admission JSON](diagnostic_native_fused_admission_s17_20260910_prewarmed.json)
 - [P-003 — Native fused admission, 8-client stress JSON](diagnostic_native_fused_admission_s17_20260910_8clients.json)
+- [P-003 — Native fused admission, 0.25 ms window JSON](diagnostic_native_fused_admission_s17_20260910_window025_prewarmed.json)
 - [P-003 — Native fused learned OOD quality JSON](diagnostic_native_fused_learned_ood_long96_20260910.json)
 - [P-003 — Native fused independent long OOD JSON](diagnostic_native_fused_ood_long48_all3_20260910.json)
 - [P-003 — Native torch matching long OOD control JSON](diagnostic_native_torch_ood_long48_all3_20260910.json)

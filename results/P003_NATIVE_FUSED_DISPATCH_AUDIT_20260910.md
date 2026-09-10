@@ -258,6 +258,13 @@ remains opt-in and is not accepted as a default serving policy; a future
 version needs request-rate-aware admission, shape prewarming, and a latency
 budget before claiming benefit.
 
+A shorter 0.25 ms window was also checked with the same prewarmed B=1…8
+shapes and four clients. Direct serving measured `75.4 ms` (`424.2 req/s`),
+while admission measured `155.7 ms` (`205.5 req/s`); it still reached an
+observed batch of 8 and retained `0` prediction mismatches. Reducing the wait
+window therefore did not change the decision: the current per-request HTTP
+queue is not a speed path for this workload.
+
 ## Long quality control
 
 The fused learned checkpoints were rerun through the 96-batch-per-condition
@@ -317,6 +324,7 @@ approximate a configuration it does not support.
 - [Native fused grouped microbatch JSON](diagnostic_native_fused_microbatch_s17_20260910_32req.json)
 - [Native fused admission JSON](diagnostic_native_fused_admission_s17_20260910_prewarmed.json)
 - [Native fused admission, 8-client stress JSON](diagnostic_native_fused_admission_s17_20260910_8clients.json)
+- [Native fused admission, 0.25 ms window JSON](diagnostic_native_fused_admission_s17_20260910_window025_prewarmed.json)
 - [Seed17 fused runtime smoke JSON](diagnostic_native_fused_runtime_s17_480_20260910.json)
 - [Long fused learned-width OOD JSON](diagnostic_native_fused_learned_ood_long96_20260910.json)
 - [Independent long fused OOD JSON](diagnostic_native_fused_ood_long48_all3_20260910.json)

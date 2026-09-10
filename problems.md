@@ -652,6 +652,10 @@ prewarm bilan tekshirganda direct `94.3 ms / 339.3 req/s`, queue esa
 `161.5 ms / 198.2 req/s` chiqdi; observed batch `8`, parity `0 mismatch`.
 Shuning uchun queue sifati to‘g‘ri, ammo hozirgi past-latency local arrival
 rate’da foydasiz: defaultga kiritilmadi, opt-in tajriba sifatida qoldi.
+0.25 ms oynali qayta sinov ham direct `75.4 ms / 424.2 req/s` va admission
+`155.7 ms / 205.5 req/s` berdi; observed batch `8`, mismatch `0`. Demak faqat
+windowni qisqartirish yetarli emas — hozirgi HTTP queue yo‘li tezlik yechimi
+sifatida rad qilindi.
 
 Mustaqil uzoq quality control’da fused va torch backendlari uch seed/to‘rt
 condition bo‘yicha exact accuracy’da bir xil chiqdi, maksimal CE farqi
