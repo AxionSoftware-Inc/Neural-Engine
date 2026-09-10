@@ -1267,6 +1267,36 @@ The packet remains a bounded diagnostic; the next step requires a
 range-aware value codec/readout, not more bank capacity. See
 `V0_207_DYNAMIC_NONMOD_ALGEBRAIC_STATE_RANGE_STRESS.md`.
 
+V0.208 finds a strong range-aware readout signal: adding 42 multiscale
+Fourier features to the exact `x,x^2` packet raises the operands-`0--15`
+two-seed mean from `64.45%` to `94.29%` held-out accuracy and depth-4 from
+`53.22%` to `92.09%`, with only `16,128` extra learned projection parameters.
+This localizes the wide-range failure to value-to-readout coding rather than
+router starvation. It remains opt-in because the fixed periods are aligned to
+the base-128 codec; the next gate is operands `0--31`. See
+`V0_208_DYNAMIC_NONMOD_ALGEBRAIC_FOURIER_AUDIT.md`.
+
+V0.209 sweeps the `0--31` output codec. `output_digit_base=512` reaches
+`78.81%` mean held-out accuracy and `73.83%` depth-4 with `32.65M/27.35M`
+total/active parameters, beating the base-1024 reference (`75.10%`/`69.92%`)
+by `+3.71/+3.91 pp`. Base 2048 reaches `69.82%`/`62.89%` with
+`14.32M/9.02M`, and base 4096 reaches `62.30%`/`53.32%` with
+`11.95M/6.65M`. The ordering is consistent across two seeds: more output
+resolution recovers depth transfer, but base512 costs `83%` more active
+parameters and about `19%` more training time. Base512 is retained as an
+opt-in quality reference; the next target is a shared/low-rank codec.
+See `V0_209_DYNAMIC_NONMOD_ALGEBRAIC_FOURIER_0_31_OUTPUT_BASE_AUDIT.md`.
+
+V0.210 is the strongest Native Engine signal so far. A shared rank-128
+projection before the base-512 digit heads reaches `85.06%` mean held-out
+accuracy and `81.05%` depth-4 on `0--31`, versus `75.10%`/`69.92%` for the
+base-1024 reference and `78.81%`/`73.83%` for the full base-512 head. It uses
+`15.79M` total and `10.49M` estimated active parameters, reducing the
+base-1024 active budget by `29.8%` while adding only about `4.5%` training
+time. This is retained as the leading opt-in architecture; robustness and
+rank/codec ablations remain before changing defaults or scaling the model.
+See `V0_210_DYNAMIC_NONMOD_ALGEBRAIC_FOURIER_SHARED_CODEC_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

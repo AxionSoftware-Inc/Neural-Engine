@@ -50,22 +50,44 @@ class ScalarGaussianOutput(nn.Module):
 
 
 class FactorizedDigitOutput(nn.Module):
-    """Factor a large class index into two small additive digit heads."""
+    """Factor a large class index into two additive digit heads.
 
-    def __init__(self, input_dim: int, num_classes: int, digit_base: int):
+    ``projection_rank`` optionally shares a low-rank state bottleneck between
+    the two digit classifiers.  This is an opt-in output-codec compression;
+    the circuit bank and recurrent state are unchanged.
+    """
+
+    def __init__(
+        self,
+        input_dim: int,
+        num_classes: int,
+        digit_base: int,
+        projection_rank: int = 0,
+    ):
         super().__init__()
         if digit_base < 2:
             raise ValueError("digit_base must be at least two")
         if num_classes % digit_base:
             raise ValueError("num_classes must be divisible by digit_base")
+        if projection_rank < 0:
+            raise ValueError("projection_rank must be non-negative")
         self.num_classes = int(num_classes)
         self.digit_base = int(digit_base)
         self.high_classes = num_classes // digit_base
-        self.high = nn.Linear(input_dim, self.high_classes)
-        self.low = nn.Linear(input_dim, self.digit_base)
+        self.projection_rank = int(projection_rank)
+        if self.projection_rank:
+            self.shared_projection = nn.Linear(input_dim, self.projection_rank)
+            classifier_dim = self.projection_rank
+        else:
+            self.shared_projection = None
+            classifier_dim = input_dim
+        self.high = nn.Linear(classifier_dim, self.high_classes)
+        self.low = nn.Linear(classifier_dim, self.digit_base)
         self.out_features = self.num_classes
 
     def digit_logits(self, states: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        if self.shared_projection is not None:
+            states = self.shared_projection(states)
         return self.high(states), self.low(states)
 
     def combine(
@@ -143,6 +165,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         algebraic_state_mode: str = "none",
         algebraic_state_scale: float = 1.0,
         algebraic_state_value_scale: float = 4096.0,
+        algebraic_state_fourier_base: int = 128,
         operator_valued_product_encoder: bool = False,
         operator_valued_packet_width: int = 16,
         operator_valued_basis_count: int = 8,
@@ -157,6 +180,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         output_temperature: float = 16.0,
         output_scalar_bias: float = 0.0,
         output_digit_base: int = 128,
+        output_factor_rank: int = 0,
         macro_cell_count: int = 0,
         macro_cell_rank: int = 8,
         macro_cell_depth: int = 4,
@@ -233,14 +257,18 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("structured_scalar_read_scale must be non-negative")
         if structured_scalar_authoritative and not structured_scalar_state:
             raise ValueError("structured_scalar_authoritative requires structured_scalar_state")
-        if algebraic_state_mode not in {"none", "polynomial2"}:
-            raise ValueError("algebraic_state_mode must be none or polynomial2")
+        if algebraic_state_mode not in {"none", "polynomial2", "polynomial2_fourier"}:
+            raise ValueError(
+                "algebraic_state_mode must be none, polynomial2, or polynomial2_fourier"
+            )
         if algebraic_state_mode != "none" and modulus is not None:
             raise ValueError("algebraic_state_mode currently requires modulus=None")
         if algebraic_state_scale < 0.0:
             raise ValueError("algebraic_state_scale must be non-negative")
         if algebraic_state_value_scale <= 0.0:
             raise ValueError("algebraic_state_value_scale must be positive")
+        if algebraic_state_fourier_base < 2:
+            raise ValueError("algebraic_state_fourier_base must be at least two")
         if operator_valued_packet_width < 1:
             raise ValueError("operator_valued_packet_width must be positive")
         if operator_valued_basis_count < 1:
@@ -267,6 +295,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("output_temperature must be positive")
         if output_digit_base < 2:
             raise ValueError("output_digit_base must be at least two")
+        if output_factor_rank < 0:
+            raise ValueError("output_factor_rank must be non-negative")
+        if output_factor_rank and output_mode != "factorized_digits":
+            raise ValueError("output_factor_rank requires factorized_digits output")
         if output_mode == "factorized_digits" and num_classes % output_digit_base:
             raise ValueError("num_classes must be divisible by output_digit_base")
         if macro_cell_count < 0:
@@ -329,6 +361,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.algebraic_state_mode = algebraic_state_mode
         self.algebraic_state_scale = float(algebraic_state_scale)
         self.algebraic_state_value_scale = float(algebraic_state_value_scale)
+        self.algebraic_state_fourier_base = int(algebraic_state_fourier_base)
         self.operator_valued_product_encoder = bool(operator_valued_product_encoder)
         self.operator_valued_packet_width = int(operator_valued_packet_width)
         self.operator_valued_basis_count = int(operator_valued_basis_count)
@@ -343,6 +376,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.output_temperature = float(output_temperature)
         self.output_scalar_bias = float(output_scalar_bias)
         self.output_digit_base = int(output_digit_base)
+        self.output_factor_rank = int(output_factor_rank)
         self.macro_cell_count = int(macro_cell_count)
         self.macro_cell_rank = int(macro_cell_rank)
         self.macro_cell_depth = int(macro_cell_depth)
@@ -482,12 +516,15 @@ class DynamicRegisterNeuralEngine(nn.Module):
             self.structured_scalar_projection = nn.Sequential(
                 nn.Linear(1, state_dim), nn.GELU()
             )
-        if self.algebraic_state_mode == "polynomial2":
+        if self.algebraic_state_mode in {"polynomial2", "polynomial2_fourier"}:
             # Keep a compact, reusable algebraic packet alongside the learned
             # state.  The transition is exact for ordinary integer
             # add/subtract/multiply; only its dense projection is learned.
+            algebraic_input_dim = 2
+            if self.algebraic_state_mode == "polynomial2_fourier":
+                algebraic_input_dim += 3 * 2 * 7
             self.algebraic_state_projection = nn.Sequential(
-                nn.Linear(2, state_dim), nn.Tanh()
+                nn.Linear(algebraic_input_dim, state_dim), nn.Tanh()
             )
         if self.modular_prior_enabled:
             if self.modular_prior_mode == "fixed":
@@ -591,7 +628,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
         elif output_mode == "factorized_digits":
             self.output = nn.Sequential(
                 nn.LayerNorm(state_dim),
-                FactorizedDigitOutput(state_dim, num_classes, output_digit_base),
+                FactorizedDigitOutput(
+                    state_dim, num_classes, output_digit_base, output_factor_rank
+                ),
             )
         else:
             self.output = nn.Sequential(
@@ -727,6 +766,23 @@ class DynamicRegisterNeuralEngine(nn.Module):
             (updated[:, 0] / value_scale, updated[:, 1] / square_scale), dim=-1
         )
 
+    def _algebraic_state_features(self, state: torch.Tensor) -> torch.Tensor:
+        """Encode the algebraic packet for the learned query/output bridge."""
+        if self.algebraic_state_mode != "polynomial2_fourier":
+            return state
+        value = state[:, 0] * self.algebraic_state_value_scale
+        features = [state]
+        for period in (
+            float(self.algebraic_state_fourier_base),
+            float(self.algebraic_state_fourier_base ** 2),
+            self.algebraic_state_value_scale,
+        ):
+            angle = value.unsqueeze(-1) * (2.0 * math.pi / period)
+            for harmonic in (1, 2, 4, 8, 16, 32, 64):
+                features.append(torch.sin(angle * harmonic))
+                features.append(torch.cos(angle * harmonic))
+        return torch.cat(features, dim=-1)
+
     def _write_state(
         self, accumulator: torch.Tensor, write_input: torch.Tensor
     ) -> torch.Tensor:
@@ -765,7 +821,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 - VALUE_TOKEN_OFFSET
             ).to(operand_states.dtype)
             scalar_state = scalar_operands[:, 0]
-        if self.algebraic_state_mode == "polynomial2":
+        if self.algebraic_state_mode in {"polynomial2", "polynomial2_fourier"}:
             algebraic_operands = (
                 inputs[:, self.value_start:self.value_start + self.max_ops + 1]
                 - VALUE_TOKEN_OFFSET
@@ -920,10 +976,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
                             scalar_candidate.unsqueeze(-1)
                         )
                     )
-                if self.algebraic_state_mode == "polynomial2":
+                if self.algebraic_state_mode in {"polynomial2", "polynomial2_fourier"}:
                     query = query + self.algebraic_state_scale * (
                         self.algebraic_state_projection(
-                            algebraic_state[active_indices]
+                            self._algebraic_state_features(algebraic_state[active_indices])
                         )
                     )
                 if self.operation_adapter_rank:
@@ -1048,7 +1104,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     next_scalar_state = scalar_state.clone()
                     next_scalar_state[active_indices] = scalar_candidate
                     scalar_state = next_scalar_state
-                if self.algebraic_state_mode == "polynomial2":
+                if self.algebraic_state_mode in {"polynomial2", "polynomial2_fourier"}:
                     next_algebraic_state = algebraic_state.clone()
                     next_algebraic_state[active_indices] = self._algebraic_state_update(
                         algebraic_state[active_indices],
@@ -1117,9 +1173,11 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     step_state = step_state + self.structured_scalar_scale * (
                         scalar_projection
                     )
-            if self.algebraic_state_mode == "polynomial2":
+            if self.algebraic_state_mode in {"polynomial2", "polynomial2_fourier"}:
                 step_state = step_state + self.algebraic_state_scale * (
-                    self.algebraic_state_projection(algebraic_state)
+                    self.algebraic_state_projection(
+                        self._algebraic_state_features(algebraic_state)
+                    )
                 )
             if self.modular_prior_enabled:
                 if self.modular_prior_mode == "fixed":
@@ -1131,7 +1189,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 step_state = step_state + self.modular_projection(step_features)
             if collect_state_stats:
                 step_state_steps.append(step_state.clone())
-                if self.algebraic_state_mode == "polynomial2":
+                if self.algebraic_state_mode in {"polynomial2", "polynomial2_fourier"}:
                     algebraic_state_steps.append(algebraic_state.clone())
             if self.output_mode == "factorized_digits":
                 output_state = self.output[0](step_state)
@@ -1174,7 +1232,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             stats["query_states"] = torch.stack(query_state_steps, dim=1)
             stats["post_accumulator_states"] = torch.stack(post_state_steps, dim=1)
             stats["step_states"] = torch.stack(step_state_steps, dim=1)
-            if self.algebraic_state_mode == "polynomial2":
+            if self.algebraic_state_mode in {"polynomial2", "polynomial2_fourier"}:
                 stats["algebraic_state_features"] = torch.stack(
                     algebraic_state_steps, dim=1
                 )
@@ -1250,7 +1308,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 self.structured_scalar_transition.numel()
                 + count_parameters(self.structured_scalar_projection)
             )
-        if self.algebraic_state_mode == "polynomial2":
+        if self.algebraic_state_mode in {"polynomial2", "polynomial2_fourier"}:
             shared += count_parameters(self.algebraic_state_projection)
         if self.write_gate_enabled:
             shared += count_parameters(self.write_gate)
@@ -1387,6 +1445,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "algebraic_state_mode": self.algebraic_state_mode,
             "algebraic_state_scale": self.algebraic_state_scale,
             "algebraic_state_value_scale": self.algebraic_state_value_scale,
+            "algebraic_state_fourier_base": self.algebraic_state_fourier_base,
             "operator_valued_product_encoder": self.operator_valued_product_encoder,
             "operator_valued_packet_width": self.operator_valued_packet_width,
             "operator_valued_basis_count": self.operator_valued_basis_count,
@@ -1405,6 +1464,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "output_temperature": self.output_temperature,
             "output_scalar_bias": self.output_scalar_bias,
             "output_digit_base": self.output_digit_base,
+            "output_factor_rank": self.output_factor_rank,
             "macro_cell_count": self.macro_cell_count,
             "macro_cell_rank": self.macro_cell_rank,
             "macro_cell_depth": self.macro_cell_depth,

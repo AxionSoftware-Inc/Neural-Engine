@@ -1295,3 +1295,36 @@ qabul qilinmaydi. Keyingi yo‘l range-aware value codec/readout, bankni
 ko‘paytirish emas.
 
 **Batafsil:** `results/V0_207_DYNAMIC_NONMOD_ALGEBRAIC_STATE_RANGE_STRESS.md`.
+
+**Range-aware algebraic/Fourier bridge (2026-09-11):** polynomial2 packetga
+`128`, `16,384`, `524,288` periodli 42 ta Fourier feature qo‘shilganda
+operand `0--15` held-out o‘rtachasi `64.45%`dan `94.29%`ga, depth-4 esa
+`53.22%`dan `92.09%`ga ko‘tarildi; qo‘shimcha learned projection faqat
+`16,128` parametr. Bu P-004 uchun kuchli ijobiy signal va muammo value-to-
+readout codingda ekanini ko‘rsatadi, ammo periodlar base-128 codecga
+moslanganligi sabab hali universal yechim emas. Keyingi gate `0--31`, scale
+oshirish emas.
+
+**Batafsil:** `results/V0_208_DYNAMIC_NONMOD_ALGEBRAIC_FOURIER_AUDIT.md`.
+
+**0--31 output-base nazorati (2026-09-11):** range-aware Fourier bridge bilan
+`base=512` ikki seedda held-out o‘rtacha `78.81%`, depth-4 `73.83%` berdi;
+base-1024 reference `75.10%`/`69.92%`dan `+3.71/+3.91 pp` yuqori. Biroq
+active parametr `14.93M`dan `27.35M`ga, training vaqti taxminan `19%`ga oshdi.
+Base2048 `69.82%`/`62.89%`, base4096 `62.30%`/`53.32%` bo‘ldi. Base512
+**RETAINED AS OPT-IN QUALITY REFERENCE**, default qilinmaydi; P-004 active
+qoladi va keyingi ish base512 sifatini pastroq active budgetga olib tushuvchi
+shared/low-rank value codec bo‘ladi.
+
+**Batafsil:** `results/V0_209_DYNAMIC_NONMOD_ALGEBRAIC_FOURIER_0_31_OUTPUT_BASE_AUDIT.md`.
+
+**Shared low-rank value codec (2026-09-11):** base512 output head oldidan
+shared `384→128` projection qo‘shilganda held-out o‘rtacha `85.06%`, depth-4
+`81.05%` bo‘ldi. Bu base-1024 reference’dan `+9.96/+11.14 pp`, full base512
+variantdan `+6.25/+7.23 pp` yuqori; total/active parametr `15.79M/10.49M`ga
+tushdi. **LEADING OPT-IN SIGNAL; DEFAULT EMAS.** P-004ning asosiy natijasi
+endi faqat router emas, value-state→readout codec ekanini ko‘rsatmoqda. Ochiq
+ishlar: rank `64/128/256` ablation, shifted offset va kengroq operand stress;
+700M/1B scale hozircha qilinmaydi.
+
+**Batafsil:** `results/V0_210_DYNAMIC_NONMOD_ALGEBRAIC_FOURIER_SHARED_CODEC_AUDIT.md`.

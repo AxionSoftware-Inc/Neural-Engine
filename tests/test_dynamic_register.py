@@ -4,6 +4,7 @@ from data.dynamic_composition import DynamicCompositionGenerator
 from neural_engine.dynamic_register import DynamicRegisterNeuralEngine
 from neural_engine.macro_growth import expand_macro_model
 from neural_engine.modular_templates import TrainableModularTemplateRegister
+from train_dynamic_composition import evaluate
 
 
 def test_dynamic_generator_layout_and_depth_split():
@@ -772,6 +773,40 @@ def test_dynamic_register_factorized_digit_output_reconstructs_classes():
     assert model.parameter_report()["output_digit_base"] == 128
 
 
+def test_dynamic_register_factorized_digit_output_supports_shared_low_rank_codec():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        num_classes=32768,
+        modulus=None,
+        seq_len=8,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        output_mode="factorized_digits",
+        output_digit_base=128,
+        output_factor_rank=8,
+    )
+    generator = DynamicCompositionGenerator(
+        max_ops=2,
+        train_max_ops=1,
+        modulus=None,
+        value_min=0,
+        value_max=3,
+        target_offset=64,
+        seed=342,
+    )
+    logits, stats = model(generator.batch(4).inputs)
+    assert logits.shape == (4, 32768)
+    assert stats["digit_high_logits"].shape == (4, 2, 256)
+    assert stats["digit_low_logits"].shape == (4, 2, 128)
+    assert model.parameter_report()["output_factor_rank"] == 8
+
+
 def test_dynamic_register_can_skip_full_factorized_logits_during_training():
     model = DynamicRegisterNeuralEngine(
         max_ops=2,
@@ -804,6 +839,38 @@ def test_dynamic_register_can_skip_full_factorized_logits_during_training():
     assert compact_logits.shape == (4, 256)
     assert stats["step_logits"] is None
     assert stats["digit_high_logits"].shape == (4, 2, 256)
+
+
+def test_dynamic_composition_compact_factorized_evaluation_keeps_exact_argmax():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        num_classes=32768,
+        modulus=None,
+        seq_len=8,
+        d_model=16,
+        state_dim=16,
+        num_circuits=32,
+        circuit_rank=2,
+        router_depth=2,
+        candidate_pool=4,
+        active_circuits=2,
+        factor_count=6,
+        output_mode="factorized_digits",
+        output_digit_base=128,
+    )
+    generator = DynamicCompositionGenerator(
+        max_ops=2,
+        train_max_ops=1,
+        modulus=None,
+        value_min=0,
+        value_max=3,
+        target_offset=64,
+        split="heldout",
+        seed=342,
+    )
+    report = evaluate(model, generator, torch.device("cpu"), 2, compact_factorized=True)
+    assert report["loss_mode"] == "factorized_digit_sum_compact"
+    assert 0.0 <= report["accuracy"] <= 1.0
 
 
 def test_dynamic_register_structured_scalar_read_path_is_optional():
@@ -872,6 +939,29 @@ def test_dynamic_register_polynomial_algebraic_state_tracks_exact_composition():
     expected = torch.tensor([[3.0 / 16.0, 9.0 / 256.0], [9.0 / 16.0, 81.0 / 256.0]])
     assert torch.allclose(features, expected, atol=1e-6)
     assert model.parameter_report()["algebraic_state_mode"] == "polynomial2"
+
+
+def test_dynamic_register_fourier_algebraic_bridge_adds_range_features():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=16,
+        state_dim=16,
+        num_circuits=32,
+        circuit_rank=2,
+        router_depth=2,
+        candidate_pool=4,
+        active_circuits=2,
+        factor_count=6,
+        modulus=None,
+        algebraic_state_mode="polynomial2_fourier",
+        algebraic_state_value_scale=16.0,
+    )
+    inputs = torch.tensor([[1, 2, 4, 33, 34, 35, 0, 0]])
+    _, stats = model(inputs, collect_state_stats=True)
+    assert stats["algebraic_state_features"].shape == (1, 2, 2)
+    assert model.algebraic_state_projection[0].in_features == 44
+    assert model.parameter_report()["algebraic_state_mode"] == "polynomial2_fourier"
 
 
 def test_dynamic_register_can_collect_recurrent_state_trace():

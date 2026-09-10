@@ -107,7 +107,7 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "structured_scalar_read_scale",
         "structured_scalar_authoritative",
         "algebraic_state_mode", "algebraic_state_scale",
-        "algebraic_state_value_scale",
+        "algebraic_state_value_scale", "algebraic_state_fourier_base",
         "operator_valued_product_encoder", "operator_valued_packet_width",
         "operator_valued_basis_count",
         "numeric_state_dim", "numeric_state_scale",
@@ -116,6 +116,7 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "circuit_residual_scale",
         "circuit_input_norm",
         "output_mode", "output_temperature", "output_scalar_bias", "output_digit_base",
+        "output_factor_rank",
         "macro_cell_count", "macro_cell_rank", "macro_cell_depth",
         "macro_router_branch", "macro_router_depth", "macro_candidate_pool",
         "active_macro_cells", "macro_cell_scale",
@@ -246,14 +247,32 @@ def evaluate(
     generator: DynamicCompositionGenerator,
     device: torch.device,
     examples_per_depth: int,
+    compact_factorized: bool = False,
 ) -> dict[str, Any]:
     model.eval()
     batch = generator.balanced_batch(examples_per_depth, device)
-    logits, stats = model(batch.inputs)
+    use_compact = compact_factorized and model.output_mode == "factorized_digits"
+    logits, stats = model(batch.inputs, return_full_logits=not use_compact)
     validate_class_targets(
         batch.targets, int(model.output[-1].out_features), "evaluation targets"
     )
-    correct = logits.argmax(dim=-1).eq(batch.targets)
+    if use_compact:
+        digit_base = model.output_digit_base
+        high_logits = stats["digit_high_logits"][:, -1]
+        low_logits = stats["digit_low_logits"][:, -1]
+        predictions = high_logits.argmax(dim=-1) * digit_base
+        predictions = predictions + low_logits.argmax(dim=-1)
+        loss = nn.functional.cross_entropy(
+            high_logits, batch.targets // digit_base
+        ) + nn.functional.cross_entropy(
+            low_logits, batch.targets.remainder(digit_base)
+        )
+        loss_mode = "factorized_digit_sum_compact"
+    else:
+        predictions = logits.argmax(dim=-1)
+        loss = nn.functional.cross_entropy(logits, batch.targets)
+        loss_mode = "reconstructed_class_logits"
+    correct = predictions.eq(batch.targets)
     per_depth = {}
     for depth in generator.allowed_depths:
         mask = batch.depths.eq(depth)
@@ -261,7 +280,8 @@ def evaluate(
     executed = stats["executed_steps"].float()
     return {
         "accuracy": float(correct.float().mean().cpu()),
-        "loss": float(nn.functional.cross_entropy(logits, batch.targets).cpu()),
+        "loss": float(loss.cpu()),
+        "loss_mode": loss_mode,
         "accuracy_by_depth": per_depth,
         "avg_executed_steps": float(executed.mean().cpu()),
         "active_step_fraction": float((executed / model.max_ops).mean().cpu()),
@@ -408,8 +428,15 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         if args.log_every and (step == 1 or step % args.log_every == 0 or step == steps):
             print(f"step={step:05d} loss={losses[-1]:.5f}")
     elapsed = time.perf_counter() - start
-    train_eval = evaluate(model, train_generator, device, args.examples_per_depth)
-    eval_eval = evaluate(model, eval_generator, device, args.examples_per_depth)
+    compact_factorized_eval = bool(config.get("compact_factorized_eval", False))
+    train_eval = evaluate(
+        model, train_generator, device, args.examples_per_depth,
+        compact_factorized=compact_factorized_eval,
+    )
+    eval_eval = evaluate(
+        model, eval_generator, device, args.examples_per_depth,
+        compact_factorized=compact_factorized_eval,
+    )
     report = {
         "run_id": args.run_id,
         "model_name": config["model"],
@@ -424,6 +451,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "eval_value_range": [args.eval_value_min, args.eval_value_max],
         "generator_modulus": generator_modulus,
         "target_offset": target_offset,
+        "compact_factorized_eval": compact_factorized_eval,
         "total_params": count_parameters(model),
         "train": train_eval,
         "evaluation": eval_eval,
