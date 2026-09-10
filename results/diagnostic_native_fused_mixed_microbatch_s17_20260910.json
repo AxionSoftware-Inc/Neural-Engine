@@ -1,0 +1,148 @@
+{
+  "experiment": "native_fused_shape_bucketed_mixed_microbatch",
+  "checkpoint": "results\\checkpoints\\ne500_stable_prefix_active16_s17_3000.pt",
+  "device": "cuda",
+  "seed": 23005,
+  "logical_requests": 32,
+  "sequence_lengths": [
+    6,
+    32
+  ],
+  "microbatch_sizes": [
+    1,
+    4,
+    8
+  ],
+  "scenarios": {
+    "1": {
+      "microbatch_size": 1,
+      "logical_requests": 32,
+      "http_requests": 32,
+      "groups_by_shape": {
+        "s6": 16,
+        "s32": 16
+      },
+      "client_workers": 4,
+      "request_wall_ms": 86.76670000022568,
+      "logical_requests_per_second": 368.80508305509795,
+      "http_client_latency_ms": {
+        "min": 2.195899999605899,
+        "mean": 10.286928124969563,
+        "p95": 28.583199999957287,
+        "max": 28.767100000550272
+      },
+      "cache": {
+        "owner_pid": 3156,
+        "cached_shape_count": 2,
+        "cache_keys": [
+          {
+            "batch_size": 1,
+            "sequence_length": 6,
+            "stream": 0
+          },
+          {
+            "batch_size": 1,
+            "sequence_length": 32,
+            "stream": 0
+          }
+        ],
+        "capture_count": 2,
+        "cache_hit_count": 32,
+        "cache_miss_count": 2,
+        "eviction_count": 0,
+        "eager_fallback_count": 0,
+        "capture_failures": [],
+        "process_graph_lock": false
+      },
+      "max_logit_error_vs_first_scenario": 0.0,
+      "prediction_mismatches_vs_first_scenario": 0
+    },
+    "4": {
+      "microbatch_size": 4,
+      "logical_requests": 32,
+      "http_requests": 8,
+      "groups_by_shape": {
+        "s6": 4,
+        "s32": 4
+      },
+      "client_workers": 4,
+      "request_wall_ms": 21.650700000463985,
+      "logical_requests_per_second": 1478.0122582324925,
+      "http_client_latency_ms": {
+        "min": 3.3720999999786727,
+        "mean": 7.9567874998929256,
+        "p95": 19.69009999993432,
+        "max": 19.69009999993432
+      },
+      "cache": {
+        "owner_pid": 13372,
+        "cached_shape_count": 2,
+        "cache_keys": [
+          {
+            "batch_size": 4,
+            "sequence_length": 32,
+            "stream": 0
+          },
+          {
+            "batch_size": 4,
+            "sequence_length": 6,
+            "stream": 0
+          }
+        ],
+        "capture_count": 2,
+        "cache_hit_count": 8,
+        "cache_miss_count": 2,
+        "eviction_count": 0,
+        "eager_fallback_count": 0,
+        "capture_failures": [],
+        "process_graph_lock": false
+      },
+      "max_logit_error_vs_first_scenario": 5.7220458984375e-06,
+      "prediction_mismatches_vs_first_scenario": 0
+    },
+    "8": {
+      "microbatch_size": 8,
+      "logical_requests": 32,
+      "http_requests": 4,
+      "groups_by_shape": {
+        "s6": 2,
+        "s32": 2
+      },
+      "client_workers": 4,
+      "request_wall_ms": 8.489900000313355,
+      "logical_requests_per_second": 3769.184560338627,
+      "http_client_latency_ms": {
+        "min": 4.315799999858427,
+        "mean": 5.77147499984676,
+        "p95": 6.891600000017206,
+        "max": 6.891600000017206
+      },
+      "cache": {
+        "owner_pid": 1652,
+        "cached_shape_count": 2,
+        "cache_keys": [
+          {
+            "batch_size": 8,
+            "sequence_length": 6,
+            "stream": 0
+          },
+          {
+            "batch_size": 8,
+            "sequence_length": 32,
+            "stream": 0
+          }
+        ],
+        "capture_count": 2,
+        "cache_hit_count": 4,
+        "cache_miss_count": 2,
+        "eviction_count": 0,
+        "eager_fallback_count": 0,
+        "capture_failures": [],
+        "process_graph_lock": false
+      },
+      "max_logit_error_vs_first_scenario": 5.7220458984375e-06,
+      "prediction_mismatches_vs_first_scenario": 0
+    }
+  },
+  "interpretation": "Requests are bucketed by sequence length before grouping. The first scenario is the parity reference; compare logical throughput and shape-specific cache entries across microbatch sizes."
+}

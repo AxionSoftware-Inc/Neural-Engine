@@ -265,6 +265,15 @@ observed batch of 8 and retained `0` prediction mismatches. Reducing the wait
 window therefore did not change the decision: the current per-request HTTP
 queue is not a speed path for this workload.
 
+Finally, a mixed-shape upstream control alternated sequence lengths 6 and 32
+across 32 logical requests, then bucketed each sequence length before grouping.
+At B=1 it reached `368.8 req/s`; B=4 reached `1478.0 req/s` (`4.0x`), and
+B=8 reached `3769.2 req/s` (`10.2x`). Both sequence buckets used their own
+cached graph shape, with `0` prediction mismatches and maximum logit difference
+`5.72e-6`. This confirms that the usable runtime path is an upstream
+shape-bucketing/grouped `/infer` API; the internal per-request admission queue
+should remain opt-in and is not part of the default.
+
 ## Long quality control
 
 The fused learned checkpoints were rerun through the 96-batch-per-condition
@@ -325,6 +334,7 @@ approximate a configuration it does not support.
 - [Native fused admission JSON](diagnostic_native_fused_admission_s17_20260910_prewarmed.json)
 - [Native fused admission, 8-client stress JSON](diagnostic_native_fused_admission_s17_20260910_8clients.json)
 - [Native fused admission, 0.25 ms window JSON](diagnostic_native_fused_admission_s17_20260910_window025_prewarmed.json)
+- [Native fused mixed-shape microbatch JSON](diagnostic_native_fused_mixed_microbatch_s17_20260910.json)
 - [Seed17 fused runtime smoke JSON](diagnostic_native_fused_runtime_s17_480_20260910.json)
 - [Long fused learned-width OOD JSON](diagnostic_native_fused_learned_ood_long96_20260910.json)
 - [Independent long fused OOD JSON](diagnostic_native_fused_ood_long48_all3_20260910.json)
@@ -344,6 +354,7 @@ approximate a configuration it does not support.
 - [Shared-GPU worker-scaling benchmark](../benchmark_native_worker_scaling.py)
 - [Grouped microbatch benchmark](../benchmark_native_microbatch.py)
 - [Admission-queue benchmark](../benchmark_native_admission.py)
+- [Mixed-shape microbatch benchmark](../benchmark_native_mixed_microbatch.py)
 - [HTTP service adapter](../neural_engine/native_fused_server.py)
 - [Python wrapper](../neural_engine/native_fused_dispatch.py)
 - [CUDA kernel](../neural_engine/native_fused_dispatch.cu)

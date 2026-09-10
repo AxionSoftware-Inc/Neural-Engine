@@ -657,6 +657,12 @@ rate’da foydasiz: defaultga kiritilmadi, opt-in tajriba sifatida qoldi.
 windowni qisqartirish yetarli emas — hozirgi HTTP queue yo‘li tezlik yechimi
 sifatida rad qilindi.
 
+Upstream shape-bucketing esa tasdiqlandi: seq=6/32 aralash 32 logical
+requestda B=1/B=4/B=8 throughput `368.8/1478.0/3769.2 req/s` bo‘ldi,
+mismatch `0`, maksimal logit farqi `5.72e-6`. Demak native runtime uchun
+foydali yo‘l — request serveriga kirishdan oldin bir xil sequence shape’larni
+guruhlash va `/infer`ga grouped batch yuborish; internal queue default emas.
+
 Mustaqil uzoq quality control’da fused va torch backendlari uch seed/to‘rt
 condition bo‘yicha exact accuracy’da bir xil chiqdi, maksimal CE farqi
 `1.61e-8`. Seed19 uniform exact `66.61%` va hard mean `31.76%` bilan seed17/18
@@ -664,8 +670,9 @@ dan ancha past, lekin torch control ham aynan shu raqamlarni berdi. Bu fused
 kernel regressiyasi emas, checkpoint/training seed barqarorligi alohida
 muammo ekanini ko‘rsatadi.
 
-**Keyingi tajriba:** one-worker-per-GPU baseline’ni saqlab, batching/admission
-siyosatini stress-test qilish. **Batafsil:**
+**Keyingi tajriba:** one-worker-per-GPU baseline’ni saqlab, upstream
+shape-bucketing API’ni client/serving pipeline’iga integratsiya qilish.
+**Batafsil:**
 `results/P003_NATIVE_FUSED_DISPATCH_AUDIT_20260910.md`.
 
 500M bankda `routing_capacity=22800` va `routing_depth=5` clamp qilinadigan
