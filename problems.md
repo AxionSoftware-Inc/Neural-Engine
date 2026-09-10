@@ -576,8 +576,8 @@ ishlaydi. Sequence `6/8/16/32` sweepida B=120 uchun fixed K=16 yutug‘i
 bo‘ldi; maksimal parity xatosi `5.72e-6`. Shu sabab batch/sequence/fallback
 bosqichi yopildi. B=120, seq=6/32 shape’larini navbatlab va ikki CUDA
 stream’da parallel ishlatgan serving smoke’da ham maksimal parity `5.72e-6`
-bo‘ldi; shape/state aralashuvi kuzatilmadi. Production shape-cache, eviction
-va server integration hali ochiq.
+bo‘ldi; shape/state aralashuvi kuzatilmadi. Bu dastlabki smoke shape-cache va
+HTTP serverni qamramagan edi; keyingi sinovlar quyida alohida qayd etilgan.
 
 `NativeFusedShapeCache` opt-in calleri bounded LRU CUDA Graph cache, shape
 `(batch, sequence, stream)` key, dynamic-width eager fallback va capture-failure
@@ -594,6 +594,17 @@ o‘tdi: 1 capture/16 hit, barcha outputlar reference bilan mos, maksimal xato
 cross-process reuse esa bloklanadi va har worker model/cache’ni o‘zi yaratishi
 kerak.
 
+`serve_native.py` va `NativeFusedService` orqali haqiqiy threaded HTTP entry
+point qo‘shildi. `/health`, `/stats` va `/infer` endpointlari input shape,
+sequence limit, token range va process ownershipni tekshiradi. Real seed17
+500M checkpointida B=1/B=8 va seq=6/32 uchun 4 shape bir martadan capture va
+keyin bir martadan cache hit berdi: `4 capture / 4 hit / 0 eager fallback`;
+predictionlar takroriy so‘rovlarda mos, eager bilan maksimal logit farqi
+`1.91e-6`. Birinchi HTTP chaqiriqlar `91.6–124.7 ms`, takroriy chaqiriqlar
+`9.3–24.9 ms` bo‘ldi. Local server-entry smoke yopildi, ammo TLS,
+authentication, batching/admission control, process supervision va production
+multi-process launcher hali ochiq.
+
 Mustaqil uzoq quality control’da fused va torch backendlari uch seed/to‘rt
 condition bo‘yicha exact accuracy’da bir xil chiqdi, maksimal CE farqi
 `1.61e-8`. Seed19 uniform exact `66.61%` va hard mean `31.76%` bilan seed17/18
@@ -601,8 +612,9 @@ dan ancha past, lekin torch control ham aynan shu raqamlarni berdi. Bu fused
 kernel regressiyasi emas, checkpoint/training seed barqarorligi alohida
 muammo ekanini ko‘rsatadi.
 
-**Keyingi tajriba:** real server entry pointiga per-worker cache lifecycle’ni
-ulash. **Batafsil:**
+**Keyingi tajriba:** deployment-specific launcherda har worker uchun model va
+cache lifecycle’ni mustaqil yaratish, keyin admission/batching siyosatini
+stress-test qilish. **Batafsil:**
 `results/P003_NATIVE_FUSED_DISPATCH_AUDIT_20260910.md`.
 
 500M bankda `routing_capacity=22800` va `routing_depth=5` clamp qilinadigan

@@ -1,0 +1,188 @@
+{
+  "experiment": "native_fused_http_server_smoke",
+  "checkpoint": "results\\checkpoints\\ne500_stable_prefix_active16_s17_3000.pt",
+  "device": "cuda:0",
+  "address": "http://127.0.0.1:50419",
+  "batch_sizes": [
+    1,
+    8
+  ],
+  "sequence_lengths": [
+    6,
+    32
+  ],
+  "requests": {
+    "b1_s6": {
+      "first_ms": 120.42150000002039,
+      "second_ms": 24.857899999972233,
+      "max_logit_error_vs_eager": 9.5367431640625e-07,
+      "predictions_match": true,
+      "cache_after_second": {
+        "owner_pid": 6832,
+        "cached_shape_count": 1,
+        "cache_keys": [
+          {
+            "batch_size": 1,
+            "sequence_length": 6,
+            "stream": 0
+          }
+        ],
+        "capture_count": 1,
+        "cache_hit_count": 1,
+        "cache_miss_count": 1,
+        "eviction_count": 0,
+        "eager_fallback_count": 0,
+        "capture_failures": []
+      }
+    },
+    "b1_s32": {
+      "first_ms": 104.5165000000452,
+      "second_ms": 14.98479999997926,
+      "max_logit_error_vs_eager": 9.5367431640625e-07,
+      "predictions_match": true,
+      "cache_after_second": {
+        "owner_pid": 6832,
+        "cached_shape_count": 2,
+        "cache_keys": [
+          {
+            "batch_size": 1,
+            "sequence_length": 6,
+            "stream": 0
+          },
+          {
+            "batch_size": 1,
+            "sequence_length": 32,
+            "stream": 0
+          }
+        ],
+        "capture_count": 2,
+        "cache_hit_count": 2,
+        "cache_miss_count": 2,
+        "eviction_count": 0,
+        "eager_fallback_count": 0,
+        "capture_failures": []
+      }
+    },
+    "b8_s6": {
+      "first_ms": 124.73479999999881,
+      "second_ms": 11.181000000021868,
+      "max_logit_error_vs_eager": 1.9073486328125e-06,
+      "predictions_match": true,
+      "cache_after_second": {
+        "owner_pid": 6832,
+        "cached_shape_count": 3,
+        "cache_keys": [
+          {
+            "batch_size": 1,
+            "sequence_length": 6,
+            "stream": 0
+          },
+          {
+            "batch_size": 1,
+            "sequence_length": 32,
+            "stream": 0
+          },
+          {
+            "batch_size": 8,
+            "sequence_length": 6,
+            "stream": 0
+          }
+        ],
+        "capture_count": 3,
+        "cache_hit_count": 3,
+        "cache_miss_count": 3,
+        "eviction_count": 0,
+        "eager_fallback_count": 0,
+        "capture_failures": []
+      }
+    },
+    "b8_s32": {
+      "first_ms": 91.5924999999902,
+      "second_ms": 9.2935000000125,
+      "max_logit_error_vs_eager": 1.9073486328125e-06,
+      "predictions_match": true,
+      "cache_after_second": {
+        "owner_pid": 6832,
+        "cached_shape_count": 4,
+        "cache_keys": [
+          {
+            "batch_size": 1,
+            "sequence_length": 6,
+            "stream": 0
+          },
+          {
+            "batch_size": 1,
+            "sequence_length": 32,
+            "stream": 0
+          },
+          {
+            "batch_size": 8,
+            "sequence_length": 6,
+            "stream": 0
+          },
+          {
+            "batch_size": 8,
+            "sequence_length": 32,
+            "stream": 0
+          }
+        ],
+        "capture_count": 4,
+        "cache_hit_count": 4,
+        "cache_miss_count": 4,
+        "eviction_count": 0,
+        "eager_fallback_count": 0,
+        "capture_failures": []
+      }
+    }
+  },
+  "health": {
+    "status": "ok",
+    "pid": 6832,
+    "device": "cuda:0",
+    "training": false,
+    "dispatch_backend": "native_cuda_fused",
+    "cache": {
+      "owner_pid": 6832,
+      "cached_shape_count": 0,
+      "cache_keys": [],
+      "capture_count": 0,
+      "cache_hit_count": 0,
+      "cache_miss_count": 0,
+      "eviction_count": 0,
+      "eager_fallback_count": 0,
+      "capture_failures": []
+    }
+  },
+  "final_cache": {
+    "owner_pid": 6832,
+    "cached_shape_count": 4,
+    "cache_keys": [
+      {
+        "batch_size": 1,
+        "sequence_length": 6,
+        "stream": 0
+      },
+      {
+        "batch_size": 1,
+        "sequence_length": 32,
+        "stream": 0
+      },
+      {
+        "batch_size": 8,
+        "sequence_length": 6,
+        "stream": 0
+      },
+      {
+        "batch_size": 8,
+        "sequence_length": 32,
+        "stream": 0
+      }
+    ],
+    "capture_count": 4,
+    "cache_hit_count": 4,
+    "cache_miss_count": 4,
+    "eviction_count": 0,
+    "eager_fallback_count": 0,
+    "capture_failures": []
+  }
+}

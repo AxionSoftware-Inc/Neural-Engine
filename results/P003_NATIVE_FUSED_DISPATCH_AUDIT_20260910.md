@@ -140,6 +140,27 @@ same-stream calls host-serialized, while different streams retain independent
 entries. A cross-process reuse unit test rejects inherited cache ownership, so
 each worker must construct its own model and cache after process creation.
 
+## HTTP server entry-point smoke
+
+`serve_native.py` and `NativeFusedService` now provide a small threaded HTTP
+entry point around the same process-local model/cache contract. `GET /health`
+reports device/backend/cache ownership, `GET /stats` reports cache counters, and
+`POST /infer` accepts a rectangular JSON `inputs` list and returns hard
+predictions (optionally logits). Input shape, sequence limit, token range, and
+process ownership are validated before dispatch. The service has no global
+request lock: same-stream graph replay is protected by the cache entry lock,
+while independent CUDA stream entries can proceed independently.
+
+The real seed-17 500M checkpoint was served in-process through the actual HTTP
+handler at B=1/B=8 and sequence lengths 6/32. All four shapes captured once and
+then hit the cache once (`4 capture / 4 hit / 0 eager fallback`); predictions
+matched on repeat requests and maximum logit error versus eager was `1.91e-6`.
+The first HTTP calls took approximately `91.6–124.7 ms` (including graph
+capture and JSON transport), and repeated calls took `9.3–24.9 ms`. This closes
+the local server-entry smoke. It is still not a production deployment: TLS,
+authentication, batching/admission control, process supervision, and a tested
+multi-process launcher remain outside this repository entry point.
+
 ## Long quality control
 
 The fused learned checkpoints were rerun through the 96-batch-per-condition
@@ -173,14 +194,14 @@ its route partition is variable; this kernel does not hide that separate issue.
 
 ## Decision
 
-`PROMISING OPT-IN — SHAPE-CACHE/CONCURRENCY SMOKE VALIDATED; PRODUCTION INTEGRATION OPEN`.
+`PROMISING OPT-IN — HTTP SERVER SMOKE VALIDATED; PRODUCTION HARDENING OPEN`.
 
 Keep native fused dispatch opt-in and leave PyTorch as the default. The
 shape-cache caller, batch/sequence parity, fallback, stream-safety, same-stream
-concurrency, and long quality checks now pass. Full server integration remains:
-workers must own their model/cache, and request admission must avoid sharing a
-single cache entry across processes. The kernel must never silently approximate
-a configuration it does not support.
+concurrency, HTTP entry-point smoke, and long quality checks now pass. Keep the
+native path opt-in until a deployment-specific launcher gives every worker its
+own model/cache and request admission policy. The kernel must never silently
+approximate a configuration it does not support.
 
 ## Raw evidence and reproduction
 
@@ -192,6 +213,7 @@ a configuration it does not support.
 - [Shape-cache B=1 JSON](diagnostic_native_fused_shape_cache_s17_b1_20260910.json)
 - [Shape-cache B=8 JSON](diagnostic_native_fused_shape_cache_s17_b8_20260910.json)
 - [Same-stream concurrency JSON](diagnostic_native_fused_serving_concurrency_s17_b1_20260910.json)
+- [HTTP server smoke JSON](diagnostic_native_fused_http_server_s17_20260910.json)
 - [Seed17 fused runtime smoke JSON](diagnostic_native_fused_runtime_s17_480_20260910.json)
 - [Long fused learned-width OOD JSON](diagnostic_native_fused_learned_ood_long96_20260910.json)
 - [Independent long fused OOD JSON](diagnostic_native_fused_ood_long48_all3_20260910.json)
@@ -203,6 +225,9 @@ a configuration it does not support.
 - [Shape-cache serving caller](../neural_engine/native_fused_serving.py)
 - [Shape-cache benchmark](../benchmark_native_fused_shape_cache.py)
 - [Concurrency benchmark](../benchmark_native_fused_serving_concurrency.py)
+- [HTTP server benchmark](../benchmark_native_server.py)
+- [HTTP serving entry point](../serve_native.py)
+- [HTTP service adapter](../neural_engine/native_fused_server.py)
 - [Python wrapper](../neural_engine/native_fused_dispatch.py)
 - [CUDA kernel](../neural_engine/native_fused_dispatch.cu)
 - [Batch-shape sweep](../benchmark_native_fused_shape_sweep.py)
@@ -217,3 +242,17 @@ python benchmark_native_width_runtime.py `
   --examples-per-task 64 --warmup 5 --repeats 20 --include-native-fused `
   --output results/diagnostic_native_fused_runtime_all3_960_20260910.json
 ```
+
+HTTP server-entry smoke:
+
+```powershell
+python benchmark_native_server.py `
+  --checkpoint results/checkpoints/ne500_stable_prefix_active16_s17_3000.pt `
+  --batch-sizes 1 8 --sequence-lengths 6 32 --warmup-iters 3 `
+  --output results/diagnostic_native_fused_http_server_s17_20260910.json
+```
+
+For interactive local serving, use the same checkpoint with
+`python serve_native.py --checkpoint <path> --port 8080`. The JSON API is
+`POST /infer` with `{"inputs": [[token, ...], ...]}` and optional
+`"return_logits": true`; each process must load its own model and cache.
