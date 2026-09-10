@@ -82,6 +82,26 @@ factor product, hidden product, hidden gate, serial composition, and address
 residual. This is a safety check, not an implementation of those features in
 the fused kernel.
 
+## Sequence-shape sweep
+
+At balanced batch 120, three seeds were also tested with the same padded
+examples truncated to sequence lengths 6, 8, 16, and 32. The three-seed mean
+speed reductions were:
+
+| Sequence length | Fixed K=16 | Learned K=8/16 |
+---:|---:|---:|
+| 6 | **40.7%** | **29.5%** |
+| 8 | **48.9%** | **29.6%** |
+| 16 | **50.2%** | **30.7%** |
+| 32 | **50.9%** | **27.9%** |
+
+Every fused sequence case remained within `5.72e-6` maximum logit error of
+the matching PyTorch path. The model's configured `slot_count=5` was respected;
+length 6 is the shortest valid serving shape for this checkpoint. This closes
+the current batch/sequence parity sweep for the tested 500M configuration, but
+it is not yet a production integration test with request-shape caching or
+concurrent requests.
+
 ## Long quality control
 
 The fused learned checkpoints were rerun through the 96-batch-per-condition
@@ -101,11 +121,11 @@ its route partition is variable; this kernel does not hide that separate issue.
 
 ## Decision
 
-`PROMISING OPT-IN — BATCH/FALLBACK VALIDATED; SEQUENCE/PRODUCTION VALIDATION OPEN`.
+`PROMISING OPT-IN — BATCH/SEQUENCE/FALLBACK VALIDATED; PRODUCTION VALIDATION OPEN`.
 
-Keep native fused dispatch opt-in and leave PyTorch as the default. Batch-shape
-and representative fallback checks now pass, but sequence-shape validation,
-production-shape timing, and an independent longer quality run remain before
+Keep native fused dispatch opt-in and leave PyTorch as the default. Batch,
+sequence-shape, and representative fallback checks now pass, but production
+shape caching/concurrency and an independent longer quality run remain before
 any default switch. The kernel must never silently approximate a configuration
 it does not support.
 
@@ -114,6 +134,7 @@ it does not support.
 - [480-batch runtime JSON](diagnostic_native_fused_runtime_all3_480_20260910.json)
 - [960-batch runtime JSON](diagnostic_native_fused_runtime_all3_960_20260910.json)
 - [Batch-shape sweep JSON](diagnostic_native_fused_shape_sweep_all3_20260910.json)
+- [Sequence-shape sweep JSON](diagnostic_native_fused_sequence_sweep_all3_20260910.json)
 - [Seed17 fused runtime smoke JSON](diagnostic_native_fused_runtime_s17_480_20260910.json)
 - [Long fused learned-width OOD JSON](diagnostic_native_fused_learned_ood_long96_20260910.json)
 - [Fused fixed K=16 Graph batch-1 JSON](diagnostic_native_cuda_graph_fused_fixed16_b1_20260910.json)
@@ -123,6 +144,7 @@ it does not support.
 - [Python wrapper](../neural_engine/native_fused_dispatch.py)
 - [CUDA kernel](../neural_engine/native_fused_dispatch.cu)
 - [Batch-shape sweep](../benchmark_native_fused_shape_sweep.py)
+- [Sequence-shape sweep](../benchmark_native_fused_sequence_sweep.py)
 
 ```powershell
 python benchmark_native_width_runtime.py `

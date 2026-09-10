@@ -540,7 +540,7 @@ custom static-index kernel. Dynamic route’ni hozircha eager/opt-in qoldirish.
 
 ### C-RUNTIME-NATIVE-FUSED-001 — Factorized native dispatch overhead
 
-**Status:** `PROMISING OPT-IN — BATCH/FALLBACK VALIDATED; SEQUENCE/PRODUCTION VALIDATION OPEN`
+**Status:** `PROMISING OPT-IN — BATCH/SEQUENCE/FALLBACK VALIDATED; PRODUCTION VALIDATION OPEN`
 **Muammo:** Runtime track / P-003 / P-007
 
 Ordered factorized-additive 500M bank uchun inference-only custom CUDA kernel
@@ -571,10 +571,12 @@ bu majburlangan active-path emas, serving overheadini himoyalovchi mavjud guard.
 Unsupported feature fallback uchun 9 CUDA test o‘tdi: unordered slots, shared
 mix, query mix, pair/product/hidden-product/hidden-gate, serial composition va
 address residual holatlarida native extension chaqirilmaydi, PyTorch yo‘li
-ishlaydi. Shu sabab batch/fallback bosqichi yopildi, sequence-shape va
-production integration hali ochiq.
+ishlaydi. Sequence `6/8/16/32` sweepida B=120 uchun fixed K=16 yutug‘i
+`40.7%/48.9%/50.2%/50.9%`, learned yutug‘i esa `29.5%/29.6%/30.7%/27.9%`
+bo‘ldi; maksimal parity xatosi `5.72e-6`. Shu sabab batch/sequence/fallback
+bosqichi yopildi, production integration hali ochiq.
 
-**Keyingi tajriba:** sequence-shape/production serving validation va mustaqil
+**Keyingi tajriba:** production shape-cache/concurrency validation va mustaqil
 uzoq quality control. **Batafsil:**
 `results/P003_NATIVE_FUSED_DISPATCH_AUDIT_20260910.md`.
 

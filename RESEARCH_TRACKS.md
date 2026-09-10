@@ -14,7 +14,7 @@ quality numbers must not be compared as if they were the same task.
 |---|---|---|---|---|
 | Native Engine | Original attention-free Neural Engine on synthetic algorithmic tasks | **Validated local baseline** | `exp/track-native-engine` | Improve small-batch and decode runtime without changing the model body |
 | Sparse Qwen | Exact Qwen FFN/SwiGLU transfer into sparse circuits and learned subset routing | **Validated at K=5/K=6; K=4 open** | `exp/track-qwen-sparse` | Work only on learned candidate retrieval/subset regret |
-| Runtime | Dispatch, memory traffic, fused/compiled kernels used by either track | **Engineering track** | `exp/track-runtime` | Validate sequence/production shapes for native fused factorized dispatch; dynamic routing remains graph-unsafe |
+| Runtime | Dispatch, memory traffic, fused/compiled kernels used by either track | **Engineering track** | `exp/track-runtime` | Validate production shape-cache/concurrency integration for native fused factorized dispatch; dynamic routing remains graph-unsafe |
 
 `freeze/baseline-20260907` is the read-only starting point for this
 organization pass. The existing `main` and `freeze/v0.27-audited` branches are
