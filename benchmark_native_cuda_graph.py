@@ -42,12 +42,15 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--iterations", type=int, default=100)
     parser.add_argument("--output", default=None)
+    parser.add_argument("--circuit-dispatch-backend", choices=("torch", "native_cuda_fused"),
+                        default="torch")
     args = parser.parse_args()
     if not torch.cuda.is_available() or not hasattr(torch.cuda, "make_graphed_callables"):
         raise RuntimeError("CUDA Graph support is unavailable")
 
     payload = torch.load(Path(args.checkpoint), map_location="cpu", weights_only=True)
     config = dict(payload["config"])
+    config["circuit_dispatch_backend"] = args.circuit_dispatch_backend
     seed_everything(int(config["seed"]))
     device = torch.device("cuda")
     eager = make_model(config).to(device).eval()

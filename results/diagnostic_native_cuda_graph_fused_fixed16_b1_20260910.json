@@ -1,0 +1,10 @@
+{
+  "batch_size": 1,
+  "adaptive": false,
+  "eager_ms_before_capture": 6.729574999990291,
+  "status": "ok",
+  "max_logit_error": 1.9073486328125e-06,
+  "eager_ms": 1.8569600000046194,
+  "cuda_graph_ms": 1.7979230000128155,
+  "speed_ratio_graph_over_eager": 0.9682077158411291
+}

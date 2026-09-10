@@ -60,7 +60,8 @@ class NeuralEngineV0(nn.Module):
                  dynamic_width_min: int | None = None,
                  dynamic_width_threshold: float = 0.8,
                  dynamic_width_min_batch: int = 0,
-                 dynamic_width_dispatch: str = "grouped"):
+                 dynamic_width_dispatch: str = "grouped",
+                 circuit_dispatch_backend: str = "torch"):
         super().__init__()
         if circuit_mode not in {"parallel", "serial"}:
             raise ValueError("circuit_mode must be 'parallel' or 'serial'")
@@ -164,11 +165,14 @@ class NeuralEngineV0(nn.Module):
             raise ValueError("dynamic_width_min_batch must be non-negative")
         if dynamic_width_dispatch not in {"grouped", "prefix_split"}:
             raise ValueError("dynamic_width_dispatch must be 'grouped' or 'prefix_split'")
+        if circuit_dispatch_backend not in {"torch", "native_cuda_fused"}:
+            raise ValueError("circuit_dispatch_backend must be 'torch' or 'native_cuda_fused'")
         self.dynamic_width_mode = dynamic_width_mode
         self.dynamic_width_min = int(dynamic_width_min)
         self.dynamic_width_threshold = float(dynamic_width_threshold)
         self.dynamic_width_min_batch = int(dynamic_width_min_batch)
         self.dynamic_width_dispatch = dynamic_width_dispatch
+        self.circuit_dispatch_backend = circuit_dispatch_backend
         self.dynamic_width_head = (nn.Linear(state_dim, 1)
                                    if dynamic_width_mode == "learned" else None)
         if self.dynamic_width_head is not None:
@@ -263,6 +267,8 @@ class NeuralEngineV0(nn.Module):
             )
         else:
             self.circuits = MicroCircuitBank(num_circuits, state_dim, circuit_rank)
+        if hasattr(self.circuits, "dispatch_backend"):
+            self.circuits.dispatch_backend = circuit_dispatch_backend
         self.correction_gate = (
             nn.Linear(2 * state_dim, 1)
             if correction_gate_mode == "route_bounded" else None

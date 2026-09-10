@@ -59,18 +59,30 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             f"{checkpoint_path.stem}_learned_width.pt")
         learned_checkpoint = torch.load(learned_path, map_location="cpu", weights_only=True)
         configs["learned_k8_k16"] = dict(learned_checkpoint["config"])
+        if args.include_native_fused:
+            for name in ("fixed_k8", "fixed_k16"):
+                fused_config = dict(configs[name])
+                fused_config["circuit_dispatch_backend"] = "native_cuda_fused"
+                configs[f"native_fused_{name}"] = fused_config
+            fused_learned_config = dict(learned_checkpoint["config"])
+            fused_learned_config["circuit_dispatch_backend"] = "native_cuda_fused"
+            configs["native_fused_learned"] = fused_learned_config
         if args.include_prefix_split:
             prefix_config = dict(learned_checkpoint["config"])
             prefix_config["dynamic_width_dispatch"] = "prefix_split"
             configs["learned_prefix_split"] = prefix_config
+        sources = {
+            name: (learned_checkpoint
+                   if name in {"learned_k8_k16", "learned_prefix_split",
+                               "native_fused_learned"}
+                   else checkpoint)
+            for name in configs
+        }
         models = {}
         for name, config in configs.items():
             model = make_model(config).to(device)
-            source_checkpoint = (learned_checkpoint
-                                 if name in {"learned_k8_k16", "learned_prefix_split"}
-                                 else checkpoint)
             model.load_state_dict(
-                source_checkpoint["model_state"])
+                sources[name]["model_state"])
             model.eval()
             models[name] = model
         seed = int(base_config.get("seed", 17))
@@ -86,6 +98,20 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 "mean_ms": timing,
                 "samples_per_second": float(batch.inputs.shape[0] * 1000.0 / timing),
             }
+            if name.startswith("native_fused_"):
+                reference_config = dict(configs[name])
+                reference_config["circuit_dispatch_backend"] = "torch"
+                reference = make_model(reference_config).to(device)
+                reference.load_state_dict(sources[name]["model_state"])
+                reference.eval()
+                with torch.no_grad():
+                    reference_logits, _ = reference(
+                        batch.inputs, adaptive=False, collect_stats=False)
+                    fused_logits, _ = model(
+                        batch.inputs, adaptive=False, collect_stats=False)
+                variant["max_logit_error_vs_torch"] = float(
+                    (fused_logits - reference_logits).abs().max().cpu())
+                del reference
             if "active_widths" in stats:
                 widths = stats["active_widths"].float()
                 executed = stats["executed_mask"]
@@ -111,6 +137,7 @@ def main() -> None:
     parser.add_argument("--repeats", type=int, default=20)
     parser.add_argument("--examples-per-task", type=int, default=32)
     parser.add_argument("--include-prefix-split", action="store_true")
+    parser.add_argument("--include-native-fused", action="store_true")
     parser.add_argument("--device", default="auto")
     parser.add_argument("--output", default="results/diagnostic_native_width_runtime_20260910.json")
     run(parser.parse_args())

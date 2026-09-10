@@ -538,6 +538,32 @@ route partitionni keyingi inputga graph orqali ko‘chirish xavfsiz emas.
 custom static-index kernel. Dynamic route’ni hozircha eager/opt-in qoldirish.
 **Batafsil:** `results/P003_NATIVE_CUDA_GRAPH_AUDIT_20260910.md`.
 
+### C-RUNTIME-NATIVE-FUSED-001 — Factorized native dispatch overhead
+
+**Status:** `PROMISING OPT-IN — QUALITY/PARITY PASSED; SHAPE VALIDATION OPEN`
+**Muammo:** Runtime track / P-003 / P-007
+
+Ordered factorized-additive 500M bank uchun inference-only custom CUDA kernel
+qo‘shildi. Uch seedli 480-example timingda fixed K=8 `37.20 → 22.03 ms`
+(`−40.8%`), fixed K=16 `58.38 → 35.32 ms` (`−39.5%`), learned K=8/16
+`41.32 → 30.90 ms` (`−25.2%`) bo‘ldi. 960-example timingda mos ravishda
+`−47.2%`, `−45.6%`, `−26.4%` chiqdi. PyTorch reference bilan maksimal logit
+farqi `7.63e-6`; route va active width o‘zgarmadi. Fixed K=16 fused kernel
+batch 1/32 CUDA Graph capture’dan ham parity bilan o‘tdi.
+
+Kernel faqat ordered two-slot additive factor bankni qamraydi; pair/product,
+hidden-gate, address-residual, serial va backward yo‘llari avtomatik ravishda
+PyTorch fallbackda qoladi. Shuning uchun default almashtirilmadi.
+
+96-batch-per-condition OOD quality control’da fused learned variant va PyTorch
+learned controlning exact/hard/active-width metrikalari uch seedda bir xil
+chiqdi; maksimal CE farqi `1.12e-8`. Demak hozirgi kernelning floating-point
+accumulation farqi ko‘rilgan recurrent route yoki sifatni o‘zgartirmagan.
+
+**Keyingi tajriba:** sequence/batch shape sweep, long quality control va
+unsupported-feature fallback validation. **Batafsil:**
+`results/P003_NATIVE_FUSED_DISPATCH_AUDIT_20260910.md`.
+
 500M bankda `routing_capacity=22800` va `routing_depth=5` clamp qilinadigan
 control full 500Mga nisbatan uniformda `+0.495 pp`, hard-taskda `+1.259 pp`
 berdi. Bu route fragmentation haqiqiy omil ekanini ko‘rsatadi, lekin clamp

@@ -106,6 +106,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             config["dynamic_width_min"] = args.dynamic_width_min
         if args.dynamic_width_threshold is not None:
             config["dynamic_width_threshold"] = args.dynamic_width_threshold
+        if args.circuit_dispatch_backend is not None:
+            config["circuit_dispatch_backend"] = args.circuit_dispatch_backend
         model = make_model(config).to(device)
         model.load_state_dict(checkpoint["model_state"])
         model.eval()
@@ -141,6 +143,8 @@ def main() -> None:
     parser.add_argument("--dynamic-width-mode", choices=("none", "topk_entropy", "learned"), default=None)
     parser.add_argument("--dynamic-width-min", type=int, default=None)
     parser.add_argument("--dynamic-width-threshold", type=float, default=None)
+    parser.add_argument("--circuit-dispatch-backend",
+                        choices=("torch", "native_cuda_fused"), default=None)
     parser.add_argument("--output", default="results/diagnostic_native_ood_300m_500m_10000.json")
     run(parser.parse_args())
 

@@ -228,6 +228,7 @@ class FactorizedMicroCircuitBank(nn.Module):
         nn.init.normal_(self.down_factors, std=0.02)
         nn.init.normal_(self.up_factors, std=0.02)
         self.cache = None
+        self.dispatch_backend = "torch"
 
     def set_cache(self, cache) -> None:
         # The existing CPU cache stores complete circuit rows and cannot be
@@ -389,6 +390,25 @@ class FactorizedMicroCircuitBank(nn.Module):
 
     def forward(self, state: torch.Tensor, circuit_ids: torch.Tensor,
                 weights: torch.Tensor) -> torch.Tensor:
+        if (self.dispatch_backend == "native_cuda_fused"
+                and state.device.type == "cuda"
+                and state.dtype == torch.float32
+                and not torch.is_grad_enabled()
+                and self.ordered_factor_slots
+                and self.factor_mix_mode == "per_address"
+                and not self.query_factor_mix_scale
+                and not self.factor_pair_rank
+                and not self.factor_product_scale
+                and not self.factor_hidden_product_scale
+                and not self.factor_hidden_gate_scale
+                and self.factor_composition_mode == "additive"
+                and not self.address_residual_rank):
+            from .native_fused_dispatch import fused_factorized_dispatch
+            return fused_factorized_dispatch(
+                state, circuit_ids, weights, self.down_factors,
+                self.up_factors, self.bias_factors, self.factor_mix,
+                self._address_factor_ids,
+            )
         if self.factor_composition_mode == "serial":
             first_down, first_up, first_bias, second_down, second_up, second_bias = (
                 self._gather_factor_slots(circuit_ids, state)

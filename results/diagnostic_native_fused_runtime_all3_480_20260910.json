@@ -1,0 +1,141 @@
+{
+  "experiment": "native_dynamic_width_runtime",
+  "device": "cuda",
+  "warmup": 5,
+  "repeats": 20,
+  "examples_per_task": 32,
+  "checkpoints": {
+    "ne500_stable_prefix_active16_s17_3000.pt": {
+      "batch_size": 480,
+      "variants": {
+        "fixed_k8": {
+          "mean_ms": 29.65902000000824,
+          "samples_per_second": 16183.946738626786,
+          "active_width_mean": 8.0,
+          "active_width_fraction": 0.5
+        },
+        "fixed_k16": {
+          "mean_ms": 52.82702000004065,
+          "samples_per_second": 9086.259266557732,
+          "active_width_mean": 16.0,
+          "active_width_fraction": 1.0
+        },
+        "learned_k8_k16": {
+          "mean_ms": 37.7482350000264,
+          "samples_per_second": 12715.826316108934,
+          "active_width_mean": 8.727778434753418,
+          "active_width_fraction": 0.5454861521720886
+        },
+        "native_fused_fixed_k8": {
+          "mean_ms": 24.624625000024025,
+          "samples_per_second": 19492.6826296657,
+          "max_logit_error_vs_torch": 3.814697265625e-06,
+          "active_width_mean": 8.0,
+          "active_width_fraction": 0.5
+        },
+        "native_fused_fixed_k16": {
+          "mean_ms": 37.41853500000616,
+          "samples_per_second": 12827.867258830978,
+          "max_logit_error_vs_torch": 5.7220458984375e-06,
+          "active_width_mean": 16.0,
+          "active_width_fraction": 1.0
+        },
+        "native_fused_learned": {
+          "mean_ms": 32.56061000001864,
+          "samples_per_second": 14741.738560786336,
+          "max_logit_error_vs_torch": 5.7220458984375e-06,
+          "active_width_mean": 8.727778434753418,
+          "active_width_fraction": 0.5454861521720886
+        }
+      }
+    },
+    "ne500_stable_prefix_active16_s18_3000.pt": {
+      "batch_size": 480,
+      "variants": {
+        "fixed_k8": {
+          "mean_ms": 42.136295000000246,
+          "samples_per_second": 11391.604316421204,
+          "active_width_mean": 8.0,
+          "active_width_fraction": 0.5
+        },
+        "fixed_k16": {
+          "mean_ms": 61.06110000000626,
+          "samples_per_second": 7860.978593571861,
+          "active_width_mean": 16.0,
+          "active_width_fraction": 1.0
+        },
+        "learned_k8_k16": {
+          "mean_ms": 42.74823999999171,
+          "samples_per_second": 11228.532449525246,
+          "active_width_mean": 8.422222137451172,
+          "active_width_fraction": 0.5263888835906982
+        },
+        "native_fused_fixed_k8": {
+          "mean_ms": 20.682839999972202,
+          "samples_per_second": 23207.644598161816,
+          "max_logit_error_vs_torch": 5.7220458984375e-06,
+          "active_width_mean": 8.0,
+          "active_width_fraction": 0.5
+        },
+        "native_fused_fixed_k16": {
+          "mean_ms": 34.326510000028065,
+          "samples_per_second": 13983.361547667024,
+          "max_logit_error_vs_torch": 5.7220458984375e-06,
+          "active_width_mean": 16.0,
+          "active_width_fraction": 1.0
+        },
+        "native_fused_learned": {
+          "mean_ms": 28.885970000010275,
+          "samples_per_second": 16617.063577917907,
+          "max_logit_error_vs_torch": 7.62939453125e-06,
+          "active_width_mean": 8.422222137451172,
+          "active_width_fraction": 0.5263888835906982
+        }
+      }
+    },
+    "ne500_stable_prefix_active16_s19_3000.pt": {
+      "batch_size": 480,
+      "variants": {
+        "fixed_k8": {
+          "mean_ms": 39.809485000023415,
+          "samples_per_second": 12057.428022485537,
+          "active_width_mean": 8.0,
+          "active_width_fraction": 0.5
+        },
+        "fixed_k16": {
+          "mean_ms": 61.25151000001097,
+          "samples_per_second": 7836.541499138782,
+          "active_width_mean": 16.0,
+          "active_width_fraction": 1.0
+        },
+        "learned_k8_k16": {
+          "mean_ms": 43.46424999998817,
+          "samples_per_second": 11043.55878682206,
+          "active_width_mean": 8.583333969116211,
+          "active_width_fraction": 0.5364583730697632
+        },
+        "native_fused_fixed_k8": {
+          "mean_ms": 20.77124500001446,
+          "samples_per_second": 23108.86997864913,
+          "max_logit_error_vs_torch": 3.814697265625e-06,
+          "active_width_mean": 8.0,
+          "active_width_fraction": 0.5
+        },
+        "native_fused_fixed_k16": {
+          "mean_ms": 34.20805499999915,
+          "samples_per_second": 14031.782865176401,
+          "max_logit_error_vs_torch": 2.86102294921875e-06,
+          "active_width_mean": 16.0,
+          "active_width_fraction": 1.0
+        },
+        "native_fused_learned": {
+          "mean_ms": 31.258200000002034,
+          "samples_per_second": 15355.970593315315,
+          "max_logit_error_vs_torch": 3.814697265625e-06,
+          "active_width_mean": 8.583333969116211,
+          "active_width_fraction": 0.5364583730697632
+        }
+      }
+    }
+  }
+}
