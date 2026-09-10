@@ -1,4 +1,5 @@
 import json
+import os
 import socket
 import subprocess
 import sys
@@ -115,7 +116,15 @@ def test_spawned_workers_have_independent_process_local_caches(tmp_path):
             )
             assert result["logit_shape"] == [1, 16]
     finally:
-        process.terminate()
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        else:
+            process.terminate()
         try:
             process.wait(timeout=10)
         except subprocess.TimeoutExpired:

@@ -136,9 +136,11 @@ The same-stream policy was then exercised on the real seed-17 500M checkpoint:
 four Python workers issued 16 B=1, seq=32 requests through one cached entry.
 The run produced one graph capture and 16 cache hits; every output matched the
 eager reference with maximum error `1.91e-6`. The per-entry replay lock makes
-same-stream calls host-serialized, while different streams retain independent
-entries. A cross-process reuse unit test rejects inherited cache ownership, so
-each worker must construct its own model and cache after process creation.
+same-shape calls host-serialized, while different streams retain independent
+entries. The cache now adds a stream-level lock around capture and replay, so
+different shapes on the same CUDA stream are serialized too. A cross-process
+reuse unit test rejects inherited cache ownership, so each worker must
+construct its own model and cache after process creation.
 
 ## HTTP server entry-point smoke
 
@@ -148,8 +150,8 @@ reports device/backend/cache ownership, `GET /stats` reports cache counters, and
 `POST /infer` accepts a rectangular JSON `inputs` list and returns hard
 predictions (optionally logits). Input shape, sequence limit, token range, and
 process ownership are validated before dispatch. The service has no global
-request lock: same-stream graph replay is protected by the cache entry lock,
-while independent CUDA stream entries can proceed independently.
+request lock: same-stream graph capture/replay is protected by the cache
+stream lock, while independent CUDA stream entries can proceed independently.
 
 The real seed-17 500M checkpoint was served in-process through the actual HTTP
 handler at B=1/B=8 and sequence lengths 6/32. All four shapes captured once and
@@ -178,6 +180,16 @@ parent. This is a local launcher, not a complete deployment: an external
 load-balancer, health-aware admission policy, TLS/authentication, and memory
 capacity planning are still required.
 
+Each child also watches the multiprocessing parent and shuts its HTTP server
+down if that parent disappears unexpectedly. This prevents orphan workers and
+stale CUDA/extension handles when a Windows benchmark or controller is killed.
+
+When multiple workers share one physical CUDA device, the launcher enables the
+cache's crash-releasing device graph lock automatically. It serializes both
+capture and replay across those processes because the RTX 3060 rejected
+overlapping graph operations; single-worker and separate-device deployments do
+not need this cross-process serialization.
+
 The launcher was integration-tested with a small CPU checkpoint and two real
 child processes: both ports answered `/health` and `/infer`, the PIDs were
 distinct, and each reported a cache owner equal to its own PID. This confirms
@@ -190,6 +202,17 @@ both workers, cross-worker logit error was `0`, and prediction mismatch was
 `0`. Because this controlled run used CPU with graphs disabled, each worker
 reported eight expected eager fallbacks; it validates routing and ownership,
 not CUDA-Graph throughput.
+
+The same benchmark was then run on the real seed-17 500M checkpoint with two
+workers on the RTX 3060. Sixteen parallel requests produced four captures and
+four cache hits per worker, with zero eager fallbacks and zero capture failures.
+Cross-worker maximum logit error was `2.86e-6` and prediction mismatch was `0`.
+An earlier run without the device lock reproduced a CUDA
+`operation failed due to a previous error during capture` at the second replay
+round; the final run confirms the lock fixes that race. The trade-off is that
+two workers on one GPU are safe but graph operations are serialized across the
+device, so throughput scaling should use one worker per GPU or a future tested
+batching policy.
 
 ## Long quality control
 
@@ -245,6 +268,7 @@ approximate a configuration it does not support.
 - [Same-stream concurrency JSON](diagnostic_native_fused_serving_concurrency_s17_b1_20260910.json)
 - [HTTP server smoke JSON](diagnostic_native_fused_http_server_s17_20260910.json)
 - [HTTP server concurrency JSON](diagnostic_native_fused_http_server_concurrency_s17_20260910.json)
+- [Native fused CUDA multi-worker JSON](diagnostic_native_fused_multi_worker_cuda_s17_20260910.json)
 - [Seed17 fused runtime smoke JSON](diagnostic_native_fused_runtime_s17_480_20260910.json)
 - [Long fused learned-width OOD JSON](diagnostic_native_fused_learned_ood_long96_20260910.json)
 - [Independent long fused OOD JSON](diagnostic_native_fused_ood_long48_all3_20260910.json)

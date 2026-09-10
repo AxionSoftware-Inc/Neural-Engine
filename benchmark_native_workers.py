@@ -6,12 +6,14 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 from itertools import product
 import json
+import os
 from pathlib import Path
 import socket
 import subprocess
 import sys
 import time
 from typing import Any
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import torch
@@ -46,10 +48,14 @@ def _post_json(url: str, rows: list[list[int]]) -> dict[str, Any]:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urlopen(request, timeout=30) as response:
-        if response.status != 200:
-            raise RuntimeError(f"unexpected HTTP status {response.status}")
-        return json.loads(response.read().decode("utf-8"))
+    try:
+        with urlopen(request, timeout=30) as response:
+            if response.status != 200:
+                raise RuntimeError(f"unexpected HTTP status {response.status}")
+            return json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"HTTP {exc.code} from {url}: {detail}") from exc
 
 
 def _wait_for_health(ports: list[int], timeout: float = 45.0) -> list[dict[str, Any]]:
@@ -65,6 +71,27 @@ def _wait_for_health(ports: list[int], timeout: float = 45.0) -> list[dict[str, 
             return health
         time.sleep(0.2)
     raise RuntimeError("not all native workers became healthy")
+
+
+def _stop_launcher(launcher: subprocess.Popen[str]) -> None:
+    """Stop the launcher and descendants; Windows terminate() is not recursive."""
+
+    if launcher.poll() is not None:
+        return
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(launcher.pid), "/T", "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    else:
+        launcher.terminate()
+    try:
+        launcher.wait(timeout=15)
+    except subprocess.TimeoutExpired:
+        launcher.kill()
+        launcher.wait(timeout=5)
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
@@ -88,6 +115,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         command.extend(["--device", args.device])
     if args.no_graphs:
         command.append("--no-graphs")
+    if args.skip_native_prebuild:
+        command.append("--skip-native-prebuild")
     launcher = subprocess.Popen(
         command, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True,
@@ -104,7 +133,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             if shape not in shape_inputs:
                 batch = generator.task_balanced_batch(batch_size, "cpu")
                 shape_inputs[shape] = batch.inputs[:, :sequence_length].tolist()
-            requests.append((index % args.workers, shape, shape_inputs[shape]))
+            # Complete one shape round on each worker before repeating. This
+            # makes cross-worker parity a real check rather than merely a
+            # same-worker cache-reuse check.
+            worker_index = (index // len(shape_specs)) % args.workers
+            requests.append((worker_index, shape, shape_inputs[shape]))
 
         def request(item: tuple[int, str, list[list[int]]]) -> tuple[int, str, dict[str, Any]]:
             worker_index, shape, rows = item
@@ -146,12 +179,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "worker_cache": [item["cache"] for item in after],
         }
     finally:
-        launcher.terminate()
-        try:
-            launcher.wait(timeout=15)
-        except subprocess.TimeoutExpired:
-            launcher.kill()
-            launcher.wait(timeout=5)
+        _stop_launcher(launcher)
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, indent=2), encoding="utf-8")
@@ -172,6 +200,7 @@ def main() -> None:
     parser.add_argument("--max-shapes", type=int, default=8)
     parser.add_argument("--warmup-iters", type=int, default=3)
     parser.add_argument("--no-graphs", action="store_true")
+    parser.add_argument("--skip-native-prebuild", action="store_true")
     parser.add_argument("--seed", type=int, default=23003)
     parser.add_argument(
         "--output",

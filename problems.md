@@ -590,9 +590,9 @@ va bir xil CUDA streamdagi requestlar lock bilan serialize qilinishi keyingi
 smoke’da tasdiqlandi.
 Same-stream policy 500M real checkpointda 4 worker/16 request bilan sinovdan
 o‘tdi: 1 capture/16 hit, barcha outputlar reference bilan mos, maksimal xato
-`1.91e-6`. Per-entry lock bir streamdagi callerlarni xavfsiz serialize qiladi;
-cross-process reuse esa bloklanadi va har worker model/cache’ni o‘zi yaratishi
-kerak.
+`1.91e-6`. Per-stream lock capture/replay’ni bir streamdagi turli shape’larda
+ham xavfsiz serialize qiladi; turli streamlar mustaqil qoladi. Cross-process
+reuse bloklanadi va har worker model/cache’ni o‘zi yaratishi kerak.
 
 `serve_native.py` va `NativeFusedService` orqali haqiqiy threaded HTTP entry
 point qo‘shildi. `/health`, `/stats` va `/infer` endpointlari input shape,
@@ -616,6 +616,9 @@ checkpoint, model va cache’ni alohida yaratadi; workerlar ketma-ket portlarda
 tinglaydi, bittasi yiqilsa parent butun guruhni to‘xtatadi. Bu process-lifecycle
 primitive’ni yopadi, lekin load-balancer, health-aware admission, TLS/auth va
 VRAM capacity planning hali production darajasida tekshirilmagan.
+Child worker parent process yo‘qolganini kuzatib, serverini o‘zi yopadi; shu bilan
+Windows benchmark/controller terminate bo‘lganda orphan worker va stale CUDA
+handle qolishi oldi olindi.
 Kichik CPU checkpoint bilan 2 ta child process integration-testida ikkala port
 `/health` va `/infer`ga javob berdi, PIDlar turlicha va har bir cache owner’i
 o‘z PIDiga teng chiqdi.
@@ -623,6 +626,12 @@ Round-robin benchmark 16 ta parallel B=1/B=8, seq=6/32 so‘rovni ikkala workerg
 taqsimladi: cross-worker logit farqi `0`, prediction mismatch `0`. CPU va
 `--no-graphs` bo‘lgani uchun har workerda 8 ta eager fallback kutilgan; CUDA
 graph tezligi alohida native GPU testlarida tasdiqlangan.
+Keyingi real seed17 500M CUDA run’da 2 worker har biri 4 capture/4 hit/0
+fallback/0 capture failure berdi; cross-worker maksimal logit farqi `2.86e-6`,
+mismatch `0`. Dastlabki lock’siz run ikkinchi replay round’da CUDA capture race
+berdi; process/device graph lock buni tuzatdi. Bir GPU’da workerlar xavfsiz,
+ammo graph operatsiyalari device-wide serialize bo‘ladi; throughput uchun
+worker-per-GPU yoki batching kerak.
 
 Mustaqil uzoq quality control’da fused va torch backendlari uch seed/to‘rt
 condition bo‘yicha exact accuracy’da bir xil chiqdi, maksimal CE farqi
@@ -631,9 +640,8 @@ dan ancha past, lekin torch control ham aynan shu raqamlarni berdi. Bu fused
 kernel regressiyasi emas, checkpoint/training seed barqarorligi alohida
 muammo ekanini ko‘rsatadi.
 
-**Keyingi tajriba:** deployment-specific launcherda har worker uchun model va
-cache lifecycle’ni mustaqil yaratish, keyin admission/batching siyosatini
-stress-test qilish. **Batafsil:**
+**Keyingi tajriba:** bir GPU’dagi device-lock overheadini bir worker bilan
+solishtirish va batching/admission siyosatini stress-test qilish. **Batafsil:**
 `results/P003_NATIVE_FUSED_DISPATCH_AUDIT_20260910.md`.
 
 500M bankda `routing_capacity=22800` va `routing_depth=5` clamp qilinadigan

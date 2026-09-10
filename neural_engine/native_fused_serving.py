@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+from contextlib import nullcontext
 import os
+from pathlib import Path
+import tempfile
 import threading
+import time
 from dataclasses import dataclass, field
 
 import torch
@@ -28,6 +32,61 @@ class _ShapeEntry:
     replay_lock: threading.Lock = field(default_factory=threading.Lock)
 
 
+class _ProcessFileLock:
+    """Crash-releasing advisory lock shared by CUDA worker processes."""
+
+    def __init__(self, path: Path):
+        self.path = path
+        self._handle = None
+
+    def __enter__(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._handle = self.path.open("a+b")
+        self._handle.seek(0, 2)
+        if self._handle.tell() == 0:
+            self._handle.write(b"0")
+            self._handle.flush()
+        self._handle.seek(0)
+        if os.name == "nt":
+            import msvcrt
+
+            while True:
+                try:
+                    msvcrt.locking(self._handle.fileno(), msvcrt.LK_LOCK, 1)
+                    break
+                except OSError:
+                    time.sleep(0.01)
+        else:
+            import fcntl
+
+            fcntl.flock(self._handle.fileno(), fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, _exc_type, _exc_value, _traceback):
+        if self._handle is None:
+            return
+        self._handle.seek(0)
+        if os.name == "nt":
+            import msvcrt
+
+            msvcrt.locking(self._handle.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(self._handle.fileno(), fcntl.LOCK_UN)
+        self._handle.close()
+        self._handle = None
+
+
+_GRAPH_PROCESS_LOCK_ROOT = Path(tempfile.gettempdir())
+
+
+def _graph_process_lock_path(device_index: int) -> Path:
+    return _GRAPH_PROCESS_LOCK_ROOT / (
+        f"neural_engine_native_fused_graph_device_{device_index}.lock"
+    )
+
+
 class NativeFusedShapeCache:
     """Serve fixed-width native models through a bounded CUDA-Graph shape cache.
 
@@ -38,7 +97,8 @@ class NativeFusedShapeCache:
     """
 
     def __init__(self, model: nn.Module, max_shapes: int = 8,
-                 warmup_iters: int = 5, capture_graphs: bool = True):
+                 warmup_iters: int = 5, capture_graphs: bool = True,
+                 process_graph_lock: bool = False):
         if max_shapes < 1:
             raise ValueError("max_shapes must be positive")
         if warmup_iters < 1:
@@ -48,8 +108,10 @@ class NativeFusedShapeCache:
         self.max_shapes = int(max_shapes)
         self.warmup_iters = int(warmup_iters)
         self.capture_graphs = bool(capture_graphs)
+        self.process_graph_lock = bool(process_graph_lock)
         self._entries: OrderedDict[tuple[int, int, int], _ShapeEntry] = OrderedDict()
         self._lock = threading.Lock()
+        self._stream_locks: dict[int, threading.Lock] = {}
         self.capture_count = 0
         self.cache_hit_count = 0
         self.cache_miss_count = 0
@@ -97,7 +159,19 @@ class NativeFusedShapeCache:
                 return entry
             self.cache_miss_count += 1
             try:
-                entry = self._capture(inputs)
+                # CUDA Graph capture is process-local but the CUDA driver can
+                # still reject overlapping captures on one physical device.
+                # The optional advisory lock is released automatically if a
+                # worker exits, unlike a sentinel-directory lock.
+                device_index = inputs.device.index
+                if device_index is None:
+                    device_index = torch.cuda.current_device()
+                capture_lock = (
+                    _ProcessFileLock(_graph_process_lock_path(device_index))
+                    if self.process_graph_lock else nullcontext()
+                )
+                with capture_lock:
+                    entry = self._capture(inputs)
             except Exception as exc:
                 self.capture_failures.append({
                     "type": type(exc).__name__,
@@ -111,6 +185,10 @@ class NativeFusedShapeCache:
                 self.eviction_count += 1
             return entry
 
+    def _stream_lock(self, stream_key: int) -> threading.Lock:
+        with self._lock:
+            return self._stream_locks.setdefault(stream_key, threading.Lock())
+
     def __call__(self, inputs: torch.Tensor) -> torch.Tensor:
         if os.getpid() != self.owner_pid:
             raise RuntimeError(
@@ -122,19 +200,29 @@ class NativeFusedShapeCache:
                 logits, _ = self.model(inputs, adaptive=False, collect_stats=False)
             return logits
         key = self._key(inputs)
-        entry = self._get_or_capture(key, inputs)
-        if entry is None:
-            self.eager_fallback_count += 1
-            with torch.inference_mode():
-                logits, _ = self.model(inputs, adaptive=False, collect_stats=False)
-            return logits
-        # A shape/stream entry owns one mutable graph input buffer. Serialize
-        # host callers sharing that stream while allowing different streams to
-        # use their independent entries concurrently.
-        with entry.replay_lock:
-            with torch.inference_mode():
-                entry.inputs.copy_(inputs)
-                return entry.graph_call(entry.inputs).clone()
+        # CUDA graph capture and replay on one stream must not overlap, even
+        # when the requests use different cached shapes. Keep different CUDA
+        # streams independent so multi-stream callers can still overlap.
+        with self._stream_lock(key[2]):
+            entry = self._get_or_capture(key, inputs)
+            if entry is None:
+                self.eager_fallback_count += 1
+                with torch.inference_mode():
+                    logits, _ = self.model(inputs, adaptive=False, collect_stats=False)
+                return logits
+            # A shape/stream entry owns one mutable graph input buffer. The
+            # entry lock remains as a local defense if replay is refactored.
+            with entry.replay_lock:
+                device_index = inputs.device.index
+                if device_index is None:
+                    device_index = torch.cuda.current_device()
+                replay_lock = (
+                    _ProcessFileLock(_graph_process_lock_path(device_index))
+                    if self.process_graph_lock else nullcontext()
+                )
+                with replay_lock, torch.inference_mode():
+                    entry.inputs.copy_(inputs)
+                    return entry.graph_call(entry.inputs).clone()
 
     def stats(self) -> dict[str, object]:
         return {
@@ -150,4 +238,5 @@ class NativeFusedShapeCache:
             "eviction_count": self.eviction_count,
             "eager_fallback_count": self.eager_fallback_count,
             "capture_failures": list(self.capture_failures),
+            "process_graph_lock": self.process_graph_lock,
         }

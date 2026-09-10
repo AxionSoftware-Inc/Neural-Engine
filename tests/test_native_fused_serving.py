@@ -95,6 +95,30 @@ def test_native_fused_shape_cache_serializes_same_stream_callers():
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA Graph requires CUDA")
+def test_native_fused_shape_cache_serializes_different_shapes_on_same_stream():
+    model = _model().cuda().eval()
+    generator = SyntheticTaskGenerator(seq_len=8, seed=606)
+    first = generator.task_balanced_batch(1, "cuda").inputs
+    second = generator.task_balanced_batch(2, "cuda").inputs
+    cache = NativeFusedShapeCache(model, warmup_iters=2)
+    with torch.inference_mode():
+        first_reference, _ = model(first, adaptive=False, collect_stats=False)
+        second_reference, _ = model(second, adaptive=False, collect_stats=False)
+
+    def request(index):
+        return cache((first if index % 2 == 0 else second).clone())
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        outputs = list(executor.map(request, range(8)))
+    torch.cuda.synchronize()
+    assert all(torch.allclose(outputs[index], first_reference, atol=1e-5, rtol=1e-5)
+               for index in (0, 2, 4, 6))
+    assert all(torch.allclose(outputs[index], second_reference, atol=1e-5, rtol=1e-5)
+               for index in (1, 3, 5, 7))
+    assert cache.stats()["capture_count"] == 2
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA Graph requires CUDA")
 def test_native_fused_shape_cache_rejects_cross_process_reuse(monkeypatch):
     model = _model().cuda().eval()
     inputs = SyntheticTaskGenerator(seq_len=8, seed=605).task_balanced_batch(1, "cuda").inputs

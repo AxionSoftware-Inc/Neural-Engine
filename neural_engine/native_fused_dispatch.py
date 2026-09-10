@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
+import importlib
 from pathlib import Path
+import sys
 
 import torch
 
@@ -14,6 +16,38 @@ from .qwen_fused_dispatch import _ensure_windows_msvc_environment
 _ROOT = Path(__file__).resolve().parent
 _CPP = _ROOT / "native_fused_dispatch.cpp"
 _CUDA = _ROOT / "native_fused_dispatch.cu"
+_EXTENSION_NAME = "neural_engine_native_fused_dispatch_v1"
+
+
+def _build_directory() -> Path:
+    from torch.utils.cpp_extension import _get_build_directory
+
+    return Path(_get_build_directory(_EXTENSION_NAME, verbose=False))
+
+
+def _import_existing_extension():
+    """Import a source-current binary without asking a fresh process to rebuild."""
+
+    build_directory = _build_directory()
+    if not build_directory.exists():
+        return None
+    source_mtime = max(_CPP.stat().st_mtime_ns, _CUDA.stat().st_mtime_ns)
+    candidates = sorted(
+        build_directory.glob(f"{_EXTENSION_NAME}*.pyd"),
+        key=lambda path: path.stat().st_mtime_ns,
+        reverse=True,
+    )
+    for binary in candidates:
+        if binary.stat().st_mtime_ns < source_mtime:
+            continue
+        module_name = binary.stem
+        if str(build_directory) not in sys.path:
+            sys.path.insert(0, str(build_directory))
+        try:
+            return importlib.import_module(module_name)
+        except ImportError:
+            continue
+    return None
 
 
 @lru_cache(maxsize=1)
@@ -24,15 +58,50 @@ def _extension():
     if "TORCH_CUDA_ARCH_LIST" not in os.environ:
         major, minor = torch.cuda.get_device_capability()
         os.environ["TORCH_CUDA_ARCH_LIST"] = f"{major}.{minor}"
-    from torch.utils.cpp_extension import load
+    existing = _import_existing_extension()
+    if existing is not None:
+        return existing
 
-    return load(
-        name="neural_engine_native_fused_dispatch_v1",
-        sources=[str(_CPP), str(_CUDA)],
-        extra_cflags=["/O2"],
-        extra_cuda_cflags=["-Xcompiler", "/Zc:preprocessor"],
-        verbose=False,
-    )
+    # A fresh Python process has an empty JIT version cache and would otherwise
+    # rebuild the same output even when a previous worker already compiled it.
+    # Serialize only the first build with a separate process lock; the existing
+    # binary is imported after the lock is released, so the builder may keep its
+    # DLL loaded while other workers start.
+    from torch.utils.cpp_extension import load
+    from torch.utils.file_baton import FileBaton
+
+    build_directory = _build_directory()
+    build_directory.mkdir(parents=True, exist_ok=True)
+    baton = FileBaton(str(build_directory / "process_build.lock"))
+    while True:
+        if baton.try_acquire():
+            try:
+                existing = _import_existing_extension()
+                if existing is not None:
+                    return existing
+                return load(
+                    name=_EXTENSION_NAME,
+                    sources=[str(_CPP), str(_CUDA)],
+                    extra_cflags=["/O2"],
+                    extra_cuda_cflags=["-Xcompiler", "/Zc:preprocessor"],
+                    verbose=False,
+                )
+            finally:
+                baton.release()
+        baton.wait()
+        existing = _import_existing_extension()
+        if existing is not None:
+            return existing
+
+
+def ensure_native_fused_extension():
+    """Build/import the extension once before spawning serving workers.
+
+    A parent process can call this during startup so independent workers only
+    import an already-built module instead of racing on the same linker output.
+    """
+
+    return _extension()
 
 
 def fused_factorized_dispatch(

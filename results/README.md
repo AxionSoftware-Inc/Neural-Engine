@@ -40,6 +40,7 @@
 - [P-003 — Native fused HTTP server smoke JSON](diagnostic_native_fused_http_server_s17_20260910.json)
 - [P-003 — Native fused HTTP server concurrency JSON](diagnostic_native_fused_http_server_concurrency_s17_20260910.json)
 - [P-003 — Native fused multi-worker round-robin JSON](diagnostic_native_fused_multi_worker_s17_20260910.json)
+- [P-003 — Native fused CUDA multi-worker JSON](diagnostic_native_fused_multi_worker_cuda_s17_20260910.json)
 - [P-003 — Native fused learned OOD quality JSON](diagnostic_native_fused_learned_ood_long96_20260910.json)
 - [P-003 — Native fused independent long OOD JSON](diagnostic_native_fused_ood_long48_all3_20260910.json)
 - [P-003 — Native torch matching long OOD control JSON](diagnostic_native_torch_ood_long48_all3_20260910.json)

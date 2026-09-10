@@ -4,8 +4,8 @@
   "device": "cpu",
   "workers": 2,
   "ports": [
-    54008,
-    54009
+    60549,
+    60550
   ],
   "requests": 16,
   "batch_sizes": [
@@ -23,18 +23,18 @@
     "b8_s6"
   ],
   "worker_pids": [
-    13704,
-    14876
+    5676,
+    14216
   ],
   "worker_health_before": [
     {
       "status": "ok",
-      "pid": 13704,
+      "pid": 5676,
       "device": "cpu",
       "training": false,
       "dispatch_backend": "native_cuda_fused",
       "cache": {
-        "owner_pid": 13704,
+        "owner_pid": 5676,
         "cached_shape_count": 0,
         "cache_keys": [],
         "capture_count": 0,
@@ -42,17 +42,18 @@
         "cache_miss_count": 0,
         "eviction_count": 0,
         "eager_fallback_count": 0,
-        "capture_failures": []
+        "capture_failures": [],
+        "process_graph_lock": false
       }
     },
     {
       "status": "ok",
-      "pid": 14876,
+      "pid": 14216,
       "device": "cpu",
       "training": false,
       "dispatch_backend": "native_cuda_fused",
       "cache": {
-        "owner_pid": 14876,
+        "owner_pid": 14216,
         "cached_shape_count": 0,
         "cache_keys": [],
         "capture_count": 0,
@@ -60,19 +61,20 @@
         "cache_miss_count": 0,
         "eviction_count": 0,
         "eager_fallback_count": 0,
-        "capture_failures": []
+        "capture_failures": [],
+        "process_graph_lock": false
       }
     }
   ],
   "worker_health_after": [
     {
       "status": "ok",
-      "pid": 13704,
+      "pid": 5676,
       "device": "cpu",
       "training": false,
       "dispatch_backend": "native_cuda_fused",
       "cache": {
-        "owner_pid": 13704,
+        "owner_pid": 5676,
         "cached_shape_count": 0,
         "cache_keys": [],
         "capture_count": 0,
@@ -80,17 +82,18 @@
         "cache_miss_count": 0,
         "eviction_count": 0,
         "eager_fallback_count": 8,
-        "capture_failures": []
+        "capture_failures": [],
+        "process_graph_lock": false
       }
     },
     {
       "status": "ok",
-      "pid": 14876,
+      "pid": 14216,
       "device": "cpu",
       "training": false,
       "dispatch_backend": "native_cuda_fused",
       "cache": {
-        "owner_pid": 14876,
+        "owner_pid": 14216,
         "cached_shape_count": 0,
         "cache_keys": [],
         "capture_count": 0,
@@ -98,7 +101,8 @@
         "cache_miss_count": 0,
         "eviction_count": 0,
         "eager_fallback_count": 8,
-        "capture_failures": []
+        "capture_failures": [],
+        "process_graph_lock": false
       }
     }
   ],
@@ -106,7 +110,7 @@
   "prediction_mismatches": 0,
   "worker_cache": [
     {
-      "owner_pid": 13704,
+      "owner_pid": 5676,
       "cached_shape_count": 0,
       "cache_keys": [],
       "capture_count": 0,
@@ -114,10 +118,11 @@
       "cache_miss_count": 0,
       "eviction_count": 0,
       "eager_fallback_count": 8,
-      "capture_failures": []
+      "capture_failures": [],
+      "process_graph_lock": false
     },
     {
-      "owner_pid": 14876,
+      "owner_pid": 14216,
       "cached_shape_count": 0,
       "cache_keys": [],
       "capture_count": 0,
@@ -125,7 +130,8 @@
       "cache_miss_count": 0,
       "eviction_count": 0,
       "eager_fallback_count": 8,
-      "capture_failures": []
+      "capture_failures": [],
+      "process_graph_lock": false
     }
   ]
 }

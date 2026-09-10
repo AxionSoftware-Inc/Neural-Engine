@@ -196,6 +196,7 @@ def load_native_fused_service(
     max_shapes: int = 8,
     warmup_iters: int = 5,
     capture_graphs: bool = True,
+    process_graph_lock: bool = False,
 ) -> NativeFusedService:
     """Load a checkpoint and create its native fused service in this process."""
 
@@ -224,6 +225,7 @@ def load_native_fused_service(
         max_shapes=max_shapes,
         warmup_iters=warmup_iters,
         capture_graphs=capture_graphs,
+        process_graph_lock=process_graph_lock,
     )
     service = NativeFusedService(model, cache)
     service.checkpoint = str(checkpoint_path)  # type: ignore[attr-defined]
