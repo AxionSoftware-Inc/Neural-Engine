@@ -179,6 +179,8 @@ def main() -> None:
     parser.add_argument("--eval-batches", type=int, default=1)
     parser.add_argument("--examples-per-task", type=int, default=16)
     parser.add_argument("--global-topk", type=int, default=8)
+    parser.add_argument("--rounds", type=int, default=1,
+                        help="On-policy target aggregation rounds")
     parser.add_argument("--steps", type=int, default=500)
     parser.add_argument("--batch-size", type=int, default=2048)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
@@ -197,13 +199,32 @@ def main() -> None:
         config, device, "heldout", args.eval_batches, args.examples_per_task,
     )
     baseline = _evaluate(model, eval_batches)
-    queries, target_bases, target_report = _collect_targets(
-        model, train_batches, args.global_topk,
-    )
-    training = _train_retriever(
-        model, queries, target_bases, args.steps, args.batch_size,
-        args.learning_rate, int(config["seed"]),
-    )
+    if args.rounds < 1:
+        raise ValueError("rounds must be positive")
+    aggregate_queries = []
+    aggregate_targets = []
+    round_reports = []
+    for round_index in range(args.rounds):
+        queries, target_bases, target_report = _collect_targets(
+            model, train_batches, args.global_topk,
+        )
+        aggregate_queries.append(queries)
+        aggregate_targets.append(target_bases)
+        training = _train_retriever(
+            model,
+            torch.cat(aggregate_queries),
+            torch.cat(aggregate_targets),
+            args.steps,
+            args.batch_size,
+            args.learning_rate,
+            int(config["seed"]) + round_index,
+        )
+        round_reports.append({
+            "round": round_index + 1,
+            "target_report": target_report,
+            "training": training,
+            "aggregate_rows": int(torch.cat(aggregate_queries).shape[0]),
+        })
     treatment = _evaluate(model, eval_batches)
     result = {
         "checkpoint": str(args.checkpoint),
@@ -213,8 +234,8 @@ def main() -> None:
         "candidate_pool": int(model.router.candidate_pool),
         "active_circuits": int(model.active_circuits),
         "global_topk": int(args.global_topk),
-        "target_report": target_report,
-        "training": training,
+        "rounds": int(args.rounds),
+        "round_reports": round_reports,
         "baseline": baseline,
         "treatment": treatment,
         "delta": {

@@ -1,0 +1,79 @@
+{
+  "checkpoint": "results/checkpoints/ne20_v12_coverage_matched_5000.pt",
+  "model": "ne_20_v12_coverage_matched",
+  "seed": 17,
+  "device": "cuda",
+  "candidate_pool": 32,
+  "active_circuits": 8,
+  "global_topk": 8,
+  "rounds": 3,
+  "round_reports": [
+    {
+      "round": 1,
+      "target_report": {
+        "examples": 1440,
+        "steps": 6,
+        "improved_fraction": 0.9194444444444444,
+        "mean_target_gain_ce": 0.018019021385245852,
+        "external_target_fraction": 0.7069444444444445
+      },
+      "training": {
+        "steps": 500,
+        "batch_size": 2048,
+        "learning_rate": 0.0003,
+        "mean_target_loss": 4.4505608620643615
+      },
+      "aggregate_rows": 1440
+    },
+    {
+      "round": 2,
+      "target_report": {
+        "examples": 1440,
+        "steps": 6,
+        "improved_fraction": 0.9166666666666666,
+        "mean_target_gain_ce": 0.022809136079417335,
+        "external_target_fraction": 0.7583333333333333
+      },
+      "training": {
+        "steps": 500,
+        "batch_size": 2048,
+        "learning_rate": 0.0003,
+        "mean_target_loss": 3.778611192703247
+      },
+      "aggregate_rows": 2880
+    },
+    {
+      "round": 3,
+      "target_report": {
+        "examples": 1440,
+        "steps": 6,
+        "improved_fraction": 0.90625,
+        "mean_target_gain_ce": 0.022850843601756626,
+        "external_target_fraction": 0.6979166666666666
+      },
+      "training": {
+        "steps": 500,
+        "batch_size": 2048,
+        "learning_rate": 0.0003,
+        "mean_target_loss": 3.41598659324646
+      },
+      "aggregate_rows": 4320
+    }
+  ],
+  "baseline": {
+    "examples": 240,
+    "mean_ce": 0.809630012512207,
+    "accuracy": 0.7583333333333333,
+    "unique_selected_circuits": 1227
+  },
+  "treatment": {
+    "examples": 240,
+    "mean_ce": 0.8286455790201823,
+    "accuracy": 0.7541666666666667,
+    "unique_selected_circuits": 1105
+  },
+  "delta": {
+    "mean_ce": 0.019015566507975312,
+    "accuracy_pp": -0.4166666666666652
+  }
+}

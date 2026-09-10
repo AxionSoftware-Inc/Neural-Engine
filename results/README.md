@@ -22,6 +22,7 @@
 - [P-003 — Route-exploration continuation audit](P003_ROUTE_EXPLORATION_CONTINUATION_AUDIT_20260910.md)
 - [P-001 — Final output-logit cost-router audit](P001_OUTPUT_LOGIT_COST_ROUTER_AUDIT_20260910.md)
 - [P-001 — Final-CE target retrieval distillation audit](P001_TARGET_RETRIEVAL_DISTILL_AUDIT_20260910.md)
+- [P-001 — On-policy target retrieval audit](P001_ON_POLICY_TARGET_RETRIEVAL_AUDIT_20260910.md)
 - [P-002 — Shared reusable residual bank audit](P002_SHARED_RESIDUAL_AUDIT.md)
 - [P-003/P-002 — Native route-causal diagnostic](P003_ROUTE_CAUSAL_DIAGNOSTIC_20260907.md)
 - [P-007 — Route-final-target auxiliary loss audit](P007_ROUTE_FINAL_TARGET_AUDIT.md)

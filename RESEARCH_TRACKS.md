@@ -12,7 +12,7 @@ quality numbers must not be compared as if they were the same task.
 
 | Track | Scope | Current status | Working branch | Primary next step |
 |---|---|---|---|---|
-| Native Engine | Original attention-free Neural Engine on synthetic algorithmic tasks | **Quality scaling open; route fragmentation and retrieval mismatch confirmed** | `exp/track-native-engine` | Test on-policy/joint target-aligned retrieval at 20M; return to circuit/state composition if it fails |
+| Native Engine | Original attention-free Neural Engine on synthetic algorithmic tasks | **Quality scaling open; simple retrieval fixes rejected** | `exp/track-native-engine` | Test circuit output composition/state interface with body+router joint control at 20M; keep larger banks frozen |
 | Sparse Qwen | Exact Qwen FFN/SwiGLU transfer into sparse circuits and learned subset routing | **Validated at K=5/K=6; K=4 open** | `exp/track-qwen-sparse` | Work only on learned candidate retrieval/subset regret |
 | Runtime | Dispatch, memory traffic, fused/compiled kernels used by either track | **Engineering track** | `exp/track-runtime` | Benchmark and implement a compiled decode path |
 

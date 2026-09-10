@@ -132,6 +132,17 @@ joint end-to-end retrieval bo‘lishi kerak, 300M/500Mga scale qilinmaydi.
 
 **Audit:** `results/P001_TARGET_RETRIEVAL_DISTILL_AUDIT_20260910.md`.
 
+**On-policy target aggregation (2026-09-10):** Frozen-body retrieval training
+har rounddan keyin yangi natural query/state’dan one-swap final-CE targetlarni
+qayta yig‘ib, 3 round davom ettirildi. Seed17/18 treatment CE delta’si
+`+0.019016/+0.011590`, accuracy delta’si `−0.42/−2.50 pp` bo‘ldi; ikki-seed
+mean `+0.015303 CE`, `−1.46 pp`. Stale calibration yagona sabab emasligi
+ko‘rindi. Offline va on-policy target distillation oilasi `REJECTED FOR
+ADOPTION`; P-001 ochiq, keyingi yo‘l body+router joint composition/state
+interface bo‘ladi.
+
+**Audit:** `results/P001_ON_POLICY_TARGET_RETRIEVAL_AUDIT_20260910.md`.
+
 **Nonlinear candidate-score scorer (2026-09-08):** zero-initialized
 `2*state_dim → 32 → 1` residual scorer bilan 20M seed17/18da 2,000-step
 soft-routing continuation qilindi. Treatment CE delta’si `+0.001152/+0.020205`,
