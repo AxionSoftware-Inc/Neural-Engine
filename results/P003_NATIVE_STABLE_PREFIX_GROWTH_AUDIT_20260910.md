@@ -33,7 +33,7 @@ formula was changed.
 - 24-batch evaluator: uniform, combination-holdout, low-edge `[0,7]`, and
   high-edge `[56,63]`.
 
-## Main result
+## Initial staged result
 
 | Condition | 300M continuation, mean | 500M stable-prefix stage 2, mean | Delta |
 |---|---:|---:|---:|
@@ -51,23 +51,40 @@ warm-up.
 
 ## Interpretation
 
-This is the strongest native capacity signal so far. Stable address semantics
-plus staged exposure removed the earlier route-fragmentation failure and gave
-a reproducible two-seed quality improvement on both ordinary and difficult
-probes.
+Stable address semantics plus staged exposure removed the earlier
+route-fragmentation failure and gave a reproducible two-seed quality
+improvement in the initial comparison.
 
-It is not yet a final scaling claim: stage 2 has received 6,000 additional
-steps in total, while the comparison shown above has only a 3,000-step 300M
-continuation. A 6,000-step 300M continuation is required to isolate capacity
-from extra optimization time. The 500M stable-prefix variant therefore remains
-`PROMISING OPT-IN — VALIDATION OPEN`, not the default and not a reason to jump
-to 700M/1B yet.
+## Compute-matched control
+
+The 300M reference was then continued for the same 6,000 additional steps.
+The stable-prefix 500M stage-2 checkpoint was evaluated against that control:
+
+| Condition | 300M, 6k continuation | 500M stable-prefix, 6k staged | Delta |
+|---|---:|---:|---:|
+| Uniform exact accuracy | 82.080% | 82.040% | −0.040 pp |
+| Uniform hard-task mean | 56.767% | 56.695% | −0.072 pp |
+| Combination holdout | 82.275% | **82.357%** | **+0.082 pp** |
+| Combination hard-task mean | 56.901% | **57.107%** | **+0.206 pp** |
+| Low-edge exact accuracy | 97.922% | 97.617% | −0.305 pp |
+| High-edge exact accuracy | 97.605% | 97.522% | −0.083 pp |
+
+Thus the clean result is capacity-neutral quality, not a large quality jump:
+the 500M model matches the 300M control within noise on ordinary and edge
+probes, while reducing mean dead-circuit fraction from `26.22%` to `14.21%`
+and using all 197 factor rows. This is a meaningful scaling/no-regression
+signal, but not yet evidence that extra capacity improves quality.
+
+The stable-prefix variant remains `PROMISING OPT-IN — VALIDATION OPEN` for a
+longer stage-2 budget. It is not the default and is not a reason to jump to
+700M/1B yet.
 
 ## Controls and raw evidence
 
 - The non-stable 500M warm-start improved route usage but did not beat a
   300M continuation under the available 3k continuation comparison.
 - [Stable-prefix staged JSON](diagnostic_native_stable_prefix_staged_20260910.json)
+- [Compute-matched JSON](diagnostic_native_stable_prefix_compute_matched_20260910.json)
 - [Stable-prefix initial JSON](diagnostic_native_stable_prefix_initial_20260910.json)
 - [Warm-start versus 300M continuation JSON](diagnostic_native_warmstart_vs_continued_20260910.json)
 - [Warm-start initial JSON](diagnostic_native_warmstart_initial_20260910.json)

@@ -4,6 +4,7 @@
 
 - [P-003 — Native stable-prefix staged-growth audit](P003_NATIVE_STABLE_PREFIX_GROWTH_AUDIT_20260910.md)
 - [P-003 — Native warm-start versus continuation control](diagnostic_native_warmstart_vs_continued_20260910.json)
+- [P-003 — Stable-prefix compute-matched control](diagnostic_native_stable_prefix_compute_matched_20260910.json)
 
 - [V0.185 — Qwen teacher-derived functional-basis SwiGLU](V0_185_QWEN_TEACHER_DERIVED_BASIS_SWIGLU.md)
 - [V0.186 — Qwen conditional-width oracle](V0_186_QWEN_ADAPTIVE_WIDTH_ORACLE.md)

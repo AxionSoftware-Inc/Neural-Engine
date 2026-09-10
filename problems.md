@@ -330,7 +330,7 @@ virtual address va route-tree semantics saqlanmaganida bo‘lishi mumkin.
 
 ### C-P003-NATIVE-STABLE-PREFIX-001 — Stable virtual-address staged growth
 
-**Status:** `PROMISING OPT-IN — VALIDATION OPEN`
+**Status:** `PROMISING OPT-IN — QUALITY-NEUTRAL UNDER MATCHED BUDGET; LONG RUN OPEN`
 **Muammo:** P-003 / P-007
 
 Stable-prefix address map 300Mning birinchi 22,800 virtual pairlarini 500Mda
@@ -342,11 +342,16 @@ combination holdoutni `81.419% → 82.357%` (`+0.938 pp`) yaxshiladi. Low/high
 edge ham mos ravishda `+0.538/+0.373 pp` bo‘ldi. Dead circuit fraction
 `24.17% → 14.21%` tushdi.
 
-Bu hozirgacha capacity scaling bo‘yicha eng kuchli ijobiy signal, lekin stage-2
-variant parentdan jami 6k qo‘shimcha step olgan, 300M control esa 3k olgan.
-Shuning uchun 6k-step 300M continuation bilan clean compute-matched control
-hali kerak. 700M/1Bga o‘tish hozircha muzlatilgan; variant default emas,
-opt-in sifatida saqlandi.
+Initial comparisondagi ijobiy farq stage-2 variantda jami 6k qo‘shimcha step,
+300M controlda esa 3k qo‘shimcha step bo‘lgani uchun compute-confounded edi.
+Clean 6k-versus-6k evaluatorda stable-prefix 500M uniformni `82.080% →
+82.040%` (`−0.040 pp`), hard-task meanni `56.767% → 56.695%` (`−0.072 pp`)
+berdi; combination holdout `+0.082 pp`, combination hard-task `+0.206 pp`
+bo‘ldi. Shu bilan birga dead fraction `26.22% → 14.21%` tushdi va 197 factor
+row ishlatildi. Demak bu hozircha katta quality jump emas, balki qo‘shimcha
+capacityni sifatni buzmasdan route’ga kiritish signali. Long stage-2 validation
+hali ochiq; 700M/1Bga o‘tish muzlatilgan, variant default emas, opt-in sifatida
+saqlandi.
 
 **Batafsil:** `results/P003_NATIVE_STABLE_PREFIX_GROWTH_AUDIT_20260910.md`.
 
