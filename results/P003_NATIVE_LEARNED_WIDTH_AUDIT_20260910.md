@@ -70,6 +70,24 @@ Thus the learned selector did not depend on the favorable warm-start quality,
 but the low absolute seed19 quality means a longer and better-matched third
 seed remains useful.
 
+## Long matched control
+
+To remove the remaining small-screen uncertainty, all three learned checkpoints
+were evaluated for 96 batches per condition and compared with their own fixed
+K=16 checkpoints under the same seeds and generators. Mean learned-minus-fixed
+K=16 deltas were:
+
+| Condition | Exact delta | Hard-task delta | Mean width |
+|---|---:|---:|---:|
+| Uniform | +0.012 pp | +0.031 pp | 8.94 |
+| Combination holdout | −0.019 pp | −0.042 pp | 8.94 |
+| Low edge | −0.038 pp | −0.096 pp | 8.35 |
+| High edge | +0.067 pp | +0.168 pp | 8.48 |
+
+The long matched run therefore keeps the quality difference within roughly a
+tenth of a percentage point except for a small positive high-edge fluctuation;
+it does not show a systematic quality regression from narrowing the route.
+
 The result is not yet a default change. Calibration labels came from frozen
 paired trajectories, and the predictor was not jointly trained with the
 recurrent body. The remaining control is longer continuation plus a regret
@@ -92,6 +110,8 @@ example.
 - [Three-seed learned-width OOD JSON](diagnostic_native_learned_width_all3_20260910.json)
 - [Head-training JSON](diagnostic_native_learned_width_training_20260910.json)
 - [Independent seed19 OOD JSON](diagnostic_native_learned_width_s19_20260910.json)
+- [Long 96-batch learned-width OOD JSON](diagnostic_native_learned_width_long96_20260910.json)
+- [Long 96-batch fixed-K=16 control JSON](diagnostic_native_fixed16_long96_20260910.json)
 - [Head training benchmark](../benchmark_native_learned_width.py)
 - [K=16 source configuration](../configs/ne_500m_v12_factorized_shared_routekeys_step_adapter_two_edge_mix_stable_prefix_active16.yaml)
 

@@ -491,6 +491,14 @@ o‘zgarmaydi.
 `results/diagnostic_native_width_runtime_all3_20260910.json` va
 `results/diagnostic_native_width_runtime_batch960_20260910.json`.
 
+96-batch-per-condition matched OOD controlda learned-minus-fixed-K=16 exact
+deltalar uniform `+0.012 pp`, combination `−0.019 pp`, low-edge `−0.038 pp`,
+high-edge `+0.067 pp`; hard-task deltalari `−0.096…+0.168 pp` oralig‘ida qoldi.
+Bu uzoqroq tekshiruv ham sifatda sistematik pasayish ko‘rsatmadi.
+
+**Sifat nazorati:** `results/diagnostic_native_learned_width_long96_20260910.json`
+va `results/diagnostic_native_fixed16_long96_20260910.json`.
+
 500M bankda `routing_capacity=22800` va `routing_depth=5` clamp qilinadigan
 control full 500Mga nisbatan uniformda `+0.495 pp`, hard-taskda `+1.259 pp`
 berdi. Bu route fragmentation haqiqiy omil ekanini ko‘rsatadi, lekin clamp
