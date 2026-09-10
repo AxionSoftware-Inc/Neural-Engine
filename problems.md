@@ -557,6 +557,18 @@ algebraic value/state primitive.
 
 **Batafsil:** `results/P004_OPERATION_TRANSITION_AUDIT_20260908.md`.
 
+**Route-conditioned circuit state-write adapter (2026-09-10):** Har bir
+selected circuit `delta`si uchun zero-init rank-4 low-rank adapter qo‘shilib,
+GRUCell update’iga route-specific write residual berildi. 20M seed17/18da
+1000-step balanced continuation natijasi CE delta `−0.001533/+0.005050`,
+accuracy delta `−0.391/+0.078 pp`; ikki-seed mean `+0.001759 CE`, `−0.156 pp`.
+Active circuit params `101,376 → 125,952`, mean stats-free latency taxminan
+`+2.5%`, peak VRAM `161 → 178 MB` bo‘ldi. Route identity’ni state write’ga
+berish bu recipe’da composition qualityni barqaror oshirmadi; variant
+`REJECTED FOR ADOPTION`, rankni oshirish yoki 300Mga scale qilish to‘xtatildi.
+
+**Batafsil:** `results/P004_ROUTE_STATE_ADAPTER_AUDIT_20260910.md`.
+
 **Multi-slot typed-register sinovi (2026-09-08):** oldingi bridge bitta
 intermediate qiymatni overwrite qilgani sababli signal yo‘qolishi mumkin degan
 gipoteza uchun step-0 va step-1 qiymatlarini alohida slotlarda saqlaydigan

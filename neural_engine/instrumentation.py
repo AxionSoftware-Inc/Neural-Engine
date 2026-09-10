@@ -61,12 +61,15 @@ def estimate_neural_engine_macs(model: nn.Module, executed_steps: float,
     router_macs = (router.num_addresses * router.depth * state_dim * router.branch
                    + router.candidate_pool * state_dim)
     circuit_macs = router.active_circuits * 2 * state_dim * circuit_rank
+    state_adapter_rank = int(getattr(model, "circuit_state_adapter_rank", 0))
+    state_adapter_macs = router.active_circuits * 2 * state_dim * state_adapter_rank
     gru_macs = 6 * state_dim * state_dim
     memory_write_macs = (2 * state_dim * state_dim
                          if getattr(model, "memory_write", None) is not None else 0)
     output_width = 1 if getattr(model, "output_mode", "learned") == "scalar_gaussian" else num_classes
     output_macs = state_dim * output_width
-    per_step_macs = router_macs + circuit_macs + gru_macs + memory_write_macs + output_macs
+    per_step_macs = (router_macs + circuit_macs + state_adapter_macs + gru_macs
+                     + memory_write_macs + output_macs)
     full_macs = fixed_macs + int(model.internal_steps) * per_step_macs
     active_macs = fixed_macs + float(executed_steps) * per_step_macs
 

@@ -86,6 +86,8 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["operation_transition_scale"] = config.get("operation_transition_scale", 1.0)
     model_kwargs["state_history_mode"] = config.get("state_history_mode", "none")
     model_kwargs["state_history_scale"] = config.get("state_history_scale", 1.0)
+    model_kwargs["circuit_state_adapter_rank"] = config.get("circuit_state_adapter_rank", 0)
+    model_kwargs["circuit_state_adapter_scale"] = config.get("circuit_state_adapter_scale", 1.0)
     if config.get("architecture") == "typed_register":
         for key in ("task_context", "task_context_update", "adaptive_halting",
                     "halt_threshold", "routing_coverage_temperature",
@@ -100,6 +102,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
                     "state_stage_head",
                     "operation_transition_rank", "operation_transition_scale",
                     "state_history_mode", "state_history_scale",
+                    "circuit_state_adapter_rank", "circuit_state_adapter_scale",
                     "routing_reuse_weight", "routing_reuse_start_level",
                     "input_reinjection_schedule"):
             model_kwargs.pop(key, None)
@@ -292,7 +295,19 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             raise ValueError("routing_mode must be 'learned' or 'controlled_task'")
     if args.init_checkpoint:
         initialization = torch.load(Path(args.init_checkpoint), map_location="cpu", weights_only=True)
-        model.load_state_dict(initialization.get("model_state", initialization))
+        load_result = model.load_state_dict(
+            initialization.get("model_state", initialization), strict=False,
+        )
+        allowed_missing = {
+            "circuit_state_adapter_down", "circuit_state_adapter_up",
+        }
+        unexpected = set(load_result.unexpected_keys)
+        missing = set(load_result.missing_keys) - allowed_missing
+        if unexpected or missing:
+            raise RuntimeError(
+                "checkpoint migration mismatch: "
+                f"missing={sorted(missing)}, unexpected={sorted(unexpected)}"
+            )
     optimizer = make_optimizer(model, config)
     composition_strength = (args.composition_strength
                             if args.composition_strength > 0

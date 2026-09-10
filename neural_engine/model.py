@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 from .circuits import MicroCircuitBank, SharedResidualMicroCircuitBank
 from .encoding import (VALUE_HARMONICS, VALUE_MODULUS, VALUE_TOKEN_OFFSET,
@@ -46,7 +47,9 @@ class NeuralEngineV0(nn.Module):
                  operation_transition_rank: int = 0,
                  operation_transition_scale: float = 1.0,
                  state_history_mode: str = "none",
-                 state_history_scale: float = 1.0):
+                 state_history_scale: float = 1.0,
+                 circuit_state_adapter_rank: int = 0,
+                 circuit_state_adapter_scale: float = 1.0):
         super().__init__()
         if circuit_mode not in {"parallel", "serial"}:
             raise ValueError("circuit_mode must be 'parallel' or 'serial'")
@@ -137,10 +140,16 @@ class NeuralEngineV0(nn.Module):
             raise ValueError("state_history_mode must be none, sum, or task_scaled")
         if state_history_scale < 0.0:
             raise ValueError("state_history_scale must be non-negative")
+        if circuit_state_adapter_rank < 0:
+            raise ValueError("circuit_state_adapter_rank must be non-negative")
+        if circuit_state_adapter_scale < 0.0:
+            raise ValueError("circuit_state_adapter_scale must be non-negative")
         self.operation_transition_rank = int(operation_transition_rank)
         self.operation_transition_scale = float(operation_transition_scale)
         self.state_history_mode = state_history_mode
         self.state_history_scale = float(state_history_scale)
+        self.circuit_state_adapter_rank = int(circuit_state_adapter_rank)
+        self.circuit_state_adapter_scale = float(circuit_state_adapter_scale)
         self.state_history_task_scales = (
             nn.Parameter(torch.full((15,), self.state_history_scale))
             if state_history_mode == "task_scaled" else None
@@ -195,6 +204,16 @@ class NeuralEngineV0(nn.Module):
             )
         else:
             self.circuits = MicroCircuitBank(num_circuits, state_dim, circuit_rank)
+        if self.circuit_state_adapter_rank:
+            self.circuit_state_adapter_down = nn.Parameter(torch.empty(
+                num_circuits, state_dim, self.circuit_state_adapter_rank,
+            ))
+            self.circuit_state_adapter_up = nn.Parameter(torch.empty(
+                num_circuits, self.circuit_state_adapter_rank, state_dim,
+            ))
+        else:
+            self.circuit_state_adapter_down = None
+            self.circuit_state_adapter_up = None
         self.correction_gate = (
             nn.Linear(2 * state_dim, 1)
             if correction_gate_mode == "route_bounded" else None
@@ -296,6 +315,11 @@ class NeuralEngineV0(nn.Module):
             # The adapter is neutral for checkpoint migration; training learns
             # the operation-specific update direction.
             nn.init.zeros_(self.operation_transition_up)
+        if self.circuit_state_adapter_rank:
+            nn.init.normal_(self.circuit_state_adapter_down, std=0.02)
+            # Keep old checkpoints exactly unchanged until this opt-in adapter
+            # learns a route-conditioned state-write direction.
+            nn.init.zeros_(self.circuit_state_adapter_up)
         self._last_route: dict[str, torch.Tensor] = {}
 
     def encode(self, inputs: torch.Tensor) -> torch.Tensor:
@@ -323,6 +347,18 @@ class NeuralEngineV0(nn.Module):
         return torch.einsum(
             "br,brd->bd", down, self.operation_transition_up[task_ids]
         )
+
+    def _circuit_state_adapter(
+        self, delta: torch.Tensor, selected: torch.Tensor,
+        weights: torch.Tensor,
+    ) -> torch.Tensor:
+        """Apply a selected-circuit low-rank write adapter to the GRU input."""
+        down = self.circuit_state_adapter_down[selected]
+        up = self.circuit_state_adapter_up[selected]
+        projected = torch.einsum("bd,bkdr->bkr", delta, down)
+        projected = F.gelu(projected)
+        transformed = torch.einsum("bkr,bkrd->bkd", projected, up)
+        return torch.einsum("bk,bkd->bd", weights, transformed)
 
     def _read_register_slots(self, slot_context: torch.Tensor) -> torch.Tensor:
         if self.register_slot_read_mode == "sum":
@@ -587,6 +623,10 @@ class NeuralEngineV0(nn.Module):
                 update = update + self.operation_transition_scale * (
                     self._operation_transition(update, task_ids)
                 )
+            if self.circuit_state_adapter_rank:
+                update = update + self.circuit_state_adapter_scale * (
+                    self._circuit_state_adapter(delta, selected, weights)
+                )
             proposal_state = self.state.step(active_state, update)
             if self.memory_write is not None:
                 write_input = torch.cat([active_state, update], dim=-1)
@@ -749,6 +789,9 @@ class NeuralEngineV0(nn.Module):
             shared += self.circuits.shared_up.numel()
             shared += self.circuits.shared_bias.numel()
         one_circuit = self.circuits.down[0].numel() + self.circuits.up[0].numel() + self.circuits.bias[0].numel()
+        if self.circuit_state_adapter_rank:
+            one_circuit += self.circuit_state_adapter_down[0].numel()
+            one_circuit += self.circuit_state_adapter_up[0].numel()
         candidate_key_params = self.router.keys[0].numel() * self.router.candidate_pool
         active = shared + candidate_key_params + one_circuit * self.active_circuits
         return {
@@ -767,6 +810,8 @@ class NeuralEngineV0(nn.Module):
             "state_stage_head": self.state_stage_head_enabled,
             "operation_transition_rank": self.operation_transition_rank,
             "operation_transition_scale": self.operation_transition_scale,
+            "circuit_state_adapter_rank": self.circuit_state_adapter_rank,
+            "circuit_state_adapter_scale": self.circuit_state_adapter_scale,
             "state_history_mode": self.state_history_mode,
             "state_history_scale": self.state_history_scale,
             "state_history_task_scaled": self.state_history_task_scales is not None,
