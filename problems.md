@@ -108,6 +108,18 @@ kerak.
 
 **Jamlangan audit:** `results/P001_COST_ROUTER_AUDITS_20260908.md`.
 
+**Final output-logit cost feature screen (2026-09-10):** Candidate circuit
+outputlari mavjud output head orqali final logitsga proyeksiya qilinib, frozen
+20M seed17/18 banklarda one-swap final CE label bilan 1,000 qadamli surrogate
+o‘qitildi. Held-out predicted-route CE delta’si `−0.000328/−0.000470` bo‘ldi;
+oracle recovery `−3.91%/−6.58%`, top-1 oracle match `3.33%/2.64%`. Calibration
+loss past bo‘lsa ham ikkala seedda predicted route natural route’dan yomonroq
+chiqdi. Bu candidate output informationning o‘zi foydasizligini emas, frozen
+post-hoc MLP va 32-candidate feature hisoblash direct fix emasligini bildiradi.
+Variant `REJECTED FOR ADOPTION`; P-001 ochiq qoladi.
+
+**Audit:** `results/P001_OUTPUT_LOGIT_COST_ROUTER_AUDIT_20260910.md`.
+
 **Nonlinear candidate-score scorer (2026-09-08):** zero-initialized
 `2*state_dim → 32 → 1` residual scorer bilan 20M seed17/18da 2,000-step
 soft-routing continuation qilindi. Treatment CE delta’si `+0.001152/+0.020205`,

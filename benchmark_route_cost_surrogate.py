@@ -75,7 +75,8 @@ def _make_batches(config: dict, device: torch.device, split: str,
 
 
 def _feature_tensor(model: NeuralEngineV0, stats: dict, step: int,
-                    signature_projection: torch.Tensor | None = None) -> torch.Tensor:
+                    signature_projection: torch.Tensor | None = None,
+                    signature_mode: str = "random") -> torch.Tensor:
     query = stats["query_states"][:, step]
     candidate_ids = stats["candidate_ids"][:, step]
     selected_ids = stats["selected_ids"][:, step]
@@ -97,7 +98,7 @@ def _feature_tensor(model: NeuralEngineV0, stats: dict, step: int,
         repeated_query, candidate_keys, repeated_summary,
         key_score.unsqueeze(-1),
     ]
-    if signature_projection is not None:
+    if signature_projection is not None or signature_mode == "output_logits":
         circuits = model.circuits
         if not all(hasattr(circuits, name) for name in ("down", "up", "bias")):
             raise ValueError("output signature requires an independent-style circuit bank")
@@ -106,11 +107,17 @@ def _feature_tensor(model: NeuralEngineV0, stats: dict, step: int,
         bias = circuits.bias[candidate_ids]
         hidden = torch.einsum("bd,bpdr->bpr", query, down)
         hidden = F.gelu(hidden)
-        projected_up = torch.einsum("bprd,ds->bprs", up, signature_projection)
-        signature = torch.einsum("bpr,bprs->bps", hidden, projected_up)
-        signature = signature + torch.einsum(
-            "bpd,ds->bps", bias, signature_projection,
-        )
+        candidate_outputs = torch.einsum("bpr,bprd->bpd", hidden, up) + bias
+        if signature_mode == "output_logits":
+            signature = model.output(candidate_outputs)
+        elif signature_projection is not None:
+            projected_up = torch.einsum("bprd,ds->bprs", up, signature_projection)
+            signature = torch.einsum("bpr,bprs->bps", hidden, projected_up)
+            signature = signature + torch.einsum(
+                "bpd,ds->bps", bias, signature_projection,
+            )
+        else:
+            raise ValueError("signature_projection is required for random signature mode")
         features.append(signature)
     features.append(repeated_step)
     return torch.cat(tuple(features), dim=-1)
@@ -120,13 +127,16 @@ def _feature_tensor(model: NeuralEngineV0, stats: dict, step: int,
 def _collect_batch(model: NeuralEngineV0, inputs: torch.Tensor,
                    targets: torch.Tensor,
                    signature_projection: torch.Tensor | None = None,
+                   signature_mode: str = "random",
                    ) -> tuple[torch.Tensor, torch.Tensor, dict]:
     natural_logits, stats = model(inputs, adaptive=False, collect_stats=True)
     natural_loss = F.cross_entropy(natural_logits, targets, reduction="none")
     features = []
     labels = []
     for step in range(model.internal_steps):
-        step_features = _feature_tensor(model, stats, step, signature_projection)
+        step_features = _feature_tensor(
+            model, stats, step, signature_projection, signature_mode,
+        )
         query = stats["query_states"][:, step]
         candidates = stats["candidate_ids"][:, step]
         replace_slot = stats["selected_weights"][:, step].argmin(dim=-1)
@@ -159,12 +169,13 @@ def _collect_batch(model: NeuralEngineV0, inputs: torch.Tensor,
 def _collect_dataset(model: NeuralEngineV0,
                      batches: list[tuple[torch.Tensor, torch.Tensor]],
                      signature_projection: torch.Tensor | None = None,
+                     signature_mode: str = "random",
                      ) -> tuple[torch.Tensor, torch.Tensor]:
     feature_rows = []
     label_rows = []
     for inputs, targets in batches:
         features, labels, _ = _collect_batch(
-            model, inputs, targets, signature_projection,
+            model, inputs, targets, signature_projection, signature_mode,
         )
         feature_rows.append(features.reshape(-1, features.shape[-1]).cpu())
         label_rows.append(labels.reshape(-1).cpu())
@@ -207,6 +218,7 @@ def _evaluate(model: NeuralEngineV0, surrogate: CostSurrogate,
               feature_mean: torch.Tensor, feature_std: torch.Tensor,
               batches: list[tuple[torch.Tensor, torch.Tensor]],
               signature_projection: torch.Tensor | None = None,
+              signature_mode: str = "random",
               ) -> dict:
     totals = {
         "examples": 0,
@@ -224,7 +236,7 @@ def _evaluate(model: NeuralEngineV0, surrogate: CostSurrogate,
         )}
         for inputs, targets in batches:
             features, labels, context = _collect_batch(
-                model, inputs, targets, signature_projection,
+                model, inputs, targets, signature_projection, signature_mode,
             )
             step_features = features[:, step]
             step_labels = labels[:, step]
@@ -309,6 +321,9 @@ def main() -> None:
     parser.add_argument("--surrogate-batch-size", type=int, default=4096)
     parser.add_argument("--signature-dim", type=int, default=0,
                         help="Add a fixed candidate output sketch to the surrogate feature")
+    parser.add_argument("--signature-mode", choices=("random", "output_logits"),
+                        default="random",
+                        help="Use a fixed state sketch or the candidate's output-head logits")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
@@ -320,13 +335,15 @@ def main() -> None:
     train_batches = _make_batches(config, device, "train", args.train_batches, args.examples_per_task)
     eval_batches = _make_batches(config, device, "heldout", args.eval_batches, args.examples_per_task)
     signature_projection = None
-    if args.signature_dim > 0:
+    if args.signature_mode == "output_logits" and args.signature_dim:
+        raise ValueError("--signature-dim cannot be combined with output_logits mode")
+    if args.signature_mode == "random" and args.signature_dim > 0:
         generator = torch.Generator(device=device).manual_seed(int(config["seed"]) + 9091)
         signature_projection = torch.randn(
             model.state_dim, args.signature_dim, generator=generator, device=device,
         ) / (model.state_dim ** 0.5)
     train_features, train_labels = _collect_dataset(
-        model, train_batches, signature_projection,
+        model, train_batches, signature_projection, args.signature_mode,
     )
     surrogate, mean, std, train_report = _train_surrogate(
         train_features,
@@ -338,6 +355,7 @@ def main() -> None:
     )
     evaluation = _evaluate(
         model, surrogate, mean, std, eval_batches, signature_projection,
+        args.signature_mode,
     )
     result = {
         "checkpoint": str(checkpoint),
@@ -350,6 +368,7 @@ def main() -> None:
         "active_circuits": int(model.active_circuits),
         "candidate_pool": int(model.router.candidate_pool),
         "signature_dim": int(args.signature_dim),
+        "signature_mode": args.signature_mode,
         "calibration": train_report,
         "evaluation": evaluation,
     }

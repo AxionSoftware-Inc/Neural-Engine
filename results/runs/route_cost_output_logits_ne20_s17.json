@@ -1,0 +1,71 @@
+{
+  "checkpoint": "results\\checkpoints\\ne20_v12_coverage_matched_5000.pt",
+  "model": "ne_20_v12_coverage_matched",
+  "seed": 17,
+  "device": "cuda",
+  "train_batches": 3,
+  "eval_batches": 1,
+  "examples_per_task": 16,
+  "active_circuits": 8,
+  "candidate_pool": 32,
+  "signature_dim": 0,
+  "signature_mode": "output_logits",
+  "calibration": {
+    "training_steps": 1000,
+    "training_batch_size": 4096,
+    "mean_smooth_l1": 0.024096593207097613,
+    "train_examples": 69120,
+    "surrogate_parameters": 274121
+  },
+  "evaluation": {
+    "steps": [
+      {
+        "step": 0,
+        "examples": 240,
+        "natural_ce": 0.8096299489339193,
+        "oracle_local_ce": 0.801589838663737,
+        "predicted_route_ce": 0.8101587931315104,
+        "oracle_local_gain_ce": 0.008040110270182255,
+        "surrogate_gain_ce": -0.0005288441975911384,
+        "oracle_gain_recovery": -0.06577573936422522,
+        "top1_oracle_match": 0.03333333333333333,
+        "predicted_improvement_fraction": 0.3458333333333333
+      },
+      {
+        "step": 1,
+        "examples": 240,
+        "natural_ce": 0.8096299489339193,
+        "oracle_local_ce": 0.8025923411051432,
+        "predicted_route_ce": 0.8100915273030599,
+        "oracle_local_gain_ce": 0.007037607828776049,
+        "surrogate_gain_ce": -0.000461578369140625,
+        "oracle_gain_recovery": -0.06558739565641593,
+        "top1_oracle_match": 0.03333333333333333,
+        "predicted_improvement_fraction": 0.3458333333333333
+      },
+      {
+        "step": 2,
+        "examples": 240,
+        "natural_ce": 0.8096299489339193,
+        "oracle_local_ce": 0.7995407104492187,
+        "predicted_route_ce": 0.8096247355143229,
+        "oracle_local_gain_ce": 0.010089238484700558,
+        "surrogate_gain_ce": 5.213419596361568e-06,
+        "oracle_gain_recovery": 0.0005167307328761492,
+        "top1_oracle_match": 0.03333333333333333,
+        "predicted_improvement_fraction": 0.3541666666666667
+      }
+    ],
+    "overall": {
+      "examples": 720,
+      "natural_ce": 0.8096299489339193,
+      "oracle_local_ce": 0.801240963406033,
+      "predicted_route_ce": 0.8099583519829644,
+      "oracle_local_gain_ce": 0.008388985527886285,
+      "surrogate_gain_ce": -0.0003284030490451389,
+      "oracle_gain_recovery": -0.03914693236190197,
+      "top1_oracle_match": 0.03333333333333333,
+      "predicted_improvement_fraction": 0.3486111111111111
+    }
+  }
+}
