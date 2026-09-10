@@ -1,0 +1,60 @@
+{
+  "experiment": "native_fused_http_server_concurrency",
+  "checkpoint": "results\\checkpoints\\ne500_stable_prefix_active16_s17_3000.pt",
+  "device": "cuda:0",
+  "workers": 4,
+  "requests": 16,
+  "batch_sizes": [
+    1,
+    8
+  ],
+  "sequence_lengths": [
+    6,
+    32
+  ],
+  "unique_shapes": [
+    "b1_s32",
+    "b1_s6",
+    "b8_s32",
+    "b8_s6"
+  ],
+  "client_latency_ms": {
+    "min": 15.687400000047091,
+    "mean": 118.79675000001555,
+    "max": 420.2079000000367
+  },
+  "max_logit_error_vs_eager": 3.814697265625e-06,
+  "prediction_mismatches": 0,
+  "cache": {
+    "owner_pid": 6484,
+    "cached_shape_count": 4,
+    "cache_keys": [
+      {
+        "batch_size": 1,
+        "sequence_length": 32,
+        "stream": 0
+      },
+      {
+        "batch_size": 8,
+        "sequence_length": 6,
+        "stream": 0
+      },
+      {
+        "batch_size": 8,
+        "sequence_length": 32,
+        "stream": 0
+      },
+      {
+        "batch_size": 1,
+        "sequence_length": 6,
+        "stream": 0
+      }
+    ],
+    "capture_count": 4,
+    "cache_hit_count": 12,
+    "cache_miss_count": 4,
+    "eviction_count": 0,
+    "eager_fallback_count": 0,
+    "capture_failures": []
+  }
+}

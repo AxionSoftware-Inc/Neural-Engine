@@ -605,6 +605,12 @@ predictionlar takroriy so‘rovlarda mos, eager bilan maksimal logit farqi
 authentication, batching/admission control, process supervision va production
 multi-process launcher hali ochiq.
 
+HTTP concurrency benchmarkida 4 client worker 16 ta B=1/B=8, seq=6/32
+so‘rovni parallel yubordi. 4 unique shape uchun 4 capture/12 hit/fallback 0,
+prediction mismatch 0 va eager bilan maksimal logit farqi `3.81e-6` bo‘ldi.
+Threaded HTTP path local stress’dan o‘tdi; deployment-specific multi-process
+launcher, admission/batching va process supervision hali ochiq.
+
 Mustaqil uzoq quality control’da fused va torch backendlari uch seed/to‘rt
 condition bo‘yicha exact accuracy’da bir xil chiqdi, maksimal CE farqi
 `1.61e-8`. Seed19 uniform exact `66.61%` va hard mean `31.76%` bilan seed17/18

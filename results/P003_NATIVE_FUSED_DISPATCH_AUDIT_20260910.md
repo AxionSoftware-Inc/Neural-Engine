@@ -161,6 +161,15 @@ the local server-entry smoke. It is still not a production deployment: TLS,
 authentication, batching/admission control, process supervision, and a tested
 multi-process launcher remain outside this repository entry point.
 
+The HTTP concurrency benchmark then sent 16 requests through four client
+workers, alternating B=1/B=8 and sequence lengths 6/32. Every response matched
+the eager reference; the maximum logit error was `1.91e-6` and there were zero
+prediction mismatches or eager fallbacks. The four unique shapes produced four
+captures and 12 cache hits in the shared process; the measured maximum logit
+error was `3.81e-6`. This validates the threaded HTTP path locally, but it is
+not a substitute for a deployment-specific multi-process launcher or
+admission/batching stress test.
+
 ## Long quality control
 
 The fused learned checkpoints were rerun through the 96-batch-per-condition
@@ -214,6 +223,7 @@ approximate a configuration it does not support.
 - [Shape-cache B=8 JSON](diagnostic_native_fused_shape_cache_s17_b8_20260910.json)
 - [Same-stream concurrency JSON](diagnostic_native_fused_serving_concurrency_s17_b1_20260910.json)
 - [HTTP server smoke JSON](diagnostic_native_fused_http_server_s17_20260910.json)
+- [HTTP server concurrency JSON](diagnostic_native_fused_http_server_concurrency_s17_20260910.json)
 - [Seed17 fused runtime smoke JSON](diagnostic_native_fused_runtime_s17_480_20260910.json)
 - [Long fused learned-width OOD JSON](diagnostic_native_fused_learned_ood_long96_20260910.json)
 - [Independent long fused OOD JSON](diagnostic_native_fused_ood_long48_all3_20260910.json)
@@ -226,6 +236,7 @@ approximate a configuration it does not support.
 - [Shape-cache benchmark](../benchmark_native_fused_shape_cache.py)
 - [Concurrency benchmark](../benchmark_native_fused_serving_concurrency.py)
 - [HTTP server benchmark](../benchmark_native_server.py)
+- [HTTP server concurrency benchmark](../benchmark_native_server_concurrency.py)
 - [HTTP serving entry point](../serve_native.py)
 - [HTTP service adapter](../neural_engine/native_fused_server.py)
 - [Python wrapper](../neural_engine/native_fused_dispatch.py)

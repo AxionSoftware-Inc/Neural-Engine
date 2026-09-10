@@ -30,6 +30,18 @@ def test_native_fused_service_returns_predictions_and_optional_logits():
     assert result["cache"]["eager_fallback_count"] == 1
 
 
+def test_native_fused_service_accepts_raw_numeric_value_tokens():
+    model = NeuralEngineV0(
+        vocab_size=128, num_classes=16, seq_len=8, d_model=16, state_dim=16,
+        num_circuits=8, circuit_rank=2, router_branch=2, router_depth=1,
+        candidate_pool=4, active_circuits=2, internal_steps=1,
+        numeric_value_encoding=True, circuit_dispatch_backend="native_cuda_fused",
+    ).eval()
+    service = NativeFusedService(model, NativeFusedShapeCache(model, capture_graphs=False))
+    result = service.infer([[1, 32, 95]])
+    assert result["logit_shape"] == [1, 16]
+
+
 @pytest.mark.parametrize(
     "rows, message",
     [

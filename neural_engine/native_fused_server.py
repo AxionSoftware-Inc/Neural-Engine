@@ -17,6 +17,7 @@ from urllib.parse import urlsplit
 import torch
 from torch import nn
 
+from .encoding import VALUE_MODULUS, VALUE_TOKEN_OFFSET
 from .native_fused_serving import NativeFusedShapeCache
 
 
@@ -65,7 +66,10 @@ class NativeFusedService:
         token_embedding = getattr(self.model, "token_embedding", None)
         vocab_size = getattr(self.model, "input_vocab_size", None)
         if vocab_size is None:
-            vocab_size = getattr(token_embedding, "num_embeddings", None)
+            if getattr(self.model, "value_encoder", None) is not None:
+                vocab_size = VALUE_TOKEN_OFFSET + VALUE_MODULUS
+            else:
+                vocab_size = getattr(token_embedding, "num_embeddings", None)
         if vocab_size is not None:
             token_min = min(token for row in rows for token in row)
             token_max = max(token for row in rows for token in row)
