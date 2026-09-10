@@ -460,7 +460,7 @@ Learned-width checkpointlari opt-in saqlandi.
 
 ### C-P003-NATIVE-DYNAMIC-WIDTH-004 — Grouped dispatch overhead reduces width savings
 
-**Status:** `POSITIVE RUNTIME SIGNAL — OPT-IN ONLY; LONGER RUN/KERNEL FUSION OPEN`
+**Status:** `POSITIVE RUNTIME SIGNAL — OPT-IN ONLY; PREFIX-SPLIT REJECTED; KERNEL FUSION OPEN`
 **Muammo:** P-003 / Runtime
 
 RTX 3060 timing screen’da balanced batch 480, 5 warm-up va 20 synchronized
@@ -498,6 +498,14 @@ Bu uzoqroq tekshiruv ham sifatda sistematik pasayish ko‘rsatmadi.
 
 **Sifat nazorati:** `results/diagnostic_native_learned_width_long96_20260910.json`
 va `results/diagnostic_native_fixed16_long96_20260910.json`.
+
+Prefix-split variant additive bank uchun algebraik jihatdan to‘g‘ri va grouped
+variant bilan output/route ID testlari mos chiqdi, lekin uch seedli 480-example
+timingda grouped `39.61 ms`, prefix-split `41.64 ms` (`+5.1%`) bo‘ldi. Shuning
+uchun bu fusion yo‘li hozirgi backend uchun **REJECTED AS RUNTIME IMPROVEMENT**;
+opt-in kod faqat qayta tekshirish uchun qoldirilgan.
+
+**Prefix-split dalili:** `results/diagnostic_native_width_prefix_split_480_20260910.json`.
 
 500M bankda `routing_capacity=22800` va `routing_depth=5` clamp qilinadigan
 control full 500Mga nisbatan uniformda `+0.495 pp`, hard-taskda `+1.259 pp`

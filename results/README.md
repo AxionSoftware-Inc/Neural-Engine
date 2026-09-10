@@ -21,6 +21,7 @@
 - [P-003 — Native small-batch guarded runtime JSON](diagnostic_native_width_runtime_small_batch_20260910_guarded.json)
 - [P-003 — Native long learned-width OOD JSON](diagnostic_native_learned_width_long96_20260910.json)
 - [P-003 — Native long fixed-K=16 OOD control JSON](diagnostic_native_fixed16_long96_20260910.json)
+- [P-003 — Native prefix-split dispatch probe JSON](diagnostic_native_width_prefix_split_480_20260910.json)
 - [P-003 — Native warm-start versus continuation control](diagnostic_native_warmstart_vs_continued_20260910.json)
 - [P-003 — Stable-prefix compute-matched control](diagnostic_native_stable_prefix_compute_matched_20260910.json)
 - [P-003 — Stable-prefix long compute-matched control](diagnostic_native_stable_prefix_long_compute_matched_20260910.json)

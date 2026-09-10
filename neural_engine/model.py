@@ -59,7 +59,8 @@ class NeuralEngineV0(nn.Module):
                  dynamic_width_mode: str = "none",
                  dynamic_width_min: int | None = None,
                  dynamic_width_threshold: float = 0.8,
-                 dynamic_width_min_batch: int = 0):
+                 dynamic_width_min_batch: int = 0,
+                 dynamic_width_dispatch: str = "grouped"):
         super().__init__()
         if circuit_mode not in {"parallel", "serial"}:
             raise ValueError("circuit_mode must be 'parallel' or 'serial'")
@@ -161,10 +162,13 @@ class NeuralEngineV0(nn.Module):
             raise ValueError("dynamic_width_threshold must be between 0 and 1")
         if dynamic_width_min_batch < 0:
             raise ValueError("dynamic_width_min_batch must be non-negative")
+        if dynamic_width_dispatch not in {"grouped", "prefix_split"}:
+            raise ValueError("dynamic_width_dispatch must be 'grouped' or 'prefix_split'")
         self.dynamic_width_mode = dynamic_width_mode
         self.dynamic_width_min = int(dynamic_width_min)
         self.dynamic_width_threshold = float(dynamic_width_threshold)
         self.dynamic_width_min_batch = int(dynamic_width_min_batch)
+        self.dynamic_width_dispatch = dynamic_width_dispatch
         self.dynamic_width_head = (nn.Linear(state_dim, 1)
                                    if dynamic_width_mode == "learned" else None)
         if self.dynamic_width_head is not None:
@@ -528,30 +532,56 @@ class NeuralEngineV0(nn.Module):
                 route_widths, width_entropy = self._choose_route_width(weights, step_query)
             if (not small_batch_fallback and self.dynamic_width_mode != "none" and not self.training
                     and route_widths.lt(self.active_circuits).any()):
-                circuit_delta = torch.zeros_like(step_query)
                 narrow = route_widths.eq(self.dynamic_width_min)
                 wide = ~narrow
-                if narrow.any():
-                    narrow_weights = weights[narrow, :self.dynamic_width_min]
-                    narrow_weights = narrow_weights / narrow_weights.sum(
+                prefix_split = (
+                    self.dynamic_width_dispatch == "prefix_split"
+                    and self.circuit_mode == "parallel"
+                    and self.circuit_bank_mode in {"independent", "factorized"}
+                    and (self.circuit_bank_mode != "factorized"
+                         or self.factor_composition_mode == "additive")
+                )
+                if prefix_split:
+                    # Additive banks can share the first K computations across
+                    # narrow and wide rows. Narrow rows retain the historical
+                    # renormalization; wide rows keep their original weights.
+                    prefix_weights = weights[:, :self.dynamic_width_min]
+                    narrow_prefix_weights = prefix_weights / prefix_weights.sum(
                         dim=-1, keepdim=True).clamp_min(1e-8)
-                    if self.circuit_mode == "serial":
-                        narrow_delta = self.circuits.forward_serial(
-                            step_query[narrow], selected[narrow, :self.dynamic_width_min],
-                            narrow_weights)
-                    else:
-                        narrow_delta = self.circuits(
-                            step_query[narrow], selected[narrow, :self.dynamic_width_min],
-                            narrow_weights)
-                    circuit_delta[narrow] = narrow_delta
-                if wide.any():
-                    if self.circuit_mode == "serial":
-                        wide_delta = self.circuits.forward_serial(
-                            step_query[wide], selected[wide], weights[wide])
-                    else:
-                        wide_delta = self.circuits(
-                            step_query[wide], selected[wide], weights[wide])
-                    circuit_delta[wide] = wide_delta
+                    prefix_weights = torch.where(
+                        narrow.unsqueeze(-1), narrow_prefix_weights, prefix_weights)
+                    circuit_delta = self.circuits(
+                        step_query, selected[:, :self.dynamic_width_min], prefix_weights)
+                    if wide.any():
+                        suffix_delta = self.circuits(
+                            step_query[wide], selected[wide, self.dynamic_width_min:],
+                            weights[wide, self.dynamic_width_min:])
+                        wide_delta = torch.zeros_like(circuit_delta)
+                        wide_delta[wide] = suffix_delta
+                        circuit_delta = circuit_delta + wide_delta
+                else:
+                    circuit_delta = torch.zeros_like(step_query)
+                    if narrow.any():
+                        narrow_weights = weights[narrow, :self.dynamic_width_min]
+                        narrow_weights = narrow_weights / narrow_weights.sum(
+                            dim=-1, keepdim=True).clamp_min(1e-8)
+                        if self.circuit_mode == "serial":
+                            narrow_delta = self.circuits.forward_serial(
+                                step_query[narrow], selected[narrow, :self.dynamic_width_min],
+                                narrow_weights)
+                        else:
+                            narrow_delta = self.circuits(
+                                step_query[narrow], selected[narrow, :self.dynamic_width_min],
+                                narrow_weights)
+                        circuit_delta[narrow] = narrow_delta
+                    if wide.any():
+                        if self.circuit_mode == "serial":
+                            wide_delta = self.circuits.forward_serial(
+                                step_query[wide], selected[wide], weights[wide])
+                        else:
+                            wide_delta = self.circuits(
+                                step_query[wide], selected[wide], weights[wide])
+                        circuit_delta[wide] = wide_delta
             elif self.circuit_mode == "serial":
                 circuit_delta = self.circuits.forward_serial(step_query, selected, weights)
             else:
@@ -761,4 +791,5 @@ class NeuralEngineV0(nn.Module):
             "step_circuit_adapter_rank": self.step_circuit_adapter_rank,
             "step_circuit_adapter_scale": self.step_circuit_adapter_scale,
             "step_circuit_adapter_start_step": self.step_circuit_adapter_start_step,
+            "dynamic_width_dispatch": self.dynamic_width_dispatch,
         }

@@ -183,6 +183,34 @@ def test_learned_dynamic_width_head_can_select_narrow_path():
     assert bool(stats["active_widths"].eq(2).all())
 
 
+def test_prefix_split_dispatch_matches_grouped_additive_bank():
+    kwargs = dict(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
+                  num_circuits=64, circuit_rank=4, router_branch=2, router_depth=3,
+                  candidate_pool=8, active_circuits=4, internal_steps=2,
+                  dynamic_width_mode="learned", dynamic_width_min=2,
+                  dynamic_width_threshold=0.5, dynamic_width_min_batch=0)
+    grouped = NeuralEngineV0(**kwargs, dynamic_width_dispatch="grouped")
+    prefix = NeuralEngineV0(**kwargs, dynamic_width_dispatch="prefix_split")
+    prefix.load_state_dict(grouped.state_dict())
+
+    def choose_width(weights, _state):
+        widths = torch.tensor([2, 4, 2, 4, 2, 4], device=weights.device)
+        return widths, torch.zeros(weights.shape[0], device=weights.device)
+
+    grouped._choose_route_width = choose_width
+    prefix._choose_route_width = choose_width
+    batch = SyntheticTaskGenerator(seed=123).batch(6)
+    grouped.eval()
+    prefix.eval()
+    with torch.no_grad():
+        grouped_logits, grouped_stats = grouped(batch.inputs, adaptive=False)
+        prefix_logits, prefix_stats = prefix(batch.inputs, adaptive=False)
+    assert torch.allclose(grouped_logits, prefix_logits, atol=1e-6, rtol=1e-6)
+    assert torch.equal(grouped_stats["active_widths"], prefix_stats["active_widths"])
+    assert torch.equal(grouped_stats["executed_selected_ids"],
+                       prefix_stats["executed_selected_ids"])
+
+
 def test_forced_route_replay_preserves_recorded_circuit_path():
     model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
                            num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,

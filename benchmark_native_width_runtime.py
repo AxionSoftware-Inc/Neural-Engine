@@ -59,12 +59,18 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             f"{checkpoint_path.stem}_learned_width.pt")
         learned_checkpoint = torch.load(learned_path, map_location="cpu", weights_only=True)
         configs["learned_k8_k16"] = dict(learned_checkpoint["config"])
+        if args.include_prefix_split:
+            prefix_config = dict(learned_checkpoint["config"])
+            prefix_config["dynamic_width_dispatch"] = "prefix_split"
+            configs["learned_prefix_split"] = prefix_config
         models = {}
         for name, config in configs.items():
             model = make_model(config).to(device)
+            source_checkpoint = (learned_checkpoint
+                                 if name in {"learned_k8_k16", "learned_prefix_split"}
+                                 else checkpoint)
             model.load_state_dict(
-                checkpoint["model_state"] if name != "learned_k8_k16"
-                else learned_checkpoint["model_state"])
+                source_checkpoint["model_state"])
             model.eval()
             models[name] = model
         seed = int(base_config.get("seed", 17))
@@ -104,6 +110,7 @@ def main() -> None:
     parser.add_argument("--warmup", type=int, default=5)
     parser.add_argument("--repeats", type=int, default=20)
     parser.add_argument("--examples-per-task", type=int, default=32)
+    parser.add_argument("--include-prefix-split", action="store_true")
     parser.add_argument("--device", default="auto")
     parser.add_argument("--output", default="results/diagnostic_native_width_runtime_20260910.json")
     run(parser.parse_args())

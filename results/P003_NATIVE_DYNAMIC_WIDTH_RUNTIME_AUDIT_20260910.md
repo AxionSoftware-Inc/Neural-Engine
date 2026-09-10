@@ -37,6 +37,24 @@ latency reduction was smaller than the width reduction, so kernel launch and
 batch partition overhead are material. This is still a practical speed signal,
 not a claim of linear FLOP-to-latency scaling.
 
+## Prefix-split fusion probe
+
+An additive-bank alternative was tested as an opt-in dispatch mode. It computes
+the first K=8 prefix for every row in one launch, then computes only the K=8
+suffix for rows selected for K=16. A unit test confirmed that its output and
+executed IDs match the existing grouped implementation exactly. However, the
+three-seed 480-example timing was worse:
+
+| Variant | Mean latency |
+|---|---:|
+| Existing grouped dispatch | 39.61 ms |
+| Prefix-split dispatch | 41.64 ms |
+
+Prefix-split was `5.1%` slower on average (one seed was 2.0% faster, two were
+6.7–10.5% slower). The shared prefix launch did not compensate for its larger
+first call and suffix bookkeeping on this GPU, so the idea is rejected as a
+runtime improvement for the current backend.
+
 ## Larger-batch confirmation
 
 A second three-seed run used a balanced batch of 960 examples with the same
@@ -49,7 +67,7 @@ prevents linear scaling.
 
 ## Decision
 
-`POSITIVE RUNTIME SIGNAL — OPT-IN ONLY; KERNEL FUSION OPEN`.
+`POSITIVE RUNTIME SIGNAL — OPT-IN ONLY; PREFIX-SPLIT REJECTED; KERNEL FUSION OPEN`.
 
 Keep learned dynamic width as the preferred opt-in native candidate. Do not make
 it the default until a third seed, longer continuation, and a larger-batch /
@@ -71,6 +89,7 @@ ms` in this regime, so the guard prevents a meaningful small-batch regression.
 - [Three-seed runtime JSON](diagnostic_native_width_runtime_all3_20260910.json)
 - [Three-seed larger-batch runtime JSON](diagnostic_native_width_runtime_batch960_20260910.json)
 - [Small-batch guarded JSON](diagnostic_native_width_runtime_small_batch_20260910_guarded.json)
+- [Prefix-split dispatch probe JSON](diagnostic_native_width_prefix_split_480_20260910.json)
 - [Runtime benchmark](../benchmark_native_width_runtime.py)
 - [Learned-width OOD audit](P003_NATIVE_LEARNED_WIDTH_AUDIT_20260910.md)
 
