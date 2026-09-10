@@ -1,0 +1,283 @@
+{
+  "run_id": "nonmod_depth4_values0_31_factorized_algebraic_fourier_base512_rank128_offset2097152_seed18_3000",
+  "model_name": "ne_dynamic_300m_nonmod_depth4_typed_write_adapter_values0_31_factorized_algebraic_fourier_base512_rank128_offset2097152",
+  "seed": 18,
+  "device": "cuda",
+  "steps": 3000,
+  "batch_size": 128,
+  "training_seconds": 500.6872648999997,
+  "train_depths": [
+    1,
+    2
+  ],
+  "eval_depths": [
+    3,
+    4
+  ],
+  "train_value_range": [
+    0,
+    31
+  ],
+  "eval_value_range": [
+    0,
+    31
+  ],
+  "generator_modulus": null,
+  "target_offset": 2097152,
+  "compact_factorized_eval": true,
+  "total_params": 15790983,
+  "train": {
+    "accuracy": 1.0,
+    "loss": 0.008905187249183655,
+    "loss_mode": "factorized_digit_sum_compact",
+    "accuracy_by_depth": {
+      "1": 1.0,
+      "2": 1.0
+    },
+    "avg_executed_steps": 1.5,
+    "active_step_fraction": 0.375,
+    "router_entropy": 4.876594543457031,
+    "route_audit": {
+      "selected_count": 6144,
+      "unique_virtual_circuits": 796,
+      "virtual_bank_utilization": 0.033728813559322036,
+      "dead_virtual_circuits": 22804,
+      "top_route_fraction": 0.04638671875,
+      "route_entropy": 5.445737361907959,
+      "unique_factor_rows": 119,
+      "factor_bank_utilization": 0.7727272510528564,
+      "dead_factor_rows": 35,
+      "by_program_depth": {
+        "1": {
+          "selected_count": 2048,
+          "unique_virtual_circuits": 527,
+          "virtual_bank_utilization": 0.02233050847457627,
+          "dead_virtual_circuits": 23073,
+          "top_route_fraction": 0.04833984375,
+          "route_entropy": 5.484556198120117,
+          "unique_factor_rows": 101,
+          "factor_bank_utilization": 0.6558441519737244,
+          "dead_factor_rows": 53
+        },
+        "2": {
+          "selected_count": 4096,
+          "unique_virtual_circuits": 625,
+          "virtual_bank_utilization": 0.026483050847457626,
+          "dead_virtual_circuits": 22975,
+          "top_route_fraction": 0.04541015625,
+          "route_entropy": 5.2124247550964355,
+          "unique_factor_rows": 111,
+          "factor_bank_utilization": 0.7207792401313782,
+          "dead_factor_rows": 43
+        }
+      },
+      "by_execution_step": {
+        "0": {
+          "selected_count": 4096,
+          "unique_virtual_circuits": 697,
+          "virtual_bank_utilization": 0.029533898305084745,
+          "dead_virtual_circuits": 22903,
+          "top_route_fraction": 0.0419921875,
+          "route_entropy": 5.587414741516113,
+          "unique_factor_rows": 110,
+          "factor_bank_utilization": 0.7142857313156128,
+          "dead_factor_rows": 44
+        },
+        "1": {
+          "selected_count": 2048,
+          "unique_virtual_circuits": 205,
+          "virtual_bank_utilization": 0.008686440677966102,
+          "dead_virtual_circuits": 23395,
+          "top_route_fraction": 0.05517578125,
+          "route_entropy": 4.316676139831543,
+          "unique_factor_rows": 47,
+          "factor_bank_utilization": 0.30519479513168335,
+          "dead_factor_rows": 107
+        },
+        "2": {
+          "selected_count": 0,
+          "unique_virtual_circuits": 0,
+          "virtual_bank_utilization": 0.0,
+          "dead_virtual_circuits": 23600
+        },
+        "3": {
+          "selected_count": 0,
+          "unique_virtual_circuits": 0,
+          "virtual_bank_utilization": 0.0,
+          "dead_virtual_circuits": 23600
+        }
+      }
+    },
+    "macro_route_audit": null
+  },
+  "evaluation": {
+    "accuracy": 0.84375,
+    "loss": 1.7947229146957397,
+    "loss_mode": "factorized_digit_sum_compact",
+    "accuracy_by_depth": {
+      "3": 0.890625,
+      "4": 0.796875
+    },
+    "avg_executed_steps": 3.5,
+    "active_step_fraction": 0.875,
+    "router_entropy": 4.854736328125,
+    "route_audit": {
+      "selected_count": 14336,
+      "unique_virtual_circuits": 930,
+      "virtual_bank_utilization": 0.03940677966101695,
+      "dead_virtual_circuits": 22670,
+      "top_route_fraction": 0.0495954230427742,
+      "route_entropy": 4.968076705932617,
+      "unique_factor_rows": 129,
+      "factor_bank_utilization": 0.8376623392105103,
+      "dead_factor_rows": 25,
+      "by_program_depth": {
+        "3": {
+          "selected_count": 6144,
+          "unique_virtual_circuits": 693,
+          "virtual_bank_utilization": 0.029364406779661015,
+          "dead_virtual_circuits": 22907,
+          "top_route_fraction": 0.0472005195915699,
+          "route_entropy": 5.0033955574035645,
+          "unique_factor_rows": 116,
+          "factor_bank_utilization": 0.7532467246055603,
+          "dead_factor_rows": 38
+        },
+        "4": {
+          "selected_count": 8192,
+          "unique_virtual_circuits": 716,
+          "virtual_bank_utilization": 0.030338983050847458,
+          "dead_virtual_circuits": 22884,
+          "top_route_fraction": 0.0513916015625,
+          "route_entropy": 4.857198715209961,
+          "unique_factor_rows": 115,
+          "factor_bank_utilization": 0.7467532753944397,
+          "dead_factor_rows": 39
+        }
+      },
+      "by_execution_step": {
+        "0": {
+          "selected_count": 4096,
+          "unique_virtual_circuits": 705,
+          "virtual_bank_utilization": 0.029872881355932204,
+          "dead_virtual_circuits": 22895,
+          "top_route_fraction": 0.04345703125,
+          "route_entropy": 5.569106578826904,
+          "unique_factor_rows": 115,
+          "factor_bank_utilization": 0.7467532753944397,
+          "dead_factor_rows": 39
+        },
+        "1": {
+          "selected_count": 4096,
+          "unique_virtual_circuits": 286,
+          "virtual_bank_utilization": 0.01211864406779661,
+          "dead_virtual_circuits": 23314,
+          "top_route_fraction": 0.052490234375,
+          "route_entropy": 4.415849208831787,
+          "unique_factor_rows": 62,
+          "factor_bank_utilization": 0.4025973975658417,
+          "dead_factor_rows": 92
+        },
+        "2": {
+          "selected_count": 4096,
+          "unique_virtual_circuits": 263,
+          "virtual_bank_utilization": 0.011144067796610169,
+          "dead_virtual_circuits": 23337,
+          "top_route_fraction": 0.05859375,
+          "route_entropy": 4.163765907287598,
+          "unique_factor_rows": 57,
+          "factor_bank_utilization": 0.37012988328933716,
+          "dead_factor_rows": 97
+        },
+        "3": {
+          "selected_count": 2048,
+          "unique_virtual_circuits": 183,
+          "virtual_bank_utilization": 0.007754237288135593,
+          "dead_virtual_circuits": 23417,
+          "top_route_fraction": 0.0771484375,
+          "route_entropy": 4.021201133728027,
+          "unique_factor_rows": 44,
+          "factor_bank_utilization": 0.2857142984867096,
+          "dead_factor_rows": 110
+        }
+      }
+    },
+    "macro_route_audit": null
+  },
+  "train_loss_first": 26.42647933959961,
+  "train_loss_last": 0.02077484503388405,
+  "structured_scalar_contract_loss_weight": 0.0,
+  "structured_scalar_target_scale": 1.0,
+  "active_params_estimate": 10491824,
+  "active_fraction": 0.6644186748855344,
+  "active_circuit_params": 608304,
+  "max_ops": 4,
+  "modulus": null,
+  "circuit_bank_mode": "factorized",
+  "routing_mode": "factorized",
+  "input_reinjection_scale": 0.0,
+  "write_gate": false,
+  "value_encoder_mode": "learned",
+  "factor_mix_mode": "shared",
+  "ordered_factor_slots": false,
+  "query_factor_mix_scale": 0.0,
+  "factor_pair_rank": 0,
+  "factor_pair_scale": 1.0,
+  "factor_count": 154,
+  "factor_candidate_pool": 8,
+  "factor_capacity": 154,
+  "route_context_mode": "full",
+  "state_layout": "flat",
+  "state_update_mode": "overwrite",
+  "state_residual_scale": 0.25,
+  "predecessor_operation_context": false,
+  "operation_adapter_rank": 16,
+  "operation_adapter_scale": 1.0,
+  "operation_adapter_gate": false,
+  "operation_adapter_gate_value": null,
+  "operation_read_adapter_rank": 0,
+  "operation_read_adapter_scale": 1.0,
+  "operation_write_adapter_rank": 16,
+  "operation_write_adapter_scale": 1.0,
+  "operation_write_adapter_mode": "post_state",
+  "operation_circuit_bank": true,
+  "operation_router_keys": false,
+  "operation_router_key_params": 0,
+  "operation_router_key_active_estimate": 0,
+  "operation_transition_rank": 0,
+  "operation_transition_scale": 1.0,
+  "structured_scalar_state": false,
+  "structured_scalar_scale": 1.0,
+  "structured_scalar_read_scale": 0.0,
+  "structured_scalar_authoritative": false,
+  "algebraic_state_mode": "polynomial2_fourier",
+  "algebraic_state_scale": 1.0,
+  "algebraic_state_value_scale": 33554432.0,
+  "algebraic_state_fourier_base": 512,
+  "operator_valued_product_encoder": false,
+  "operator_valued_packet_width": 16,
+  "operator_valued_basis_count": 8,
+  "operator_valued_product_scalar_dof": 0,
+  "numeric_state_dim": 0,
+  "numeric_state_scale": 1.0,
+  "modular_prior": false,
+  "modular_prior_mode": "fixed",
+  "modular_template_init": "identity",
+  "circuit_residual_scale": 1.0,
+  "circuit_input_norm": false,
+  "output_mode": "factorized_digits",
+  "output_temperature": 16.0,
+  "output_scalar_bias": 0.0,
+  "output_digit_base": 512,
+  "output_factor_rank": 128,
+  "macro_cell_count": 0,
+  "macro_cell_rank": 8,
+  "macro_cell_depth": 4,
+  "macro_router_branch": 4,
+  "macro_router_depth": 0,
+  "macro_candidate_pool": 4,
+  "active_macro_cells": 0,
+  "macro_cell_scale": 1.0,
+  "macro_total_params": 0,
+  "macro_active_params_estimate": 0
+}

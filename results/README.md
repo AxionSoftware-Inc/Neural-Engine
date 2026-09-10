@@ -1297,6 +1297,14 @@ time. This is retained as the leading opt-in architecture; robustness and
 rank/codec ablations remain before changing defaults or scaling the model.
 See `V0_210_DYNAMIC_NONMOD_ALGEBRAIC_FOURIER_SHARED_CODEC_AUDIT.md`.
 
+V0.211 passes the target-offset robustness check. Keeping the same shared
+rank-128 base-512 codec but shifting the offset from `1,048,576` to `2,097,152`
+changes two-seed held-out mean only from `85.06%` to `84.86%`, while depth-4
+changes from `81.05%` to `82.42%`; total/active parameters remain
+`15.79M/10.49M`. The codec is therefore not memorizing one absolute offset.
+The next gate is operand range `0--63`, not model scaling. See
+`V0_211_DYNAMIC_NONMOD_ALGEBRAIC_FOURIER_SHARED_CODEC_OFFSET_ROBUSTNESS.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

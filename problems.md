@@ -1328,3 +1328,13 @@ ishlar: rank `64/128/256` ablation, shifted offset va kengroq operand stress;
 700M/1B scale hozircha qilinmaydi.
 
 **Batafsil:** `results/V0_210_DYNAMIC_NONMOD_ALGEBRAIC_FOURIER_SHARED_CODEC_AUDIT.md`.
+
+**Target-offset robustness (2026-09-11):** shared rank-128 base512 codec
+offset `1,048,576`dan `2,097,152`ga ko‘chirilganda ikki seedli held-out
+o‘rtacha `85.06%`dan `84.86%`ga, depth-4 esa `81.05%`dan `82.42%`ga o‘zgardi;
+parametrlar `15.79M/10.49M` bo‘lib qoldi. **ROBUSTNESS GATE PASSED.** Bu
+codecning bitta absolut target offsetni yodlab qolmaganini ko‘rsatadi. P-004
+active qoladi; keyingi muhim screen operandlarni `0--63`ga kengaytirish,
+700M/1B scale emas.
+
+**Batafsil:** `results/V0_211_DYNAMIC_NONMOD_ALGEBRAIC_FOURIER_SHARED_CODEC_OFFSET_ROBUSTNESS.md`.
