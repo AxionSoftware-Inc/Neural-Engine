@@ -57,6 +57,22 @@ two seeds and evaluator.
 ordinary and held-out-combination streams. Thus the recipe fixes distribution
 coverage, not the underlying 300M→500M capacity-scaling problem.
 
+## Depth and route diagnosis
+
+The matched depth audit shows why the extra 500M rows did not translate into
+ordinary quality. On the uniform probe, selected pair cosine falls only a
+little from `0.2726 → 0.2686` at depth 2 and `0.2827 → 0.2758` at depth 3,
+so selected circuits are marginally less redundant. However, the useful route
+contribution relative to the query also falls from `5.67% → 5.10%` at depth 2
+and `4.64% → 3.96%` at depth 3, while dead traffic rises from `57.47%` to
+`61.12%`. The same direction is visible on edge probes: 500M has lower pair
+cosine but weaker route/query ratios and roughly equal or higher dead traffic.
+
+This points to a remaining active-path utilization problem, not simply a lack
+of stored circuit rows. The step adapter improves the interface, and edge
+coverage improves the training distribution, but 500M still spreads useful
+credit too thinly across the larger bank.
+
 For context, high-edge-only sampling reached about 97% high-edge accuracy,
 but reduced low-edge accuracy by 3.711 pp and was not accepted as a general
 recipe. Training longer was necessary: at 3,000 steps the two-edge mix was
@@ -90,4 +106,5 @@ Raw outputs:
 - `results/diagnostic_native_step_adapter_vs_two_edge_mix_10000.json`
 - `results/diagnostic_native_step_adapter_two_edge_mix_3000.json`
 - `results/diagnostic_native_two_edge_mix_300m_500m_10000.json`
+- `results/diagnostic_native_two_edge_mix_depth_300m_500m_10000.json`
 - `data/generator.py` and `train.py` implement the opt-in sampler.

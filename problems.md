@@ -1544,5 +1544,7 @@ recipe 500Mda qayta tekshirilganda edge foydasi saqlanib qoldi
 (`+0.286/+0.920 pp` low/high), lekin uniform `−1.128 pp` va hard-task
 `−2.192 pp` bo‘ldi. Shuning uchun recipe 300M uchun current reference opt-in,
 500M esa scaling bo‘yicha salbiy nazorat; default va 700M/1B qarori ochiq
-qoladi.
+qoladi. Depth auditida 500M selected-pair cosine biroz kamaygan bo‘lsa ham,
+depth-2/3 route-to-query ratio pasayib, uniform dead traffic `57.47% → 61.12%`
+oshdi; ya’ni qo‘shimcha qatorlar active creditni kuchaytirmayapti.
 **Batafsil:** `results/P003_NATIVE_EDGE_MIX_AUDIT_20260910.md`.

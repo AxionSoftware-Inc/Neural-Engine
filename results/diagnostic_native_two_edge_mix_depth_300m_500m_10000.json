@@ -1,0 +1,600 @@
+{
+  "audit": "native_depth_specialization",
+  "device": "cuda",
+  "examples_per_task": 64,
+  "conditions": {
+    "uniform_all": {
+      "value_min": 0,
+      "value_max": 63,
+      "split": "all"
+    },
+    "low_edge_values": {
+      "value_min": 0,
+      "value_max": 7,
+      "split": "all"
+    },
+    "high_edge_values": {
+      "value_min": 56,
+      "value_max": 63,
+      "split": "all"
+    }
+  },
+  "checkpoints": {
+    "ne300_step_adapter_two_edge_mix_s17_10000.pt": {
+      "model_name": "ne_300m_v12_factorized_shared_routekeys_step_adapter_two_edge_mix",
+      "seed": 17,
+      "conditions": {
+        "uniform_all": {
+          "value_range": [
+            0,
+            63
+          ],
+          "split": "all",
+          "examples_per_task": 64,
+          "accuracy": 0.7864583730697632,
+          "accuracy_by_depth": {
+            "1": 0.9809027910232544,
+            "2": 0.5989583730697632,
+            "3": 0.390625
+          },
+          "depths": {
+            "1": {
+              "rows": 576,
+              "selected_pair_cosine_mean": 0.2883564531803131,
+              "selected_pair_cosine_p95": 0.4460424780845642,
+              "selected_output_norm_mean": 1.679391622543335,
+              "query_norm_mean": 13.409107208251953,
+              "route_output_norm_mean": 1.190704345703125,
+              "route_to_query_norm_ratio": 0.08806157857179642
+            },
+            "2": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.28226059675216675,
+              "selected_pair_cosine_p95": 0.4423132538795471,
+              "selected_output_norm_mean": 1.2512922286987305,
+              "query_norm_mean": 13.877835273742676,
+              "route_output_norm_mean": 0.8428352475166321,
+              "route_to_query_norm_ratio": 0.06153743341565132
+            },
+            "3": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.28445473313331604,
+              "selected_pair_cosine_p95": 0.4460764527320862,
+              "selected_output_norm_mean": 1.0857048034667969,
+              "query_norm_mean": 14.072366714477539,
+              "route_output_norm_mean": 0.6995376944541931,
+              "route_to_query_norm_ratio": 0.049816034734249115
+            }
+          },
+          "selected_unique": 9790,
+          "dead_circuit_fraction": 0.5706140398979187,
+          "factor_dead_fraction": 0.0
+        },
+        "low_edge_values": {
+          "value_range": [
+            0,
+            7
+          ],
+          "split": "all",
+          "examples_per_task": 64,
+          "accuracy": 0.9583333730697632,
+          "accuracy_by_depth": {
+            "1": 1.0,
+            "2": 0.96875,
+            "3": 0.8229166865348816
+          },
+          "depths": {
+            "1": {
+              "rows": 576,
+              "selected_pair_cosine_mean": 0.28813669085502625,
+              "selected_pair_cosine_p95": 0.43478477001190186,
+              "selected_output_norm_mean": 1.6983458995819092,
+              "query_norm_mean": 14.681036949157715,
+              "route_output_norm_mean": 1.1616837978363037,
+              "route_to_query_norm_ratio": 0.07925036549568176
+            },
+            "2": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.2942560613155365,
+              "selected_pair_cosine_p95": 0.42765700817108154,
+              "selected_output_norm_mean": 1.9589792490005493,
+              "query_norm_mean": 14.550539016723633,
+              "route_output_norm_mean": 1.4917360544204712,
+              "route_to_query_norm_ratio": 0.1046118289232254
+            },
+            "3": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.27481532096862793,
+              "selected_pair_cosine_p95": 0.41502490639686584,
+              "selected_output_norm_mean": 1.4225698709487915,
+              "query_norm_mean": 14.18523120880127,
+              "route_output_norm_mean": 0.9585444331169128,
+              "route_to_query_norm_ratio": 0.06746309250593185
+            }
+          },
+          "selected_unique": 6987,
+          "dead_circuit_fraction": 0.6935526132583618,
+          "factor_dead_fraction": 0.0
+        },
+        "high_edge_values": {
+          "value_range": [
+            56,
+            63
+          ],
+          "split": "all",
+          "examples_per_task": 64,
+          "accuracy": 0.9427083730697632,
+          "accuracy_by_depth": {
+            "1": 0.9982638955116272,
+            "2": 0.921875,
+            "3": 0.796875
+          },
+          "depths": {
+            "1": {
+              "rows": 576,
+              "selected_pair_cosine_mean": 0.29861146211624146,
+              "selected_pair_cosine_p95": 0.4396525025367737,
+              "selected_output_norm_mean": 1.791552186012268,
+              "query_norm_mean": 13.772407531738281,
+              "route_output_norm_mean": 1.3162771463394165,
+              "route_to_query_norm_ratio": 0.09393318742513657
+            },
+            "2": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.28378498554229736,
+              "selected_pair_cosine_p95": 0.4219752550125122,
+              "selected_output_norm_mean": 2.094472885131836,
+              "query_norm_mean": 13.789627075195312,
+              "route_output_norm_mean": 1.588259220123291,
+              "route_to_query_norm_ratio": 0.11703059822320938
+            },
+            "3": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.2744317352771759,
+              "selected_pair_cosine_p95": 0.41705161333084106,
+              "selected_output_norm_mean": 1.4090968370437622,
+              "query_norm_mean": 13.744702339172363,
+              "route_output_norm_mean": 0.965347409248352,
+              "route_to_query_norm_ratio": 0.07073017209768295
+            }
+          },
+          "selected_unique": 8052,
+          "dead_circuit_fraction": 0.6468421220779419,
+          "factor_dead_fraction": 0.0
+        }
+      }
+    },
+    "ne300_step_adapter_two_edge_mix_s18_10000.pt": {
+      "model_name": "ne_300m_v12_factorized_shared_routekeys_step_adapter_two_edge_mix",
+      "seed": 18,
+      "conditions": {
+        "uniform_all": {
+          "value_range": [
+            0,
+            63
+          ],
+          "split": "all",
+          "examples_per_task": 64,
+          "accuracy": 0.7770833969116211,
+          "accuracy_by_depth": {
+            "1": 0.9791666865348816,
+            "2": 0.5885416865348816,
+            "3": 0.359375
+          },
+          "depths": {
+            "1": {
+              "rows": 576,
+              "selected_pair_cosine_mean": 0.27727210521698,
+              "selected_pair_cosine_p95": 0.4316803216934204,
+              "selected_output_norm_mean": 1.4561964273452759,
+              "query_norm_mean": 13.539032936096191,
+              "route_output_norm_mean": 1.003005862236023,
+              "route_to_query_norm_ratio": 0.07397768646478653
+            },
+            "2": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.26301151514053345,
+              "selected_pair_cosine_p95": 0.41526132822036743,
+              "selected_output_norm_mean": 1.0510995388031006,
+              "query_norm_mean": 13.412109375,
+              "route_output_norm_mean": 0.6816267967224121,
+              "route_to_query_norm_ratio": 0.05195816606283188
+            },
+            "3": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.28103548288345337,
+              "selected_pair_cosine_p95": 0.4788188934326172,
+              "selected_output_norm_mean": 0.9354897737503052,
+              "query_norm_mean": 13.990983009338379,
+              "route_output_norm_mean": 0.5986083149909973,
+              "route_to_query_norm_ratio": 0.04296654090285301
+            }
+          },
+          "selected_unique": 9605,
+          "dead_circuit_fraction": 0.5787280797958374,
+          "factor_dead_fraction": 0.0
+        },
+        "low_edge_values": {
+          "value_range": [
+            0,
+            7
+          ],
+          "split": "all",
+          "examples_per_task": 64,
+          "accuracy": 0.9583333730697632,
+          "accuracy_by_depth": {
+            "1": 1.0,
+            "2": 0.984375,
+            "3": 0.8072916865348816
+          },
+          "depths": {
+            "1": {
+              "rows": 576,
+              "selected_pair_cosine_mean": 0.282685250043869,
+              "selected_pair_cosine_p95": 0.42833951115608215,
+              "selected_output_norm_mean": 1.5781363248825073,
+              "query_norm_mean": 14.392191886901855,
+              "route_output_norm_mean": 1.0509446859359741,
+              "route_to_query_norm_ratio": 0.07292648404836655
+            },
+            "2": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.26386046409606934,
+              "selected_pair_cosine_p95": 0.41310036182403564,
+              "selected_output_norm_mean": 1.416415810585022,
+              "query_norm_mean": 14.017727851867676,
+              "route_output_norm_mean": 0.9884474277496338,
+              "route_to_query_norm_ratio": 0.07234316319227219
+            },
+            "3": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.26802560687065125,
+              "selected_pair_cosine_p95": 0.4330240488052368,
+              "selected_output_norm_mean": 1.1945087909698486,
+              "query_norm_mean": 14.060155868530273,
+              "route_output_norm_mean": 0.7876966595649719,
+              "route_to_query_norm_ratio": 0.056028034538030624
+            }
+          },
+          "selected_unique": 7111,
+          "dead_circuit_fraction": 0.6881140470504761,
+          "factor_dead_fraction": 0.0
+        },
+        "high_edge_values": {
+          "value_range": [
+            56,
+            63
+          ],
+          "split": "all",
+          "examples_per_task": 64,
+          "accuracy": 0.95208340883255,
+          "accuracy_by_depth": {
+            "1": 1.0,
+            "2": 0.984375,
+            "3": 0.7760416865348816
+          },
+          "depths": {
+            "1": {
+              "rows": 576,
+              "selected_pair_cosine_mean": 0.27674105763435364,
+              "selected_pair_cosine_p95": 0.4127295911312103,
+              "selected_output_norm_mean": 1.5790722370147705,
+              "query_norm_mean": 13.992517471313477,
+              "route_output_norm_mean": 1.0969047546386719,
+              "route_to_query_norm_ratio": 0.0774388387799263
+            },
+            "2": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.25910794734954834,
+              "selected_pair_cosine_p95": 0.39832204580307007,
+              "selected_output_norm_mean": 1.7905722856521606,
+              "query_norm_mean": 13.723299980163574,
+              "route_output_norm_mean": 1.352691650390625,
+              "route_to_query_norm_ratio": 0.10077764093875885
+            },
+            "3": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.28588739037513733,
+              "selected_pair_cosine_p95": 0.4537090063095093,
+              "selected_output_norm_mean": 1.1946431398391724,
+              "query_norm_mean": 13.36224365234375,
+              "route_output_norm_mean": 0.7985473275184631,
+              "route_to_query_norm_ratio": 0.059697475284338
+            }
+          },
+          "selected_unique": 6765,
+          "dead_circuit_fraction": 0.7032894492149353,
+          "factor_dead_fraction": 0.0
+        }
+      }
+    },
+    "ne500_step_adapter_two_edge_mix_s17_10000.pt": {
+      "model_name": "ne_500m_v12_factorized_shared_routekeys_step_adapter_two_edge_mix",
+      "seed": 17,
+      "conditions": {
+        "uniform_all": {
+          "value_range": [
+            0,
+            63
+          ],
+          "split": "all",
+          "examples_per_task": 64,
+          "accuracy": 0.768750011920929,
+          "accuracy_by_depth": {
+            "1": 0.9774305820465088,
+            "2": 0.5416666865348816,
+            "3": 0.3697916865348816
+          },
+          "depths": {
+            "1": {
+              "rows": 576,
+              "selected_pair_cosine_mean": 0.26416152715682983,
+              "selected_pair_cosine_p95": 0.40105798840522766,
+              "selected_output_norm_mean": 1.5372670888900757,
+              "query_norm_mean": 13.389013290405273,
+              "route_output_norm_mean": 1.0552940368652344,
+              "route_to_query_norm_ratio": 0.07837756723165512
+            },
+            "2": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.2583847939968109,
+              "selected_pair_cosine_p95": 0.40053099393844604,
+              "selected_output_norm_mean": 1.191774606704712,
+              "query_norm_mean": 14.000082015991211,
+              "route_output_norm_mean": 0.7677078247070312,
+              "route_to_query_norm_ratio": 0.05525081232190132
+            },
+            "3": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.2640909254550934,
+              "selected_pair_cosine_p95": 0.4136884808540344,
+              "selected_output_norm_mean": 0.9547951817512512,
+              "query_norm_mean": 13.941652297973633,
+              "route_output_norm_mean": 0.5881741642951965,
+              "route_to_query_norm_ratio": 0.04255274683237076
+            }
+          },
+          "selected_unique": 15339,
+          "dead_circuit_fraction": 0.6026166081428528,
+          "factor_dead_fraction": 0.0
+        },
+        "low_edge_values": {
+          "value_range": [
+            0,
+            7
+          ],
+          "split": "all",
+          "examples_per_task": 64,
+          "accuracy": 0.9531250596046448,
+          "accuracy_by_depth": {
+            "1": 1.0,
+            "2": 0.9635416865348816,
+            "3": 0.8020833730697632
+          },
+          "depths": {
+            "1": {
+              "rows": 576,
+              "selected_pair_cosine_mean": 0.26384302973747253,
+              "selected_pair_cosine_p95": 0.4094037115573883,
+              "selected_output_norm_mean": 1.5231422185897827,
+              "query_norm_mean": 14.355952262878418,
+              "route_output_norm_mean": 0.9866073131561279,
+              "route_to_query_norm_ratio": 0.06904380768537521
+            },
+            "2": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.2755022644996643,
+              "selected_pair_cosine_p95": 0.4186377227306366,
+              "selected_output_norm_mean": 1.7586227655410767,
+              "query_norm_mean": 14.39989185333252,
+              "route_output_norm_mean": 1.2801657915115356,
+              "route_to_query_norm_ratio": 0.09014841169118881
+            },
+            "3": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.2547203302383423,
+              "selected_pair_cosine_p95": 0.402276873588562,
+              "selected_output_norm_mean": 1.1254653930664062,
+              "query_norm_mean": 14.102147102355957,
+              "route_output_norm_mean": 0.7190432548522949,
+              "route_to_query_norm_ratio": 0.05097469314932823
+            }
+          },
+          "selected_unique": 11904,
+          "dead_circuit_fraction": 0.6916062235832214,
+          "factor_dead_fraction": 0.0
+        },
+        "high_edge_values": {
+          "value_range": [
+            56,
+            63
+          ],
+          "split": "all",
+          "examples_per_task": 64,
+          "accuracy": 0.9437500238418579,
+          "accuracy_by_depth": {
+            "1": 1.0,
+            "2": 0.90625,
+            "3": 0.8125
+          },
+          "depths": {
+            "1": {
+              "rows": 576,
+              "selected_pair_cosine_mean": 0.2670915722846985,
+              "selected_pair_cosine_p95": 0.4014768898487091,
+              "selected_output_norm_mean": 1.6775472164154053,
+              "query_norm_mean": 13.615513801574707,
+              "route_output_norm_mean": 1.1629050970077515,
+              "route_to_query_norm_ratio": 0.0852101668715477
+            },
+            "2": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.26098835468292236,
+              "selected_pair_cosine_p95": 0.4104619324207306,
+              "selected_output_norm_mean": 1.8554856777191162,
+              "query_norm_mean": 13.663689613342285,
+              "route_output_norm_mean": 1.3754539489746094,
+              "route_to_query_norm_ratio": 0.10176647454500198
+            },
+            "3": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.2551960051059723,
+              "selected_pair_cosine_p95": 0.390781968832016,
+              "selected_output_norm_mean": 1.1379281282424927,
+              "query_norm_mean": 13.522296905517578,
+              "route_output_norm_mean": 0.74085932970047,
+              "route_to_query_norm_ratio": 0.05536879599094391
+            }
+          },
+          "selected_unique": 12046,
+          "dead_circuit_fraction": 0.6879274845123291,
+          "factor_dead_fraction": 0.0
+        }
+      }
+    },
+    "ne500_step_adapter_two_edge_mix_s18_10000.pt": {
+      "model_name": "ne_500m_v12_factorized_shared_routekeys_step_adapter_two_edge_mix",
+      "seed": 18,
+      "conditions": {
+        "uniform_all": {
+          "value_range": [
+            0,
+            63
+          ],
+          "split": "all",
+          "examples_per_task": 64,
+          "accuracy": 0.7760416865348816,
+          "accuracy_by_depth": {
+            "1": 0.9739583134651184,
+            "2": 0.5625,
+            "3": 0.3958333432674408
+          },
+          "depths": {
+            "1": {
+              "rows": 576,
+              "selected_pair_cosine_mean": 0.2633797824382782,
+              "selected_pair_cosine_p95": 0.4048301577568054,
+              "selected_output_norm_mean": 1.441239356994629,
+              "query_norm_mean": 13.493961334228516,
+              "route_output_norm_mean": 0.9750121831893921,
+              "route_to_query_norm_ratio": 0.07219768315553665
+            },
+            "2": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.2788673937320709,
+              "selected_pair_cosine_p95": 0.42338845133781433,
+              "selected_output_norm_mean": 0.952174186706543,
+              "query_norm_mean": 13.140301704406738,
+              "route_output_norm_mean": 0.6121729612350464,
+              "route_to_query_norm_ratio": 0.04678470641374588
+            },
+            "3": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.2875562012195587,
+              "selected_pair_cosine_p95": 0.45161759853363037,
+              "selected_output_norm_mean": 0.7910280823707581,
+              "query_norm_mean": 13.576740264892578,
+              "route_output_norm_mean": 0.49005603790283203,
+              "route_to_query_norm_ratio": 0.03659207001328468
+            }
+          },
+          "selected_unique": 14680,
+          "dead_circuit_fraction": 0.6196891069412231,
+          "factor_dead_fraction": 0.0
+        },
+        "low_edge_values": {
+          "value_range": [
+            0,
+            7
+          ],
+          "split": "all",
+          "examples_per_task": 64,
+          "accuracy": 0.9666666984558105,
+          "accuracy_by_depth": {
+            "1": 1.0,
+            "2": 0.96875,
+            "3": 0.8645833730697632
+          },
+          "depths": {
+            "1": {
+              "rows": 576,
+              "selected_pair_cosine_mean": 0.25970152020454407,
+              "selected_pair_cosine_p95": 0.40376007556915283,
+              "selected_output_norm_mean": 1.4693756103515625,
+              "query_norm_mean": 14.586966514587402,
+              "route_output_norm_mean": 0.9600933194160461,
+              "route_to_query_norm_ratio": 0.0662071481347084
+            },
+            "2": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.2607801556587219,
+              "selected_pair_cosine_p95": 0.4037171006202698,
+              "selected_output_norm_mean": 1.4728766679763794,
+              "query_norm_mean": 14.07446002960205,
+              "route_output_norm_mean": 1.0243030786514282,
+              "route_to_query_norm_ratio": 0.0746588334441185
+            },
+            "3": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.2595253586769104,
+              "selected_pair_cosine_p95": 0.3997513949871063,
+              "selected_output_norm_mean": 1.0827704668045044,
+              "query_norm_mean": 13.793461799621582,
+              "route_output_norm_mean": 0.6891577839851379,
+              "route_to_query_norm_ratio": 0.04997355490922928
+            }
+          },
+          "selected_unique": 11941,
+          "dead_circuit_fraction": 0.6906476616859436,
+          "factor_dead_fraction": 0.0
+        },
+        "high_edge_values": {
+          "value_range": [
+            56,
+            63
+          ],
+          "split": "all",
+          "examples_per_task": 64,
+          "accuracy": 0.9604167342185974,
+          "accuracy_by_depth": {
+            "1": 1.0,
+            "2": 0.9635416865348816,
+            "3": 0.8385416865348816
+          },
+          "depths": {
+            "1": {
+              "rows": 576,
+              "selected_pair_cosine_mean": 0.2598785161972046,
+              "selected_pair_cosine_p95": 0.3968513607978821,
+              "selected_output_norm_mean": 1.5247557163238525,
+              "query_norm_mean": 13.840912818908691,
+              "route_output_norm_mean": 1.035851240158081,
+              "route_to_query_norm_ratio": 0.07472937554121017
+            },
+            "2": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.25175151228904724,
+              "selected_pair_cosine_p95": 0.3773350715637207,
+              "selected_output_norm_mean": 1.4922845363616943,
+              "query_norm_mean": 13.376837730407715,
+              "route_output_norm_mean": 1.0576778650283813,
+              "route_to_query_norm_ratio": 0.08089807629585266
+            },
+            "3": {
+              "rows": 192,
+              "selected_pair_cosine_mean": 0.26186931133270264,
+              "selected_pair_cosine_p95": 0.4028584957122803,
+              "selected_output_norm_mean": 1.0245541334152222,
+              "query_norm_mean": 13.206278800964355,
+              "route_output_norm_mean": 0.6537864804267883,
+              "route_to_query_norm_ratio": 0.04976734146475792
+            }
+          },
+          "selected_unique": 11886,
+          "dead_circuit_fraction": 0.6920725107192993,
+          "factor_dead_fraction": 0.0
+        }
+      }
+    }
+  }
+}
