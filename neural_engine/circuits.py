@@ -6,6 +6,8 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from .factor_layout import build_factor_address_map
+
 
 class MicroCircuitBank(nn.Module):
     """Many small low-rank blocks stored as contiguous parameter tensors."""
@@ -130,7 +132,9 @@ class FactorizedMicroCircuitBank(nn.Module):
                  factor_hidden_gate_scale: float = 0.0,
                  factor_composition_mode: str = "additive",
                  address_residual_rank: int = 0,
-                 address_residual_scale: float = 1.0):
+                 address_residual_scale: float = 1.0,
+                 factor_address_layout: str = "standard",
+                 legacy_factor_count: int | None = None):
         super().__init__()
         if num_circuits < 1:
             raise ValueError("num_circuits must be positive")
@@ -167,6 +171,8 @@ class FactorizedMicroCircuitBank(nn.Module):
         if factor_composition_mode not in {"additive", "serial"}:
             raise ValueError("factor_composition_mode must be additive or serial")
         self.factor_composition_mode = factor_composition_mode
+        self.factor_address_layout = factor_address_layout
+        self.legacy_factor_count = legacy_factor_count
         self.address_residual_rank = int(address_residual_rank)
         self.address_residual_scale = float(address_residual_scale)
         if self.address_residual_rank < 0:
@@ -216,6 +222,9 @@ class FactorizedMicroCircuitBank(nn.Module):
         mix_shape = (num_circuits, 2) if factor_mix_mode == "per_address" else (2,)
         self.factor_mix = nn.Parameter(torch.full(mix_shape, 0.5))
         self.factor_hidden_gates = nn.Parameter(torch.zeros(*factor_shape, rank))
+        address_map = build_factor_address_map(
+            num_circuits, factor_count, factor_address_layout, legacy_factor_count)
+        self.register_buffer("_address_factor_ids", address_map, persistent=False)
         nn.init.normal_(self.down_factors, std=0.02)
         nn.init.normal_(self.up_factors, std=0.02)
         self.cache = None
@@ -227,6 +236,9 @@ class FactorizedMicroCircuitBank(nn.Module):
         self.cache = cache
 
     def _factor_ids(self, circuit_ids: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        if self._address_factor_ids is not None:
+            factor_ids = self._address_factor_ids[circuit_ids]
+            return factor_ids[..., 0], factor_ids[..., 1]
         first = circuit_ids.remainder(self.factor_count)
         second = circuit_ids.div(self.factor_count, rounding_mode="floor")
         return first, second

@@ -6,6 +6,8 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from .factor_layout import build_factor_address_map
+
 
 class HierarchicalRouter(nn.Module):
     """Route through a small branching tree, then score a local candidate pool."""
@@ -17,7 +19,9 @@ class HierarchicalRouter(nn.Module):
                  factor_key_count: int | None = None,
                  ordered_factor_slots: bool = False,
                  factor_candidate_layout: str = "flat",
-                 factor_pair_interaction_scale: float = 0.0):
+                 factor_pair_interaction_scale: float = 0.0,
+                 factor_address_layout: str = "standard",
+                 legacy_factor_count: int | None = None):
         super().__init__()
         if active_circuits > candidate_pool:
             raise ValueError("active_circuits cannot exceed candidate_pool")
@@ -45,6 +49,8 @@ class HierarchicalRouter(nn.Module):
         self.level_bias = nn.Parameter(torch.zeros(num_addresses, depth, branch))
         self.factor_key_count = None if factor_key_count is None else int(factor_key_count)
         self.ordered_factor_slots = bool(ordered_factor_slots)
+        self.factor_address_layout = factor_address_layout
+        self.legacy_factor_count = legacy_factor_count
         if factor_candidate_layout not in {"flat", "factor_grid"}:
             raise ValueError("factor_candidate_layout must be flat or factor_grid")
         if factor_candidate_layout == "factor_grid" and self.factor_key_count is None:
@@ -72,6 +78,10 @@ class HierarchicalRouter(nn.Module):
                             else (self.factor_key_count,))
             self.factor_keys = nn.Parameter(torch.empty(*factor_shape, state_dim))
             nn.init.normal_(self.factor_keys, std=0.02)
+            address_map = build_factor_address_map(
+                num_circuits, self.factor_key_count, factor_address_layout,
+                legacy_factor_count)
+            self.register_buffer("_address_factor_ids", address_map, persistent=False)
         else:
             self.keys = nn.Parameter(torch.empty(num_circuits, state_dim))
         nn.init.normal_(self.level_projections, std=0.02)
@@ -79,8 +89,7 @@ class HierarchicalRouter(nn.Module):
     def _lookup_keys(self, circuit_ids: torch.Tensor) -> torch.Tensor:
         if self.factor_key_count is None:
             return self.keys[circuit_ids]
-        first = circuit_ids.remainder(self.factor_key_count)
-        second = circuit_ids.div(self.factor_key_count, rounding_mode="floor")
+        first, second = self._factor_ids(circuit_ids)
         if self.ordered_factor_slots:
             return self.factor_keys[0, first] + self.factor_keys[1, second]
         return self.factor_keys[first] + self.factor_keys[second]
@@ -88,11 +97,18 @@ class HierarchicalRouter(nn.Module):
     def _lookup_factor_key_parts(self, circuit_ids: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         if self.factor_key_count is None:
             raise RuntimeError("factor key parts require factor-derived keys")
-        first = circuit_ids.remainder(self.factor_key_count)
-        second = circuit_ids.div(self.factor_key_count, rounding_mode="floor")
+        first, second = self._factor_ids(circuit_ids)
         if self.ordered_factor_slots:
             return self.factor_keys[0, first], self.factor_keys[1, second]
         return self.factor_keys[first], self.factor_keys[second]
+
+    def _factor_ids(self, circuit_ids: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        if self._address_factor_ids is not None:
+            factor_ids = self._address_factor_ids[circuit_ids]
+            return factor_ids[..., 0], factor_ids[..., 1]
+        first = circuit_ids.remainder(self.factor_key_count)
+        second = circuit_ids.div(self.factor_key_count, rounding_mode="floor")
+        return first, second
 
     def _factor_grid_candidates(self, base: torch.Tensor,
                                 local_capacity: int) -> torch.Tensor:
@@ -102,8 +118,7 @@ class HierarchicalRouter(nn.Module):
         first_width, second_width = self.factor_grid_shape
         first_offsets = torch.arange(first_width, device=base.device)
         second_offsets = torch.arange(second_width, device=base.device)
-        first_base = base.remainder(self.factor_key_count)
-        second_base = base.div(self.factor_key_count, rounding_mode="floor")
+        first_base, second_base = self._factor_ids(base)
         first_ids = (first_base.unsqueeze(-1) + first_offsets).remainder(self.factor_key_count)
         second_ids = (second_base.unsqueeze(-1) + second_offsets).remainder(self.factor_key_count)
         candidates = (

@@ -311,6 +311,25 @@ def test_factorized_native_engine_supports_ordered_factor_slots():
     assert model.parameter_report()["circuit_bank_mode"] == "factorized"
 
 
+def test_factorized_native_engine_supports_stable_prefix_addresses():
+    model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
+                           num_circuits=20, circuit_rank=4, router_branch=2, router_depth=4,
+                           candidate_pool=4, active_circuits=2, internal_steps=2,
+                           circuit_bank_mode="factorized", router_variant="global_factorized_keys",
+                           factor_count=5, ordered_factor_slots=True,
+                           factor_address_layout="stable_prefix", legacy_factor_count=3)
+    circuit_ids = torch.arange(20)
+    router_pairs = model.router._factor_ids(circuit_ids)
+    circuit_pairs = model.circuits._factor_ids(circuit_ids)
+    assert torch.equal(router_pairs[0], circuit_pairs[0])
+    assert torch.equal(router_pairs[1], circuit_pairs[1])
+    assert torch.equal(router_pairs[0][:9], torch.tensor([0, 1, 2, 0, 1, 2, 0, 1, 2]))
+    batch = SyntheticTaskGenerator(seed=158).batch(4)
+    logits, stats = model(batch.inputs)
+    assert logits.shape == (4, 64)
+    assert stats["selected_ids"].shape == (4, 2, 2)
+
+
 def test_semantic_family_mapping_splits_four_domains():
     model = NeuralEngineV0(num_circuits=32, state_dim=16, d_model=16,
                            circuit_rank=2, router_branch=2, router_depth=2,

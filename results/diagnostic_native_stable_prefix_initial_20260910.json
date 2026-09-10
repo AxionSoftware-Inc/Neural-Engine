@@ -1,0 +1,320 @@
+{
+  "audit": "native_ood_distribution_probes",
+  "device": "cuda",
+  "batches": 24,
+  "examples_per_task_per_condition": 768,
+  "value_vocabulary": [
+    0,
+    63
+  ],
+  "conditions": {
+    "uniform_all": {
+      "value_min": 0,
+      "value_max": 63,
+      "split": "all"
+    },
+    "combination_heldout": {
+      "value_min": 0,
+      "value_max": 63,
+      "split": "heldout"
+    },
+    "low_edge_values": {
+      "value_min": 0,
+      "value_max": 7,
+      "split": "all"
+    },
+    "high_edge_values": {
+      "value_min": 56,
+      "value_max": 63,
+      "split": "all"
+    }
+  },
+  "hard_tasks": [
+    "chain3",
+    "compose_add_mul",
+    "compose_if",
+    "lookup",
+    "reverse_sum",
+    "state_machine"
+  ],
+  "checkpoints": {
+    "ne500_stable_prefix_s17_10000.pt": {
+      "model_name": "ne_500m_v12_factorized_shared_routekeys_step_adapter_two_edge_mix_stable_prefix",
+      "seed": 17,
+      "total_params": 7116193,
+      "conditions": {
+        "uniform_all": {
+          "val_loss": 0.7003028492132822,
+          "exact_accuracy": 0.777430534362793,
+          "task_accuracy": {
+            "add": 0.9986979365348816,
+            "subtract": 0.9973958134651184,
+            "multiply": 0.84375,
+            "greater_than": 1.0,
+            "less_equal": 1.0,
+            "xor_parity": 1.0,
+            "max3": 0.9778645634651184,
+            "median3": 0.9322916865348816,
+            "min3": 0.98046875,
+            "reverse_sum": 0.6666666865348816,
+            "lookup": 1.0,
+            "chain3": 0.05859375,
+            "compose_add_mul": 0.3645833432674408,
+            "compose_if": 0.7942708134651184,
+            "state_machine": 0.046875
+          },
+          "depth_accuracy": {
+            "1": 0.9700520634651184,
+            "2": 0.5750868320465088,
+            "3": 0.4019097089767456
+          },
+          "hard_task_mean_accuracy": 0.4884982655445735,
+          "depth_2_3_mean_accuracy": 0.4884982705116272,
+          "circuits_used": 31402,
+          "dead_circuit_fraction": 0.1864766776561737,
+          "factor_rows_used": 197,
+          "factor_dead_fraction": 0.0,
+          "routing_entropy": 9.966143608093262
+        },
+        "combination_heldout": {
+          "val_loss": 0.6779475584626198,
+          "exact_accuracy": 0.7881944179534912,
+          "task_accuracy": {
+            "add": 0.9986979365348816,
+            "subtract": 1.0,
+            "multiply": 0.9765625,
+            "greater_than": 1.0,
+            "less_equal": 1.0,
+            "xor_parity": 1.0,
+            "max3": 0.9752604365348816,
+            "median3": 0.9375,
+            "min3": 0.9791666865348816,
+            "reverse_sum": 0.68359375,
+            "lookup": 0.9973958134651184,
+            "chain3": 0.0638020858168602,
+            "compose_add_mul": 0.3528645932674408,
+            "compose_if": 0.8111979365348816,
+            "state_machine": 0.046875
+          },
+          "depth_accuracy": {
+            "1": 0.9852430820465088,
+            "2": 0.5815972089767456,
+            "3": 0.4036458432674408
+          },
+          "hard_task_mean_accuracy": 0.4926215298473835,
+          "depth_2_3_mean_accuracy": 0.4926215261220932,
+          "circuits_used": 30943,
+          "dead_circuit_fraction": 0.1983678787946701,
+          "factor_rows_used": 197,
+          "factor_dead_fraction": 0.0,
+          "routing_entropy": 9.935243606567383
+        },
+        "low_edge_values": {
+          "val_loss": 0.12915194065620503,
+          "exact_accuracy": 0.9566840529441833,
+          "task_accuracy": {
+            "add": 1.0,
+            "subtract": 1.0,
+            "multiply": 1.0,
+            "greater_than": 1.0,
+            "less_equal": 1.0,
+            "xor_parity": 1.0,
+            "max3": 1.0,
+            "median3": 1.0,
+            "min3": 1.0,
+            "reverse_sum": 0.9908854365348816,
+            "lookup": 1.0,
+            "chain3": 0.9140625,
+            "compose_add_mul": 0.9830729365348816,
+            "compose_if": 0.96875,
+            "state_machine": 0.4934895932674408
+          },
+          "depth_accuracy": {
+            "1": 1.0,
+            "2": 0.9683159589767456,
+            "3": 0.8151041865348816
+          },
+          "hard_task_mean_accuracy": 0.8917100777228674,
+          "depth_2_3_mean_accuracy": 0.8917100727558136,
+          "circuits_used": 19625,
+          "dead_circuit_fraction": 0.4915803074836731,
+          "factor_rows_used": 197,
+          "factor_dead_fraction": 0.0,
+          "routing_entropy": 9.191682815551758
+        },
+        "high_edge_values": {
+          "val_loss": 0.16254449045906463,
+          "exact_accuracy": 0.9405381679534912,
+          "task_accuracy": {
+            "add": 1.0,
+            "subtract": 1.0,
+            "multiply": 1.0,
+            "greater_than": 1.0,
+            "less_equal": 1.0,
+            "xor_parity": 1.0,
+            "max3": 0.9986979365348816,
+            "median3": 1.0,
+            "min3": 0.9921875,
+            "reverse_sum": 0.9778645634651184,
+            "lookup": 1.0,
+            "chain3": 0.8489583134651184,
+            "compose_add_mul": 0.9830729365348816,
+            "compose_if": 0.84375,
+            "state_machine": 0.4635416567325592
+          },
+          "depth_accuracy": {
+            "1": 0.9989872574806213,
+            "2": 0.9422743320465088,
+            "3": 0.7634548544883728
+          },
+          "hard_task_mean_accuracy": 0.8528645783662796,
+          "depth_2_3_mean_accuracy": 0.8528645932674408,
+          "circuits_used": 21267,
+          "dead_circuit_fraction": 0.4490414559841156,
+          "factor_rows_used": 197,
+          "factor_dead_fraction": 0.0,
+          "routing_entropy": 9.350263595581055
+        }
+      }
+    },
+    "ne500_stable_prefix_s18_10000.pt": {
+      "model_name": "ne_500m_v12_factorized_shared_routekeys_step_adapter_two_edge_mix_stable_prefix",
+      "seed": 17,
+      "total_params": 7116193,
+      "conditions": {
+        "uniform_all": {
+          "val_loss": 0.696807066599528,
+          "exact_accuracy": 0.7808159589767456,
+          "task_accuracy": {
+            "add": 1.0,
+            "subtract": 0.9986979365348816,
+            "multiply": 0.8528645634651184,
+            "greater_than": 1.0,
+            "less_equal": 0.9986979365348816,
+            "xor_parity": 1.0,
+            "max3": 0.9765625,
+            "median3": 0.953125,
+            "min3": 0.9791666865348816,
+            "reverse_sum": 0.76953125,
+            "lookup": 0.9973958134651184,
+            "chain3": 0.0651041641831398,
+            "compose_add_mul": 0.2825520932674408,
+            "compose_if": 0.796875,
+            "state_machine": 0.0416666679084301
+          },
+          "depth_accuracy": {
+            "1": 0.9732349514961243,
+            "2": 0.6106770634651184,
+            "3": 0.3736979067325592
+          },
+          "hard_task_mean_accuracy": 0.49218749813735485,
+          "depth_2_3_mean_accuracy": 0.4921874850988388,
+          "circuits_used": 31494,
+          "dead_circuit_fraction": 0.18409326672554016,
+          "factor_rows_used": 197,
+          "factor_dead_fraction": 0.0,
+          "routing_entropy": 9.91721248626709
+        },
+        "combination_heldout": {
+          "val_loss": 0.6940317253271738,
+          "exact_accuracy": 0.7849826216697693,
+          "task_accuracy": {
+            "add": 1.0,
+            "subtract": 1.0,
+            "multiply": 0.9661458134651184,
+            "greater_than": 0.9986979365348816,
+            "less_equal": 1.0,
+            "xor_parity": 1.0,
+            "max3": 0.9596354365348816,
+            "median3": 0.9440104365348816,
+            "min3": 0.9778645634651184,
+            "reverse_sum": 0.7239583134651184,
+            "lookup": 0.9921875,
+            "chain3": 0.0572916679084301,
+            "compose_add_mul": 0.2981770932674408,
+            "compose_if": 0.8203125,
+            "state_machine": 0.0364583320915699
+          },
+          "depth_accuracy": {
+            "1": 0.9829282164573669,
+            "2": 0.5911458134651184,
+            "3": 0.3849826455116272
+          },
+          "hard_task_mean_accuracy": 0.4880642344554265,
+          "depth_2_3_mean_accuracy": 0.4880642294883728,
+          "circuits_used": 30931,
+          "dead_circuit_fraction": 0.19867876172065735,
+          "factor_rows_used": 197,
+          "factor_dead_fraction": 0.0,
+          "routing_entropy": 9.883661270141602
+        },
+        "low_edge_values": {
+          "val_loss": 0.13044010816762844,
+          "exact_accuracy": 0.9537326097488403,
+          "task_accuracy": {
+            "add": 1.0,
+            "subtract": 1.0,
+            "multiply": 1.0,
+            "greater_than": 1.0,
+            "less_equal": 1.0,
+            "xor_parity": 1.0,
+            "max3": 1.0,
+            "median3": 1.0,
+            "min3": 1.0,
+            "reverse_sum": 0.96875,
+            "lookup": 0.9986979365348816,
+            "chain3": 0.94140625,
+            "compose_add_mul": 0.9856770634651184,
+            "compose_if": 0.9479166865348816,
+            "state_machine": 0.4635416567325592
+          },
+          "depth_accuracy": {
+            "1": 1.0,
+            "2": 0.9696180820465088,
+            "3": 0.7990451455116272
+          },
+          "hard_task_mean_accuracy": 0.8843315988779068,
+          "depth_2_3_mean_accuracy": 0.884331613779068,
+          "circuits_used": 20785,
+          "dead_circuit_fraction": 0.4615285098552704,
+          "factor_rows_used": 197,
+          "factor_dead_fraction": 0.0,
+          "routing_entropy": 9.33401870727539
+        },
+        "high_edge_values": {
+          "val_loss": 0.13754514946291843,
+          "exact_accuracy": 0.9533854126930237,
+          "task_accuracy": {
+            "add": 1.0,
+            "subtract": 1.0,
+            "multiply": 1.0,
+            "greater_than": 1.0,
+            "less_equal": 1.0,
+            "xor_parity": 1.0,
+            "max3": 0.9895833134651184,
+            "median3": 1.0,
+            "min3": 0.9921875,
+            "reverse_sum": 0.9947916865348816,
+            "lookup": 1.0,
+            "chain3": 0.94921875,
+            "compose_add_mul": 0.9752604365348816,
+            "compose_if": 0.8658854365348816,
+            "state_machine": 0.5338541865348816
+          },
+          "depth_accuracy": {
+            "1": 0.9979745149612427,
+            "2": 0.9813368320465088,
+            "3": 0.7916666865348816
+          },
+          "hard_task_mean_accuracy": 0.8865017493565878,
+          "depth_2_3_mean_accuracy": 0.8865017592906952,
+          "circuits_used": 20158,
+          "dead_circuit_fraction": 0.4777720272541046,
+          "factor_rows_used": 197,
+          "factor_dead_fraction": 0.0,
+          "routing_entropy": 9.114891052246094
+        }
+      }
+    }
+  }
+}

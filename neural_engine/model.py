@@ -47,6 +47,8 @@ class NeuralEngineV0(nn.Module):
                  factor_composition_mode: str = "additive",
                  address_residual_rank: int = 0,
                  address_residual_scale: float = 1.0,
+                 factor_address_layout: str = "standard",
+                 legacy_factor_count: int | None = None,
                  routing_reuse_weight: float = 0.0, routing_reuse_start_level: int = 0,
                  route_exploration_prob: float = 0.0,
                  routing_capacity: int | None = None, routing_depth: int | None = None,
@@ -94,6 +96,8 @@ class NeuralEngineV0(nn.Module):
         self.factor_composition_mode = factor_composition_mode
         self.address_residual_rank = int(address_residual_rank)
         self.address_residual_scale = float(address_residual_scale)
+        self.factor_address_layout = factor_address_layout
+        self.legacy_factor_count = legacy_factor_count
         self.numeric_value_encoding = numeric_value_encoding
         self.adaptive_halting = adaptive_halting
         self.adaptive_inference = adaptive_halting
@@ -196,6 +200,8 @@ class NeuralEngineV0(nn.Module):
                 ordered_factor_slots=ordered_factor_slots,
                 factor_candidate_layout=factor_candidate_layout,
                 factor_pair_interaction_scale=factor_pair_interaction_scale,
+                factor_address_layout=factor_address_layout,
+                legacy_factor_count=legacy_factor_count,
             )
         else:
             self.router = HierarchicalRouter(
@@ -221,6 +227,8 @@ class NeuralEngineV0(nn.Module):
                 factor_composition_mode=factor_composition_mode,
                 address_residual_rank=address_residual_rank,
                 address_residual_scale=address_residual_scale,
+                factor_address_layout=factor_address_layout,
+                legacy_factor_count=legacy_factor_count,
             )
         elif circuit_bank_mode == "shared_residual":
             self.circuits = SharedResidualMicroCircuitBank(

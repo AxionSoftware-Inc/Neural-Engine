@@ -313,6 +313,43 @@ arxitektura yechimi emas; 500Mda qayta tasdiqlanmaguncha default o‘zgarmaydi.
 
 **Batafsil:** `results/P003_NATIVE_EDGE_MIX_AUDIT_20260910.md`.
 
+### C-P003-NATIVE-WARMSTART-002 — Non-stable factor-grid warm-start
+
+**Status:** `REJECTED AS SUFFICIENT CAPACITY FIX; RETAINED AS CONTROL`
+**Muammo:** P-003 / P-007
+
+300M 10k checkpointidan 500M factor gridiga reusable factor rows va pair-mix
+ko‘chirilib, 3k davom ettirildi. 24-batch evaluator’da 500M warm-startning
+uniform accuracy mean qiymati `80.707%`, hard-task mean `54.546%` bo‘ldi;
+300Mning aynan 3k continuation nazorati `80.920%` va `54.796%` berdi.
+Demak warm-start route dead fractionni `24.17% → 13.54%` kamaytirdi, ammo
+quality bo‘yicha yetarli ustunlik bermadi. Muammo factor rowsning o‘zida emas,
+virtual address va route-tree semantics saqlanmaganida bo‘lishi mumkin.
+
+**Batafsil:** `results/diagnostic_native_warmstart_vs_continued_20260910.json`.
+
+### C-P003-NATIVE-STABLE-PREFIX-001 — Stable virtual-address staged growth
+
+**Status:** `PROMISING OPT-IN — VALIDATION OPEN`
+**Muammo:** P-003 / P-007
+
+Stable-prefix address map 300Mning birinchi 22,800 virtual pairlarini 500Mda
+aynan saqladi; yangi 15,800 address va oltinchi router leveli 3k warm-updan
+keyin ochildi. Ikki seedli, bir xil 24-batch evaluator’da stage-2 500M
+300M 3k continuationga nisbatan uniform accuracy’ni `80.920% → 82.040%`
+(`+1.120 pp`), hard-task mean’ni `54.796% → 56.695%` (`+1.899 pp`),
+combination holdoutni `81.419% → 82.357%` (`+0.938 pp`) yaxshiladi. Low/high
+edge ham mos ravishda `+0.538/+0.373 pp` bo‘ldi. Dead circuit fraction
+`24.17% → 14.21%` tushdi.
+
+Bu hozirgacha capacity scaling bo‘yicha eng kuchli ijobiy signal, lekin stage-2
+variant parentdan jami 6k qo‘shimcha step olgan, 300M control esa 3k olgan.
+Shuning uchun 6k-step 300M continuation bilan clean compute-matched control
+hali kerak. 700M/1Bga o‘tish hozircha muzlatilgan; variant default emas,
+opt-in sifatida saqlandi.
+
+**Batafsil:** `results/P003_NATIVE_STABLE_PREFIX_GROWTH_AUDIT_20260910.md`.
+
 500M bankda `routing_capacity=22800` va `routing_depth=5` clamp qilinadigan
 control full 500Mga nisbatan uniformda `+0.495 pp`, hard-taskda `+1.259 pp`
 berdi. Bu route fragmentation haqiqiy omil ekanini ko‘rsatadi, lekin clamp

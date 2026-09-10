@@ -70,6 +70,8 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["factor_composition_mode"] = config.get("factor_composition_mode", "additive")
     model_kwargs["address_residual_rank"] = config.get("address_residual_rank", 0)
     model_kwargs["address_residual_scale"] = config.get("address_residual_scale", 1.0)
+    model_kwargs["factor_address_layout"] = config.get("factor_address_layout", "standard")
+    model_kwargs["legacy_factor_count"] = config.get("legacy_factor_count")
     model_kwargs["numeric_value_encoding"] = config.get("numeric_value_encoding", False)
     model_kwargs["adaptive_halting"] = config.get("adaptive_halting", False)
     model_kwargs["halt_threshold"] = config.get("halt_threshold", 0.5)
@@ -101,6 +103,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
                     "factor_candidate_layout", "factor_pair_interaction_scale",
                     "factor_hidden_product_scale",
                     "factor_hidden_gate_scale",
+                    "factor_address_layout", "legacy_factor_count",
                     "step_circuit_adapter_rank", "step_circuit_adapter_scale",
                     "step_circuit_adapter_start_step",
                     "soft_routing_temperature", "route_target_supervision",
