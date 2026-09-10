@@ -633,6 +633,14 @@ berdi; process/device graph lock buni tuzatdi. Bir GPU’da workerlar xavfsiz,
 ammo graph operatsiyalari device-wide serialize bo‘ladi; throughput uchun
 worker-per-GPU yoki batching kerak.
 
+Bir xil 4-client parallelizmi bilan one-vs-two-worker scaling ham o‘lchandi:
+1 workerda 16 request wall-time `815.3 ms`, mean latency `202.1 ms`, p95
+`784.4 ms`; 2 workerda mos ravishda `3245.0 ms`, `810.0 ms`, `1612.6 ms`.
+Shu kichik shared-GPU workloadida 2 worker throughput bermadi (`3.98x`
+sekinroq). Demak qo‘shimcha worker bu GPU’da capacity yoki tezlik yechimi emas;
+deployment baseline’i one-worker-per-GPU bo‘lishi kerak. Batching/admission
+keyingi runtime eksperimenti sifatida ochiq qoldi.
+
 Mustaqil uzoq quality control’da fused va torch backendlari uch seed/to‘rt
 condition bo‘yicha exact accuracy’da bir xil chiqdi, maksimal CE farqi
 `1.61e-8`. Seed19 uniform exact `66.61%` va hard mean `31.76%` bilan seed17/18
@@ -640,8 +648,8 @@ dan ancha past, lekin torch control ham aynan shu raqamlarni berdi. Bu fused
 kernel regressiyasi emas, checkpoint/training seed barqarorligi alohida
 muammo ekanini ko‘rsatadi.
 
-**Keyingi tajriba:** bir GPU’dagi device-lock overheadini bir worker bilan
-solishtirish va batching/admission siyosatini stress-test qilish. **Batafsil:**
+**Keyingi tajriba:** one-worker-per-GPU baseline’ni saqlab, batching/admission
+siyosatini stress-test qilish. **Batafsil:**
 `results/P003_NATIVE_FUSED_DISPATCH_AUDIT_20260910.md`.
 
 500M bankda `routing_capacity=22800` va `routing_depth=5` clamp qilinadigan

@@ -6,6 +6,7 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 from itertools import product
 import json
+import math
 import os
 from pathlib import Path
 import socket
@@ -95,8 +96,9 @@ def _stop_launcher(launcher: subprocess.Popen[str]) -> None:
 
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
-    if args.workers < 1 or args.requests < 1:
-        raise ValueError("workers and requests must be positive")
+    client_workers = args.client_workers if args.client_workers is not None else args.workers
+    if args.workers < 1 or args.requests < 1 or client_workers < 1:
+        raise ValueError("workers, client-workers, and requests must be positive")
     if args.requests < args.workers:
         raise ValueError("requests must be at least workers")
     base_port = args.port or _free_consecutive_ports(args.workers)
@@ -139,17 +141,26 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             worker_index = (index // len(shape_specs)) % args.workers
             requests.append((worker_index, shape, shape_inputs[shape]))
 
-        def request(item: tuple[int, str, list[list[int]]]) -> tuple[int, str, dict[str, Any]]:
+        def request(
+            item: tuple[int, str, list[list[int]]],
+        ) -> tuple[int, str, dict[str, Any], float]:
             worker_index, shape, rows = item
+            started = time.perf_counter()
             response = _post_json(f"http://127.0.0.1:{ports[worker_index]}/infer", rows)
-            return worker_index, shape, response
+            return worker_index, shape, response, (time.perf_counter() - started) * 1000.0
 
-        with ThreadPoolExecutor(max_workers=args.workers) as executor:
+        request_started = time.perf_counter()
+        with ThreadPoolExecutor(max_workers=client_workers) as executor:
             responses = list(executor.map(request, requests))
+        request_wall_ms = (time.perf_counter() - request_started) * 1000.0
         references: dict[str, torch.Tensor] = {}
         max_cross_worker_error = 0.0
         prediction_mismatches = 0
-        for _worker_index, shape, response in responses:
+        worker_request_counts = [0 for _ in range(args.workers)]
+        client_latencies_ms = []
+        for _worker_index, shape, response, latency_ms in responses:
+            worker_request_counts[_worker_index] += 1
+            client_latencies_ms.append(latency_ms)
             logits = torch.tensor(response["logits"])
             if shape not in references:
                 references[shape] = logits
@@ -161,13 +172,27 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             if response["predictions"] != references[shape].argmax(dim=-1).tolist():
                 prediction_mismatches += 1
         after = _wait_for_health(ports)
+        ordered_latencies = sorted(client_latencies_ms)
+        p95_index = min(
+            len(ordered_latencies) - 1,
+            max(0, math.ceil(0.95 * len(ordered_latencies)) - 1),
+        )
         result: dict[str, Any] = {
             "experiment": "native_fused_multi_worker_round_robin",
             "checkpoint": str(Path(args.checkpoint)),
             "device": args.device or "auto",
             "workers": args.workers,
+            "client_workers": client_workers,
             "ports": ports,
             "requests": args.requests,
+            "requests_per_worker": worker_request_counts,
+            "request_wall_ms": request_wall_ms,
+            "client_latency_ms": {
+                "min": min(client_latencies_ms),
+                "mean": sum(client_latencies_ms) / len(client_latencies_ms),
+                "p95": ordered_latencies[p95_index],
+                "max": max(client_latencies_ms),
+            },
             "batch_sizes": args.batch_sizes,
             "sequence_lengths": args.sequence_lengths,
             "unique_shapes": sorted(shape_inputs),
@@ -191,6 +216,12 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--workers", type=int, default=2)
+    parser.add_argument(
+        "--client-workers",
+        type=int,
+        default=None,
+        help="HTTP client concurrency; defaults to the number of server workers",
+    )
     parser.add_argument("--requests", type=int, default=16)
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--device", default=None)

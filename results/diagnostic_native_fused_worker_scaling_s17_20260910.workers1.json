@@ -1,0 +1,138 @@
+{
+  "experiment": "native_fused_multi_worker_round_robin",
+  "checkpoint": "results\\checkpoints\\ne500_stable_prefix_active16_s17_3000.pt",
+  "device": "cuda",
+  "workers": 1,
+  "client_workers": 4,
+  "ports": [
+    59904
+  ],
+  "requests": 16,
+  "requests_per_worker": [
+    16
+  ],
+  "request_wall_ms": 815.2565999998842,
+  "client_latency_ms": {
+    "min": 3.9378000001306646,
+    "mean": 202.082531249971,
+    "p95": 784.4248999999763,
+    "max": 784.4248999999763
+  },
+  "batch_sizes": [
+    1,
+    8
+  ],
+  "sequence_lengths": [
+    6,
+    32
+  ],
+  "unique_shapes": [
+    "b1_s32",
+    "b1_s6",
+    "b8_s32",
+    "b8_s6"
+  ],
+  "worker_pids": [
+    13396
+  ],
+  "worker_health_before": [
+    {
+      "status": "ok",
+      "pid": 13396,
+      "device": "cuda:0",
+      "training": false,
+      "dispatch_backend": "native_cuda_fused",
+      "cache": {
+        "owner_pid": 13396,
+        "cached_shape_count": 0,
+        "cache_keys": [],
+        "capture_count": 0,
+        "cache_hit_count": 0,
+        "cache_miss_count": 0,
+        "eviction_count": 0,
+        "eager_fallback_count": 0,
+        "capture_failures": [],
+        "process_graph_lock": false
+      }
+    }
+  ],
+  "worker_health_after": [
+    {
+      "status": "ok",
+      "pid": 13396,
+      "device": "cuda:0",
+      "training": false,
+      "dispatch_backend": "native_cuda_fused",
+      "cache": {
+        "owner_pid": 13396,
+        "cached_shape_count": 4,
+        "cache_keys": [
+          {
+            "batch_size": 1,
+            "sequence_length": 6,
+            "stream": 0
+          },
+          {
+            "batch_size": 8,
+            "sequence_length": 32,
+            "stream": 0
+          },
+          {
+            "batch_size": 8,
+            "sequence_length": 6,
+            "stream": 0
+          },
+          {
+            "batch_size": 1,
+            "sequence_length": 32,
+            "stream": 0
+          }
+        ],
+        "capture_count": 4,
+        "cache_hit_count": 12,
+        "cache_miss_count": 4,
+        "eviction_count": 0,
+        "eager_fallback_count": 0,
+        "capture_failures": [],
+        "process_graph_lock": false
+      }
+    }
+  ],
+  "max_cross_worker_logit_error": 3.814697265625e-06,
+  "prediction_mismatches": 0,
+  "worker_cache": [
+    {
+      "owner_pid": 13396,
+      "cached_shape_count": 4,
+      "cache_keys": [
+        {
+          "batch_size": 1,
+          "sequence_length": 6,
+          "stream": 0
+        },
+        {
+          "batch_size": 8,
+          "sequence_length": 32,
+          "stream": 0
+        },
+        {
+          "batch_size": 8,
+          "sequence_length": 6,
+          "stream": 0
+        },
+        {
+          "batch_size": 1,
+          "sequence_length": 32,
+          "stream": 0
+        }
+      ],
+      "capture_count": 4,
+      "cache_hit_count": 12,
+      "cache_miss_count": 4,
+      "eviction_count": 0,
+      "eager_fallback_count": 0,
+      "capture_failures": [],
+      "process_graph_lock": false
+    }
+  ]
+}

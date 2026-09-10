@@ -1,0 +1,161 @@
+{
+  "experiment": "native_fused_worker_scaling_same_gpu",
+  "checkpoint": "results\\checkpoints\\ne500_stable_prefix_active16_s17_3000.pt",
+  "device": "cuda",
+  "worker_counts": [
+    1,
+    2
+  ],
+  "client_workers": 4,
+  "requests": 16,
+  "batch_sizes": [
+    1,
+    8
+  ],
+  "sequence_lengths": [
+    6,
+    32
+  ],
+  "seed": 23003,
+  "scenarios": {
+    "1": {
+      "workers": 1,
+      "client_workers": 4,
+      "requests": 16,
+      "requests_per_worker": [
+        16
+      ],
+      "request_wall_ms": 815.2565999998842,
+      "client_latency_ms": {
+        "min": 3.9378000001306646,
+        "mean": 202.082531249971,
+        "p95": 784.4248999999763,
+        "max": 784.4248999999763
+      },
+      "max_cross_worker_logit_error": 3.814697265625e-06,
+      "prediction_mismatches": 0,
+      "worker_cache": [
+        {
+          "owner_pid": 13396,
+          "cached_shape_count": 4,
+          "cache_keys": [
+            {
+              "batch_size": 1,
+              "sequence_length": 6,
+              "stream": 0
+            },
+            {
+              "batch_size": 8,
+              "sequence_length": 32,
+              "stream": 0
+            },
+            {
+              "batch_size": 8,
+              "sequence_length": 6,
+              "stream": 0
+            },
+            {
+              "batch_size": 1,
+              "sequence_length": 32,
+              "stream": 0
+            }
+          ],
+          "capture_count": 4,
+          "cache_hit_count": 12,
+          "cache_miss_count": 4,
+          "eviction_count": 0,
+          "eager_fallback_count": 0,
+          "capture_failures": [],
+          "process_graph_lock": false
+        }
+      ]
+    },
+    "2": {
+      "workers": 2,
+      "client_workers": 4,
+      "requests": 16,
+      "requests_per_worker": [
+        8,
+        8
+      ],
+      "request_wall_ms": 3245.0179000006756,
+      "client_latency_ms": {
+        "min": 5.274299999655341,
+        "mean": 810.0321375000021,
+        "p95": 1612.5633000001471,
+        "max": 1612.5633000001471
+      },
+      "max_cross_worker_logit_error": 2.86102294921875e-06,
+      "prediction_mismatches": 0,
+      "worker_cache": [
+        {
+          "owner_pid": 1148,
+          "cached_shape_count": 4,
+          "cache_keys": [
+            {
+              "batch_size": 1,
+              "sequence_length": 6,
+              "stream": 0
+            },
+            {
+              "batch_size": 1,
+              "sequence_length": 32,
+              "stream": 0
+            },
+            {
+              "batch_size": 8,
+              "sequence_length": 6,
+              "stream": 0
+            },
+            {
+              "batch_size": 8,
+              "sequence_length": 32,
+              "stream": 0
+            }
+          ],
+          "capture_count": 4,
+          "cache_hit_count": 4,
+          "cache_miss_count": 4,
+          "eviction_count": 0,
+          "eager_fallback_count": 0,
+          "capture_failures": [],
+          "process_graph_lock": true
+        },
+        {
+          "owner_pid": 6212,
+          "cached_shape_count": 4,
+          "cache_keys": [
+            {
+              "batch_size": 8,
+              "sequence_length": 6,
+              "stream": 0
+            },
+            {
+              "batch_size": 1,
+              "sequence_length": 6,
+              "stream": 0
+            },
+            {
+              "batch_size": 1,
+              "sequence_length": 32,
+              "stream": 0
+            },
+            {
+              "batch_size": 8,
+              "sequence_length": 32,
+              "stream": 0
+            }
+          ],
+          "capture_count": 4,
+          "cache_hit_count": 4,
+          "cache_miss_count": 4,
+          "eviction_count": 0,
+          "eager_fallback_count": 0,
+          "capture_failures": [],
+          "process_graph_lock": true
+        }
+      ]
+    }
+  },
+  "interpretation": "Compare request wall time and client latency at fixed client concurrency. When CUDA graphs are enabled, multi-worker serving on one physical GPU uses a device-wide lock for correctness, so additional workers may not increase throughput without batching or separate GPUs."
+}

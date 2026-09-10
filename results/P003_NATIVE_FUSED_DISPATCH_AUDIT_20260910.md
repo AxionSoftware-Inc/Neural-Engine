@@ -214,6 +214,25 @@ two workers on one GPU are safe but graph operations are serialized across the
 device, so throughput scaling should use one worker per GPU or a future tested
 batching policy.
 
+### Shared-GPU worker scaling
+
+To quantify that trade-off, the same seed-17 500M checkpoint was tested with
+the same four concurrent HTTP clients, 16 requests, and the same B=1/B=8,
+sequence 6/32 shape cycle. With one worker, the request wall time was
+`815.3 ms`, mean client latency `202.1 ms`, and p95 latency `784.4 ms`. With
+two workers on the same RTX 3060, the wall time was `3245.0 ms`, mean latency
+`810.0 ms`, and p95 latency `1612.6 ms`. Thus the two-worker configuration
+was about `3.98x` slower for this small local workload; it did not provide
+throughput scaling because the correctness lock serializes graph capture/replay
+on the shared device and two processes add scheduling/IPC overhead.
+
+This is not a quality regression: both configurations had zero prediction
+mismatches, all four shapes captured successfully, and the maximum cross-worker
+logit difference in the two-worker run was `2.86e-6`. The deployment policy is
+therefore one worker per GPU unless a tested admission/batching layer can
+combine requests before graph replay. The result is a small-batch serving
+measurement, not a claim about all batch sizes or multiple physical GPUs.
+
 ## Long quality control
 
 The fused learned checkpoints were rerun through the 96-batch-per-condition
@@ -269,6 +288,7 @@ approximate a configuration it does not support.
 - [HTTP server smoke JSON](diagnostic_native_fused_http_server_s17_20260910.json)
 - [HTTP server concurrency JSON](diagnostic_native_fused_http_server_concurrency_s17_20260910.json)
 - [Native fused CUDA multi-worker JSON](diagnostic_native_fused_multi_worker_cuda_s17_20260910.json)
+- [Native fused one-vs-two-worker scaling JSON](diagnostic_native_fused_worker_scaling_s17_20260910.json)
 - [Seed17 fused runtime smoke JSON](diagnostic_native_fused_runtime_s17_480_20260910.json)
 - [Long fused learned-width OOD JSON](diagnostic_native_fused_learned_ood_long96_20260910.json)
 - [Independent long fused OOD JSON](diagnostic_native_fused_ood_long48_all3_20260910.json)
@@ -285,6 +305,7 @@ approximate a configuration it does not support.
 - [HTTP serving entry point](../serve_native.py)
 - [Multi-process serving launcher](../serve_native_workers.py)
 - [Multi-worker round-robin benchmark](../benchmark_native_workers.py)
+- [Shared-GPU worker-scaling benchmark](../benchmark_native_worker_scaling.py)
 - [HTTP service adapter](../neural_engine/native_fused_server.py)
 - [Python wrapper](../neural_engine/native_fused_dispatch.py)
 - [CUDA kernel](../neural_engine/native_fused_dispatch.cu)
