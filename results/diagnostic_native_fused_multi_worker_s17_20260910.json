@@ -1,0 +1,131 @@
+{
+  "experiment": "native_fused_multi_worker_round_robin",
+  "checkpoint": "results\\checkpoints\\checkpoint_smoke.pt",
+  "device": "cpu",
+  "workers": 2,
+  "ports": [
+    54008,
+    54009
+  ],
+  "requests": 16,
+  "batch_sizes": [
+    1,
+    8
+  ],
+  "sequence_lengths": [
+    6,
+    32
+  ],
+  "unique_shapes": [
+    "b1_s32",
+    "b1_s6",
+    "b8_s32",
+    "b8_s6"
+  ],
+  "worker_pids": [
+    13704,
+    14876
+  ],
+  "worker_health_before": [
+    {
+      "status": "ok",
+      "pid": 13704,
+      "device": "cpu",
+      "training": false,
+      "dispatch_backend": "native_cuda_fused",
+      "cache": {
+        "owner_pid": 13704,
+        "cached_shape_count": 0,
+        "cache_keys": [],
+        "capture_count": 0,
+        "cache_hit_count": 0,
+        "cache_miss_count": 0,
+        "eviction_count": 0,
+        "eager_fallback_count": 0,
+        "capture_failures": []
+      }
+    },
+    {
+      "status": "ok",
+      "pid": 14876,
+      "device": "cpu",
+      "training": false,
+      "dispatch_backend": "native_cuda_fused",
+      "cache": {
+        "owner_pid": 14876,
+        "cached_shape_count": 0,
+        "cache_keys": [],
+        "capture_count": 0,
+        "cache_hit_count": 0,
+        "cache_miss_count": 0,
+        "eviction_count": 0,
+        "eager_fallback_count": 0,
+        "capture_failures": []
+      }
+    }
+  ],
+  "worker_health_after": [
+    {
+      "status": "ok",
+      "pid": 13704,
+      "device": "cpu",
+      "training": false,
+      "dispatch_backend": "native_cuda_fused",
+      "cache": {
+        "owner_pid": 13704,
+        "cached_shape_count": 0,
+        "cache_keys": [],
+        "capture_count": 0,
+        "cache_hit_count": 0,
+        "cache_miss_count": 0,
+        "eviction_count": 0,
+        "eager_fallback_count": 8,
+        "capture_failures": []
+      }
+    },
+    {
+      "status": "ok",
+      "pid": 14876,
+      "device": "cpu",
+      "training": false,
+      "dispatch_backend": "native_cuda_fused",
+      "cache": {
+        "owner_pid": 14876,
+        "cached_shape_count": 0,
+        "cache_keys": [],
+        "capture_count": 0,
+        "cache_hit_count": 0,
+        "cache_miss_count": 0,
+        "eviction_count": 0,
+        "eager_fallback_count": 8,
+        "capture_failures": []
+      }
+    }
+  ],
+  "max_cross_worker_logit_error": 0.0,
+  "prediction_mismatches": 0,
+  "worker_cache": [
+    {
+      "owner_pid": 13704,
+      "cached_shape_count": 0,
+      "cache_keys": [],
+      "capture_count": 0,
+      "cache_hit_count": 0,
+      "cache_miss_count": 0,
+      "eviction_count": 0,
+      "eager_fallback_count": 8,
+      "capture_failures": []
+    },
+    {
+      "owner_pid": 14876,
+      "cached_shape_count": 0,
+      "cache_keys": [],
+      "capture_count": 0,
+      "cache_hit_count": 0,
+      "cache_miss_count": 0,
+      "eviction_count": 0,
+      "eager_fallback_count": 8,
+      "capture_failures": []
+    }
+  ]
+}

@@ -184,6 +184,13 @@ distinct, and each reported a cache owner equal to its own PID. This confirms
 the ownership boundary without duplicating the 500M CUDA checkpoint merely for
 a lifecycle test.
 
+The round-robin client benchmark then sent 16 parallel requests (B=1/B=8,
+sequence 6/32) across those two workers. All four shapes were exercised by
+both workers, cross-worker logit error was `0`, and prediction mismatch was
+`0`. Because this controlled run used CPU with graphs disabled, each worker
+reported eight expected eager fallbacks; it validates routing and ownership,
+not CUDA-Graph throughput.
+
 ## Long quality control
 
 The fused learned checkpoints were rerun through the 96-batch-per-condition
@@ -253,6 +260,7 @@ approximate a configuration it does not support.
 - [HTTP server concurrency benchmark](../benchmark_native_server_concurrency.py)
 - [HTTP serving entry point](../serve_native.py)
 - [Multi-process serving launcher](../serve_native_workers.py)
+- [Multi-worker round-robin benchmark](../benchmark_native_workers.py)
 - [HTTP service adapter](../neural_engine/native_fused_server.py)
 - [Python wrapper](../neural_engine/native_fused_dispatch.py)
 - [CUDA kernel](../neural_engine/native_fused_dispatch.cu)

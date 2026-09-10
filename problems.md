@@ -619,6 +619,10 @@ VRAM capacity planning hali production darajasida tekshirilmagan.
 Kichik CPU checkpoint bilan 2 ta child process integration-testida ikkala port
 `/health` va `/infer`ga javob berdi, PIDlar turlicha va har bir cache owner’i
 o‘z PIDiga teng chiqdi.
+Round-robin benchmark 16 ta parallel B=1/B=8, seq=6/32 so‘rovni ikkala workerga
+taqsimladi: cross-worker logit farqi `0`, prediction mismatch `0`. CPU va
+`--no-graphs` bo‘lgani uchun har workerda 8 ta eager fallback kutilgan; CUDA
+graph tezligi alohida native GPU testlarida tasdiqlangan.
 
 Mustaqil uzoq quality control’da fused va torch backendlari uch seed/to‘rt
 condition bo‘yicha exact accuracy’da bir xil chiqdi, maksimal CE farqi
