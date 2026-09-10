@@ -611,6 +611,15 @@ prediction mismatch 0 va eager bilan maksimal logit farqi `3.81e-6` bo‘ldi.
 Threaded HTTP path local stress’dan o‘tdi; deployment-specific multi-process
 launcher, admission/batching va process supervision hali ochiq.
 
+`serve_native_workers.py` Windows-safe `spawn` bilan har worker ichida
+checkpoint, model va cache’ni alohida yaratadi; workerlar ketma-ket portlarda
+tinglaydi, bittasi yiqilsa parent butun guruhni to‘xtatadi. Bu process-lifecycle
+primitive’ni yopadi, lekin load-balancer, health-aware admission, TLS/auth va
+VRAM capacity planning hali production darajasida tekshirilmagan.
+Kichik CPU checkpoint bilan 2 ta child process integration-testida ikkala port
+`/health` va `/infer`ga javob berdi, PIDlar turlicha va har bir cache owner’i
+o‘z PIDiga teng chiqdi.
+
 Mustaqil uzoq quality control’da fused va torch backendlari uch seed/to‘rt
 condition bo‘yicha exact accuracy’da bir xil chiqdi, maksimal CE farqi
 `1.61e-8`. Seed19 uniform exact `66.61%` va hard mean `31.76%` bilan seed17/18

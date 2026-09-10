@@ -170,6 +170,20 @@ error was `3.81e-6`. This validates the threaded HTTP path locally, but it is
 not a substitute for a deployment-specific multi-process launcher or
 admission/batching stress test.
 
+`serve_native_workers.py` now supplies that process-lifecycle primitive using
+the Windows-safe `spawn` start method. Each child loads the checkpoint and
+constructs its own model/cache, then listens on a consecutive port. The parent
+terminates the group if a worker fails; no CUDA object is inherited from the
+parent. This is a local launcher, not a complete deployment: an external
+load-balancer, health-aware admission policy, TLS/authentication, and memory
+capacity planning are still required.
+
+The launcher was integration-tested with a small CPU checkpoint and two real
+child processes: both ports answered `/health` and `/infer`, the PIDs were
+distinct, and each reported a cache owner equal to its own PID. This confirms
+the ownership boundary without duplicating the 500M CUDA checkpoint merely for
+a lifecycle test.
+
 ## Long quality control
 
 The fused learned checkpoints were rerun through the 96-batch-per-condition
@@ -238,6 +252,7 @@ approximate a configuration it does not support.
 - [HTTP server benchmark](../benchmark_native_server.py)
 - [HTTP server concurrency benchmark](../benchmark_native_server_concurrency.py)
 - [HTTP serving entry point](../serve_native.py)
+- [Multi-process serving launcher](../serve_native_workers.py)
 - [HTTP service adapter](../neural_engine/native_fused_server.py)
 - [Python wrapper](../neural_engine/native_fused_dispatch.py)
 - [CUDA kernel](../neural_engine/native_fused_dispatch.cu)
