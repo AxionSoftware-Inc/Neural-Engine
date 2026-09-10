@@ -1323,6 +1323,14 @@ rejected for adoption. The code remains opt-in; a future full-range codec
 needs cross-digit interactions, not just more independent heads. See
 `V0_213_DYNAMIC_NONMOD_THREE_DIGIT_CODEC_AUDIT.md`.
 
+V0.214 aligns the Fourier periods with the three-digit output base (`1024`).
+The two-seed mean improves from `63.28%` to `67.97%` held-out and from
+`55.08%` to `58.40%` at depth 4, with the same `7.67M/2.37M` total/active
+budget. This confirms period alignment as a secondary factor, but the result
+still trails the leading two-digit codec substantially. Independent digit
+heads remain rejected; the next path needs cross-digit/carry interaction. See
+`V0_214_DYNAMIC_NONMOD_THREE_DIGIT_FOURIER_BASE_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

@@ -1358,3 +1358,13 @@ independent digit logits unseen-depth compositionni yo‘qotmoqda. Keyingi
 codec cross-digit interactionga ega bo‘lishi kerak; bank/700M/1B scale emas.
 
 **Batafsil:** `results/V0_213_DYNAMIC_NONMOD_THREE_DIGIT_CODEC_AUDIT.md`.
+
+**Three-digit Fourier-base alignment (2026-09-11):** output base1024ga
+Fourier-base1024 moslanganda ikki seedli held-out `63.28%`dan `67.97%`ga,
+depth-4 `55.08%`dan `58.40%`ga ko‘tarildi; active budget `2.37M` bo‘lib qoldi.
+Bu secondary improvement, lekin leading two-digit rank128 sifatiga yaqin emas.
+**RETAINED AS DIAGNOSTIC; QUALITY ADOPTION REJECTED.** Asosiy ochiq muammo
+independent digit headlarda cross-digit/carry interaction yo‘qligi; model
+scale oshirish emas, shu interactionni qurish kerak.
+
+**Batafsil:** `results/V0_214_DYNAMIC_NONMOD_THREE_DIGIT_FOURIER_BASE_AUDIT.md`.
