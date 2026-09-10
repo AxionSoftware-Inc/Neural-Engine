@@ -1365,6 +1365,17 @@ saqlandi.
 
 **Hidden-gate audit:** `results/P003_NATIVE_FACTORIZED_HIDDEN_GATE_AUDIT_20260910.md`.
 
+10,000 qadamli teng-budget capacity auditida 300M ordered shared-route-key
+mean `77.096% / 0.66621 CE`, 500M esa `77.292% / 0.65446 CE` berdi. Demak 500M
+sig‘imi yetarli training budget bilan ishlayapti, lekin hard accuracy foydasi
+faqat `+0.195 pp`. 500M 10k diagnostikada 300Mga nisbatan ko‘proq unique
+address (`4,912 vs 3,926`), pastroq dead fraction (`39.00% vs 42.23%`) va
+barcha factor rows ishlatilgan. Asosiy muammo “sig‘im umuman ishlamayapti” emas;
+qo‘shimcha virtual kombinatsiyalar task-useful specializationga to‘liq
+aylanmayapti. 700M/1B kengayishi yangi mexanizmsiz hozircha rad.
+
+**Long-budget capacity audit:** `results/P003_NATIVE_FACTORIZED_LONG_BUDGET_AUDIT_20260910.md`.
+
 500M ordered-slotning birinchi varianti `d_model=512` bilan ishga tushgani
 aniqlandi, holbuki shared 500M baseline `d_model=384` edi; `69.818%` natija
 shu sabab fair taqqoslash dalili emas va confounded deb belgilandi. Teng

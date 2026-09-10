@@ -1584,6 +1584,13 @@ steps: 68.060% versus 68.594% for ordered shared route keys. It adds only
 6,304 parameters and negligible VRAM, but does not fix scaling quality. See
 `P003_NATIVE_FACTORIZED_HIDDEN_GATE_AUDIT_20260910.md`.
 
+The matched long-budget capacity audit changes the earlier interpretation:
+after 10,000 steps, 500M reaches 77.292% versus 77.096% for 300M, with lower
+dead traffic and more unique selected addresses. The gain is real but only
+0.195 percentage points, so 700M/1B expansion still waits for a new
+specialization mechanism. See
+`P003_NATIVE_FACTORIZED_LONG_BUDGET_AUDIT_20260910.md`.
+
 The matched 500M seed17 specialization diagnostic confirms a structural effect:
 shared factor-derived route keys reduce candidate/selected pair cosine from
 `0.37746/0.38004` to `0.26475/0.27034` and dead-circuit traffic from `46.05%`
