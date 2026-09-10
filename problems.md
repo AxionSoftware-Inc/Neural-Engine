@@ -522,6 +522,22 @@ yoki default muhit avtomatik o‘zgartirilmaydi.
 **Keyingi yo‘l:** Tritonga bog‘liq bo‘lmagan static-index/custom fused decode
 path. **Batafsil:** `results/P003_NATIVE_COMPILE_AUDIT_20260910.md`.
 
+### C-RUNTIME-NATIVE-CUDAGRAPH-001 — Dynamic-width route partition is not graph-safe
+
+**Status:** `OPEN BLOCKER — FIXED FALLBACK ONLY`
+**Muammo:** Runtime track / P-003
+
+Fixed K=16 va learned-width batch=1 fallback CUDA Graph capture’da exact
+parity bilan ishladi, lekin graph/eager `1.006x/1.001x` bo‘lib material tezlik
+bermadi. Learned dynamic K=8/K=16 batch=32 capture vaqtida route-dependent
+GPU shartlari va o‘zgaruvchan narrow/wide subsetlar sabab `operation not
+permitted when stream is capturing` xatosiga uchradi. Bir inputdan olingan
+route partitionni keyingi inputga graph orqali ko‘chirish xavfsiz emas.
+
+**Keyingi yo‘l:** stable dispatch shape yoki route-dependent outputni saqlovchi
+custom static-index kernel. Dynamic route’ni hozircha eager/opt-in qoldirish.
+**Batafsil:** `results/P003_NATIVE_CUDA_GRAPH_AUDIT_20260910.md`.
+
 500M bankda `routing_capacity=22800` va `routing_depth=5` clamp qilinadigan
 control full 500Mga nisbatan uniformda `+0.495 pp`, hard-taskda `+1.259 pp`
 berdi. Bu route fragmentation haqiqiy omil ekanini ko‘rsatadi, lekin clamp

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import time
 from pathlib import Path
 
@@ -40,6 +41,7 @@ def main() -> None:
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--iterations", type=int, default=100)
+    parser.add_argument("--output", default=None)
     args = parser.parse_args()
     if not torch.cuda.is_available() or not hasattr(torch.cuda, "make_graphed_callables"):
         raise RuntimeError("CUDA Graph support is unavailable")
@@ -61,24 +63,39 @@ def main() -> None:
     with torch.inference_mode():
         eager_logits = wrapper(inputs)
     eager_ms_before_capture = timed(wrapper, inputs, args.iterations)
-    graph_model = torch.cuda.make_graphed_callables(
-        wrapper, (inputs,), num_warmup_iters=5, allow_unused_input=True,
-    )
-    with torch.inference_mode():
-        graph_logits = graph_model(inputs)
-        torch.cuda.synchronize()
-    max_error = (graph_logits - eager_logits).abs().max().item()
-    eager_ms = timed(wrapper, inputs, args.iterations)
-    graph_ms = timed(graph_model, inputs, args.iterations)
-    print({
+    result = {
         "batch_size": args.batch_size,
         "adaptive": False,
-        "max_logit_error": max_error,
         "eager_ms_before_capture": eager_ms_before_capture,
-        "eager_ms": eager_ms,
-        "cuda_graph_ms": graph_ms,
-        "speed_ratio_graph_over_eager": graph_ms / eager_ms,
-    })
+    }
+    try:
+        graph_model = torch.cuda.make_graphed_callables(
+            wrapper, (inputs,), num_warmup_iters=5, allow_unused_input=True,
+        )
+        with torch.inference_mode():
+            graph_logits = graph_model(inputs)
+            torch.cuda.synchronize()
+        max_error = (graph_logits - eager_logits).abs().max().item()
+        eager_ms = timed(wrapper, inputs, args.iterations)
+        graph_ms = timed(graph_model, inputs, args.iterations)
+        result.update({
+            "status": "ok",
+            "max_logit_error": max_error,
+            "eager_ms": eager_ms,
+            "cuda_graph_ms": graph_ms,
+            "speed_ratio_graph_over_eager": graph_ms / eager_ms,
+        })
+    except Exception as exc:
+        result.update({
+            "status": "error",
+            "error_type": type(exc).__name__,
+            "error": str(exc)[-2000:],
+        })
+    if args.output:
+        output = Path(args.output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(result, indent=2), encoding="utf-8")
+    print(result)
 
 
 if __name__ == "__main__":

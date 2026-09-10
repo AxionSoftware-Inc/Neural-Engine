@@ -1,0 +1,8 @@
+{
+  "batch_size": 32,
+  "adaptive": false,
+  "eager_ms_before_capture": 12.039972000002308,
+  "status": "error",
+  "error_type": "RuntimeError",
+  "error": "CUDA error: operation failed due to a previous error during capture\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\n"
+}
