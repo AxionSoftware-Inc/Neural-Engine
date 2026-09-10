@@ -1,0 +1,43 @@
+{
+  "checkpoint": "results/checkpoints/ne500_staged_b128_s17_full_10000.pt",
+  "seed": 17,
+  "model": "ne_500m_v12_coverage_b128",
+  "device": "cuda",
+  "examples_per_task": 64,
+  "evaluator_seed": 1712,
+  "results": [
+    {
+      "mode": "natural",
+      "routing_capacity": 38600,
+      "routing_depth": 6,
+      "accuracy": 0.8583333492279053,
+      "cross_entropy": 0.4332024157047272,
+      "avg_executed_steps": 1.5979167222976685,
+      "circuits_used": 9333,
+      "dead_circuit_fraction_full_bank": 0.7582124471664429,
+      "used_fraction_within_reachable_prefix": 0.24178756773471832
+    },
+    {
+      "mode": "prefix_7552_depth5",
+      "routing_capacity": 7552,
+      "routing_depth": 5,
+      "accuracy": 0.8541666865348816,
+      "cross_entropy": 0.4353150725364685,
+      "avg_executed_steps": 1.5979167222976685,
+      "circuits_used": 5137,
+      "dead_circuit_fraction_full_bank": 0.8669171333312988,
+      "used_fraction_within_reachable_prefix": 0.6802171468734741
+    },
+    {
+      "mode": "prefix_1408_depth4",
+      "routing_capacity": 1408,
+      "routing_depth": 4,
+      "accuracy": 0.8531250357627869,
+      "cross_entropy": 0.4363590180873871,
+      "avg_executed_steps": 1.5979167222976685,
+      "circuits_used": 1377,
+      "dead_circuit_fraction_full_bank": 0.9643264412879944,
+      "used_fraction_within_reachable_prefix": 0.9779829978942871
+    }
+  ]
+}

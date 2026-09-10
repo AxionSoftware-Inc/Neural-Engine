@@ -96,6 +96,7 @@ def analyze(args: argparse.Namespace) -> dict[str, Any]:
     example_hot /= len(route_sets)
     result: dict[str, Any] = {
         "checkpoint": str(args.checkpoint),
+        "seed": int(config["seed"]),
         "model": config["model"],
         "device": str(device),
         "examples_per_task": args.examples_per_task,

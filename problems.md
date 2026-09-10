@@ -933,11 +933,34 @@ isbotlamaydi, ammo yana 700M/1B scale’ga o‘tishdan oldin hal qilinishi kerak
 - route dead fraction va task route overlap hisobotlari;
 - total/active params, latency va VRAM alohida qayd qilinsin.
 
-**Keyingi tajriba:** yangi bankni kattalashtirmasdan route fragmentation/coverage
-muammosini minimal patch bilan sinash. 500M konfiguratsiya scale-control sifatida
+**Frontier recheck (2026-09-10):** Oltita frozen checkpoint bir xil route-audit
+protokolida qayta tekshirildi. 100M seed17/18da bankning `67.3%/64.8%` qismi
+ishlatilgan va dead fraction `32.71%/35.20%` bo‘lgan. 300M’da usage
+`25.5%/24.9%`, dead `74.52%/75.07%`; 500M’da usage `24.2%/23.8%`, dead
+`75.82%/76.17%` bo‘ldi. Between-task union Jaccard 100M’dagi
+`0.0488/0.0513`dan 500M’da `0.0126/0.0168`gacha tushdi. Ikki seedda ham bir
+xil yo‘nalish bor: capacity-only scale yangi foydali computationga aylanmay,
+route coverage va reuse parchalanmoqda. Bu bankdagi barcha circuitlar
+foydasizligini isbotlamaydi, ammo 700M/1B’ga o‘tishdan avval coverage/reuse
+muammosini hal qilish kerakligini kuchaytiradi.
+
+**Holat:** `DIAGNOSTIC CONFIRMED; CAPACITY-ONLY SCALE DEFERRED`.
+**Batafsil:** `results/P003_ROUTE_FRONTIER_RECHECK_20260910.md`.
+
+**Qo‘shimcha nazorat:** frozen prefix clamp 100M/300M/500M seed17/18da izchil
+quality foydasi bermadi; katta bankning o‘zi yetarli sabab emas. Training-time
+5% tree exploration esa 300M continuationda dead/CE ayrim hollarda yaxshilangan
+bo‘lsa-da, hard accuracy ikki seed o‘rtachasida `−0.13 pp` bo‘ldi. Demak
+coverage’ni mexanik oshirish ham foydali computationga aylanmadi.
+
+**Holat:** prefix clamp `REJECTED AS QUALITY FIX`; route exploration
+`REJECTED FOR ADOPTION`. Keyingi sinov route exposure’ni yana oshirish emas,
+circuit correctionning recurrent state/outputga ta’sirini operation composition
+bilan bog‘laydigan minimal interface bo‘lishi kerak. 500M scale-control sifatida
 saqlanadi, defaultga ko‘chirilmaydi.
 
-**Batafsil:** `results/P003_STAGED_SCALE_300M_500M_SEED17_18.md`.
+**Batafsil:** `results/P003_ROUTE_CAPACITY_CLAMP_AUDIT_20260910.md` va
+`results/P003_ROUTE_EXPLORATION_CONTINUATION_AUDIT_20260910.md`.
 
 ### C-P003-TYPED-700M-REPLICATION-001 — Second-seed typed-register 700M validation
 

@@ -1,0 +1,150 @@
+{
+  "checkpoint": "results/checkpoints/ne500_staged_b128_s18_full_10000.pt",
+  "seed": 18,
+  "model": "ne_500m_v12_coverage_b128",
+  "device": "cuda",
+  "examples_per_task": 64,
+  "split": "all",
+  "avg_executed_steps": 1.5989583730697632,
+  "active_circuits_per_step": 8,
+  "circuit_bank_size": 38600,
+  "circuits_used": 9198,
+  "dead_circuit_fraction": 0.7617098689079285,
+  "always_hot_fraction_ge_50pct_examples": 0.0,
+  "routing_entropy": 9.00308609008789,
+  "routing_max_load_fraction": 0.0012214983580633998,
+  "within_task_jaccard_mean": 0.001600830864791266,
+  "between_task_union_jaccard_mean": 0.016789361434625557,
+  "most_overlapping_task_pair": [
+    "chain3",
+    "state_machine"
+  ],
+  "most_overlapping_task_pair_jaccard": 0.057345971563981045,
+  "least_overlapping_task_pair": [
+    "multiply",
+    "chain3"
+  ],
+  "least_overlapping_task_pair_jaccard": 0.0028469750889679717,
+  "per_task": [
+    {
+      "task": "add",
+      "depth": 1,
+      "samples": 64,
+      "mean_unique_active_circuits": 8.0,
+      "union_circuits": 485,
+      "within_task_jaccard": 0.0013910692482121052
+    },
+    {
+      "task": "subtract",
+      "depth": 1,
+      "samples": 64,
+      "mean_unique_active_circuits": 8.0,
+      "union_circuits": 481,
+      "within_task_jaccard": 0.0015920256991685568
+    },
+    {
+      "task": "multiply",
+      "depth": 1,
+      "samples": 64,
+      "mean_unique_active_circuits": 8.0,
+      "union_circuits": 512,
+      "within_task_jaccard": 0.0
+    },
+    {
+      "task": "greater_than",
+      "depth": 1,
+      "samples": 64,
+      "mean_unique_active_circuits": 8.0,
+      "union_circuits": 464,
+      "within_task_jaccard": 0.0030252926086259415
+    },
+    {
+      "task": "less_equal",
+      "depth": 1,
+      "samples": 64,
+      "mean_unique_active_circuits": 8.0,
+      "union_circuits": 459,
+      "within_task_jaccard": 0.002768902173664078
+    },
+    {
+      "task": "xor_parity",
+      "depth": 1,
+      "samples": 64,
+      "mean_unique_active_circuits": 8.0,
+      "union_circuits": 473,
+      "within_task_jaccard": 0.002072398500969929
+    },
+    {
+      "task": "max3",
+      "depth": 1,
+      "samples": 64,
+      "mean_unique_active_circuits": 8.0,
+      "union_circuits": 496,
+      "within_task_jaccard": 0.0006919006919006919
+    },
+    {
+      "task": "median3",
+      "depth": 1,
+      "samples": 64,
+      "mean_unique_active_circuits": 8.0,
+      "union_circuits": 496,
+      "within_task_jaccard": 0.0006528194028194027
+    },
+    {
+      "task": "min3",
+      "depth": 1,
+      "samples": 64,
+      "mean_unique_active_circuits": 8.0,
+      "union_circuits": 483,
+      "within_task_jaccard": 0.0016941061583918729
+    },
+    {
+      "task": "reverse_sum",
+      "depth": 2,
+      "samples": 64,
+      "mean_unique_active_circuits": 16.0,
+      "union_circuits": 969,
+      "within_task_jaccard": 0.0012109440183181728
+    },
+    {
+      "task": "lookup",
+      "depth": 2,
+      "samples": 64,
+      "mean_unique_active_circuits": 16.0,
+      "union_circuits": 953,
+      "within_task_jaccard": 0.0016123657128433156
+    },
+    {
+      "task": "chain3",
+      "depth": 2,
+      "samples": 64,
+      "mean_unique_active_circuits": 16.078125,
+      "union_circuits": 897,
+      "within_task_jaccard": 0.002685370164955065
+    },
+    {
+      "task": "compose_add_mul",
+      "depth": 3,
+      "samples": 64,
+      "mean_unique_active_circuits": 23.609375,
+      "union_circuits": 1432,
+      "within_task_jaccard": 0.0009248140412467566
+    },
+    {
+      "task": "compose_if",
+      "depth": 3,
+      "samples": 64,
+      "mean_unique_active_circuits": 23.203125,
+      "union_circuits": 1393,
+      "within_task_jaccard": 0.0011662086246579523
+    },
+    {
+      "task": "state_machine",
+      "depth": 3,
+      "samples": 64,
+      "mean_unique_active_circuits": 23.8125,
+      "union_circuits": 1334,
+      "within_task_jaccard": 0.002524245926095085
+    }
+  ]
+}
