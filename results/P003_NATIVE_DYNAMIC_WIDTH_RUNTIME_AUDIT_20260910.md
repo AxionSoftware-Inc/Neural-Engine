@@ -37,6 +37,16 @@ latency reduction was smaller than the width reduction, so kernel launch and
 batch partition overhead are material. This is still a practical speed signal,
 not a claim of linear FLOP-to-latency scaling.
 
+## Larger-batch confirmation
+
+A second three-seed run used a balanced batch of 960 examples with the same
+warm-up and repeat protocol. Fixed K=8 averaged `65.69 ms`, fixed K=16
+`105.77 ms`, and learned K=8/16 `67.84 ms`; the learned path was therefore
+`35.9%` lower latency than fixed K=16 and only `3.3%` slower than fixed K=8.
+Mean learned width was `8.67/16`. This confirms that the runtime signal is not
+limited to the original 480-example timing batch, while launch overhead still
+prevents linear scaling.
+
 ## Decision
 
 `POSITIVE RUNTIME SIGNAL — OPT-IN ONLY; KERNEL FUSION OPEN`.
@@ -59,6 +69,7 @@ ms` in this regime, so the guard prevents a meaningful small-batch regression.
 
 - [Runtime JSON](diagnostic_native_width_runtime_20260910.json)
 - [Three-seed runtime JSON](diagnostic_native_width_runtime_all3_20260910.json)
+- [Three-seed larger-batch runtime JSON](diagnostic_native_width_runtime_batch960_20260910.json)
 - [Small-batch guarded JSON](diagnostic_native_width_runtime_small_batch_20260910_guarded.json)
 - [Runtime benchmark](../benchmark_native_width_runtime.py)
 - [Learned-width OOD audit](P003_NATIVE_LEARNED_WIDTH_AUDIT_20260910.md)

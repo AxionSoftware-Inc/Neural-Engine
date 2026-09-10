@@ -17,6 +17,7 @@
 - [P-003 — Native three-seed learned-width OOD JSON](diagnostic_native_learned_width_all3_20260910.json)
 - [P-003 — Native scratch seed19 learned-width OOD JSON](diagnostic_native_learned_width_s19_20260910.json)
 - [P-003 — Native three-seed runtime JSON](diagnostic_native_width_runtime_all3_20260910.json)
+- [P-003 — Native three-seed larger-batch runtime JSON](diagnostic_native_width_runtime_batch960_20260910.json)
 - [P-003 — Native small-batch guarded runtime JSON](diagnostic_native_width_runtime_small_batch_20260910_guarded.json)
 - [P-003 — Native warm-start versus continuation control](diagnostic_native_warmstart_vs_continued_20260910.json)
 - [P-003 — Stable-prefix compute-matched control](diagnostic_native_stable_prefix_compute_matched_20260910.json)

@@ -477,12 +477,19 @@ Batch=15da `dynamic_width_min_batch=32` guard K=16ga fallback qildi; learned
 variant `~11.8 ms` bo‘lgan, shuning uchun guard small-batch regressiyasini
 sezilarli kamaytirdi.
 
+960-example balanced batchdagi alohida uch-seed timingda fixed K=8 `65.69 ms`,
+fixed K=16 `105.77 ms`, learned `67.84 ms` bo‘ldi: K=16ga nisbatan `35.9%`
+latency kamayishi, K=8ga nisbatan faqat `3.3%` overhead. Mean active width
+`8.67/16`. Demak foyda bitta batch o‘lchamiga xos emas, lekin kernel launch
+overheadi hali ham mavjud.
+
 Bu hali default emas. Uzunroq continuation va kernel fusion profili kerak.
 Keyingi optimizatsiya — grouped-dispatch kernel fusion; sifat va route qarori
 o‘zgarmaydi.
 
-**Batafsil:** `results/P003_NATIVE_DYNAMIC_WIDTH_RUNTIME_AUDIT_20260910.md` va
-`results/diagnostic_native_width_runtime_all3_20260910.json`.
+**Batafsil:** `results/P003_NATIVE_DYNAMIC_WIDTH_RUNTIME_AUDIT_20260910.md`,
+`results/diagnostic_native_width_runtime_all3_20260910.json` va
+`results/diagnostic_native_width_runtime_batch960_20260910.json`.
 
 500M bankda `routing_capacity=22800` va `routing_depth=5` clamp qilinadigan
 control full 500Mga nisbatan uniformda `+0.495 pp`, hard-taskda `+1.259 pp`
