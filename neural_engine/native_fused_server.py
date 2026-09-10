@@ -258,6 +258,11 @@ class NativeFusedService:
             raise ValueError("max_batch_size must be an integer")
         if max_batch_size < 1:
             raise ValueError("max_batch_size must be positive")
+        if max_batch_size > self.max_batch_size:
+            raise ValueError(
+                f"max_batch_size {max_batch_size} exceeds configured limit "
+                f"{self.max_batch_size}"
+            )
 
         jobs: list[tuple[int, list[list[int]], bool, int]] = []
         buckets: dict[int, list[tuple[int, list[list[int]], bool, int]]] = {}

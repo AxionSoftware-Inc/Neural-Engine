@@ -113,3 +113,9 @@ def test_native_fused_service_explicit_batch_buckets_sequence_shapes():
             atol=1e-5,
             rtol=1e-5,
         )
+
+
+def test_native_fused_service_explicit_batch_honors_configured_limit():
+    service = _service()
+    with pytest.raises(ValueError, match="configured limit"):
+        service.infer_batch([{"inputs": [[1, 2, 3]]}], max_batch_size=9)
