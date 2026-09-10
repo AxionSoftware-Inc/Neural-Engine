@@ -146,14 +146,30 @@ def make_optimizer(model: nn.Module, config: dict[str, Any]) -> torch.optim.Opti
 
 class BatchSource:
     def __init__(self, generator: SyntheticTaskGenerator, batch_size: int, device: torch.device,
-                 task_balanced: bool = False, composition_strength: float = 0.0):
+                 task_balanced: bool = False, composition_strength: float = 0.0,
+                 edge_mix_fraction: float = 0.0,
+                 edge_value_min: int = 56, edge_value_max: int = 63,
+                 edge_value_ranges: list[tuple[int, int]] | None = None):
         self.generator = generator
         self.batch_size = batch_size
         self.device = device
         self.task_balanced = task_balanced
         self.composition_strength = composition_strength
+        self.edge_mix_fraction = edge_mix_fraction
+        self.edge_value_min = edge_value_min
+        self.edge_value_max = edge_value_max
+        self.edge_value_ranges = edge_value_ranges
 
     def batch(self) -> Batch:
+        if self.edge_mix_fraction > 0.0:
+            return self.generator.mixed_value_batch(
+                self.batch_size, self.device,
+                edge_fraction=self.edge_mix_fraction,
+                edge_value_min=self.edge_value_min,
+                edge_value_max=self.edge_value_max,
+                edge_ranges=self.edge_value_ranges,
+                task_balanced=self.task_balanced,
+                composition_strength=self.composition_strength)
         if self.composition_strength > 0:
             return self.generator.composition_batch(self.batch_size, self.device, self.composition_strength)
         if self.task_balanced:
@@ -371,7 +387,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                                value_min=train_value_min, value_max=train_value_max,
                                split=train_split),
                                config["batch_size"], device, task_balanced=args.balanced_train,
-                               composition_strength=composition_strength)
+                               composition_strength=composition_strength,
+                               edge_mix_fraction=float(config.get("edge_train_fraction", 0.0)),
+                               edge_value_min=int(config.get("edge_train_value_min", 56)),
+                               edge_value_max=int(config.get("edge_train_value_max", 63)),
+                               edge_value_ranges=[(int(pair[0]), int(pair[1]))
+                                                  for pair in config.get("edge_train_ranges", [])]
+                               or None)
     eval_source = BatchSource(SyntheticTaskGenerator(
                               config["seq_len"], int(config["seed"]) + 2,
                               value_min=eval_value_min, value_max=eval_value_max,
@@ -489,6 +511,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "batch_size": config["batch_size"], "training_seconds": elapsed,
         "samples_per_second": steps * config["batch_size"] / max(elapsed, 1e-9), "peak_vram_mb": int(peak_vram),
         "task_balanced": bool(args.balanced_train), "composition_strength": composition_strength,
+        "edge_train_fraction": float(config.get("edge_train_fraction", 0.0)),
+        "edge_train_value_range": [int(config.get("edge_train_value_min", 56)),
+                                   int(config.get("edge_train_value_max", 63))],
+        "edge_train_ranges": config.get("edge_train_ranges", []),
         "stage_loss_weight": float(config.get("stage_loss_weight", 0.0)),
         "halt_loss_weight": float(config.get("halt_loss_weight", 0.0)),
         "exit_loss_weight": float(config.get("exit_loss_weight", 0.0)),

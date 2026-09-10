@@ -303,6 +303,16 @@ P-003 yechilgan emas.
 
 **Batafsil:** `results/P003_NATIVE_OOD_DISTRIBUTION_AUDIT_20260910.md`.
 
+Keyingi ikki-seedli 10k auditida step-adapter bilan birga training oqimining
+25%ini low-edge `[0,7]` va high-edge `[56,63]` rejimlariga teng ajratish sinab
+ko‘rildi. Oddiy evaluatorda uniform accuracy `77.266% → 77.865%` va hard-task
+mean `46.658% → 48.926%` oshdi; low/high edge probe’larda mos ravishda
+`+17.340/+22.097 pp` chiqdi. Demak P-003dagi edge regressiyaning katta qismi
+rare joint-value coverage bilan bog‘liq bo‘lishi mumkin. Bu training recipe,
+arxitektura yechimi emas; 500Mda qayta tasdiqlanmaguncha default o‘zgarmaydi.
+
+**Batafsil:** `results/P003_NATIVE_EDGE_MIX_AUDIT_20260910.md`.
+
 #### Muammo ta’rifi
 
 Model capacity'si ko‘payganda yangi parametrlar foydali, kirish-dependent
@@ -1518,3 +1528,17 @@ oshdi, lekin 500M overall scaling `−0.130 pp` va high-edge probe regressiyasi
 saqlanib qoldi. Shuning uchun adapter default emas, hozirgi leading opt-in
 candidate; keyingi ish high-edge/value representation validation.
 **Batafsil:** `results/P007_NATIVE_STEP_ADAPTER_SCALE_AUDIT_20260910.md`.
+
+### C-P003-NATIVE-EDGE-COVERAGE-001 — Low/high edge training coverage
+
+**Status:** `PROMISING OPT-IN — 500M VALIDATION OPEN`
+**Muammo:** P-003 / P-007
+
+**Natija:** 300M rank-8 step-adapterda 25% ikki-edge mix 10k, seed17/18
+juftligida uniform accuracyni `+0.599 pp`, combination holdoutni `+0.629 pp`,
+low-edge’ni `+17.340 pp` va high-edge’ni `+22.097 pp` yaxshiladi. Hard-task
+mean ordinary probe’da `+2.268 pp` oshdi. 3k screen yomon ko‘ringani uchun
+long-budget validation zarur bo‘ldi. Bu model body yoki active pathni
+o‘zgartirmaydi; u faqat rare value regimesni trainingda ko‘paytiradi. 500Mda
+shu recipe qayta tekshirilishi kerak, shundan keyin default haqida qaror qilinadi.
+**Batafsil:** `results/P003_NATIVE_EDGE_MIX_AUDIT_20260910.md`.

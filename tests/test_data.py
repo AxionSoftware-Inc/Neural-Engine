@@ -45,3 +45,27 @@ def test_combination_split_is_disjoint():
                 tokens, _, _, _ = generator._one(task)
                 values = [token - 32 for token in tokens[1:1 + task.arity]]
                 assert generator._combination_bucket(task, values) in expected_bucket
+
+
+def test_mixed_value_batch_includes_requested_edge_range():
+    generator = SyntheticTaskGenerator(seed=12)
+    batch = generator.mixed_value_batch(
+        512, edge_fraction=1.0, edge_value_min=56, edge_value_max=63,
+        task_balanced=True)
+    operands = batch.inputs[:, 1:5]
+    non_padding = operands.ne(0)
+    values = operands[non_padding] - 32
+    assert int(values.min()) >= 56
+    assert int(values.max()) <= 63
+
+
+def test_mixed_value_batch_can_use_multiple_edge_ranges():
+    generator = SyntheticTaskGenerator(seed=13)
+    batch = generator.mixed_value_batch(
+        1024, edge_fraction=1.0, edge_ranges=[(0, 7), (56, 63)],
+        task_balanced=True)
+    operands = batch.inputs[:, 1:5]
+    values = operands[operands.ne(0)] - 32
+    assert bool(values.le(7).any())
+    assert bool(values.ge(56).any())
+    assert bool(values[(values > 7) & (values < 56)].numel() == 0)

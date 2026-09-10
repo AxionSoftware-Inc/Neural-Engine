@@ -95,9 +95,12 @@ class SyntheticTaskGenerator:
             raise ValueError(f"missing stage target definition for depth-{task.depth} task {task.name}")
         return stages, mask
 
-    def _one(self, task: TaskSpec) -> tuple[list[int], int, list[int], list[bool]]:
+    def _one_for_range(self, task: TaskSpec, value_min: int,
+                       value_max: int) -> tuple[list[int], int, list[int], list[bool]]:
+        if not 0 <= value_min <= value_max < MODULUS:
+            raise ValueError(f"value range must be within [0, {MODULUS - 1}]")
         while True:
-            values = self.rng.integers(self.value_min, self.value_max + 1, size=task.arity).tolist()
+            values = self.rng.integers(value_min, value_max + 1, size=task.arity).tolist()
             if self._accept_values(task, values):
                 break
         tokens = [TASK_TOKEN_OFFSET + task.task_id]
@@ -106,6 +109,9 @@ class SyntheticTaskGenerator:
         target = int(task.fn(values))
         stage_targets, stage_mask = self._stage_targets(task, values, target)
         return tokens, target, stage_targets, stage_mask
+
+    def _one(self, task: TaskSpec) -> tuple[list[int], int, list[int], list[bool]]:
+        return self._one_for_range(task, self.value_min, self.value_max)
 
     @staticmethod
     def _make_batch(rows: list[tuple[list[int], int, int, int, list[int], list[bool]]],
@@ -152,6 +158,60 @@ class SyntheticTaskGenerator:
             task = TASKS[int(task_index)]
             tokens, target, stage_targets, stage_mask = self._one(task)
             rows.append((tokens, target, task.task_id, task.depth, stage_targets, stage_mask))
+        return self._make_batch(rows, device)
+
+    def mixed_value_batch(self, batch_size: int, device: str | torch.device = "cpu",
+                          edge_fraction: float = 0.0,
+                          edge_value_min: int = 56, edge_value_max: int = 63,
+                          edge_ranges: list[tuple[int, int]] | None = None,
+                          task_balanced: bool = False,
+                          composition_strength: float = 0.0) -> Batch:
+        """Mix the normal training range with a deliberately sampled edge range.
+
+        This is a distribution-robustness control, not an architecture change.
+        The regular range remains ``self.value_min..self.value_max`` and the
+        edge range is selected independently for each example. Task balancing
+        and deeper-task oversampling retain the same semantics as their normal
+        batch methods.
+        """
+        if not 0.0 <= edge_fraction <= 1.0:
+            raise ValueError("edge_fraction must be between 0 and 1")
+        if composition_strength < 0.0:
+            raise ValueError("composition strength must be non-negative")
+        if edge_ranges is None:
+            edge_ranges = [(edge_value_min, edge_value_max)]
+        if not edge_ranges:
+            raise ValueError("edge_ranges must not be empty")
+        normalized_ranges = []
+        for value_min, value_max in edge_ranges:
+            if not 0 <= value_min <= value_max < MODULUS:
+                raise ValueError(f"edge value range must be within [0, {MODULUS - 1}]")
+            normalized_ranges.append((int(value_min), int(value_max)))
+        if task_balanced:
+            task_indices = np.arange(batch_size) % len(TASKS)
+            self.rng.shuffle(task_indices)
+        elif composition_strength > 0.0:
+            weights = np.array([
+                1.0 + composition_strength * (task.depth - 1)
+                for task in TASKS
+            ])
+            task_indices = self.rng.choice(
+                len(TASKS), size=batch_size, p=weights / weights.sum())
+        else:
+            task_indices = self.rng.integers(0, len(TASKS), size=batch_size)
+        rows: list[tuple[list[int], int, int, int, list[int], list[bool]]] = []
+        for task_index in task_indices:
+            task = TASKS[int(task_index)]
+            use_edge = bool(self.rng.random() < edge_fraction)
+            if use_edge:
+                value_min, value_max = normalized_ranges[
+                    int(self.rng.integers(0, len(normalized_ranges)))]
+            else:
+                value_min, value_max = self.value_min, self.value_max
+            tokens, target, stage_targets, stage_mask = self._one_for_range(
+                task, value_min, value_max)
+            rows.append((tokens, target, task.task_id, task.depth,
+                         stage_targets, stage_mask))
         return self._make_batch(rows, device)
 
     def composition_batch(self, batch_size: int,

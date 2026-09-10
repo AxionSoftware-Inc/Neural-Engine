@@ -1638,3 +1638,11 @@ and hard-task mean by `+1.302 pp`. At 10,000 steps it gives `+0.352 pp` on
 scales. The adapter does not solve overall 300M→500M scaling, and high-edge
 value probes still regress. It remains a promising opt-in rather than the
 default. See `P007_NATIVE_STEP_ADAPTER_SCALE_AUDIT_20260910.md`.
+
+The follow-up 300M training-distribution audit mixed 25% low/high-edge
+examples into the step-adapter training stream. At 10,000 steps and two seeds,
+uniform accuracy improved `+0.599 pp` and hard-task mean `+2.268 pp`; low-edge
+and high-edge probe accuracy improved `+17.340/+22.097 pp` respectively.
+This is a strong robustness result, but it is a training recipe rather than an
+architecture change. It remains opt-in until the same protocol is validated
+at 500M. See `P003_NATIVE_EDGE_MIX_AUDIT_20260910.md`.
