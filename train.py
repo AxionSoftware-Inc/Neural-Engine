@@ -51,6 +51,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["slot_count"] = config.get("slot_count", 0)
     model_kwargs["task_context"] = config.get("task_context", False)
     model_kwargs["task_context_update"] = config.get("task_context_update", True)
+    model_kwargs["task_context_scale"] = config.get("task_context_scale", 1.0)
     model_kwargs["circuit_mode"] = config.get("circuit_mode", "parallel")
     model_kwargs["circuit_bank_mode"] = config.get("circuit_bank_mode", "independent")
     model_kwargs["shared_rank"] = config.get("shared_rank", 8)

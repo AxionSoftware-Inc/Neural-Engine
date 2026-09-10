@@ -21,7 +21,8 @@ class NeuralEngineV0(nn.Module):
                  circuit_rank: int = 16, router_branch: int = 8, router_depth: int = 4,
                  candidate_pool: int = 32, active_circuits: int = 8, internal_steps: int = 3,
                  router_addresses: int = 1, slot_count: int = 0, task_context: bool = False,
-                 task_context_update: bool = True, circuit_mode: str = "parallel",
+                 task_context_update: bool = True, task_context_scale: float = 1.0,
+                 circuit_mode: str = "parallel",
                  numeric_value_encoding: bool = False, adaptive_halting: bool = False,
                  halt_threshold: float = 0.5, routing_coverage_temperature: float = 0.25,
                  input_reinjection: float = 1.0, circuit_delta_scale: float = 1.0,
@@ -69,6 +70,9 @@ class NeuralEngineV0(nn.Module):
         self.slot_count = slot_count
         self.use_task_context = task_context
         self.task_context_update = task_context_update
+        if task_context_scale < 0.0:
+            raise ValueError("task_context_scale must be non-negative")
+        self.task_context_scale = float(task_context_scale)
         self.circuit_mode = circuit_mode
         self.circuit_bank_mode = circuit_bank_mode
         self.shared_rank = int(shared_rank)
@@ -282,7 +286,7 @@ class NeuralEngineV0(nn.Module):
         task_context = None
         if self.task_context_embedding is not None:
             task_ids = (inputs[:, 0] - 1).clamp(0, self.task_context_embedding.num_embeddings - 1)
-            task_context = self.task_context_embedding(task_ids)
+            task_context = self.task_context_embedding(task_ids) * self.task_context_scale
         batch_size = inputs.shape[0]
         num_classes = self.output[-1].out_features
         selected_steps = [] if collect_stats else None

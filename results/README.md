@@ -1606,3 +1606,27 @@ rose sharply on edge probes for both scales. This confirms that 500M has a
 small real capacity gain on the ordinary stream, but not distribution-robust
 specialization; P-003 stays active and blind 700M/1B expansion remains
 deferred. See `P003_NATIVE_OOD_DISTRIBUTION_AUDIT_20260910.md`.
+
+The native depth/amplitude audit found that selected correction is relatively
+weaker on 500M than 300M at the difficult recurrent steps: uniform depth-2/3
+route/query norm falls from `6.63%/6.40%` to `5.22%/4.47%`. Training with
+`circuit_delta_scale=2` produced only `+0.169 pp` mean accuracy, `+0.033 pp`
+hard-task mean, and `+0.00466` worse CE across two seeds. Universal correction
+amplitude is rejected as a quality fix; the remaining P-007 path is a
+loss-aligned state-write interface. See
+`P007_NATIVE_DELTA2_DEPTH_AUDIT_20260910.md`.
+
+The native gated state-write screen (`memory_write_mode=gated`) also failed:
+two-seed 300M mean accuracy fell `68.451% → 67.969%` while CE improved only
+`0.00194` and depth-2/3 accuracy fell `0.163 pp`. A generic state-preservation
+gate is rejected as a quality fix; P-007 still needs a task-loss-aligned
+state/circuit interface. See `P007_NATIVE_MEMORY_WRITE_AUDIT_20260910.md`.
+
+Explicit task context for the native router was also screened. Router-only
+context at scale 1 improved overall accuracy by `+0.313 pp` and CE by `0.01401`,
+but reduced hard-task mean by `0.163 pp` and increased dead traffic by `8.78
+pp`. A `0.25x` router-only context reduced the fragmentation but still fell
+`0.156 pp` below baseline. Context added to state updates fell `0.404 pp`.
+Task-context routing is therefore rejected as a reliable quality fix; the
+next path is partial-result or operation-aware state representation. See
+`P007_NATIVE_TASK_CONTEXT_AUDIT_20260910.md`.

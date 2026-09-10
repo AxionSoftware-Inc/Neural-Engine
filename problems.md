@@ -1163,6 +1163,16 @@ capacity-only scaling va yangi statik scale sweep hozircha to‘xtatiladi.
 
 **Batafsil:** `results/P007_STATE_PATH_SCALE_EXTENDED_AUDIT_20260909.md`.
 
+2026-09-10 depth specialization diagnostikasi 10k checkpointlarda depth-2/3
+selected route correctioni 500Mda 300Mdan kuchliroq emasligini ko‘rsatdi:
+uniform probe’da route/query normasi depth-2 uchun `6.63% → 5.22%`, depth-3
+uchun `6.40% → 4.47%` tushdi. Shu gipotezaga mos `circuit_delta_scale=2`
+training arm ham tekshirildi: ikki seed, 3000 qadamda accuracy faqat `+0.169
+pp`, hard-task mean `+0.033 pp`, CE esa `+0.00466` yomonlashdi. Universal
+amplitude oshirish P-007ni yechmadi va qabul qilinmadi.
+
+**Depth/amplitude audit:** `results/P007_NATIVE_DELTA2_DEPTH_AUDIT_20260910.md`.
+
 Keyingi ikki inference-only pilot ham yakunlandi. Per-example correction
 advantage aralash chiqdi (100M seed17/18 positive fraction `46.88%/52.08%`),
 lekin advantage bilan correction normasi korrelyatsiyasi kuchsiz
@@ -1196,6 +1206,26 @@ qo‘shish mavjud checkpoint uchun barqaror quality fix emas va training/default
 qabul qilinmadi. Opt-in API saqlandi.
 
 **Residual audit:** `results/P007_POST_CORRECTION_RESIDUAL_AUDIT.md`.
+
+Gated state-write (`memory_write_mode=gated`) ham tekshirildi. 300M ordered
+shared-route-key, ikki seed, 3000 qadamli screen’da mean accuracy
+`68.451% → 67.969%` (`−0.482 pp`), depth-2/3 mean `33.366% → 33.203%`
+(`−0.163 pp`) bo‘ldi; CE `0.99639 → 0.99445` yaxshilangan bo‘lsa ham hard
+quality oshmadi. Demak generic state-preservation gate P-007ni yechmaydi va
+P-005dagi CE/hard mismatch saqlanadi.
+
+**Memory-write audit:** `results/P007_NATIVE_MEMORY_WRITE_AUDIT_20260910.md`.
+
+Task tokenini routerga alohida embedding sifatida berishning uch varianti ham
+tekshirildi. Embeddingni state update’ga ham qo‘shish ikki seedda mean
+accuracy’ni `68.451% → 68.047%` tushirdi. Faqat routerga `1.0×` berish accuracy’ni
+`+0.313 pp` va CE’ni `−0.01401` yaxshilagan bo‘lsa ham hard-task mean
+`−0.163 pp`, dead traffic `+8.78 pp` bo‘ldi. `0.25×` router-only variantida
+accuracy `−0.156 pp`, hard-task mean `−0.228 pp` va dead traffic `+3.41 pp`
+bo‘ldi. Demak task context routingni task-specific qiladi, lekin depth-2/3
+qualityni ishonchli oshirmaydi; scale tuning qabul qilinmadi.
+
+**Task-context audit:** `results/P007_NATIVE_TASK_CONTEXT_AUDIT_20260910.md`.
 
 ### C-P003-NATIVE-FACTORIZED-001 — Virtual factor bank does not turn address count into quality
 
@@ -1435,3 +1465,28 @@ o‘zgarishi `-7.74%/-3.12%/-0.10%` bo‘ldi. Exact numerical parity va generati
 saqlandi. Eager yutug‘i graph servingga ko‘chmagani uchun default o‘zgarmadi;
 variant opt-in qoldi.
 **Batafsil:** `results/RUNTIME_QWEN_DERIVED_POSITION_AUDIT_20260909.md`.
+
+### C-P007-NATIVE-DELTA2-001 — Universal circuit correction amplitude 2x
+
+**Status:** `REJECTED AS QUALITY FIX`
+**Muammo:** P-007 / P-003
+**Natija:** Router va circuit bankni o‘zgartirmasdan, `circuit_delta_scale=2.0`
+ikki seedli 300M, 3000-qadamli screen’da tekshirildi. Shared route-key
+baselinega nisbatan accuracy `68.451% → 68.620%` (`+0.169 pp`) bo‘ldi,
+hard-task mean `33.366% → 33.398%` (`+0.033 pp`) xolos, CE esa
+`0.99639 → 1.00105` yomonlashdi. Depth diagnostikasi 500Mda depth-2/3
+correction normasi 300Mdan kuchliroq emasligini ham ko‘rsatdi. Universal
+amplitude oshirish adoption uchun yetarli emas; opt-in control saqlandi.
+**Batafsil:** `results/P007_NATIVE_DELTA2_DEPTH_AUDIT_20260910.md`.
+
+### C-P007-NATIVE-TASK-CONTEXT-001 — Explicit task context for routing
+
+**Status:** `REJECTED AS RELIABLE QUALITY FIX`
+**Muammo:** P-007 / P-003 / P-005
+**Natija:** 300M, ikki seed, 3000-qadamli screen’da router-only task context
+`1.0×` umumiy accuracy’ni `+0.313 pp` oshirdi, lekin hard-task mean
+`−0.163 pp` va dead traffic `+8.78 pp` yomonlashdi. `0.25×` variant ham
+baseline’dan `−0.156 pp` accuracy va `−0.228 pp` hard-task mean qoldi.
+Embeddingni state update’ga qo‘shish esa `−0.404 pp` berdi. API opt-in sifatida
+saqlandi, default va route majburlash o‘zgarmadi.
+**Batafsil:** `results/P007_NATIVE_TASK_CONTEXT_AUDIT_20260910.md`.
