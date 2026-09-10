@@ -138,7 +138,7 @@ def main() -> None:
     parser.add_argument("--checkpoints", nargs="+", default=list(DEFAULT_CHECKPOINTS))
     parser.add_argument("--batches", type=int, default=24)
     parser.add_argument("--device", default="auto")
-    parser.add_argument("--dynamic-width-mode", choices=("none", "topk_entropy"), default=None)
+    parser.add_argument("--dynamic-width-mode", choices=("none", "topk_entropy", "learned"), default=None)
     parser.add_argument("--dynamic-width-min", type=int, default=None)
     parser.add_argument("--dynamic-width-threshold", type=float, default=None)
     parser.add_argument("--output", default="results/diagnostic_native_ood_300m_500m_10000.json")

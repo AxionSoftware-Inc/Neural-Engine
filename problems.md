@@ -406,6 +406,55 @@ learned width head/predictor o‘qitish va held-out hard-task gate bilan tekshir
 **Batafsil:** `results/P003_NATIVE_DYNAMIC_WIDTH_AUDIT_20260910.md` va
 `results/diagnostic_native_dynamic_width_threshold0995_20260910.json`.
 
+### C-P003-NATIVE-DYNAMIC-WIDTH-002 — Oracle shows real selective-width headroom
+
+**Status:** `POSITIVE ORACLE HEADROOM — LEARNED WIDTH PREDICTOR JUSTIFIED`
+**Muammo:** P-003 / P-007
+
+Bir xil 500M K=16 checkpoint uchun fixed K=8 va fixed K=16 final logitslari
+har bir example’da alohida hisoblanib, `lambda * width_fraction` penalti bilan
+oracle tanlandi. Ikki seedli 24-batch OOD screen’da `lambda=0.05`da uniform
+active width `51.3%`, exact accuracy `83.060%`, hard-task mean `58.681%` bo‘ldi;
+fixed K=16 control `82.999% / 58.583%` edi. Combination holdoutda active
+width `51.2%`, exact `83.168%`, hard mean `59.071%` bo‘ldi. `lambda=0.10`da
+width taxminan `50.5%`ga tushib, sifat hamon controlga yaqin qoldi.
+
+Bu entropy proxy natijasidan ancha yaxshi: u faqat `~8.5%` width tejagan edi.
+Ammo oracle ikkala widthni ham oldindan hisoblaydi va deployable emas; recurrent
+state K=8/K=16 tanlovidan keyin farq qiladi. Demak bu sifat/compute ceiling,
+router tayyor degani emas. Keyingi ish — paired K=8/K=16 loss-gapdan kichik
+cost-aware width head o‘qitish, keyin disjoint seedda bitta yo‘l dispatchini
+hard-task regret, mean executed width va real runtime bilan tekshirish.
+
+**Batafsil:** `results/P003_NATIVE_DYNAMIC_WIDTH_ORACLE_AUDIT_20260910.md` va
+`results/diagnostic_native_dynamic_width_oracle_20260910.json`.
+
+### C-P003-NATIVE-DYNAMIC-WIDTH-003 — Learned width predictor preserves quality
+
+**Status:** `PROMISING OPT-IN — QUALITY/PARAMETER GATE PASSED; RUNTIME AND THIRD-SEED OPEN`
+**Muammo:** P-003 / P-007
+
+Frozen 500M K=16 modelidan paired K=8/K=16 step-loss label bilan `384→1`
+width head o‘qitildi. Ikki seedli, 24-batch OOD screen’da learned dispatch
+uniform exact accuracy’ni K=16 controlga nisbatan `82.999% → 83.008%`
+(`+0.009 pp`), hard-task mean’ni `58.583% → 58.594%` (`+0.011 pp`) berdi.
+Combination holdout delta `+0.004 pp`, high-edge delta `+0.013 pp`, low-edge
+delta `0.000 pp` bo‘ldi.
+
+Actual executed-slot accounting bo‘yicha uniform mean active width `8.99/16`
+(`56.2%`), wide K=16 fraction `12.4%`; combinationda `8.98/16`, edge
+probelarda `8.4–8.5/16`. Bu entropy proxydagi `~8.5%` tejashdan ancha yaxshi
+va oraclening taxminan yarim-width nuqtasiga yaqin. Head faqat `385` yangi
+parametr qo‘shadi; circuit bank/body o‘zgarmadi.
+
+Bu hali default emas: paired frozen-trajectory label, uchinchi seed, uzunroq
+continuation va haqiqiy wall-clock dispatch benchmarki kerak. Katta taskni K=8
+ga noto‘g‘ri yuborish regreti, oson taskni K=16ga yuborish xarajati bilan birga
+tekshiriladi. Learned-width checkpointlari opt-in saqlandi.
+
+**Batafsil:** `results/P003_NATIVE_LEARNED_WIDTH_AUDIT_20260910.md` va
+`results/diagnostic_native_learned_width_20260910.json`.
+
 500M bankda `routing_capacity=22800` va `routing_depth=5` clamp qilinadigan
 control full 500Mga nisbatan uniformda `+0.495 pp`, hard-taskda `+1.259 pp`
 berdi. Bu route fragmentation haqiqiy omil ekanini ko‘rsatadi, lekin clamp

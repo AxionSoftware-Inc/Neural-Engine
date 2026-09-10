@@ -150,8 +150,8 @@ class NeuralEngineV0(nn.Module):
         self.family_count = family_count
         self.shared_fraction = shared_fraction
         self.route_target_supervision = route_target_supervision
-        if dynamic_width_mode not in {"none", "topk_entropy"}:
-            raise ValueError("dynamic_width_mode must be 'none' or 'topk_entropy'")
+        if dynamic_width_mode not in {"none", "topk_entropy", "learned"}:
+            raise ValueError("dynamic_width_mode must be 'none', 'topk_entropy', or 'learned'")
         if dynamic_width_min is None:
             dynamic_width_min = max(1, active_circuits // 2)
         if not 1 <= dynamic_width_min < active_circuits:
@@ -161,6 +161,11 @@ class NeuralEngineV0(nn.Module):
         self.dynamic_width_mode = dynamic_width_mode
         self.dynamic_width_min = int(dynamic_width_min)
         self.dynamic_width_threshold = float(dynamic_width_threshold)
+        self.dynamic_width_head = (nn.Linear(state_dim, 1)
+                                   if dynamic_width_mode == "learned" else None)
+        if self.dynamic_width_head is not None:
+            nn.init.zeros_(self.dynamic_width_head.weight)
+            nn.init.zeros_(self.dynamic_width_head.bias)
         embedding_vocab = 16 if numeric_value_encoding else vocab_size
         self.token_embedding = nn.Embedding(embedding_vocab, d_model, padding_idx=0)
         self.value_encoder = nn.Linear(1 + 2 * len(VALUE_HARMONICS), d_model) if numeric_value_encoding else None
@@ -307,7 +312,8 @@ class NeuralEngineV0(nn.Module):
                                            torch.where(task_ids < 9, 2, 3)))
         return task_ids.remainder(self.family_count)
 
-    def _choose_route_width(self, weights: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def _choose_route_width(self, weights: torch.Tensor,
+                            state: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
         """Choose narrow/full execution from route confidence.
 
         This first hook is inference-only. Training keeps the configured fixed
@@ -320,19 +326,24 @@ class NeuralEngineV0(nn.Module):
             return (torch.full((weights.shape[0],), full_width, dtype=torch.long,
                                device=weights.device),
                     torch.zeros(weights.shape[0], device=weights.device))
-        narrow_weights = weights[:, :self.dynamic_width_min]
-        narrow_weights = narrow_weights / narrow_weights.sum(
-            dim=-1, keepdim=True).clamp_min(1e-8)
-        entropy = -(narrow_weights * narrow_weights.clamp_min(1e-8).log()).sum(dim=-1)
-        entropy = entropy / torch.log(torch.tensor(
-            float(self.dynamic_width_min), device=weights.device)).clamp_min(1e-8)
-        use_full = entropy >= self.dynamic_width_threshold
+        if self.dynamic_width_mode == "learned":
+            if state is None or self.dynamic_width_head is None:
+                raise ValueError("learned dynamic width requires the route state")
+            confidence = torch.sigmoid(self.dynamic_width_head(state).squeeze(-1))
+        else:
+            narrow_weights = weights[:, :self.dynamic_width_min]
+            narrow_weights = narrow_weights / narrow_weights.sum(
+                dim=-1, keepdim=True).clamp_min(1e-8)
+            confidence = -(narrow_weights * narrow_weights.clamp_min(1e-8).log()).sum(dim=-1)
+            confidence = confidence / torch.log(torch.tensor(
+                float(self.dynamic_width_min), device=weights.device)).clamp_min(1e-8)
+        use_full = confidence >= self.dynamic_width_threshold
         widths = torch.where(
             use_full,
             torch.full_like(use_full, full_width, dtype=torch.long),
             torch.full_like(use_full, self.dynamic_width_min, dtype=torch.long),
         )
-        return widths, entropy
+        return widths, confidence
 
     def forward(self, inputs: torch.Tensor, adaptive: bool | None = None,
                 forced_selected_ids: torch.Tensor | None = None,
@@ -498,7 +509,7 @@ class NeuralEngineV0(nn.Module):
                         override_gains = forced_route_gains[active_indices, step].to(
                             device=inputs.device)
                     route_gain = torch.where(override, override_gains, route_gain)
-            route_widths, width_entropy = self._choose_route_width(weights)
+            route_widths, width_entropy = self._choose_route_width(weights, step_query)
             if (self.dynamic_width_mode != "none" and not self.training
                     and route_widths.lt(self.active_circuits).any()):
                 circuit_delta = torch.zeros_like(step_query)
@@ -657,6 +668,8 @@ class NeuralEngineV0(nn.Module):
             shared += count_parameters(self.halt_head)
         if self.memory_write is not None:
             shared += count_parameters(self.memory_write)
+        if self.dynamic_width_head is not None:
+            shared += count_parameters(self.dynamic_width_head)
         if self.correction_gate is not None:
             shared += count_parameters(self.correction_gate)
         if self.step_circuit_adapter_rank:

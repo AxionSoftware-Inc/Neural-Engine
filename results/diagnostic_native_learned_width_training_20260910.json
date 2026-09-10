@@ -1,0 +1,51 @@
+{
+  "experiment": "native_learned_dynamic_width_head",
+  "device": "cuda",
+  "lambda_target": 0.05,
+  "calibration_batches_per_condition": 8,
+  "epochs": 20,
+  "checkpoints": {
+    "results\\checkpoints\\ne500_stable_prefix_active16_s17_3000_learned_width.pt": {
+      "training": {
+        "train_bce": 0.17818590998649597,
+        "valid_bce": 0.18289361894130707,
+        "train_accuracy": 0.9244520664215088,
+        "valid_accuracy": 0.9225260615348816,
+        "train_positive_rate": 0.0252685546875,
+        "valid_positive_rate": 0.0277235247194767,
+        "train_predicted_wide_rate": 0.0687798410654068,
+        "valid_predicted_wide_rate": 0.0699327290058136
+      },
+      "feature_count": 92160,
+      "label_positive_rate": 0.02575954794883728,
+      "condition_label_counts": {
+        "uniform_all": 11520,
+        "combination_heldout": 11520,
+        "low_edge_values": 11520,
+        "high_edge_values": 11520
+      },
+      "source_checkpoint": "results\\checkpoints\\ne500_stable_prefix_active16_s17_3000.pt"
+    },
+    "results\\checkpoints\\ne500_stable_prefix_active16_s18_3000_learned_width.pt": {
+      "training": {
+        "train_bce": 0.13703064620494843,
+        "valid_bce": 0.14061614871025085,
+        "train_accuracy": 0.9550510048866272,
+        "valid_accuracy": 0.9528537392616272,
+        "train_positive_rate": 0.01714409701526165,
+        "valid_positive_rate": 0.0168185755610466,
+        "train_predicted_wide_rate": 0.0364312082529068,
+        "valid_predicted_wide_rate": 0.0373806431889534
+      },
+      "feature_count": 92160,
+      "label_positive_rate": 0.01707899384200573,
+      "condition_label_counts": {
+        "uniform_all": 11520,
+        "combination_heldout": 11520,
+        "low_edge_values": 11520,
+        "high_edge_values": 11520
+      },
+      "source_checkpoint": "results\\checkpoints\\ne500_stable_prefix_active16_s18_3000.pt"
+    }
+  }
+}

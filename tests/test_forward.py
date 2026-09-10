@@ -168,6 +168,21 @@ def test_dynamic_width_runs_narrow_or_full_route_only_at_inference():
     assert bool(training_stats["active_widths"].eq(4).all())
 
 
+def test_learned_dynamic_width_head_can_select_narrow_path():
+    model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
+                           num_circuits=64, circuit_rank=4, router_branch=2, router_depth=3,
+                           candidate_pool=8, active_circuits=4, internal_steps=2,
+                           dynamic_width_mode="learned", dynamic_width_min=2,
+                           dynamic_width_threshold=0.5)
+    model.dynamic_width_head.bias.data.fill_(-10.0)
+    batch = SyntheticTaskGenerator(seed=122).batch(3)
+    model.eval()
+    with torch.no_grad():
+        logits, stats = model(batch.inputs, adaptive=False)
+    assert logits.shape == (3, 64)
+    assert bool(stats["active_widths"].eq(2).all())
+
+
 def test_forced_route_replay_preserves_recorded_circuit_path():
     model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
                            num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,
