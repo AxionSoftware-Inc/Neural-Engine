@@ -95,6 +95,9 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["shared_fraction"] = config.get("shared_fraction", 0.125)
     model_kwargs["soft_routing_temperature"] = config.get("soft_routing_temperature", 0.0)
     model_kwargs["route_target_supervision"] = config.get("route_target_supervision", False)
+    model_kwargs["dynamic_width_mode"] = config.get("dynamic_width_mode", "none")
+    model_kwargs["dynamic_width_min"] = config.get("dynamic_width_min")
+    model_kwargs["dynamic_width_threshold"] = config.get("dynamic_width_threshold", 0.8)
     if config.get("architecture") == "typed_register":
         for key in ("task_context", "task_context_update", "adaptive_halting",
                     "halt_threshold", "routing_coverage_temperature",
@@ -107,6 +110,8 @@ def make_model(config: dict[str, Any]) -> nn.Module:
                     "step_circuit_adapter_rank", "step_circuit_adapter_scale",
                     "step_circuit_adapter_start_step",
                     "soft_routing_temperature", "route_target_supervision",
+                    "dynamic_width_mode", "dynamic_width_min",
+                    "dynamic_width_threshold",
                     "routing_reuse_weight", "routing_reuse_start_level",
                     "input_reinjection_schedule"):
             model_kwargs.pop(key, None)
@@ -268,6 +273,7 @@ def evaluate(model: nn.Module, source: BatchSource, batches: int = 8) -> dict[st
     model.eval()
     losses, predictions, targets, task_ids, depths, selected_ids = [], [], [], [], [], []
     executed_step_values = []
+    active_width_values = []
     for _ in range(batches):
         batch = source.balanced(16 if batches <= 2 else 32)
         if isinstance(model, NeuralEngineV0):
@@ -285,10 +291,15 @@ def evaluate(model: nn.Module, source: BatchSource, batches: int = 8) -> dict[st
         targets.append(batch.targets.cpu())
         task_ids.append(batch.task_ids.cpu())
         depths.append(batch.depths.cpu())
-        if "selected_ids" in route_stats:
-            selected_ids.append(route_stats["selected_ids"].detach().cpu().reshape(-1))
+        routed_ids = route_stats.get("executed_selected_ids", route_stats.get("selected_ids"))
+        if routed_ids is not None:
+            selected_ids.append(routed_ids.detach().cpu().reshape(-1))
         if "executed_steps" in route_stats:
             executed_step_values.append(route_stats["executed_steps"].detach().cpu())
+        if "active_widths" in route_stats and "executed_mask" in route_stats:
+            widths = route_stats["active_widths"].detach().cpu()
+            mask = route_stats["executed_mask"].detach().cpu()
+            active_width_values.append(widths[mask])
     joined = Batch(inputs=torch.empty(0, dtype=torch.long), targets=torch.cat(targets),
                    task_ids=torch.cat(task_ids), depths=torch.cat(depths))
     pred = torch.cat(predictions)
@@ -334,6 +345,13 @@ def evaluate(model: nn.Module, source: BatchSource, batches: int = 8) -> dict[st
             "avg_executed_steps": float(executed.mean()),
             "active_step_fraction": float(executed.mean() / getattr(model, "internal_steps", 1)),
             "executed_steps_by_depth": depth_execution,
+        })
+    if active_width_values:
+        widths = torch.cat(active_width_values).float()
+        result.update({
+            "active_width_mean": float(widths.mean()),
+            "active_width_fraction": float(widths.mean() / getattr(model, "active_circuits", 1)),
+            "wide_width_fraction": float(widths.gt(getattr(model, "dynamic_width_min", 0)).float().mean()),
         })
     return result
 
@@ -547,6 +565,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         report.update({"active_circuits": model.active_circuits, "internal_steps": model.internal_steps,
                        "circuit_mode": model.circuit_mode, "task_context": model.use_task_context,
                        "router_variant": model.router_variant,
+                       "dynamic_width_mode": model.dynamic_width_mode,
+                       "dynamic_width_min": model.dynamic_width_min,
+                       "dynamic_width_threshold": model.dynamic_width_threshold,
                        "family_count": model.family_count,
                        "adaptive_halting": model.adaptive_halting,
                        "router_type": type(model.router).__name__,

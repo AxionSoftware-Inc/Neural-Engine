@@ -150,6 +150,24 @@ def test_adaptive_halting_skips_later_circuits():
     assert bool(stats["selected_ids"][:, 1:].eq(-1).all())
 
 
+def test_dynamic_width_runs_narrow_or_full_route_only_at_inference():
+    model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
+                           num_circuits=64, circuit_rank=4, router_branch=2, router_depth=3,
+                           candidate_pool=8, active_circuits=4, internal_steps=2,
+                           dynamic_width_mode="topk_entropy", dynamic_width_min=2,
+                           dynamic_width_threshold=0.8)
+    batch = SyntheticTaskGenerator(seed=121).batch(5)
+    model.eval()
+    with torch.no_grad():
+        logits, stats = model(batch.inputs, adaptive=False)
+    assert logits.shape == (5, 64)
+    assert stats["active_widths"].shape == (5, 2)
+    assert bool(stats["active_widths"].eq(2).logical_or(stats["active_widths"].eq(4)).all())
+    model.train()
+    _, training_stats = model(batch.inputs, adaptive=False)
+    assert bool(training_stats["active_widths"].eq(4).all())
+
+
 def test_forced_route_replay_preserves_recorded_circuit_path():
     model = NeuralEngineV0(vocab_size=128, num_classes=64, seq_len=32, d_model=32, state_dim=32,
                            num_circuits=32, circuit_rank=4, router_branch=2, router_depth=2,

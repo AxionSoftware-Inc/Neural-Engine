@@ -3,6 +3,10 @@
 ## Current capacity-signal experiment
 
 - [P-003 — Native stable-prefix staged-growth audit](P003_NATIVE_STABLE_PREFIX_GROWTH_AUDIT_20260910.md)
+- [P-003 — Native active-width diagnostic](P003_NATIVE_ACTIVE_WIDTH_AUDIT_20260910.md)
+- [P-003 — Native K=8 versus K=16 OOD JSON](diagnostic_native_active_width_20260910.json)
+- [P-003 — Native entropy-gated dynamic-width audit](P003_NATIVE_DYNAMIC_WIDTH_AUDIT_20260910.md)
+- [P-003 — Native entropy-gated K=8/16 OOD JSON](diagnostic_native_dynamic_width_threshold0995_20260910.json)
 - [P-003 — Native warm-start versus continuation control](diagnostic_native_warmstart_vs_continued_20260910.json)
 - [P-003 — Stable-prefix compute-matched control](diagnostic_native_stable_prefix_compute_matched_20260910.json)
 - [P-003 — Stable-prefix long compute-matched control](diagnostic_native_stable_prefix_long_compute_matched_20260910.json)

@@ -58,6 +58,9 @@ def _summarize(metrics: dict[str, Any]) -> dict[str, Any]:
         "factor_rows_used": int(metrics.get("factor_rows_used", 0)),
         "factor_dead_fraction": float(metrics.get("factor_dead_fraction", 0.0)),
         "routing_entropy": float(metrics.get("routing_entropy", 0.0)),
+        "active_width_mean": float(metrics.get("active_width_mean", 0.0)),
+        "active_width_fraction": float(metrics.get("active_width_fraction", 0.0)),
+        "wide_width_fraction": float(metrics.get("wide_width_fraction", 0.0)),
     }
 
 
@@ -97,6 +100,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             raise FileNotFoundError(checkpoint_path)
         checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
         config = dict(checkpoint["config"])
+        if args.dynamic_width_mode is not None:
+            config["dynamic_width_mode"] = args.dynamic_width_mode
+        if args.dynamic_width_min is not None:
+            config["dynamic_width_min"] = args.dynamic_width_min
+        if args.dynamic_width_threshold is not None:
+            config["dynamic_width_threshold"] = args.dynamic_width_threshold
         model = make_model(config).to(device)
         model.load_state_dict(checkpoint["model_state"])
         model.eval()
@@ -129,6 +138,9 @@ def main() -> None:
     parser.add_argument("--checkpoints", nargs="+", default=list(DEFAULT_CHECKPOINTS))
     parser.add_argument("--batches", type=int, default=24)
     parser.add_argument("--device", default="auto")
+    parser.add_argument("--dynamic-width-mode", choices=("none", "topk_entropy"), default=None)
+    parser.add_argument("--dynamic-width-min", type=int, default=None)
+    parser.add_argument("--dynamic-width-threshold", type=float, default=None)
     parser.add_argument("--output", default="results/diagnostic_native_ood_300m_500m_10000.json")
     run(parser.parse_args())
 

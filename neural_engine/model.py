@@ -55,7 +55,10 @@ class NeuralEngineV0(nn.Module):
                  router_variant: str = "global", family_count: int = 2,
                  shared_fraction: float = 0.125,
                  soft_routing_temperature: float = 0.0,
-                 route_target_supervision: bool = False):
+                 route_target_supervision: bool = False,
+                 dynamic_width_mode: str = "none",
+                 dynamic_width_min: int | None = None,
+                 dynamic_width_threshold: float = 0.8):
         super().__init__()
         if circuit_mode not in {"parallel", "serial"}:
             raise ValueError("circuit_mode must be 'parallel' or 'serial'")
@@ -147,6 +150,17 @@ class NeuralEngineV0(nn.Module):
         self.family_count = family_count
         self.shared_fraction = shared_fraction
         self.route_target_supervision = route_target_supervision
+        if dynamic_width_mode not in {"none", "topk_entropy"}:
+            raise ValueError("dynamic_width_mode must be 'none' or 'topk_entropy'")
+        if dynamic_width_min is None:
+            dynamic_width_min = max(1, active_circuits // 2)
+        if not 1 <= dynamic_width_min < active_circuits:
+            raise ValueError("dynamic_width_min must be between 1 and active_circuits - 1")
+        if not 0.0 <= dynamic_width_threshold <= 1.0:
+            raise ValueError("dynamic_width_threshold must be between 0 and 1")
+        self.dynamic_width_mode = dynamic_width_mode
+        self.dynamic_width_min = int(dynamic_width_min)
+        self.dynamic_width_threshold = float(dynamic_width_threshold)
         embedding_vocab = 16 if numeric_value_encoding else vocab_size
         self.token_embedding = nn.Embedding(embedding_vocab, d_model, padding_idx=0)
         self.value_encoder = nn.Linear(1 + 2 * len(VALUE_HARMONICS), d_model) if numeric_value_encoding else None
@@ -293,6 +307,33 @@ class NeuralEngineV0(nn.Module):
                                            torch.where(task_ids < 9, 2, 3)))
         return task_ids.remainder(self.family_count)
 
+    def _choose_route_width(self, weights: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Choose narrow/full execution from route confidence.
+
+        This first hook is inference-only. Training keeps the configured fixed
+        width until a width objective exists, so a hard dispatch choice cannot
+        silently become a non-differentiable training shortcut.
+        """
+        full_width = weights.shape[-1]
+        if (self.dynamic_width_mode == "none" or self.training
+                or full_width <= self.dynamic_width_min):
+            return (torch.full((weights.shape[0],), full_width, dtype=torch.long,
+                               device=weights.device),
+                    torch.zeros(weights.shape[0], device=weights.device))
+        narrow_weights = weights[:, :self.dynamic_width_min]
+        narrow_weights = narrow_weights / narrow_weights.sum(
+            dim=-1, keepdim=True).clamp_min(1e-8)
+        entropy = -(narrow_weights * narrow_weights.clamp_min(1e-8).log()).sum(dim=-1)
+        entropy = entropy / torch.log(torch.tensor(
+            float(self.dynamic_width_min), device=weights.device)).clamp_min(1e-8)
+        use_full = entropy >= self.dynamic_width_threshold
+        widths = torch.where(
+            use_full,
+            torch.full_like(use_full, full_width, dtype=torch.long),
+            torch.full_like(use_full, self.dynamic_width_min, dtype=torch.long),
+        )
+        return widths, entropy
+
     def forward(self, inputs: torch.Tensor, adaptive: bool | None = None,
                 forced_selected_ids: torch.Tensor | None = None,
                 forced_selected_weights: torch.Tensor | None = None,
@@ -319,6 +360,7 @@ class NeuralEngineV0(nn.Module):
         batch_size = inputs.shape[0]
         num_classes = self.output[-1].out_features
         selected_steps = [] if collect_stats else None
+        executed_selected_steps = [] if collect_stats else None
         candidate_steps = [] if collect_stats else None
         query_steps = [] if collect_stats else None
         coverage_losses = []
@@ -340,6 +382,10 @@ class NeuralEngineV0(nn.Module):
                                    device=inputs.device) if collect_stats else None)
         halt_logits = (torch.zeros(batch_size, self.internal_steps, device=inputs.device)
                        if collect_stats else None)
+        active_widths = (torch.zeros(batch_size, self.internal_steps, dtype=torch.long,
+                                     device=inputs.device) if collect_stats else None)
+        width_entropies = (torch.zeros(batch_size, self.internal_steps, device=inputs.device)
+                           if collect_stats else None)
         last_logits = torch.zeros(batch_size, num_classes, device=inputs.device)
         active = torch.ones(batch_size, dtype=torch.bool, device=inputs.device)
         if forced_selected_ids is not None:
@@ -368,12 +414,16 @@ class NeuralEngineV0(nn.Module):
             selected_step = (torch.full((batch_size, route_width), -1,
                                         dtype=torch.long, device=inputs.device)
                              if collect_stats else None)
+            executed_selected_step = (torch.full((batch_size, route_width), -1,
+                                                  dtype=torch.long, device=inputs.device)
+                                      if collect_stats else None)
             candidate_step = (torch.full((batch_size, self.router.candidate_pool), -1,
                                          dtype=torch.long, device=inputs.device)
                               if collect_stats else None)
             if active_indices.numel() == 0:
                 if collect_stats:
                     selected_steps.append(selected_step)
+                    executed_selected_steps.append(executed_selected_step)
                     candidate_steps.append(candidate_step)
                     query_steps.append(torch.zeros(batch_size, self.state_dim, device=inputs.device))
                     step_logits[:, step] = last_logits
@@ -448,10 +498,33 @@ class NeuralEngineV0(nn.Module):
                         override_gains = forced_route_gains[active_indices, step].to(
                             device=inputs.device)
                     route_gain = torch.where(override, override_gains, route_gain)
-                if self.circuit_mode == "serial":
-                    circuit_delta = self.circuits.forward_serial(step_query, selected, weights)
-                else:
-                    circuit_delta = self.circuits(step_query, selected, weights)
+            route_widths, width_entropy = self._choose_route_width(weights)
+            if (self.dynamic_width_mode != "none" and not self.training
+                    and route_widths.lt(self.active_circuits).any()):
+                circuit_delta = torch.zeros_like(step_query)
+                narrow = route_widths.eq(self.dynamic_width_min)
+                wide = ~narrow
+                if narrow.any():
+                    narrow_weights = weights[narrow, :self.dynamic_width_min]
+                    narrow_weights = narrow_weights / narrow_weights.sum(
+                        dim=-1, keepdim=True).clamp_min(1e-8)
+                    if self.circuit_mode == "serial":
+                        narrow_delta = self.circuits.forward_serial(
+                            step_query[narrow], selected[narrow, :self.dynamic_width_min],
+                            narrow_weights)
+                    else:
+                        narrow_delta = self.circuits(
+                            step_query[narrow], selected[narrow, :self.dynamic_width_min],
+                            narrow_weights)
+                    circuit_delta[narrow] = narrow_delta
+                if wide.any():
+                    if self.circuit_mode == "serial":
+                        wide_delta = self.circuits.forward_serial(
+                            step_query[wide], selected[wide], weights[wide])
+                    else:
+                        wide_delta = self.circuits(
+                            step_query[wide], selected[wide], weights[wide])
+                    circuit_delta[wide] = wide_delta
             elif self.circuit_mode == "serial":
                 circuit_delta = self.circuits.forward_serial(step_query, selected, weights)
             else:
@@ -498,10 +571,20 @@ class NeuralEngineV0(nn.Module):
                 state = next_state
             if collect_stats:
                 selected_step[active_indices] = selected
+                if route_widths.eq(self.dynamic_width_min).any():
+                    narrow = route_widths.eq(self.dynamic_width_min)
+                    executed_selected_step[active_indices[narrow], :self.dynamic_width_min] = (
+                        selected[narrow, :self.dynamic_width_min])
+                if route_widths.eq(selected.shape[-1]).any():
+                    wide = route_widths.eq(selected.shape[-1])
+                    executed_selected_step[active_indices[wide], :selected.shape[-1]] = selected[wide]
                 selected_steps.append(selected_step)
+                executed_selected_steps.append(executed_selected_step)
                 candidate_steps.append(candidate_step)
                 query_steps.append(query_step)
                 selected_weights[active_indices, step] = weights
+                active_widths[active_indices, step] = route_widths
+                width_entropies[active_indices, step] = width_entropy
                 route_gains[active_indices, step] = route_gain
                 executed_mask[active_indices, step] = True
                 step_entropies[active_indices, step] = route_stats["router_entropy"]
@@ -533,9 +616,12 @@ class NeuralEngineV0(nn.Module):
             "internal_steps": torch.tensor(self.internal_steps, device=inputs.device),
             "router_entropy": step_entropies.sum() / executed_mask.sum().clamp_min(1),
             "selected_ids": torch.stack(selected_steps, dim=1),
+            "executed_selected_ids": torch.stack(executed_selected_steps, dim=1),
             "candidate_ids": torch.stack(candidate_steps, dim=1),
             "query_states": torch.stack(query_steps, dim=1),
             "selected_weights": selected_weights,
+            "active_widths": active_widths,
+            "width_entropies": width_entropies,
             "route_gains": route_gains,
             "step_logits": step_logits,
             "halt_logits": halt_logits,

@@ -359,6 +359,53 @@ o‘tish muzlatilgan, variant default emas, opt-in sifatida saqlandi.
 
 **Batafsil:** `results/P003_NATIVE_STABLE_PREFIX_GROWTH_AUDIT_20260910.md`.
 
+### C-P003-NATIVE-ACTIVE-WIDTH-001 — Fixed K=8 may cap hard-task quality
+
+**Status:** `PROMISING DIAGNOSTIC — DYNAMIC WIDTH OPEN`  
+**Muammo:** P-003 / P-007
+
+Stable-prefix 500M checkpointida `active_circuits=8`ni `16`ga oshirish ikki
+seedli, 24-batch OOD screen’da uniform exact accuracy’ni `82.040% → 82.999%`
+(`+0.959 pp`), uniform hard-task mean’ni `56.695% → 58.583%` (`+1.888 pp`),
+combination hard-task mean’ni `57.107% → 58.952%` (`+1.845 pp`) oshirdi.
+Dead virtual-circuit fraction `14.21% → 1.52%` tushdi. Bu fixed K=8 joriy
+representation uchun qiyin tasklarda active-compute ceiling bo‘lishi mumkinligi
+haqida hozirgi eng kuchli ijobiy signal.
+
+Ammo K=16 barcha sample’larda majburiy ishladi: active circuit parameters
+taxminan `202,768 → 405,536`, active-parameter estimate `~1.70M → ~2.31M`,
+throughput `~1,838 → ~1,160 samples/s` bo‘ldi. Shuning uchun bu selective
+solution emas va compute-matched scaling dalili emas. K=16 default qilinmadi;
+keyingi muammo — hard tasklarda 8, kerak bo‘lganda 16 slotni tanlaydigan,
+haqiqiy sparse dispatch bilan ishlaydigan difficulty-conditioned dynamic-width
+router. Easy task K=8da qolishi, hard task esa foydasi bo‘lsa K=16ga chiqishi
+kerak; logical mask va real runtime cost alohida o‘lchanadi.
+
+**Batafsil:** `results/P003_NATIVE_ACTIVE_WIDTH_AUDIT_20260910.md` va
+`results/diagnostic_native_active_width_20260910.json`.
+
+### C-P003-NATIVE-DYNAMIC-WIDTH-001 — Fixed entropy proxy saves too little compute
+
+**Status:** `PROMISING PROTOTYPE — LEARNED WIDTH OPEN`  
+**Muammo:** P-003 / P-007
+
+K=16 trained checkpointida top-8 route weight entropy bilan sample/step
+darajasida K=8 yoki K=16 dispatch qilindi. Threshold `0.995`da uniform mean
+active width `16 → 14.64` (`~8.5%` slot reduction), wide dispatch fraction
+`83.0%` bo‘ldi. Shu bilan birga uniform exact accuracy `82.999% → 82.990%`
+(`−0.009 pp`), uniform hard-task mean `58.583% → 58.573%` (`−0.010 pp`),
+combination hard-task mean `58.952% → 58.930%` (`−0.022 pp`) bo‘ldi. Demak
+actual executed-slot accounting bilan sifat deyarli saqlandi, ammo entropy proxy
+katta tejash bermadi; low-edge’da ham keng yo‘l ko‘p tanlandi.
+
+`selected_ids` va `executed_selected_ids` alohida saqlandi, shuning uchun
+router qarori va real circuit computation aralashtirilmaydi. Bu variant default
+emas. Keyingi ish — K=8 va K=16 orasidagi o‘lchangan loss gapidan cost-aware
+learned width head/predictor o‘qitish va held-out hard-task gate bilan tekshirish.
+
+**Batafsil:** `results/P003_NATIVE_DYNAMIC_WIDTH_AUDIT_20260910.md` va
+`results/diagnostic_native_dynamic_width_threshold0995_20260910.json`.
+
 500M bankda `routing_capacity=22800` va `routing_depth=5` clamp qilinadigan
 control full 500Mga nisbatan uniformda `+0.495 pp`, hard-taskda `+1.259 pp`
 berdi. Bu route fragmentation haqiqiy omil ekanini ko‘rsatadi, lekin clamp
