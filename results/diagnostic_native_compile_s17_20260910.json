@@ -1,0 +1,34 @@
+{
+  "experiment": "native_torch_compile_probe",
+  "device": "cuda",
+  "mode": "reduce-overhead",
+  "fullgraph": false,
+  "warmup": 3,
+  "repeats": 10,
+  "examples_per_task": 32,
+  "checkpoints": {
+    "ne500_stable_prefix_active16_s17_3000.pt": {
+      "batch_size": 480,
+      "variants": {
+        "fixed_k8": {
+          "eager_ms": 29.94111999996676,
+          "status": "error",
+          "error_type": "BackendCompilerFailed",
+          "error": "backend='inductor' raised:\nRuntimeError: Cannot find a working triton installation. Either the package is not installed or it is too old. More information on installing Triton can be found at https://github.com/openai/triton\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n"
+        },
+        "fixed_k16": {
+          "eager_ms": 75.38691999998264,
+          "status": "error",
+          "error_type": "BackendCompilerFailed",
+          "error": "backend='inductor' raised:\nRuntimeError: Cannot find a working triton installation. Either the package is not installed or it is too old. More information on installing Triton can be found at https://github.com/openai/triton\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n"
+        },
+        "learned_grouped": {
+          "eager_ms": 56.84073000002172,
+          "status": "error",
+          "error_type": "BackendCompilerFailed",
+          "error": "backend='inductor' raised:\nRuntimeError: Cannot find a working triton installation. Either the package is not installed or it is too old. More information on installing Triton can be found at https://github.com/openai/triton\n\nSet TORCH_LOGS=\"+dynamo\" and TORCHDYNAMO_VERBOSE=1 for more information\n\n\nYou can suppress this exception and fall back to eager by setting:\n    import torch._dynamo\n    torch._dynamo.config.suppress_errors = True\n"
+        }
+      }
+    }
+  }
+}

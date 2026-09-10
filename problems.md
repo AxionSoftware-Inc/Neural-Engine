@@ -507,6 +507,21 @@ opt-in kod faqat qayta tekshirish uchun qoldirilgan.
 
 **Prefix-split dalili:** `results/diagnostic_native_width_prefix_split_480_20260910.json`.
 
+### C-RUNTIME-NATIVE-COMPILE-001 — Local Inductor/Triton compiler blocker
+
+**Status:** `BLOCKED LOCALLY — STATIC/FUSED PATH REQUIRED`
+**Muammo:** Runtime track / P-003
+
+Native fixed K=8, fixed K=16 va learned grouped K=8/K=16 uchun PyTorch
+`2.6.0+cu124` `torch.compile(mode="reduce-overhead")` probe qilindi. Uchala
+variantda ham eager timing ishladi, lekin Inductor bir xil sabab bilan to‘xtadi:
+`BackendCompilerFailed: Cannot find a working triton installation.` Bu model
+parity yoki sifat muammosi emas, lokal toolchain cheklovi. Compiler o‘rnatilishi
+yoki default muhit avtomatik o‘zgartirilmaydi.
+
+**Keyingi yo‘l:** Tritonga bog‘liq bo‘lmagan static-index/custom fused decode
+path. **Batafsil:** `results/P003_NATIVE_COMPILE_AUDIT_20260910.md`.
+
 500M bankda `routing_capacity=22800` va `routing_depth=5` clamp qilinadigan
 control full 500Mga nisbatan uniformda `+0.495 pp`, hard-taskda `+1.259 pp`
 berdi. Bu route fragmentation haqiqiy omil ekanini ko‘rsatadi, lekin clamp
