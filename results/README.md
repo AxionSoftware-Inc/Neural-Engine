@@ -1239,6 +1239,34 @@ than deployable. The next route experiment should learn final-cost alignment
 from query plus circuit signatures. See
 `P001_ROUTE_NEIGHBORHOOD_REGRET_AUDIT_20260908.md`.
 
+V0.205 rejects giving the authoritative scalar packet a full 9,000-step
+budget as a quality or scaling solution. Seeds 17/18 reached `65.72%` mean
+held-out accuracy (`70.70%` depth 3, `60.74%` depth 4), despite `89.79%`
+mean seen-depth accuracy and near-complete factor-row usage. More training
+helped against the 1,000-step authoritative screen but did not match the
+non-authoritative factorized reference. P-004 therefore requires a genuinely
+different structured value/state representation; the same scalar authority
+must not be scaled. See
+`V0_205_DYNAMIC_NONMOD_AUTHORITATIVE_VALUE_9000_AUDIT.md`.
+
+V0.206 finds the first large two-seed signal on the non-modular depth-4 gate:
+adding a compact fixed `x,x^2` algebraic state packet raises paired mean
+held-out accuracy from `71.97%` to `78.52%` (`+6.55 pp`) and mean depth-4
+accuracy by `+10.74 pp`, with total/active estimates effectively unchanged
+at `7.35M/2.05M`. This is a leading P-004 hypothesis, not yet a production
+default, because the semantic transition is fixed and bounded by its value
+normalization. The next gate is operand-range stress at `0--15`. See
+`V0_206_DYNAMIC_NONMOD_ALGEBRAIC_STATE_AUDIT.md`.
+
+V0.207 range stress rejects treating the V0.206 polynomial2 packet as a
+universal solution. With operands `0--15`, two seeds reach only `64.45%` mean
+held-out accuracy and `53.22%` depth 4, versus `78.52%` and `70.70%` on
+operands `0--7`. Seen-depth fit remains `99.95%` and factor-row usage is
+broad, so the failure is range/readout transfer rather than router starvation.
+The packet remains a bounded diagnostic; the next step requires a
+range-aware value codec/readout, not more bank capacity. See
+`V0_207_DYNAMIC_NONMOD_ALGEBRAIC_STATE_RANGE_STRESS.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

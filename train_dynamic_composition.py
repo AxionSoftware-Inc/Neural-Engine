@@ -106,6 +106,8 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "structured_scalar_state", "structured_scalar_scale",
         "structured_scalar_read_scale",
         "structured_scalar_authoritative",
+        "algebraic_state_mode", "algebraic_state_scale",
+        "algebraic_state_value_scale",
         "operator_valued_product_encoder", "operator_valued_packet_width",
         "operator_valued_basis_count",
         "numeric_state_dim", "numeric_state_scale",
@@ -348,7 +350,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         validate_class_targets(batch.targets, num_classes, "training targets")
         validate_class_targets(batch.stage_targets, num_classes, "stage targets")
         optimizer.zero_grad(set_to_none=True)
-        logits, stats = model(batch.inputs)
+        logits, stats = model(
+            batch.inputs,
+            return_full_logits=(model.output_mode != "factorized_digits"),
+        )
         loss = output_loss(model, logits, stats, batch.targets)
         stage_weight = float(config.get("stage_loss_weight", 0.0))
         if stage_weight and batch.stage_targets is not None and batch.stage_mask is not None:

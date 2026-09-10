@@ -772,6 +772,40 @@ def test_dynamic_register_factorized_digit_output_reconstructs_classes():
     assert model.parameter_report()["output_digit_base"] == 128
 
 
+def test_dynamic_register_can_skip_full_factorized_logits_during_training():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        num_classes=32768,
+        modulus=None,
+        seq_len=8,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        output_mode="factorized_digits",
+        output_digit_base=128,
+    )
+    generator = DynamicCompositionGenerator(
+        max_ops=2,
+        train_max_ops=2,
+        modulus=None,
+        value_min=0,
+        value_max=3,
+        target_offset=64,
+        seed=341,
+    )
+    compact_logits, stats = model(
+        generator.batch(4).inputs, return_full_logits=False
+    )
+    assert compact_logits.shape == (4, 256)
+    assert stats["step_logits"] is None
+    assert stats["digit_high_logits"].shape == (4, 2, 256)
+
+
 def test_dynamic_register_structured_scalar_read_path_is_optional():
     model = DynamicRegisterNeuralEngine(
         max_ops=2,
@@ -813,6 +847,31 @@ def test_dynamic_register_authoritative_scalar_requires_and_uses_value_lane():
     assert logits.shape == (4, 64)
     assert stats["step_logits"].shape == (4, 2, 64)
     assert model.parameter_report()["structured_scalar_authoritative"] is True
+
+
+def test_dynamic_register_polynomial_algebraic_state_tracks_exact_composition():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=16,
+        state_dim=16,
+        num_circuits=32,
+        circuit_rank=2,
+        router_depth=2,
+        candidate_pool=4,
+        active_circuits=2,
+        factor_count=6,
+        modulus=None,
+        algebraic_state_mode="polynomial2",
+        algebraic_state_value_scale=16.0,
+    )
+    # x=1; add 2 -> 3; multiply by 3 -> 9.
+    inputs = torch.tensor([[1, 2, 4, 33, 34, 35, 0, 0]])
+    _, stats = model(inputs, collect_state_stats=True)
+    features = stats["algebraic_state_features"][0]
+    expected = torch.tensor([[3.0 / 16.0, 9.0 / 256.0], [9.0 / 16.0, 81.0 / 256.0]])
+    assert torch.allclose(features, expected, atol=1e-6)
+    assert model.parameter_report()["algebraic_state_mode"] == "polynomial2"
 
 
 def test_dynamic_register_can_collect_recurrent_state_trace():

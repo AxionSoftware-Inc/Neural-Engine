@@ -140,6 +140,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
         structured_scalar_scale: float = 1.0,
         structured_scalar_read_scale: float = 0.0,
         structured_scalar_authoritative: bool = False,
+        algebraic_state_mode: str = "none",
+        algebraic_state_scale: float = 1.0,
+        algebraic_state_value_scale: float = 4096.0,
         operator_valued_product_encoder: bool = False,
         operator_valued_packet_width: int = 16,
         operator_valued_basis_count: int = 8,
@@ -230,6 +233,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("structured_scalar_read_scale must be non-negative")
         if structured_scalar_authoritative and not structured_scalar_state:
             raise ValueError("structured_scalar_authoritative requires structured_scalar_state")
+        if algebraic_state_mode not in {"none", "polynomial2"}:
+            raise ValueError("algebraic_state_mode must be none or polynomial2")
+        if algebraic_state_mode != "none" and modulus is not None:
+            raise ValueError("algebraic_state_mode currently requires modulus=None")
+        if algebraic_state_scale < 0.0:
+            raise ValueError("algebraic_state_scale must be non-negative")
+        if algebraic_state_value_scale <= 0.0:
+            raise ValueError("algebraic_state_value_scale must be positive")
         if operator_valued_packet_width < 1:
             raise ValueError("operator_valued_packet_width must be positive")
         if operator_valued_basis_count < 1:
@@ -315,6 +326,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.structured_scalar_scale = float(structured_scalar_scale)
         self.structured_scalar_read_scale = float(structured_scalar_read_scale)
         self.structured_scalar_authoritative = bool(structured_scalar_authoritative)
+        self.algebraic_state_mode = algebraic_state_mode
+        self.algebraic_state_scale = float(algebraic_state_scale)
+        self.algebraic_state_value_scale = float(algebraic_state_value_scale)
         self.operator_valued_product_encoder = bool(operator_valued_product_encoder)
         self.operator_valued_packet_width = int(operator_valued_packet_width)
         self.operator_valued_basis_count = int(operator_valued_basis_count)
@@ -467,6 +481,13 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 self.structured_scalar_transition[:, 1:].normal_(std=0.02)
             self.structured_scalar_projection = nn.Sequential(
                 nn.Linear(1, state_dim), nn.GELU()
+            )
+        if self.algebraic_state_mode == "polynomial2":
+            # Keep a compact, reusable algebraic packet alongside the learned
+            # state.  The transition is exact for ordinary integer
+            # add/subtract/multiply; only its dense projection is learned.
+            self.algebraic_state_projection = nn.Sequential(
+                nn.Linear(2, state_dim), nn.Tanh()
             )
         if self.modular_prior_enabled:
             if self.modular_prior_mode == "fixed":
@@ -675,6 +696,37 @@ class DynamicRegisterNeuralEngine(nn.Module):
         ) + self.operation_transition_bias[operation_ids]
         return nn.functional.gelu(adapted)
 
+    def _algebraic_state_update(
+        self,
+        state: torch.Tensor,
+        operand: torch.Tensor,
+        operation_ids: torch.Tensor,
+    ) -> torch.Tensor:
+        """Apply the exact degree-2 polynomial coordinate transition.
+
+        The packet stores normalized ``x`` and ``x**2``.  This is deliberately
+        a small fixed semantic primitive, not a learned arithmetic oracle:
+        the model still has to learn how to project and use the packet.
+        """
+        value_scale = self.algebraic_state_value_scale
+        square_scale = value_scale * value_scale
+        value = state[:, 0] * value_scale
+        square = state[:, 1] * square_scale
+        operand = operand.to(value.dtype)
+        add_value = value + operand
+        subtract_value = value - operand
+        multiply_value = value * operand
+        add = torch.stack((add_value, add_value.square()), dim=-1)
+        subtract = torch.stack((subtract_value, subtract_value.square()), dim=-1)
+        multiply = torch.stack((multiply_value, multiply_value.square()), dim=-1)
+        updated = torch.where(
+            operation_ids.unsqueeze(-1).eq(0), add,
+            torch.where(operation_ids.unsqueeze(-1).eq(1), subtract, multiply),
+        )
+        return torch.stack(
+            (updated[:, 0] / value_scale, updated[:, 1] / square_scale), dim=-1
+        )
+
     def _write_state(
         self, accumulator: torch.Tensor, write_input: torch.Tensor
     ) -> torch.Tensor:
@@ -695,6 +747,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         inputs: torch.Tensor,
         adaptive: bool | None = None,
         collect_state_stats: bool = False,
+        return_full_logits: bool = True,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         del adaptive
         batch_size = inputs.shape[0]
@@ -712,6 +765,16 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 - VALUE_TOKEN_OFFSET
             ).to(operand_states.dtype)
             scalar_state = scalar_operands[:, 0]
+        if self.algebraic_state_mode == "polynomial2":
+            algebraic_operands = (
+                inputs[:, self.value_start:self.value_start + self.max_ops + 1]
+                - VALUE_TOKEN_OFFSET
+            ).to(operand_states.dtype)
+            value_scale = self.algebraic_state_value_scale
+            algebraic_state = torch.stack((
+                algebraic_operands[:, 0] / value_scale,
+                algebraic_operands[:, 0].square() / (value_scale * value_scale),
+            ), dim=-1)
         if self.numeric_state_dim:
             numeric_values = (
                 inputs[:, self.value_start:self.value_start + self.max_ops + 1]
@@ -761,6 +824,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         query_state_steps = []
         post_state_steps = []
         step_state_steps = []
+        algebraic_state_steps = []
 
         for step in range(self.max_ops):
             if collect_state_stats:
@@ -854,6 +918,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     query = query + self.structured_scalar_scale * (
                         self.structured_scalar_projection(
                             scalar_candidate.unsqueeze(-1)
+                        )
+                    )
+                if self.algebraic_state_mode == "polynomial2":
+                    query = query + self.algebraic_state_scale * (
+                        self.algebraic_state_projection(
+                            algebraic_state[active_indices]
                         )
                     )
                 if self.operation_adapter_rank:
@@ -978,6 +1048,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     next_scalar_state = scalar_state.clone()
                     next_scalar_state[active_indices] = scalar_candidate
                     scalar_state = next_scalar_state
+                if self.algebraic_state_mode == "polynomial2":
+                    next_algebraic_state = algebraic_state.clone()
+                    next_algebraic_state[active_indices] = self._algebraic_state_update(
+                        algebraic_state[active_indices],
+                        algebraic_operands[active_indices, step + 1],
+                        current_operation_ids,
+                    )
+                    algebraic_state = next_algebraic_state
                 if self.modular_prior_enabled:
                     operand_values = (
                         inputs[active_indices, self.value_start + step + 1]
@@ -1039,6 +1117,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     step_state = step_state + self.structured_scalar_scale * (
                         scalar_projection
                     )
+            if self.algebraic_state_mode == "polynomial2":
+                step_state = step_state + self.algebraic_state_scale * (
+                    self.algebraic_state_projection(algebraic_state)
+                )
             if self.modular_prior_enabled:
                 if self.modular_prior_mode == "fixed":
                     step_features = nn.functional.one_hot(
@@ -1049,10 +1131,13 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 step_state = step_state + self.modular_projection(step_features)
             if collect_state_stats:
                 step_state_steps.append(step_state.clone())
+                if self.algebraic_state_mode == "polynomial2":
+                    algebraic_state_steps.append(algebraic_state.clone())
             if self.output_mode == "factorized_digits":
                 output_state = self.output[0](step_state)
                 digit_high, digit_low = self.output[1].digit_logits(output_state)
-                step_logits.append(self.output[1].combine(digit_high, digit_low))
+                if return_full_logits:
+                    step_logits.append(self.output[1].combine(digit_high, digit_low))
                 digit_high_steps.append(digit_high)
                 digit_low_steps.append(digit_low)
             else:
@@ -1060,6 +1145,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
             if self.structured_scalar_state:
                 scalar_step_states.append(scalar_state)
 
+        full_step_logits = (
+            torch.stack(step_logits, dim=1) if return_full_logits else None
+        )
         stats = {
             "active_circuits": torch.tensor(self.router.active_circuits, device=device),
             "internal_steps": torch.tensor(self.max_ops, device=device),
@@ -1068,7 +1156,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "selected_weights": selected_weights,
             "macro_selected_ids": torch.stack(macro_selected_steps, dim=1),
             "macro_selected_weights": macro_selected_weights,
-            "step_logits": torch.stack(step_logits, dim=1),
+            "step_logits": full_step_logits,
             "executed_steps": executed_mask.sum(dim=1),
             "executed_mask": executed_mask,
             "macro_router_entropy": macro_step_entropies.sum()
@@ -1086,8 +1174,19 @@ class DynamicRegisterNeuralEngine(nn.Module):
             stats["query_states"] = torch.stack(query_state_steps, dim=1)
             stats["post_accumulator_states"] = torch.stack(post_state_steps, dim=1)
             stats["step_states"] = torch.stack(step_state_steps, dim=1)
+            if self.algebraic_state_mode == "polynomial2":
+                stats["algebraic_state_features"] = torch.stack(
+                    algebraic_state_steps, dim=1
+                )
         self._last_route = stats
-        return stats["step_logits"][:, -1], stats
+        if return_full_logits:
+            final_logits = stats["step_logits"][:, -1]
+        else:
+            # Training with factorized digits only consumes the compact digit
+            # logits; avoid materializing a potentially enormous Cartesian
+            # class matrix. Evaluation keeps the default full-logit path.
+            final_logits = digit_high_steps[-1]
+        return final_logits, stats
 
     def parameter_report(self) -> dict[str, int | float | str]:
         total = count_parameters(self)
@@ -1151,6 +1250,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 self.structured_scalar_transition.numel()
                 + count_parameters(self.structured_scalar_projection)
             )
+        if self.algebraic_state_mode == "polynomial2":
+            shared += count_parameters(self.algebraic_state_projection)
         if self.write_gate_enabled:
             shared += count_parameters(self.write_gate)
         if self.circuit_input_norm is not None:
@@ -1283,6 +1384,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "structured_scalar_scale": self.structured_scalar_scale,
             "structured_scalar_read_scale": self.structured_scalar_read_scale,
             "structured_scalar_authoritative": self.structured_scalar_authoritative,
+            "algebraic_state_mode": self.algebraic_state_mode,
+            "algebraic_state_scale": self.algebraic_state_scale,
+            "algebraic_state_value_scale": self.algebraic_state_value_scale,
             "operator_valued_product_encoder": self.operator_valued_product_encoder,
             "operator_valued_packet_width": self.operator_valued_packet_width,
             "operator_valued_basis_count": self.operator_valued_basis_count,

@@ -1260,3 +1260,38 @@ preservation oilasi yopildi; P-004 `ACTIVE`, keyingi yo‘l genuinely structured
 transition yoki FFN/circuit-transplant lane.
 
 **Batafsil:** `results/V0_204_DYNAMIC_NONMOD_STATE_RESIDUAL_AUDIT.md`.
+
+**Authoritative packet 9k stress (2026-09-10):** V0.202 authoritative scalar
+packetga to‘liq 9,000 qadam berilganda ham seed17/18 held-out o‘rtachasi
+`65.72%` bo‘ldi; depth-3 `70.70%`, depth-4 `60.74%`. Seen-depth o‘rtachasi
+`89.79%` bo‘lsa-da, factor rows deyarli to‘liq ishlatilgan vaqtda ham
+compositional transfer qaytmadi. Bu 1,000-qadamdagi `5.08%` natijadan ancha
+yaxshi, lekin non-authoritative factorized reference’dagi `71.97%`dan past.
+Shuning uchun scalar packet authority’ni ko‘proq qadam yoki scale bilan
+davom ettirish **REJECTED FOR ADOPTION AND SCALING**. P-004 `ACTIVE`; keyingi
+yo‘l yana scalar injection/contract/residual emas, genuinely structured
+value/state representation yoki explicit algebraic transition bo‘lishi kerak.
+
+**Batafsil:** `results/V0_205_DYNAMIC_NONMOD_AUTHORITATIVE_VALUE_9000_AUDIT.md`.
+
+**Algebraic state primitive (2026-09-10):** ikki koordinatali fixed `x,x^2`
+packetni learned dense query/output bilan birga olib yurish seed17/18da
+held-out o‘rtachani `71.97%`dan `78.52%`ga ko‘tardi (`+6.55 pp`); depth-4
+o‘rtacha foyda `+10.74 pp`, total/active budget esa `7.35M/2.05M` atrofida
+qoldi. Bu hozirgi P-004 uchun kuchli ijobiy signal, ammo semantic transition
+fixed va normalization bounded bo‘lgani uchun hali default qilinmaydi. Keyingi
+gate operand diapazonini `0--15`ga kengaytirish va circuit yo‘lining haqiqiy
+zarurligini alohida o‘lchashdir.
+
+**Batafsil:** `results/V0_206_DYNAMIC_NONMOD_ALGEBRAIC_STATE_AUDIT.md`.
+
+**Algebraic state range stress (2026-09-11):** polynomial2 `x,x^2` packet
+operandlar `0--15`ga kengaytirilganda seed17/18 held-out o‘rtachasi
+`64.45%`, depth-4 `53.22%` bo‘ldi; `0--7`da esa `78.52%` va `70.70%` edi.
+Seen-depth fit `99.95%`, factor-row usage keng, shuning uchun bu router
+starvation emas, range/readout transfer muammosi. Polynomial2 packet hozircha
+bounded diagnostic sifatida qoladi; universal quality yoki scale yechimi deb
+qabul qilinmaydi. Keyingi yo‘l range-aware value codec/readout, bankni
+ko‘paytirish emas.
+
+**Batafsil:** `results/V0_207_DYNAMIC_NONMOD_ALGEBRAIC_STATE_RANGE_STRESS.md`.
