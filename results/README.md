@@ -1649,3 +1649,10 @@ gains but lost `1.128 pp` on
 uniform and `2.192 pp` on hard-task mean, so 300M remains the current reference
 and 700M/1B expansion stays deferred. See
 `P003_NATIVE_EDGE_MIX_AUDIT_20260910.md`.
+
+A 500M capacity-clamp control kept the larger bank but exposed only the 300M
+route prefix/depth. It recovered `+0.495 pp` uniform and `+1.259 pp`
+hard-task accuracy versus full 500M, confirming route fragmentation as part of
+the scaling loss. It still remained below the 300M mixed reference, so the
+clamp is diagnostic/opt-in and 700M/1B expansion remains deferred. See
+`P003_NATIVE_CAPACITY_CLAMP_AUDIT_20260910.md`.

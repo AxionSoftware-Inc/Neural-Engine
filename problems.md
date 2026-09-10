@@ -313,6 +313,15 @@ arxitektura yechimi emas; 500Mda qayta tasdiqlanmaguncha default o‘zgarmaydi.
 
 **Batafsil:** `results/P003_NATIVE_EDGE_MIX_AUDIT_20260910.md`.
 
+500M bankda `routing_capacity=22800` va `routing_depth=5` clamp qilinadigan
+control full 500Mga nisbatan uniformda `+0.495 pp`, hard-taskda `+1.259 pp`
+berdi. Bu route fragmentation haqiqiy omil ekanini ko‘rsatadi, lekin clamp
+300M reference’dan uniformda `−0.634 pp` va hard-taskda `−0.933 pp` pastligicha
+qoldi. Demak qo‘shimcha saqlangan qatorlarni shunchaki yashirish scalingni
+to‘liq hal qilmaydi.
+
+**Batafsil:** `results/P003_NATIVE_CAPACITY_CLAMP_AUDIT_20260910.md`.
+
 #### Muammo ta’rifi
 
 Model capacity'si ko‘payganda yangi parametrlar foydali, kirish-dependent
