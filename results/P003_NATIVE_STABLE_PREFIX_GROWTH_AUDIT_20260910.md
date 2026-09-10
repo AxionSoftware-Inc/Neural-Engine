@@ -79,12 +79,35 @@ The stable-prefix variant remains `PROMISING OPT-IN — VALIDATION OPEN` for a
 longer stage-2 budget. It is not the default and is not a reason to jump to
 700M/1B yet.
 
+## Long-budget compute-matched control
+
+The full-capacity stage was extended by 7,000 more steps from the stage-2
+3,000-step checkpoints. The 300M control was continued for the same 7,000
+steps from its matching 6,000-step checkpoints:
+
+| Condition | 300M, matching +7k | 500M stable-prefix, matching +7k | Delta |
+|---|---:|---:|---:|
+| Uniform exact accuracy | 84.546% | 84.485% | −0.061 pp |
+| Uniform hard-task mean | 62.388% | 62.080% | −0.308 pp |
+| Combination holdout | 84.420% | 84.345% | −0.075 pp |
+| Combination hard-task mean | 61.945% | 61.855% | −0.090 pp |
+| Low-edge exact accuracy | 98.935% | 98.725% | −0.210 pp |
+| High-edge exact accuracy | 98.725% | 99.065% | **+0.340 pp** |
+
+The result is still quality-neutral within a small margin, while mean dead
+circuit fraction remains much lower for 500M (`26.80% → 15.62%`). The extra
+capacity is being reached and all 197 factor rows are active, but it is not
+producing a reliable quality gain. The current bottleneck is therefore likely
+representation or difficulty-conditioned active computation, not merely
+untrained bank rows.
+
 ## Controls and raw evidence
 
 - The non-stable 500M warm-start improved route usage but did not beat a
   300M continuation under the available 3k continuation comparison.
 - [Stable-prefix staged JSON](diagnostic_native_stable_prefix_staged_20260910.json)
 - [Compute-matched JSON](diagnostic_native_stable_prefix_compute_matched_20260910.json)
+- [Long compute-matched JSON](diagnostic_native_stable_prefix_long_compute_matched_20260910.json)
 - [Stable-prefix initial JSON](diagnostic_native_stable_prefix_initial_20260910.json)
 - [Warm-start versus 300M continuation JSON](diagnostic_native_warmstart_vs_continued_20260910.json)
 - [Warm-start initial JSON](diagnostic_native_warmstart_initial_20260910.json)

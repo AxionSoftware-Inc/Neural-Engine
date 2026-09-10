@@ -349,9 +349,13 @@ Clean 6k-versus-6k evaluatorda stable-prefix 500M uniformni `82.080% →
 berdi; combination holdout `+0.082 pp`, combination hard-task `+0.206 pp`
 bo‘ldi. Shu bilan birga dead fraction `26.22% → 14.21%` tushdi va 197 factor
 row ishlatildi. Demak bu hozircha katta quality jump emas, balki qo‘shimcha
-capacityni sifatni buzmasdan route’ga kiritish signali. Long stage-2 validation
-hali ochiq; 700M/1Bga o‘tish muzlatilgan, variant default emas, opt-in sifatida
-saqlandi.
+capacityni sifatni buzmasdan route’ga kiritish signali. Long stage-2 va
+compute-matched 7k continuationda ham 500M uniform `84.485%`, 300M esa
+`84.546%` berdi (`−0.061 pp`); hard-task mean `62.080%` va `62.388%` bo‘ldi
+(`−0.308 pp`). Dead fraction esa `26.80% → 15.62%` tushdi. Bu extra rows
+route’ga kirayotganini, lekin quality bottleneck representation yoki
+difficulty-conditioned active compute tomonida ekanini ko‘rsatadi. 700M/1Bga
+o‘tish muzlatilgan, variant default emas, opt-in sifatida saqlandi.
 
 **Batafsil:** `results/P003_NATIVE_STABLE_PREFIX_GROWTH_AUDIT_20260910.md`.
 
