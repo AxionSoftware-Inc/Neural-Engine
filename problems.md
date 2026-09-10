@@ -1338,3 +1338,23 @@ active qoladi; keyingi muhim screen operandlarni `0--63`ga kengaytirish,
 700M/1B scale emas.
 
 **Batafsil:** `results/V0_211_DYNAMIC_NONMOD_ALGEBRAIC_FOURIER_SHARED_CODEC_OFFSET_ROBUSTNESS.md`.
+
+**Operand range `0--63` depth-3 gate (2026-09-11):** rank128 shared codec
+ikki seedda held-out o‘rtacha `85.74%`, active `10.49M` berdi; matched 0–31
+depth-3 reference’dan farq `−3.32 pp`, ya’ni signal qulamadi. 0–63 depth-4da
+oldingi `67M` class config yetarli emasligi guard bilan aniqlandi: targetlar
+`225.6M`gacha chiqdi. Bu quality failure emas, ikki-digit output codec
+chegarasi. P-004 active; keyingi ish 1B-class targetni uchta kichik digit head
+va shared low-rank projection bilan ifodalash.
+
+**Batafsil:** `results/V0_212_DYNAMIC_NONMOD_ALGEBRAIC_FOURIER_RANGE63_DEPTH3_AUDIT.md`.
+
+**Three-digit range-safe codec (2026-09-11):** `2^30` class space uchun
+base1024 uchta digit head qo‘shildi. Rank128 ikki seedda held-out `63.28%`,
+depth-4 `55.08%`; rank256 `65.63%`/`58.59%` bo‘ldi. Parametr juda kam
+(`2.37M/2.81M active`), lekin quality leading two-digit rank128 yo‘lidan ancha
+past. **REJECTED FOR QUALITY ADOPTION.** Muammo faqat class range emas:
+independent digit logits unseen-depth compositionni yo‘qotmoqda. Keyingi
+codec cross-digit interactionga ega bo‘lishi kerak; bank/700M/1B scale emas.
+
+**Batafsil:** `results/V0_213_DYNAMIC_NONMOD_THREE_DIGIT_CODEC_AUDIT.md`.

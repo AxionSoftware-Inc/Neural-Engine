@@ -1,0 +1,253 @@
+{
+  "run_id": "nonmod_depth3_values0_63_factorized_algebraic_fourier_base512_rank128_seed18_3000",
+  "model_name": "ne_dynamic_300m_nonmod_depth3_typed_write_adapter_values0_63_factorized_algebraic_fourier_base512_rank128",
+  "seed": 18,
+  "device": "cuda",
+  "steps": 3000,
+  "batch_size": 128,
+  "training_seconds": 478.10957730000155,
+  "train_depths": [
+    1,
+    2
+  ],
+  "eval_depths": [
+    3
+  ],
+  "train_value_range": [
+    0,
+    63
+  ],
+  "eval_value_range": [
+    0,
+    63
+  ],
+  "generator_modulus": null,
+  "target_offset": 1048576,
+  "compact_factorized_eval": true,
+  "total_params": 15788295,
+  "train": {
+    "accuracy": 0.98046875,
+    "loss": 0.07202275842428207,
+    "loss_mode": "factorized_digit_sum_compact",
+    "accuracy_by_depth": {
+      "1": 1.0,
+      "2": 0.9609375
+    },
+    "avg_executed_steps": 1.5,
+    "active_step_fraction": 0.5,
+    "router_entropy": 4.771441459655762,
+    "route_audit": {
+      "selected_count": 6144,
+      "unique_virtual_circuits": 819,
+      "virtual_bank_utilization": 0.034703389830508476,
+      "dead_virtual_circuits": 22781,
+      "top_route_fraction": 0.0418294258415699,
+      "route_entropy": 5.767984867095947,
+      "unique_factor_rows": 115,
+      "factor_bank_utilization": 0.7467532753944397,
+      "dead_factor_rows": 39,
+      "by_program_depth": {
+        "1": {
+          "selected_count": 2048,
+          "unique_virtual_circuits": 540,
+          "virtual_bank_utilization": 0.02288135593220339,
+          "dead_virtual_circuits": 23060,
+          "top_route_fraction": 0.044921875,
+          "route_entropy": 5.670991897583008,
+          "unique_factor_rows": 104,
+          "factor_bank_utilization": 0.6753246784210205,
+          "dead_factor_rows": 50
+        },
+        "2": {
+          "selected_count": 4096,
+          "unique_virtual_circuits": 662,
+          "virtual_bank_utilization": 0.028050847457627117,
+          "dead_virtual_circuits": 22938,
+          "top_route_fraction": 0.040283203125,
+          "route_entropy": 5.558925628662109,
+          "unique_factor_rows": 102,
+          "factor_bank_utilization": 0.6623376607894897,
+          "dead_factor_rows": 52
+        }
+      },
+      "by_execution_step": {
+        "0": {
+          "selected_count": 4096,
+          "unique_virtual_circuits": 680,
+          "virtual_bank_utilization": 0.0288135593220339,
+          "dead_virtual_circuits": 22920,
+          "top_route_fraction": 0.0439453125,
+          "route_entropy": 5.747155666351318,
+          "unique_factor_rows": 112,
+          "factor_bank_utilization": 0.7272727489471436,
+          "dead_factor_rows": 42
+        },
+        "1": {
+          "selected_count": 2048,
+          "unique_virtual_circuits": 240,
+          "virtual_bank_utilization": 0.010169491525423728,
+          "dead_virtual_circuits": 23360,
+          "top_route_fraction": 0.04638671875,
+          "route_entropy": 4.540642261505127,
+          "unique_factor_rows": 48,
+          "factor_bank_utilization": 0.31168830394744873,
+          "dead_factor_rows": 106
+        },
+        "2": {
+          "selected_count": 0,
+          "unique_virtual_circuits": 0,
+          "virtual_bank_utilization": 0.0,
+          "dead_virtual_circuits": 23600
+        }
+      }
+    },
+    "macro_route_audit": null
+  },
+  "evaluation": {
+    "accuracy": 0.8984375,
+    "loss": 1.0467647314071655,
+    "loss_mode": "factorized_digit_sum_compact",
+    "accuracy_by_depth": {
+      "3": 0.8984375
+    },
+    "avg_executed_steps": 3.0,
+    "active_step_fraction": 1.0,
+    "router_entropy": 4.758070468902588,
+    "route_audit": {
+      "selected_count": 6144,
+      "unique_virtual_circuits": 777,
+      "virtual_bank_utilization": 0.03292372881355932,
+      "dead_virtual_circuits": 22823,
+      "top_route_fraction": 0.0358072929084301,
+      "route_entropy": 5.449940204620361,
+      "unique_factor_rows": 115,
+      "factor_bank_utilization": 0.7467532753944397,
+      "dead_factor_rows": 39,
+      "by_program_depth": {
+        "3": {
+          "selected_count": 6144,
+          "unique_virtual_circuits": 777,
+          "virtual_bank_utilization": 0.03292372881355932,
+          "dead_virtual_circuits": 22823,
+          "top_route_fraction": 0.0358072929084301,
+          "route_entropy": 5.449940204620361,
+          "unique_factor_rows": 115,
+          "factor_bank_utilization": 0.7467532753944397,
+          "dead_factor_rows": 39
+        }
+      },
+      "by_execution_step": {
+        "0": {
+          "selected_count": 2048,
+          "unique_virtual_circuits": 557,
+          "virtual_bank_utilization": 0.023601694915254236,
+          "dead_virtual_circuits": 23043,
+          "top_route_fraction": 0.044921875,
+          "route_entropy": 5.713713645935059,
+          "unique_factor_rows": 104,
+          "factor_bank_utilization": 0.6753246784210205,
+          "dead_factor_rows": 50
+        },
+        "1": {
+          "selected_count": 2048,
+          "unique_virtual_circuits": 245,
+          "virtual_bank_utilization": 0.01038135593220339,
+          "dead_virtual_circuits": 23355,
+          "top_route_fraction": 0.04345703125,
+          "route_entropy": 4.627453804016113,
+          "unique_factor_rows": 52,
+          "factor_bank_utilization": 0.33766233921051025,
+          "dead_factor_rows": 102
+        },
+        "2": {
+          "selected_count": 2048,
+          "unique_virtual_circuits": 255,
+          "virtual_bank_utilization": 0.010805084745762712,
+          "dead_virtual_circuits": 23345,
+          "top_route_fraction": 0.06494140625,
+          "route_entropy": 4.536375999450684,
+          "unique_factor_rows": 59,
+          "factor_bank_utilization": 0.38311687111854553,
+          "dead_factor_rows": 95
+        }
+      }
+    },
+    "macro_route_audit": null
+  },
+  "train_loss_first": 26.278099060058594,
+  "train_loss_last": 0.11633206158876419,
+  "structured_scalar_contract_loss_weight": 0.0,
+  "structured_scalar_target_scale": 1.0,
+  "active_params_estimate": 10489136,
+  "active_fraction": 0.6643615412557214,
+  "active_circuit_params": 608304,
+  "max_ops": 3,
+  "modulus": null,
+  "circuit_bank_mode": "factorized",
+  "routing_mode": "factorized",
+  "input_reinjection_scale": 0.0,
+  "write_gate": false,
+  "value_encoder_mode": "learned",
+  "factor_mix_mode": "shared",
+  "ordered_factor_slots": false,
+  "query_factor_mix_scale": 0.0,
+  "factor_pair_rank": 0,
+  "factor_pair_scale": 1.0,
+  "factor_count": 154,
+  "factor_candidate_pool": 8,
+  "factor_capacity": 154,
+  "route_context_mode": "full",
+  "state_layout": "flat",
+  "state_update_mode": "overwrite",
+  "state_residual_scale": 0.25,
+  "predecessor_operation_context": false,
+  "operation_adapter_rank": 16,
+  "operation_adapter_scale": 1.0,
+  "operation_adapter_gate": false,
+  "operation_adapter_gate_value": null,
+  "operation_read_adapter_rank": 0,
+  "operation_read_adapter_scale": 1.0,
+  "operation_write_adapter_rank": 16,
+  "operation_write_adapter_scale": 1.0,
+  "operation_write_adapter_mode": "post_state",
+  "operation_circuit_bank": true,
+  "operation_router_keys": false,
+  "operation_router_key_params": 0,
+  "operation_router_key_active_estimate": 0,
+  "operation_transition_rank": 0,
+  "operation_transition_scale": 1.0,
+  "structured_scalar_state": false,
+  "structured_scalar_scale": 1.0,
+  "structured_scalar_read_scale": 0.0,
+  "structured_scalar_authoritative": false,
+  "algebraic_state_mode": "polynomial2_fourier",
+  "algebraic_state_scale": 1.0,
+  "algebraic_state_value_scale": 33554432.0,
+  "algebraic_state_fourier_base": 512,
+  "operator_valued_product_encoder": false,
+  "operator_valued_packet_width": 16,
+  "operator_valued_basis_count": 8,
+  "operator_valued_product_scalar_dof": 0,
+  "numeric_state_dim": 0,
+  "numeric_state_scale": 1.0,
+  "modular_prior": false,
+  "modular_prior_mode": "fixed",
+  "modular_template_init": "identity",
+  "circuit_residual_scale": 1.0,
+  "circuit_input_norm": false,
+  "output_mode": "factorized_digits",
+  "output_temperature": 16.0,
+  "output_scalar_bias": 0.0,
+  "output_digit_base": 512,
+  "output_factor_rank": 128,
+  "macro_cell_count": 0,
+  "macro_cell_rank": 8,
+  "macro_cell_depth": 4,
+  "macro_router_branch": 4,
+  "macro_router_depth": 0,
+  "macro_candidate_pool": 4,
+  "active_macro_cells": 0,
+  "macro_cell_scale": 1.0,
+  "macro_total_params": 0,
+  "macro_active_params_estimate": 0
+}

@@ -52,9 +52,10 @@ class ScalarGaussianOutput(nn.Module):
 class FactorizedDigitOutput(nn.Module):
     """Factor a large class index into two additive digit heads.
 
-    ``projection_rank`` optionally shares a low-rank state bottleneck between
-    the two digit classifiers.  This is an opt-in output-codec compression;
-    the circuit bank and recurrent state are unchanged.
+    ``digit_count`` optionally splits the class index into more than two
+    digits. ``projection_rank`` shares a low-rank state bottleneck between all
+    digit classifiers. Both are opt-in output-codec controls; the circuit bank
+    and recurrent state are unchanged.
     """
 
     def __init__(
@@ -63,17 +64,24 @@ class FactorizedDigitOutput(nn.Module):
         num_classes: int,
         digit_base: int,
         projection_rank: int = 0,
+        digit_count: int = 2,
     ):
         super().__init__()
         if digit_base < 2:
             raise ValueError("digit_base must be at least two")
-        if num_classes % digit_base:
-            raise ValueError("num_classes must be divisible by digit_base")
+        if digit_count < 2:
+            raise ValueError("digit_count must be at least two")
+        factor = digit_base ** (digit_count - 1)
+        if num_classes % factor:
+            raise ValueError(
+                "num_classes must be divisible by digit_base^(digit_count-1)"
+            )
         if projection_rank < 0:
             raise ValueError("projection_rank must be non-negative")
         self.num_classes = int(num_classes)
         self.digit_base = int(digit_base)
-        self.high_classes = num_classes // digit_base
+        self.digit_count = int(digit_count)
+        self.high_classes = num_classes // factor
         self.projection_rank = int(projection_rank)
         if self.projection_rank:
             self.shared_projection = nn.Linear(input_dim, self.projection_rank)
@@ -81,25 +89,35 @@ class FactorizedDigitOutput(nn.Module):
         else:
             self.shared_projection = None
             classifier_dim = input_dim
-        self.high = nn.Linear(classifier_dim, self.high_classes)
-        self.low = nn.Linear(classifier_dim, self.digit_base)
+        digit_sizes = [self.high_classes] + [self.digit_base] * (self.digit_count - 1)
+        self.digit_heads = nn.ModuleList(
+            nn.Linear(classifier_dim, size) for size in digit_sizes
+        )
+        # Keep the two-head names for callers and checkpoints using the
+        # original compact interface.
+        self.high = self.digit_heads[0]
+        self.low = self.digit_heads[-1]
         self.out_features = self.num_classes
 
-    def digit_logits(self, states: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def digit_logits(self, states: torch.Tensor) -> tuple[torch.Tensor, ...]:
         if self.shared_projection is not None:
             states = self.shared_projection(states)
-        return self.high(states), self.low(states)
+        return tuple(head(states) for head in self.digit_heads)
 
     def combine(
-        self, high_logits: torch.Tensor, low_logits: torch.Tensor
+        self, *digit_logits: torch.Tensor
     ) -> torch.Tensor:
-        return (high_logits.unsqueeze(-1) + low_logits.unsqueeze(-2)).reshape(
-            high_logits.shape[0], self.num_classes
-        )
+        if len(digit_logits) != self.digit_count:
+            raise ValueError("digit logits do not match configured digit count")
+        combined = digit_logits[0]
+        for logits in digit_logits[1:]:
+            combined = (combined.unsqueeze(-1) + logits.unsqueeze(-2)).reshape(
+                combined.shape[0], -1
+            )
+        return combined
 
     def forward(self, states: torch.Tensor) -> torch.Tensor:
-        high_logits, low_logits = self.digit_logits(states)
-        return self.combine(high_logits, low_logits)
+        return self.combine(*self.digit_logits(states))
 
 
 class DynamicRegisterNeuralEngine(nn.Module):
@@ -181,6 +199,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         output_scalar_bias: float = 0.0,
         output_digit_base: int = 128,
         output_factor_rank: int = 0,
+        output_digit_count: int = 2,
         macro_cell_count: int = 0,
         macro_cell_rank: int = 8,
         macro_cell_depth: int = 4,
@@ -299,8 +318,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("output_factor_rank must be non-negative")
         if output_factor_rank and output_mode != "factorized_digits":
             raise ValueError("output_factor_rank requires factorized_digits output")
-        if output_mode == "factorized_digits" and num_classes % output_digit_base:
-            raise ValueError("num_classes must be divisible by output_digit_base")
+        if output_digit_count < 2:
+            raise ValueError("output_digit_count must be at least two")
+        if output_mode == "factorized_digits":
+            factor = output_digit_base ** (output_digit_count - 1)
+            if num_classes % factor:
+                raise ValueError(
+                    "num_classes must be divisible by output_digit_base^(output_digit_count-1)"
+                )
         if macro_cell_count < 0:
             raise ValueError("macro_cell_count must be non-negative")
         if macro_cell_count:
@@ -377,6 +402,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.output_scalar_bias = float(output_scalar_bias)
         self.output_digit_base = int(output_digit_base)
         self.output_factor_rank = int(output_factor_rank)
+        self.output_digit_count = int(output_digit_count)
         self.macro_cell_count = int(macro_cell_count)
         self.macro_cell_rank = int(macro_cell_rank)
         self.macro_cell_depth = int(macro_cell_depth)
@@ -629,7 +655,11 @@ class DynamicRegisterNeuralEngine(nn.Module):
             self.output = nn.Sequential(
                 nn.LayerNorm(state_dim),
                 FactorizedDigitOutput(
-                    state_dim, num_classes, output_digit_base, output_factor_rank
+                    state_dim,
+                    num_classes,
+                    output_digit_base,
+                    output_factor_rank,
+                    output_digit_count,
                 ),
             )
         else:
@@ -873,8 +903,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             batch_size, self.max_ops, dtype=torch.bool, device=device
         )
         step_logits = []
-        digit_high_steps = []
-        digit_low_steps = []
+        digit_steps = []
         scalar_step_states = []
         pre_state_steps = []
         query_state_steps = []
@@ -1193,11 +1222,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     algebraic_state_steps.append(algebraic_state.clone())
             if self.output_mode == "factorized_digits":
                 output_state = self.output[0](step_state)
-                digit_high, digit_low = self.output[1].digit_logits(output_state)
+                digits = self.output[1].digit_logits(output_state)
                 if return_full_logits:
-                    step_logits.append(self.output[1].combine(digit_high, digit_low))
-                digit_high_steps.append(digit_high)
-                digit_low_steps.append(digit_low)
+                    step_logits.append(self.output[1].combine(*digits))
+                digit_steps.append(digits)
             else:
                 step_logits.append(self.output(step_state))
             if self.structured_scalar_state:
@@ -1225,8 +1253,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 scalar_step_states, dim=1
             )
         if self.output_mode == "factorized_digits":
-            stats["digit_high_logits"] = torch.stack(digit_high_steps, dim=1)
-            stats["digit_low_logits"] = torch.stack(digit_low_steps, dim=1)
+            digit_logits = tuple(
+                torch.stack([step[index] for step in digit_steps], dim=1)
+                for index in range(self.output_digit_count)
+            )
+            stats["digit_logits"] = digit_logits
+            if self.output_digit_count == 2:
+                stats["digit_high_logits"] = digit_logits[0]
+                stats["digit_low_logits"] = digit_logits[1]
         if collect_state_stats:
             stats["pre_accumulator_states"] = torch.stack(pre_state_steps, dim=1)
             stats["query_states"] = torch.stack(query_state_steps, dim=1)
@@ -1243,7 +1277,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             # Training with factorized digits only consumes the compact digit
             # logits; avoid materializing a potentially enormous Cartesian
             # class matrix. Evaluation keeps the default full-logit path.
-            final_logits = digit_high_steps[-1]
+            final_logits = digit_steps[-1][0]
         return final_logits, stats
 
     def parameter_report(self) -> dict[str, int | float | str]:
@@ -1465,6 +1499,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "output_scalar_bias": self.output_scalar_bias,
             "output_digit_base": self.output_digit_base,
             "output_factor_rank": self.output_factor_rank,
+            "output_digit_count": self.output_digit_count,
             "macro_cell_count": self.macro_cell_count,
             "macro_cell_rank": self.macro_cell_rank,
             "macro_cell_depth": self.macro_cell_depth,

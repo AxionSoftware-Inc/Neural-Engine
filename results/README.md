@@ -1305,6 +1305,24 @@ changes from `81.05%` to `82.42%`; total/active parameters remain
 The next gate is operand range `0--63`, not model scaling. See
 `V0_211_DYNAMIC_NONMOD_ALGEBRAIC_FOURIER_SHARED_CODEC_OFFSET_ROBUSTNESS.md`.
 
+V0.212 passes a valid `0--63` depth-3 gate with the same rank-128 codec:
+two-seed held-out mean is `85.74%` at `10.49M` estimated active parameters,
+only `3.32 pp` below the matched `0--31` depth-3 reference. The attempted
+depth-4 range-63 run was stopped by the target-range guard because the old
+two-digit/67M-class setup cannot represent all depth-4 products; this is a
+codec sizing issue, not a quality result. The next implementation is a
+three-digit output codec for the valid billion-class depth-4 space. See
+`V0_212_DYNAMIC_NONMOD_ALGEBRAIC_FOURIER_RANGE63_DEPTH3_AUDIT.md`.
+
+V0.213 implements the range-safe three-digit base-1024 codec for `2^30`
+classes. Rank128 and rank256 reach only `63.28%` and `65.63%` mean held-out
+accuracy on `0--63` depth-4 (`55.08%`/`58.59%` at depth 4), despite using only
+`2.37M`/`2.81M` estimated active parameters. The larger rank does not recover
+the lost composition quality, so independent three-digit factorization is
+rejected for adoption. The code remains opt-in; a future full-range codec
+needs cross-digit interactions, not just more independent heads. See
+`V0_213_DYNAMIC_NONMOD_THREE_DIGIT_CODEC_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

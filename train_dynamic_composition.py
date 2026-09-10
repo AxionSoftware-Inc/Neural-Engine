@@ -39,13 +39,34 @@ def output_loss(
     """Use compact digit supervision when the output head is factorized."""
     if model.output_mode != "factorized_digits":
         return nn.functional.cross_entropy(logits, targets)
-    digit_base = model.output_digit_base
-    high_targets = targets // digit_base
-    low_targets = targets.remainder(digit_base)
-    return (
-        nn.functional.cross_entropy(stats["digit_high_logits"][:, -1], high_targets)
-        + nn.functional.cross_entropy(stats["digit_low_logits"][:, -1], low_targets)
+    return factorized_digit_loss(
+        stats["digit_logits"], targets, model.output_digit_base
     )
+
+
+def factorized_digit_targets(
+    targets: torch.Tensor, digit_base: int, digit_count: int,
+) -> tuple[torch.Tensor, ...]:
+    return tuple(
+        (targets // (digit_base ** (digit_count - 1 - index))).remainder(digit_base)
+        for index in range(digit_count)
+    )
+
+
+def factorized_digit_loss(
+    digit_logits: tuple[torch.Tensor, ...],
+    targets: torch.Tensor,
+    digit_base: int,
+) -> torch.Tensor:
+    digit_targets = factorized_digit_targets(
+        targets, digit_base, len(digit_logits)
+    )
+    return torch.stack(
+        [
+            nn.functional.cross_entropy(logits[:, -1], digit_target)
+            for logits, digit_target in zip(digit_logits, digit_targets)
+        ]
+    ).sum()
 
 
 def structured_scalar_contract_loss(
@@ -116,7 +137,7 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "circuit_residual_scale",
         "circuit_input_norm",
         "output_mode", "output_temperature", "output_scalar_bias", "output_digit_base",
-        "output_factor_rank",
+        "output_factor_rank", "output_digit_count",
         "macro_cell_count", "macro_cell_rank", "macro_cell_depth",
         "macro_router_branch", "macro_router_depth", "macro_candidate_pool",
         "active_macro_cells", "macro_cell_scale",
@@ -258,15 +279,12 @@ def evaluate(
     )
     if use_compact:
         digit_base = model.output_digit_base
-        high_logits = stats["digit_high_logits"][:, -1]
-        low_logits = stats["digit_low_logits"][:, -1]
-        predictions = high_logits.argmax(dim=-1) * digit_base
-        predictions = predictions + low_logits.argmax(dim=-1)
-        loss = nn.functional.cross_entropy(
-            high_logits, batch.targets // digit_base
-        ) + nn.functional.cross_entropy(
-            low_logits, batch.targets.remainder(digit_base)
-        )
+        digit_logits = stats["digit_logits"]
+        predictions = torch.zeros_like(batch.targets)
+        for index, logits in enumerate(digit_logits):
+            power = digit_base ** (len(digit_logits) - 1 - index)
+            predictions = predictions + logits[:, -1].argmax(dim=-1) * power
+        loss = factorized_digit_loss(digit_logits, batch.targets, digit_base)
         loss_mode = "factorized_digit_sum_compact"
     else:
         predictions = logits.argmax(dim=-1)
@@ -383,16 +401,24 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 if mask.any():
                     stage_targets = batch.stage_targets[mask, stage]
                     if model.output_mode == "factorized_digits":
-                        digit_base = model.output_digit_base
+                        stage_digit_logits = tuple(
+                            logits[mask, stage]
+                            for logits in stats["digit_logits"]
+                        )
+                        stage_digit_targets = factorized_digit_targets(
+                            stage_targets,
+                            model.output_digit_base,
+                            len(stage_digit_logits),
+                        )
                         stage_losses.append(
-                            nn.functional.cross_entropy(
-                                stats["digit_high_logits"][mask, stage],
-                                stage_targets // digit_base,
-                            )
-                            + nn.functional.cross_entropy(
-                                stats["digit_low_logits"][mask, stage],
-                                stage_targets.remainder(digit_base),
-                            )
+                            torch.stack(
+                                [
+                                    nn.functional.cross_entropy(logits, target)
+                                    for logits, target in zip(
+                                        stage_digit_logits, stage_digit_targets
+                                    )
+                                ]
+                            ).sum()
                         )
                     else:
                         stage_losses.append(nn.functional.cross_entropy(
