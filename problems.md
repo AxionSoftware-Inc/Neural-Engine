@@ -120,6 +120,18 @@ Variant `REJECTED FOR ADOPTION`; P-001 ochiq qoladi.
 
 **Audit:** `results/P001_OUTPUT_LOGIT_COST_ROUTER_AUDIT_20260910.md`.
 
+**Final-CE target retrieval distillation (2026-09-10):** Frozen 20M
+seed17/18da one-swap final CE bilan eng yaxshi local yoki full-key-top-8
+alternative circuit group target qilinib, faqat hierarchical tree/key router
+1000 qadam o‘qitildi. Teacher targetlarning `70.69%/71.04%`i current
+candidate pooldan tashqarida va target headroom `0.018019/0.015981 CE` edi.
+Shunga qaramay held-out treatment CE `+0.020154/+0.014433`, accuracy
+`−0.42/−2.08 pp` yomonlashdi. Offline frozen-query target distillation
+`REJECTED FOR ADOPTION`; P-001 ochiq qoladi. Keyingi variant on-policy yoki
+joint end-to-end retrieval bo‘lishi kerak, 300M/500Mga scale qilinmaydi.
+
+**Audit:** `results/P001_TARGET_RETRIEVAL_DISTILL_AUDIT_20260910.md`.
+
 **Nonlinear candidate-score scorer (2026-09-08):** zero-initialized
 `2*state_dim → 32 → 1` residual scorer bilan 20M seed17/18da 2,000-step
 soft-routing continuation qilindi. Treatment CE delta’si `+0.001152/+0.020205`,

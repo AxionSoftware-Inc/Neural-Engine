@@ -1,0 +1,38 @@
+{
+  "checkpoint": "results/checkpoints/ne20_v12_coverage_matched_seed18_5000.pt",
+  "model": "ne_20_v12_coverage_matched",
+  "seed": 18,
+  "device": "cuda",
+  "candidate_pool": 32,
+  "active_circuits": 8,
+  "global_topk": 8,
+  "target_report": {
+    "examples": 1440,
+    "steps": 6,
+    "improved_fraction": 0.9277777777777778,
+    "mean_target_gain_ce": 0.015981135765711467,
+    "external_target_fraction": 0.7104166666666667
+  },
+  "training": {
+    "steps": 1000,
+    "batch_size": 2048,
+    "learning_rate": 0.0003,
+    "mean_target_loss": 4.028623404502869
+  },
+  "baseline": {
+    "examples": 240,
+    "mean_ce": 0.805154546101888,
+    "accuracy": 0.7583333333333333,
+    "unique_selected_circuits": 1244
+  },
+  "treatment": {
+    "examples": 240,
+    "mean_ce": 0.8195870717366537,
+    "accuracy": 0.7375,
+    "unique_selected_circuits": 1006
+  },
+  "delta": {
+    "mean_ce": 0.014432525634765714,
+    "accuracy_pp": -2.083333333333326
+  }
+}
