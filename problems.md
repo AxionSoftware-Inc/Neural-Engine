@@ -540,7 +540,7 @@ custom static-index kernel. Dynamic route’ni hozircha eager/opt-in qoldirish.
 
 ### C-RUNTIME-NATIVE-FUSED-001 — Factorized native dispatch overhead
 
-**Status:** `PROMISING OPT-IN — QUALITY/PARITY PASSED; SHAPE VALIDATION OPEN`
+**Status:** `PROMISING OPT-IN — BATCH/FALLBACK VALIDATED; SEQUENCE/PRODUCTION VALIDATION OPEN`
 **Muammo:** Runtime track / P-003 / P-007
 
 Ordered factorized-additive 500M bank uchun inference-only custom CUDA kernel
@@ -560,8 +560,22 @@ learned controlning exact/hard/active-width metrikalari uch seedda bir xil
 chiqdi; maksimal CE farqi `1.12e-8`. Demak hozirgi kernelning floating-point
 accumulation farqi ko‘rilgan recurrent route yoki sifatni o‘zgartirmagan.
 
-**Keyingi tajriba:** sequence/batch shape sweep, long quality control va
-unsupported-feature fallback validation. **Batafsil:**
+Keyingi uch seedli batch-shape sweep B=15/120/240/480/960 da fixed K=16
+uchun torch→fused o‘rtacha `7.52→7.25`, `23.17→11.35`, `38.75→17.91`,
+`65.48→29.76`, `116.43→45.31 ms` berdi (`−3.5%` dan `−61.1%` gacha).
+Learned K=8/16 uchun mos yutuq `−22.5%/−21.4%/−33.7%/−34.5%/−38.8%` bo‘ldi.
+Har bir shape’da maksimal parity xatosi `5.72e-6` dan oshmadi. B=15 da
+`dynamic_width_min_batch=32` guard sabab learned yo‘l to‘liq K=16 ishlatdi;
+bu majburlangan active-path emas, serving overheadini himoyalovchi mavjud guard.
+
+Unsupported feature fallback uchun 9 CUDA test o‘tdi: unordered slots, shared
+mix, query mix, pair/product/hidden-product/hidden-gate, serial composition va
+address residual holatlarida native extension chaqirilmaydi, PyTorch yo‘li
+ishlaydi. Shu sabab batch/fallback bosqichi yopildi, sequence-shape va
+production integration hali ochiq.
+
+**Keyingi tajriba:** sequence-shape/production serving validation va mustaqil
+uzoq quality control. **Batafsil:**
 `results/P003_NATIVE_FUSED_DISPATCH_AUDIT_20260910.md`.
 
 500M bankda `routing_capacity=22800` va `routing_depth=5` clamp qilinadigan

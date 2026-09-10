@@ -1,6 +1,8 @@
 import torch
+import pytest
 
 from data.generator import SyntheticTaskGenerator
+from neural_engine.circuits import FactorizedMicroCircuitBank
 from neural_engine.model import NeuralEngineV0
 from neural_engine.router import StableFamilyRouter
 
@@ -209,6 +211,43 @@ def test_prefix_split_dispatch_matches_grouped_additive_bank():
     assert torch.equal(grouped_stats["active_widths"], prefix_stats["active_widths"])
     assert torch.equal(grouped_stats["executed_selected_ids"],
                        prefix_stats["executed_selected_ids"])
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="native CUDA dispatch requires CUDA")
+@pytest.mark.parametrize("unsupported", [
+    {"ordered_factor_slots": False},
+    {"factor_mix_mode": "shared"},
+    {"query_factor_mix_scale": 0.1},
+    {"factor_pair_rank": 2},
+    {"factor_product_scale": 0.1},
+    {"factor_hidden_product_scale": 0.1},
+    {"factor_hidden_gate_scale": 0.1},
+    {"factor_composition_mode": "serial"},
+    {"address_residual_rank": 1},
+])
+def test_native_fused_backend_falls_back_for_unsupported_features(monkeypatch, unsupported):
+    bank_kwargs = dict(
+        num_circuits=16, state_dim=16, rank=4, factor_count=4,
+        ordered_factor_slots=True,
+    )
+    bank_kwargs.update(unsupported)
+    bank = FactorizedMicroCircuitBank(**bank_kwargs).cuda()
+    bank.dispatch_backend = "native_cuda_fused"
+    state = torch.randn(3, 16, device="cuda")
+    circuit_ids = torch.tensor([[0, 1], [2, 3], [4, 5]], device="cuda")
+    weights = torch.ones(3, 2, device="cuda")
+    import neural_engine.native_fused_dispatch as native_fused
+
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("unsupported bank used native kernel")
+
+    monkeypatch.setattr(
+        native_fused, "fused_factorized_dispatch",
+        fail_if_called,
+    )
+    with torch.no_grad():
+        output = bank(state, circuit_ids, weights)
+    assert output.shape == state.shape
 
 
 def test_forced_route_replay_preserves_recorded_circuit_path():

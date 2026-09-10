@@ -388,21 +388,27 @@ class FactorizedMicroCircuitBank(nn.Module):
             return self.factor_hidden_gates[0, first], self.factor_hidden_gates[1, second]
         return self.factor_hidden_gates[first], self.factor_hidden_gates[second]
 
+    def _native_fused_eligible(self, state: torch.Tensor) -> bool:
+        """Return whether the inference-only CUDA kernel exactly covers this bank."""
+        return (
+            self.dispatch_backend == "native_cuda_fused"
+            and state.device.type == "cuda"
+            and state.dtype == torch.float32
+            and not torch.is_grad_enabled()
+            and self.ordered_factor_slots
+            and self.factor_mix_mode == "per_address"
+            and not self.query_factor_mix_scale
+            and not self.factor_pair_rank
+            and not self.factor_product_scale
+            and not self.factor_hidden_product_scale
+            and not self.factor_hidden_gate_scale
+            and self.factor_composition_mode == "additive"
+            and not self.address_residual_rank
+        )
+
     def forward(self, state: torch.Tensor, circuit_ids: torch.Tensor,
                 weights: torch.Tensor) -> torch.Tensor:
-        if (self.dispatch_backend == "native_cuda_fused"
-                and state.device.type == "cuda"
-                and state.dtype == torch.float32
-                and not torch.is_grad_enabled()
-                and self.ordered_factor_slots
-                and self.factor_mix_mode == "per_address"
-                and not self.query_factor_mix_scale
-                and not self.factor_pair_rank
-                and not self.factor_product_scale
-                and not self.factor_hidden_product_scale
-                and not self.factor_hidden_gate_scale
-                and self.factor_composition_mode == "additive"
-                and not self.address_residual_rank):
+        if self._native_fused_eligible(state):
             from .native_fused_dispatch import fused_factorized_dispatch
             return fused_factorized_dispatch(
                 state, circuit_ids, weights, self.down_factors,

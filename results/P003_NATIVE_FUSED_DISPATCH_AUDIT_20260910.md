@@ -50,6 +50,38 @@ The learned selector keeps the same active widths and route choices; the
 kernel changes execution only. The larger-batch result confirms that the
 gain is not limited to launch noise at one shape.
 
+## Serving batch-shape sweep
+
+The same three checkpoints were measured at balanced batch sizes 15, 120, 240,
+480, and 960 (five warm-ups and 20 synchronized CUDA repeats). The table is
+the three-seed mean; the percentage is the reduction relative to the matching
+PyTorch path.
+
+| Batch | Fixed K=16 torch → fused | Speed change | Learned torch → fused | Speed change |
+|---:|---:|---:|---:|---:|
+| 15 | 7.52 → 7.25 ms | −3.5% | 8.51 → 6.59 ms | −22.5% |
+| 120 | 23.17 → 11.35 ms | **−51.0%** | 19.60 → 15.40 ms | −21.4% |
+| 240 | 38.75 → 17.91 ms | **−53.8%** | 28.50 → 18.91 ms | −33.7% |
+| 480 | 65.48 → 29.76 ms | **−54.6%** | 44.57 → 29.21 ms | −34.5% |
+| 960 | 116.43 → 45.31 ms | **−61.1%** | 67.88 → 41.56 ms | −38.8% |
+
+All fused cases stayed within `5.72e-6` maximum logit error of their PyTorch
+reference. At batch 15 the learned-width guard correctly selected full K=16;
+at batches 120–960 its mean active width was approximately 8.4–8.9. Thus the
+kernel is useful for both fixed-width throughput and learned-width serving,
+but the small-batch result is too close to launch noise to justify a universal
+automatic dispatch policy.
+
+## Unsupported-feature fallback validation
+
+The bank now exposes one explicit eligibility predicate for the native kernel.
+Nine CUDA tests verified that unsupported configurations do not call the
+native extension and instead complete through the existing PyTorch path:
+unordered slots, shared factor mix, query-conditioned mix, pair interaction,
+factor product, hidden product, hidden gate, serial composition, and address
+residual. This is a safety check, not an implementation of those features in
+the fused kernel.
+
 ## Long quality control
 
 The fused learned checkpoints were rerun through the 96-batch-per-condition
@@ -69,17 +101,19 @@ its route partition is variable; this kernel does not hide that separate issue.
 
 ## Decision
 
-`PROMISING OPT-IN — PARITY PASSED; SHAPE/CAPABILITY VALIDATION OPEN`.
+`PROMISING OPT-IN — BATCH/FALLBACK VALIDATED; SEQUENCE/PRODUCTION VALIDATION OPEN`.
 
-Keep native fused dispatch opt-in and leave PyTorch as the default. Before any
-default switch, validate more batch/sequence shapes, an independent long
-quality run, and fallback behavior for every unsupported factor-bank feature.
-The kernel must never silently approximate a configuration it does not support.
+Keep native fused dispatch opt-in and leave PyTorch as the default. Batch-shape
+and representative fallback checks now pass, but sequence-shape validation,
+production-shape timing, and an independent longer quality run remain before
+any default switch. The kernel must never silently approximate a configuration
+it does not support.
 
 ## Raw evidence and reproduction
 
 - [480-batch runtime JSON](diagnostic_native_fused_runtime_all3_480_20260910.json)
 - [960-batch runtime JSON](diagnostic_native_fused_runtime_all3_960_20260910.json)
+- [Batch-shape sweep JSON](diagnostic_native_fused_shape_sweep_all3_20260910.json)
 - [Seed17 fused runtime smoke JSON](diagnostic_native_fused_runtime_s17_480_20260910.json)
 - [Long fused learned-width OOD JSON](diagnostic_native_fused_learned_ood_long96_20260910.json)
 - [Fused fixed K=16 Graph batch-1 JSON](diagnostic_native_cuda_graph_fused_fixed16_b1_20260910.json)
@@ -88,6 +122,7 @@ The kernel must never silently approximate a configuration it does not support.
 - [CUDA Graph benchmark](../benchmark_native_cuda_graph.py)
 - [Python wrapper](../neural_engine/native_fused_dispatch.py)
 - [CUDA kernel](../neural_engine/native_fused_dispatch.cu)
+- [Batch-shape sweep](../benchmark_native_fused_shape_sweep.py)
 
 ```powershell
 python benchmark_native_width_runtime.py `
