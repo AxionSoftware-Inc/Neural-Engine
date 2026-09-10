@@ -76,6 +76,9 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["routing_coverage_temperature"] = config.get("routing_coverage_temperature", 0.25)
     model_kwargs["input_reinjection"] = config.get("input_reinjection", 1.0)
     model_kwargs["input_reinjection_schedule"] = config.get("input_reinjection_schedule")
+    model_kwargs["step_circuit_adapter_rank"] = config.get("step_circuit_adapter_rank", 0)
+    model_kwargs["step_circuit_adapter_scale"] = config.get("step_circuit_adapter_scale", 1.0)
+    model_kwargs["step_circuit_adapter_start_step"] = config.get("step_circuit_adapter_start_step", 0)
     model_kwargs["circuit_delta_scale"] = config.get("circuit_delta_scale", 1.0)
     model_kwargs["correction_gate_mode"] = config.get("correction_gate_mode", "none")
     model_kwargs["memory_write_mode"] = config.get("memory_write_mode", "none")
@@ -98,6 +101,8 @@ def make_model(config: dict[str, Any]) -> nn.Module:
                     "factor_candidate_layout", "factor_pair_interaction_scale",
                     "factor_hidden_product_scale",
                     "factor_hidden_gate_scale",
+                    "step_circuit_adapter_rank", "step_circuit_adapter_scale",
+                    "step_circuit_adapter_start_step",
                     "soft_routing_temperature", "route_target_supervision",
                     "routing_reuse_weight", "routing_reuse_start_level",
                     "input_reinjection_schedule"):

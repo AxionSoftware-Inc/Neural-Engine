@@ -1630,3 +1630,11 @@ pp`. A `0.25x` router-only context reduced the fragmentation but still fell
 Task-context routing is therefore rejected as a reliable quality fix; the
 next path is partial-result or operation-aware state representation. See
 `P007_NATIVE_TASK_CONTEXT_AUDIT_20260910.md`.
+
+The native step-specific rank-8 circuit adapter is the strongest current
+candidate. At 3,000 steps it improves two-seed 300M accuracy by `+0.612 pp`
+and hard-task mean by `+1.302 pp`. At 10,000 steps it gives `+0.352 pp` on
+300M and `+0.026 pp` on 500M, while improving hard-task mean and CE at both
+scales. The adapter does not solve overall 300M→500M scaling, and high-edge
+value probes still regress. It remains a promising opt-in rather than the
+default. See `P007_NATIVE_STEP_ADAPTER_SCALE_AUDIT_20260910.md`.

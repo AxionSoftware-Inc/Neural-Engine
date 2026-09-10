@@ -27,6 +27,9 @@ class NeuralEngineV0(nn.Module):
                  halt_threshold: float = 0.5, routing_coverage_temperature: float = 0.25,
                  input_reinjection: float = 1.0, circuit_delta_scale: float = 1.0,
                  input_reinjection_schedule: list[float] | tuple[float, ...] | None = None,
+                 step_circuit_adapter_rank: int = 0,
+                 step_circuit_adapter_scale: float = 1.0,
+                 step_circuit_adapter_start_step: int = 0,
                  correction_gate_mode: str = "none", memory_write_mode: str = "none",
                  post_correction_residual_scale: float = 0.0,
                  circuit_bank_mode: str = "independent", shared_rank: int = 8,
@@ -110,6 +113,15 @@ class NeuralEngineV0(nn.Module):
         if circuit_delta_scale <= 0.0:
             raise ValueError("circuit_delta_scale must be positive")
         self.circuit_delta_scale = circuit_delta_scale
+        if step_circuit_adapter_rank < 0:
+            raise ValueError("step_circuit_adapter_rank must be non-negative")
+        if step_circuit_adapter_scale < 0.0:
+            raise ValueError("step_circuit_adapter_scale must be non-negative")
+        if not 0 <= step_circuit_adapter_start_step <= internal_steps:
+            raise ValueError("step_circuit_adapter_start_step must be within internal steps")
+        self.step_circuit_adapter_rank = int(step_circuit_adapter_rank)
+        self.step_circuit_adapter_scale = float(step_circuit_adapter_scale)
+        self.step_circuit_adapter_start_step = int(step_circuit_adapter_start_step)
         if routing_reuse_weight < 0.0:
             raise ValueError("routing_reuse_weight must be non-negative")
         self.routing_reuse_weight = routing_reuse_weight
@@ -221,6 +233,15 @@ class NeuralEngineV0(nn.Module):
             if correction_gate_mode == "route_bounded" else None
         )
         self.output = nn.Sequential(nn.LayerNorm(state_dim), nn.Linear(state_dim, num_classes))
+        if self.step_circuit_adapter_rank:
+            self.step_circuit_adapter_down = nn.Parameter(
+                torch.empty(internal_steps, state_dim, self.step_circuit_adapter_rank))
+            self.step_circuit_adapter_up = nn.Parameter(
+                torch.zeros(internal_steps, self.step_circuit_adapter_rank, state_dim))
+            nn.init.normal_(self.step_circuit_adapter_down, std=0.02)
+        else:
+            self.register_parameter("step_circuit_adapter_down", None)
+            self.register_parameter("step_circuit_adapter_up", None)
         nn.init.normal_(self.position_embedding, std=0.02)
         nn.init.normal_(self.position_scale, std=0.01)
         nn.init.normal_(self.position_bias, std=0.01)
@@ -427,6 +448,14 @@ class NeuralEngineV0(nn.Module):
                 circuit_delta = self.circuits.forward_serial(step_query, selected, weights)
             else:
                 circuit_delta = self.circuits(step_query, selected, weights)
+            if (self.step_circuit_adapter_rank
+                    and step >= self.step_circuit_adapter_start_step):
+                adapter_hidden = torch.matmul(
+                    circuit_delta, self.step_circuit_adapter_down[step])
+                adapter_delta = torch.matmul(
+                    torch.nn.functional.gelu(adapter_hidden),
+                    self.step_circuit_adapter_up[step])
+                circuit_delta = circuit_delta + self.step_circuit_adapter_scale * adapter_delta
             if self.correction_gate is not None:
                 gate_input = torch.cat((step_query, circuit_delta), dim=-1)
                 correction_gate = 2.0 * torch.sigmoid(
@@ -536,6 +565,9 @@ class NeuralEngineV0(nn.Module):
             shared += count_parameters(self.memory_write)
         if self.correction_gate is not None:
             shared += count_parameters(self.correction_gate)
+        if self.step_circuit_adapter_rank:
+            shared += self.step_circuit_adapter_down.numel()
+            shared += self.step_circuit_adapter_up.numel()
         if self.circuit_bank_mode == "shared_residual":
             shared += self.circuits.shared_down.numel()
             shared += self.circuits.shared_up.numel()
@@ -603,4 +635,7 @@ class NeuralEngineV0(nn.Module):
             "factor_pair_interaction_scale": self.factor_pair_interaction_scale,
             "factor_hidden_product_scale": self.factor_hidden_product_scale,
             "factor_hidden_gate_scale": self.factor_hidden_gate_scale,
+            "step_circuit_adapter_rank": self.step_circuit_adapter_rank,
+            "step_circuit_adapter_scale": self.step_circuit_adapter_scale,
+            "step_circuit_adapter_start_step": self.step_circuit_adapter_start_step,
         }

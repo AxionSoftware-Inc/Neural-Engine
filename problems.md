@@ -1227,6 +1227,21 @@ qualityni ishonchli oshirmaydi; scale tuning qabul qilinmadi.
 
 **Task-context audit:** `results/P007_NATIVE_TASK_CONTEXT_AUDIT_20260910.md`.
 
+Step-specific rank-8 circuit adapter 300M ikki seedli 3000-qadamli screen’da
+mean accuracy’ni `68.451% → 69.063%` (`+0.612 pp`), hard-task mean’ni
+`+1.302 pp` va CE’ni `−0.01671` yaxshiladi. 10000 qadamda 300M foydasi
+`+0.352 pp`, 500M foydasi esa `+0.026 pp` bo‘ldi; hard-task mean ikkala
+scale’da ham yaxshilandi. Edge auditda 300M low-edge `+0.625 pp`, high-edge
+`−1.389 pp`; 500M low/high edge `−1.575/−1.047 pp` chiqdi. Demak bu hozirgi
+eng kuchli native candidate, ammo high-edge robustness va 300→500 overall
+scaling muammosi ochiq; defaultga olinmadi.
+
+Adapterni faqat depth-2/3ga qo‘llash ikki seedda `68.555%` berdi va to‘liq
+adapterdagi `69.063%` foydaning ko‘p qismini yo‘qotdi. Step-1 interface ham
+zarur ekanini ko‘rsatadi.
+
+**Step-adapter audit:** `results/P007_NATIVE_STEP_ADAPTER_SCALE_AUDIT_20260910.md`.
+
 ### C-P003-NATIVE-FACTORIZED-001 — Virtual factor bank does not turn address count into quality
 
 **Status:** `REJECTED AS QUALITY/CAPACITY FIX; RETAINED OPT-IN FOR COMPRESSION/RUNTIME`
@@ -1490,3 +1505,16 @@ baseline’dan `−0.156 pp` accuracy va `−0.228 pp` hard-task mean qoldi.
 Embeddingni state update’ga qo‘shish esa `−0.404 pp` berdi. API opt-in sifatida
 saqlandi, default va route majburlash o‘zgarmadi.
 **Batafsil:** `results/P007_NATIVE_TASK_CONTEXT_AUDIT_20260910.md`.
+
+### C-P007-NATIVE-STEP-ADAPTER-001 — Step-specific circuit correction interface
+
+**Status:** `PROMISING OPT-IN — VALIDATION OPEN`
+**Muammo:** P-007 / P-003
+**Natija:** Rank-8 step-specific low-rank residual adapter router va active
+route budgetini o‘zgartirmadi. 300M 3k screen’da ikki seed mean accuracy
+`+0.612 pp`, hard-task mean `+1.302 pp`, CE `−0.01671`; 10kda 300M
+`+0.352 pp`, 500M `+0.026 pp` bo‘ldi. Hard-task mean ikkala scale’da
+oshdi, lekin 500M overall scaling `−0.130 pp` va high-edge probe regressiyasi
+saqlanib qoldi. Shuning uchun adapter default emas, hozirgi leading opt-in
+candidate; keyingi ish high-edge/value representation validation.
+**Batafsil:** `results/P007_NATIVE_STEP_ADAPTER_SCALE_AUDIT_20260910.md`.
