@@ -242,6 +242,92 @@ class NativeFusedService:
         logits, batch_size, sequence_length = self._infer_logits(rows)
         return self._format_result(logits, batch_size, sequence_length, return_logits)
 
+    def infer_batch(self, requests: Any, max_batch_size: int = 8) -> dict[str, Any]:
+        """Serve many logical requests through shape-bucketed native batches.
+
+        This is an explicit one-call batching API. It groups only equal
+        sequence lengths and preserves the caller's request order in the
+        returned responses. It intentionally bypasses the optional per-request
+        admission queue because the caller has already supplied the batch.
+        """
+
+        self._check_owner()
+        if not isinstance(requests, list) or not requests:
+            raise ValueError("requests must be a non-empty list")
+        if isinstance(max_batch_size, bool) or not isinstance(max_batch_size, int):
+            raise ValueError("max_batch_size must be an integer")
+        if max_batch_size < 1:
+            raise ValueError("max_batch_size must be positive")
+
+        jobs: list[tuple[int, list[list[int]], bool, int]] = []
+        buckets: dict[int, list[tuple[int, list[list[int]], bool, int]]] = {}
+        for index, item in enumerate(requests):
+            if not isinstance(item, dict):
+                raise ValueError("each request must be an object")
+            rows = item.get("inputs")
+            _batch_size, sequence_length = self._validate_rows(rows)
+            job = (index, rows, bool(item.get("return_logits", False)), sequence_length)
+            jobs.append(job)
+            buckets.setdefault(sequence_length, []).append(job)
+
+        groups: list[tuple[int, list[tuple[int, list[list[int]], bool, int]]]] = []
+        for sequence_length, shape_jobs in buckets.items():
+            current: list[tuple[int, list[list[int]], bool, int]] = []
+            current_rows = 0
+            for job in shape_jobs:
+                row_count = len(job[1])
+                if current and current_rows + row_count > max_batch_size:
+                    groups.append((sequence_length, current))
+                    current = []
+                    current_rows = 0
+                current.append(job)
+                current_rows += row_count
+                if current_rows >= max_batch_size:
+                    groups.append((sequence_length, current))
+                    current = []
+                    current_rows = 0
+            if current:
+                groups.append((sequence_length, current))
+
+        responses: list[dict[str, Any] | None] = [None] * len(jobs)
+        group_metadata: list[dict[str, int]] = []
+        for sequence_length, group in groups:
+            combined_rows = [row for _index, rows, _return_logits, _seq in group for row in rows]
+            logits, _combined_batch_size, _combined_sequence_length = self._infer_logits(
+                combined_rows
+            )
+            logits_cpu = logits.detach().cpu()
+            offset = 0
+            group_metadata.append({
+                "sequence_length": sequence_length,
+                "batch_size": len(combined_rows),
+                "request_count": len(group),
+            })
+            for index, rows, return_logits, _seq in group:
+                end = offset + len(rows)
+                request_logits = logits_cpu[offset:end]
+                response: dict[str, Any] = {
+                    "batch_size": len(rows),
+                    "sequence_length": sequence_length,
+                    "logit_shape": list(request_logits.shape),
+                    "predictions": request_logits.argmax(dim=-1).tolist(),
+                    "cache": self.cache.stats(),
+                }
+                if return_logits:
+                    response["logits"] = request_logits.tolist()
+                responses[index] = response
+                offset = end
+
+        if any(response is None for response in responses):
+            raise RuntimeError("batch inference completed with a missing response")
+        return {
+            "responses": [response for response in responses if response is not None],
+            "request_count": len(jobs),
+            "group_count": len(groups),
+            "groups": group_metadata,
+            "cache": self.cache.stats(),
+        }
+
     def _complete_batched(self, requests: list[_PendingInference]) -> None:
         rows = [row for request in requests for row in request.rows]
         logits, _batch_size, sequence_length = self._infer_logits(rows)
@@ -368,15 +454,21 @@ class NativeFusedHTTPHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802 - stdlib handler API
         path = urlsplit(self.path).path
-        if path != "/infer":
+        if path not in {"/infer", "/infer_batch"}:
             self._send_json(404, {"error": "not found"})
             return
         try:
             payload = self._read_json()
-            result = self.service.infer(
-                payload.get("inputs"),
-                return_logits=bool(payload.get("return_logits", False)),
-            )
+            if path == "/infer":
+                result = self.service.infer(
+                    payload.get("inputs"),
+                    return_logits=bool(payload.get("return_logits", False)),
+                )
+            else:
+                result = self.service.infer_batch(
+                    payload.get("requests"),
+                    max_batch_size=payload.get("max_batch_size", 8),
+                )
             self._send_json(200, result)
         except (TypeError, ValueError, json.JSONDecodeError) as exc:
             self._send_json(400, {"error": str(exc)})

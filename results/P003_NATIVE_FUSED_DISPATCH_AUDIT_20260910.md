@@ -274,6 +274,15 @@ cached graph shape, with `0` prediction mismatches and maximum logit difference
 shape-bucketing/grouped `/infer` API; the internal per-request admission queue
 should remain opt-in and is not part of the default.
 
+The explicit `/infer_batch` endpoint was then validated on the same 32 mixed
+seq=6/32 logical requests. Direct serving used 32 HTTP calls and reached
+`326.4 req/s`; one grouped endpoint call used four B=8 shape groups and reached
+`1227.4 req/s` (`3.76x`). The endpoint kept both sequence buckets separate,
+used two cached graph shapes, produced `0` prediction mismatches, and stayed
+within `5.72e-6` maximum logit difference from direct serving. This makes the
+upstream grouped endpoint the preferred runtime integration point; the
+per-request admission queue remains an opt-in fallback experiment.
+
 ## Long quality control
 
 The fused learned checkpoints were rerun through the 96-batch-per-condition
@@ -335,6 +344,7 @@ approximate a configuration it does not support.
 - [Native fused admission, 8-client stress JSON](diagnostic_native_fused_admission_s17_20260910_8clients.json)
 - [Native fused admission, 0.25 ms window JSON](diagnostic_native_fused_admission_s17_20260910_window025_prewarmed.json)
 - [Native fused mixed-shape microbatch JSON](diagnostic_native_fused_mixed_microbatch_s17_20260910.json)
+- [Native fused explicit batch endpoint JSON](diagnostic_native_fused_batch_endpoint_s17_20260910.json)
 - [Seed17 fused runtime smoke JSON](diagnostic_native_fused_runtime_s17_480_20260910.json)
 - [Long fused learned-width OOD JSON](diagnostic_native_fused_learned_ood_long96_20260910.json)
 - [Independent long fused OOD JSON](diagnostic_native_fused_ood_long48_all3_20260910.json)
@@ -355,6 +365,7 @@ approximate a configuration it does not support.
 - [Grouped microbatch benchmark](../benchmark_native_microbatch.py)
 - [Admission-queue benchmark](../benchmark_native_admission.py)
 - [Mixed-shape microbatch benchmark](../benchmark_native_mixed_microbatch.py)
+- [Explicit batch endpoint benchmark](../benchmark_native_batch_endpoint.py)
 - [HTTP service adapter](../neural_engine/native_fused_server.py)
 - [Python wrapper](../neural_engine/native_fused_dispatch.py)
 - [CUDA kernel](../neural_engine/native_fused_dispatch.cu)

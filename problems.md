@@ -663,6 +663,13 @@ mismatch `0`, maksimal logit farqi `5.72e-6`. Demak native runtime uchun
 foydali yo‘l — request serveriga kirishdan oldin bir xil sequence shape’larni
 guruhlash va `/infer`ga grouped batch yuborish; internal queue default emas.
 
+Bu yo‘l amaliy endpoint bilan ham tasdiqlandi: `/infer_batch` 32 aralash
+seq=6/32 logical requestni bitta HTTP call’da 4 ta B=8 groupga ajratdi.
+Direct `326.4 req/s`, grouped endpoint `1227.4 req/s` (`3.76x`), mismatch
+`0`, maksimal logit farqi `5.72e-6`. Shuning uchun upstream grouped endpoint
+foydali runtime yechim sifatida qabul qilindi; per-request admission queue
+esa faqat opt-in tadqiqot bo‘lib qoladi.
+
 Mustaqil uzoq quality control’da fused va torch backendlari uch seed/to‘rt
 condition bo‘yicha exact accuracy’da bir xil chiqdi, maksimal CE farqi
 `1.61e-8`. Seed19 uniform exact `66.61%` va hard mean `31.76%` bilan seed17/18

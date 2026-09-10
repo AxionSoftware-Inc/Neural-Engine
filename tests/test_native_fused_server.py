@@ -87,3 +87,29 @@ def test_native_fused_service_batches_same_sequence_and_splits_results():
         assert stats["max_observed_batch_rows"] == 2
     finally:
         service.close()
+
+
+def test_native_fused_service_explicit_batch_buckets_sequence_shapes():
+    service = _service()
+    requests = [
+        {"inputs": [[1, 2, 3]], "return_logits": True},
+        {"inputs": [[4, 5, 6]], "return_logits": True},
+        {"inputs": [[7, 8]], "return_logits": True},
+    ]
+    result = service.infer_batch(requests, max_batch_size=2)
+    assert result["request_count"] == 3
+    assert result["group_count"] == 2
+    assert result["groups"] == [
+        {"sequence_length": 3, "batch_size": 2, "request_count": 2},
+        {"sequence_length": 2, "batch_size": 1, "request_count": 1},
+    ]
+    assert [item["sequence_length"] for item in result["responses"]] == [3, 3, 2]
+    assert all(item["logit_shape"] == [1, 16] for item in result["responses"])
+    for request, response in zip(requests, result["responses"]):
+        direct = service.infer(request["inputs"], return_logits=True)
+        assert torch.allclose(
+            torch.tensor(response["logits"]),
+            torch.tensor(direct["logits"]),
+            atol=1e-5,
+            rtol=1e-5,
+        )

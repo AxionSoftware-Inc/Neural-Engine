@@ -1,0 +1,103 @@
+{
+  "experiment": "native_fused_explicit_batch_endpoint",
+  "checkpoint": "results\\checkpoints\\ne500_stable_prefix_active16_s17_3000.pt",
+  "device": "cuda",
+  "seed": 23006,
+  "logical_requests": 32,
+  "sequence_lengths": [
+    6,
+    32
+  ],
+  "client_workers": 4,
+  "max_batch_size": 8,
+  "direct": {
+    "http_requests": 32,
+    "client_workers": 4,
+    "request_wall_ms": 98.03100000044651,
+    "logical_requests_per_second": 326.4273546108297,
+    "client_latency_ms": {
+      "min": 2.084199999444536,
+      "mean": 10.39302812483811,
+      "p95": 26.430099999743106,
+      "max": 28.856899999482266
+    },
+    "cache": {
+      "owner_pid": 9628,
+      "cached_shape_count": 2,
+      "cache_keys": [
+        {
+          "batch_size": 1,
+          "sequence_length": 32,
+          "stream": 0
+        },
+        {
+          "batch_size": 1,
+          "sequence_length": 6,
+          "stream": 0
+        }
+      ],
+      "capture_count": 2,
+      "cache_hit_count": 32,
+      "cache_miss_count": 2,
+      "eviction_count": 0,
+      "eager_fallback_count": 0,
+      "capture_failures": [],
+      "process_graph_lock": false
+    }
+  },
+  "grouped_endpoint": {
+    "http_requests": 1,
+    "client_workers": 1,
+    "request_wall_ms": 26.071799999954237,
+    "logical_requests_per_second": 1227.3797743176983,
+    "groups": [
+      {
+        "sequence_length": 6,
+        "batch_size": 8,
+        "request_count": 8
+      },
+      {
+        "sequence_length": 6,
+        "batch_size": 8,
+        "request_count": 8
+      },
+      {
+        "sequence_length": 32,
+        "batch_size": 8,
+        "request_count": 8
+      },
+      {
+        "sequence_length": 32,
+        "batch_size": 8,
+        "request_count": 8
+      }
+    ],
+    "group_count": 4,
+    "cache": {
+      "owner_pid": 4876,
+      "cached_shape_count": 2,
+      "cache_keys": [
+        {
+          "batch_size": 8,
+          "sequence_length": 6,
+          "stream": 0
+        },
+        {
+          "batch_size": 8,
+          "sequence_length": 32,
+          "stream": 0
+        }
+      ],
+      "capture_count": 2,
+      "cache_hit_count": 6,
+      "cache_miss_count": 2,
+      "eviction_count": 0,
+      "eager_fallback_count": 0,
+      "capture_failures": [],
+      "process_graph_lock": false
+    },
+    "max_logit_error_vs_direct": 5.7220458984375e-06,
+    "prediction_mismatches_vs_direct": 0
+  },
+  "interpretation": "Both modes use the same logical requests. Direct mode sends one HTTP request per item; /infer_batch sends one request and buckets sequence lengths before native grouped inference."
+}
