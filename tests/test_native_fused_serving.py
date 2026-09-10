@@ -1,5 +1,6 @@
 import pytest
 import torch
+from concurrent.futures import ThreadPoolExecutor
 
 from data.generator import SyntheticTaskGenerator
 from neural_engine.model import NeuralEngineV0
@@ -73,3 +74,32 @@ def test_native_fused_shape_cache_capture_failure_uses_eager_fallback(monkeypatc
     assert stats["capture_count"] == 0
     assert stats["eager_fallback_count"] == 1
     assert stats["capture_failures"][0]["type"] == "RuntimeError"
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA Graph requires CUDA")
+def test_native_fused_shape_cache_serializes_same_stream_callers():
+    model = _model().cuda().eval()
+    inputs = SyntheticTaskGenerator(seq_len=8, seed=604).task_balanced_batch(1, "cuda").inputs
+    cache = NativeFusedShapeCache(model, warmup_iters=2)
+    reference = cache(inputs)
+
+    def request():
+        return cache(inputs.clone())
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        outputs = list(executor.map(lambda _index: request(), range(4)))
+    torch.cuda.synchronize()
+    assert all(torch.allclose(output, reference, atol=1e-5, rtol=1e-5)
+               for output in outputs)
+    assert cache.stats()["capture_count"] == 1
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA Graph requires CUDA")
+def test_native_fused_shape_cache_rejects_cross_process_reuse(monkeypatch):
+    model = _model().cuda().eval()
+    inputs = SyntheticTaskGenerator(seq_len=8, seed=605).task_balanced_batch(1, "cuda").inputs
+    cache = NativeFusedShapeCache(model, warmup_iters=2)
+    monkeypatch.setattr("neural_engine.native_fused_serving.os.getpid",
+                        lambda: cache.owner_pid + 1)
+    with pytest.raises(RuntimeError, match="process-local"):
+        cache(inputs)

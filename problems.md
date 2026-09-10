@@ -540,7 +540,7 @@ custom static-index kernel. Dynamic route’ni hozircha eager/opt-in qoldirish.
 
 ### C-RUNTIME-NATIVE-FUSED-001 — Factorized native dispatch overhead
 
-**Status:** `PROMISING OPT-IN — SHAPE-CACHE SERVING SMOKE VALIDATED; PRODUCTION INTEGRATION OPEN`
+**Status:** `PROMISING OPT-IN — SHAPE-CACHE/CONCURRENCY SMOKE VALIDATED; PRODUCTION INTEGRATION OPEN`
 **Muammo:** Runtime track / P-003 / P-007
 
 Ordered factorized-additive 500M bank uchun inference-only custom CUDA kernel
@@ -585,8 +585,14 @@ fallback bilan qo‘shildi. Seed17 500M real checkpointida B=1 seq=6/32 uchun
 2 capture/52 hit/fallback 0, cached `2.10/2.17 ms` bo‘ldi; B=8 uchun
 `2.42/2.55 ms`, maksimal graph-eager parity `1.91e-6`. Unit testlar eviction,
 dynamic fallback va capture failure fallbackni ham qamradi. Bu production
-caller smoke’ni yopadi, lekin multi-worker/server ownership va bir xil CUDA
-streamdagi concurrent request policy hali ochiq.
+caller smoke’ni yopadi. Multi-worker’da cache ownership per-process ekanligi
+va bir xil CUDA streamdagi requestlar lock bilan serialize qilinishi keyingi
+smoke’da tasdiqlandi.
+Same-stream policy 500M real checkpointda 4 worker/16 request bilan sinovdan
+o‘tdi: 1 capture/16 hit, barcha outputlar reference bilan mos, maksimal xato
+`1.91e-6`. Per-entry lock bir streamdagi callerlarni xavfsiz serialize qiladi;
+cross-process reuse esa bloklanadi va har worker model/cache’ni o‘zi yaratishi
+kerak.
 
 Mustaqil uzoq quality control’da fused va torch backendlari uch seed/to‘rt
 condition bo‘yicha exact accuracy’da bir xil chiqdi, maksimal CE farqi
@@ -595,8 +601,8 @@ dan ancha past, lekin torch control ham aynan shu raqamlarni berdi. Bu fused
 kernel regressiyasi emas, checkpoint/training seed barqarorligi alohida
 muammo ekanini ko‘rsatadi.
 
-**Keyingi tajriba:** multi-worker/server ownership va bir xil CUDA streamdagi
-concurrent request policy. **Batafsil:**
+**Keyingi tajriba:** real server entry pointiga per-worker cache lifecycle’ni
+ulash. **Batafsil:**
 `results/P003_NATIVE_FUSED_DISPATCH_AUDIT_20260910.md`.
 
 500M bankda `routing_capacity=22800` va `routing_depth=5` clamp qilinadigan

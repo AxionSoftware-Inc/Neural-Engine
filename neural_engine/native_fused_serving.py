@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+import os
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import torch
 from torch import nn
@@ -24,6 +25,7 @@ class _LogitsCall(nn.Module):
 class _ShapeEntry:
     inputs: torch.Tensor
     graph_call: nn.Module
+    replay_lock: threading.Lock = field(default_factory=threading.Lock)
 
 
 class NativeFusedShapeCache:
@@ -42,6 +44,7 @@ class NativeFusedShapeCache:
         if warmup_iters < 1:
             raise ValueError("warmup_iters must be positive")
         self.model = model.eval()
+        self.owner_pid = os.getpid()
         self.max_shapes = int(max_shapes)
         self.warmup_iters = int(warmup_iters)
         self.capture_graphs = bool(capture_graphs)
@@ -109,6 +112,10 @@ class NativeFusedShapeCache:
             return entry
 
     def __call__(self, inputs: torch.Tensor) -> torch.Tensor:
+        if os.getpid() != self.owner_pid:
+            raise RuntimeError(
+                "NativeFusedShapeCache is process-local; construct a model and cache per worker"
+            )
         if not self._graph_eligible(inputs):
             self.eager_fallback_count += 1
             with torch.inference_mode():
@@ -121,12 +128,17 @@ class NativeFusedShapeCache:
             with torch.inference_mode():
                 logits, _ = self.model(inputs, adaptive=False, collect_stats=False)
             return logits
-        with torch.inference_mode():
-            entry.inputs.copy_(inputs)
-            return entry.graph_call(entry.inputs).clone()
+        # A shape/stream entry owns one mutable graph input buffer. Serialize
+        # host callers sharing that stream while allowing different streams to
+        # use their independent entries concurrently.
+        with entry.replay_lock:
+            with torch.inference_mode():
+                entry.inputs.copy_(inputs)
+                return entry.graph_call(entry.inputs).clone()
 
     def stats(self) -> dict[str, object]:
         return {
+            "owner_pid": self.owner_pid,
             "cached_shape_count": len(self._entries),
             "cache_keys": [
                 {"batch_size": key[0], "sequence_length": key[1], "stream": key[2]}

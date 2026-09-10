@@ -132,6 +132,14 @@ This is a reusable serving caller and a real-checkpoint smoke, not a complete
 multi-worker server. Request admission, cross-process ownership, and policy
 for concurrent requests on the same CUDA stream remain caller responsibilities.
 
+The same-stream policy was then exercised on the real seed-17 500M checkpoint:
+four Python workers issued 16 B=1, seq=32 requests through one cached entry.
+The run produced one graph capture and 16 cache hits; every output matched the
+eager reference with maximum error `1.91e-6`. The per-entry replay lock makes
+same-stream calls host-serialized, while different streams retain independent
+entries. A cross-process reuse unit test rejects inherited cache ownership, so
+each worker must construct its own model and cache after process creation.
+
 ## Long quality control
 
 The fused learned checkpoints were rerun through the 96-batch-per-condition
@@ -165,14 +173,14 @@ its route partition is variable; this kernel does not hide that separate issue.
 
 ## Decision
 
-`PROMISING OPT-IN — SHAPE-CACHE SERVING SMOKE VALIDATED; PRODUCTION INTEGRATION OPEN`.
+`PROMISING OPT-IN — SHAPE-CACHE/CONCURRENCY SMOKE VALIDATED; PRODUCTION INTEGRATION OPEN`.
 
 Keep native fused dispatch opt-in and leave PyTorch as the default. The
-shape-cache caller, batch/sequence parity, fallback, stream-safety, and long
-quality checks now pass, but full multi-worker production integration and an
-explicit policy for concurrent same-stream requests remain before any default
-switch. The kernel must never silently approximate a configuration it does not
-support.
+shape-cache caller, batch/sequence parity, fallback, stream-safety, same-stream
+concurrency, and long quality checks now pass. Full server integration remains:
+workers must own their model/cache, and request admission must avoid sharing a
+single cache entry across processes. The kernel must never silently approximate
+a configuration it does not support.
 
 ## Raw evidence and reproduction
 
@@ -183,6 +191,7 @@ support.
 - [Serving reuse/stream smoke JSON](diagnostic_native_fused_serving_smoke_all3_20260910.json)
 - [Shape-cache B=1 JSON](diagnostic_native_fused_shape_cache_s17_b1_20260910.json)
 - [Shape-cache B=8 JSON](diagnostic_native_fused_shape_cache_s17_b8_20260910.json)
+- [Same-stream concurrency JSON](diagnostic_native_fused_serving_concurrency_s17_b1_20260910.json)
 - [Seed17 fused runtime smoke JSON](diagnostic_native_fused_runtime_s17_480_20260910.json)
 - [Long fused learned-width OOD JSON](diagnostic_native_fused_learned_ood_long96_20260910.json)
 - [Independent long fused OOD JSON](diagnostic_native_fused_ood_long48_all3_20260910.json)
@@ -193,6 +202,7 @@ support.
 - [CUDA Graph benchmark](../benchmark_native_cuda_graph.py)
 - [Shape-cache serving caller](../neural_engine/native_fused_serving.py)
 - [Shape-cache benchmark](../benchmark_native_fused_shape_cache.py)
+- [Concurrency benchmark](../benchmark_native_fused_serving_concurrency.py)
 - [Python wrapper](../neural_engine/native_fused_dispatch.py)
 - [CUDA kernel](../neural_engine/native_fused_dispatch.cu)
 - [Batch-shape sweep](../benchmark_native_fused_shape_sweep.py)

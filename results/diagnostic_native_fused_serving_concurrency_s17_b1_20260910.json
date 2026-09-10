@@ -1,0 +1,28 @@
+{
+  "experiment": "native_fused_serving_concurrency",
+  "checkpoint": "results\\checkpoints\\ne500_stable_prefix_active16_s17_3000.pt",
+  "device": "cuda",
+  "batch_size": 1,
+  "sequence_length": 32,
+  "workers": 4,
+  "requests": 16,
+  "max_logit_error_vs_eager": 1.9073486328125e-06,
+  "all_outputs_match_reference": true,
+  "cache": {
+    "owner_pid": 6964,
+    "cached_shape_count": 1,
+    "cache_keys": [
+      {
+        "batch_size": 1,
+        "sequence_length": 32,
+        "stream": 0
+      }
+    ],
+    "capture_count": 1,
+    "cache_hit_count": 16,
+    "cache_miss_count": 1,
+    "eviction_count": 0,
+    "eager_fallback_count": 0,
+    "capture_failures": []
+  }
+}
