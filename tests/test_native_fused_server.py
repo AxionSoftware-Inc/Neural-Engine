@@ -1,4 +1,5 @@
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 import torch
@@ -62,3 +63,27 @@ def test_native_fused_service_rejects_cross_process_use(monkeypatch):
     monkeypatch.setattr("neural_engine.native_fused_server.os.getpid", lambda: service.owner_pid + 1)
     with pytest.raises(RuntimeError, match="process-local"):
         service.health()
+
+
+def test_native_fused_service_batches_same_sequence_and_splits_results():
+    base = _service()
+    service = NativeFusedService(
+        base.model,
+        NativeFusedShapeCache(base.model, capture_graphs=False),
+        max_batch_size=4,
+        batch_window_ms=10.0,
+    )
+    rows = [[[1, 2, 3]], [[4, 5, 6]]]
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(lambda item: service.infer(item, True), rows))
+        assert [result["batch_size"] for result in results] == [1, 1]
+        assert all(result["logit_shape"] == [1, 16] for result in results)
+        assert all(len(result["logits"]) == 1 for result in results)
+        stats = service.health()["batching"]
+        assert stats["enabled"] is True
+        assert stats["batch_count"] == 1
+        assert stats["coalesced_request_count"] == 2
+        assert stats["max_observed_batch_rows"] == 2
+    finally:
+        service.close()

@@ -32,6 +32,8 @@ def _worker_main(
     warmup_iters: int,
     capture_graphs: bool,
     process_graph_lock: bool,
+    max_batch_size: int,
+    batch_window_ms: float,
 ) -> None:
     """Worker target; model/cache creation intentionally happens in the child."""
 
@@ -42,6 +44,8 @@ def _worker_main(
         warmup_iters=warmup_iters,
         capture_graphs=capture_graphs,
         process_graph_lock=process_graph_lock,
+        max_batch_size=max_batch_size,
+        batch_window_ms=batch_window_ms,
     )
     server = NativeFusedHTTPServer((host, port), service)
     startup: dict[str, Any] = {
@@ -56,6 +60,7 @@ def _worker_main(
         server.serve_forever()
     finally:
         server.server_close()
+        service.close()
 
 
 def _watch_parent(server: NativeFusedHTTPServer) -> None:
@@ -121,6 +126,8 @@ def run(args: argparse.Namespace) -> None:
                 args.warmup_iters,
                 not args.no_graphs,
                 shared_device_graph_lock,
+                args.max_batch_size,
+                args.batch_window_ms,
             ),
             name=f"neural-engine-native-worker-{worker_index}",
         )
@@ -163,6 +170,8 @@ def main() -> None:
     parser.add_argument("--device", default=None)
     parser.add_argument("--max-shapes", type=int, default=8)
     parser.add_argument("--warmup-iters", type=int, default=5)
+    parser.add_argument("--max-batch-size", type=int, default=8)
+    parser.add_argument("--batch-window-ms", type=float, default=0.0)
     parser.add_argument("--no-graphs", action="store_true")
     parser.add_argument("--skip-native-prebuild", action="store_true")
     args = parser.parse_args()

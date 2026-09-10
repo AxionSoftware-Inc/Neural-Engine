@@ -1,0 +1,142 @@
+{
+  "experiment": "native_fused_shape_homogeneous_admission",
+  "checkpoint": "results\\checkpoints\\ne500_stable_prefix_active16_s17_3000.pt",
+  "device": "cuda",
+  "seed": 23004,
+  "sequence_length": 32,
+  "logical_requests": 32,
+  "client_workers": 4,
+  "max_batch_size": 8,
+  "batch_window_ms": 2.0,
+  "direct": {
+    "batch_window_ms": 0.0,
+    "prewarm_sizes": [
+      1
+    ],
+    "logical_requests": 32,
+    "http_requests": 32,
+    "client_workers": 4,
+    "request_wall_ms": 94.30809999958001,
+    "logical_requests_per_second": 339.31337817369354,
+    "client_latency_ms": {
+      "min": 2.1502999998119776,
+      "mean": 9.731724999937796,
+      "p95": 24.92640000036772,
+      "max": 27.840300000207208
+    },
+    "cache": {
+      "owner_pid": 13436,
+      "cached_shape_count": 1,
+      "cache_keys": [
+        {
+          "batch_size": 1,
+          "sequence_length": 32,
+          "stream": 0
+        }
+      ],
+      "capture_count": 1,
+      "cache_hit_count": 32,
+      "cache_miss_count": 1,
+      "eviction_count": 0,
+      "eager_fallback_count": 0,
+      "capture_failures": [],
+      "process_graph_lock": false
+    },
+    "batching": {
+      "enabled": false,
+      "max_batch_size": 8,
+      "batch_window_ms": 0.0,
+      "batch_count": 0,
+      "coalesced_request_count": 0,
+      "max_observed_batch_rows": 0
+    }
+  },
+  "admitted": {
+    "batch_window_ms": 2.0,
+    "prewarm_sizes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "logical_requests": 32,
+    "http_requests": 32,
+    "client_workers": 4,
+    "request_wall_ms": 161.468799999966,
+    "logical_requests_per_second": 198.18070116336244,
+    "client_latency_ms": {
+      "min": 7.004099999903701,
+      "mean": 18.482787500119002,
+      "p95": 32.89390000009007,
+      "max": 32.97999999995227
+    },
+    "cache": {
+      "owner_pid": 2728,
+      "cached_shape_count": 8,
+      "cache_keys": [
+        {
+          "batch_size": 1,
+          "sequence_length": 32,
+          "stream": 0
+        },
+        {
+          "batch_size": 5,
+          "sequence_length": 32,
+          "stream": 0
+        },
+        {
+          "batch_size": 6,
+          "sequence_length": 32,
+          "stream": 0
+        },
+        {
+          "batch_size": 7,
+          "sequence_length": 32,
+          "stream": 0
+        },
+        {
+          "batch_size": 8,
+          "sequence_length": 32,
+          "stream": 0
+        },
+        {
+          "batch_size": 3,
+          "sequence_length": 32,
+          "stream": 0
+        },
+        {
+          "batch_size": 4,
+          "sequence_length": 32,
+          "stream": 0
+        },
+        {
+          "batch_size": 2,
+          "sequence_length": 32,
+          "stream": 0
+        }
+      ],
+      "capture_count": 8,
+      "cache_hit_count": 9,
+      "cache_miss_count": 8,
+      "eviction_count": 0,
+      "eager_fallback_count": 0,
+      "capture_failures": [],
+      "process_graph_lock": false
+    },
+    "batching": {
+      "enabled": true,
+      "max_batch_size": 8,
+      "batch_window_ms": 2.0,
+      "batch_count": 17,
+      "coalesced_request_count": 40,
+      "max_observed_batch_rows": 8
+    },
+    "max_logit_error_vs_direct": 5.7220458984375e-06,
+    "prediction_mismatches_vs_direct": 0
+  },
+  "interpretation": "Both modes send the same individual requests. The admitted mode coalesces compatible requests inside the bounded sequence-shape window; output parity is checked against the direct mode."
+}

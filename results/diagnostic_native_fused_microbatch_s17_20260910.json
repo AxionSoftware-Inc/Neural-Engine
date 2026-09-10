@@ -1,0 +1,153 @@
+{
+  "experiment": "native_fused_shape_homogeneous_microbatch",
+  "checkpoint": "results\\checkpoints\\ne500_stable_prefix_active16_s17_3000.pt",
+  "device": "cuda",
+  "seed": 23004,
+  "logical_requests": 16,
+  "microbatch_sizes": [
+    1,
+    2,
+    4,
+    8
+  ],
+  "sequence_length": 32,
+  "scenarios": {
+    "1": {
+      "microbatch_size": 1,
+      "logical_requests": 16,
+      "http_requests": 16,
+      "client_workers": 4,
+      "request_wall_ms": 49.140799999804585,
+      "logical_requests_per_second": 325.5950249093142,
+      "http_client_latency_ms": {
+        "min": 2.3909999999887077,
+        "mean": 11.380931250016602,
+        "p95": 25.379099999554455,
+        "max": 25.379099999554455
+      },
+      "cache": {
+        "owner_pid": 9640,
+        "cached_shape_count": 1,
+        "cache_keys": [
+          {
+            "batch_size": 1,
+            "sequence_length": 32,
+            "stream": 0
+          }
+        ],
+        "capture_count": 1,
+        "cache_hit_count": 16,
+        "cache_miss_count": 1,
+        "eviction_count": 0,
+        "eager_fallback_count": 0,
+        "capture_failures": [],
+        "process_graph_lock": false
+      },
+      "max_logit_error_vs_first_scenario": 0.0,
+      "prediction_mismatches_vs_first_scenario": 0
+    },
+    "2": {
+      "microbatch_size": 2,
+      "logical_requests": 16,
+      "http_requests": 8,
+      "client_workers": 4,
+      "request_wall_ms": 22.5044999997408,
+      "logical_requests_per_second": 710.9689173358342,
+      "http_client_latency_ms": {
+        "min": 2.6447999998708838,
+        "mean": 8.095725000202947,
+        "p95": 19.4710000005216,
+        "max": 19.4710000005216
+      },
+      "cache": {
+        "owner_pid": 4380,
+        "cached_shape_count": 1,
+        "cache_keys": [
+          {
+            "batch_size": 2,
+            "sequence_length": 32,
+            "stream": 0
+          }
+        ],
+        "capture_count": 1,
+        "cache_hit_count": 8,
+        "cache_miss_count": 1,
+        "eviction_count": 0,
+        "eager_fallback_count": 0,
+        "capture_failures": [],
+        "process_graph_lock": false
+      },
+      "max_logit_error_vs_first_scenario": 8.58306884765625e-06,
+      "prediction_mismatches_vs_first_scenario": 0
+    },
+    "4": {
+      "microbatch_size": 4,
+      "logical_requests": 16,
+      "http_requests": 4,
+      "client_workers": 4,
+      "request_wall_ms": 10.69420000021637,
+      "logical_requests_per_second": 1496.1380935157638,
+      "http_client_latency_ms": {
+        "min": 5.127299999912793,
+        "mean": 6.872450000173558,
+        "p95": 9.029100000589096,
+        "max": 9.029100000589096
+      },
+      "cache": {
+        "owner_pid": 6060,
+        "cached_shape_count": 1,
+        "cache_keys": [
+          {
+            "batch_size": 4,
+            "sequence_length": 32,
+            "stream": 0
+          }
+        ],
+        "capture_count": 1,
+        "cache_hit_count": 4,
+        "cache_miss_count": 1,
+        "eviction_count": 0,
+        "eager_fallback_count": 0,
+        "capture_failures": [],
+        "process_graph_lock": false
+      },
+      "max_logit_error_vs_first_scenario": 5.7220458984375e-06,
+      "prediction_mismatches_vs_first_scenario": 0
+    },
+    "8": {
+      "microbatch_size": 8,
+      "logical_requests": 16,
+      "http_requests": 2,
+      "client_workers": 2,
+      "request_wall_ms": 19.574099999772443,
+      "logical_requests_per_second": 817.4066751567636,
+      "http_client_latency_ms": {
+        "min": 4.975099999683152,
+        "mean": 11.757199999465229,
+        "p95": 18.539299999247305,
+        "max": 18.539299999247305
+      },
+      "cache": {
+        "owner_pid": 13768,
+        "cached_shape_count": 1,
+        "cache_keys": [
+          {
+            "batch_size": 8,
+            "sequence_length": 32,
+            "stream": 0
+          }
+        ],
+        "capture_count": 1,
+        "cache_hit_count": 2,
+        "cache_miss_count": 1,
+        "eviction_count": 0,
+        "eager_fallback_count": 0,
+        "capture_failures": [],
+        "process_graph_lock": false
+      },
+      "max_logit_error_vs_first_scenario": 5.0067901611328125e-06,
+      "prediction_mismatches_vs_first_scenario": 0
+    }
+  },
+  "interpretation": "The first scenario is the reference only for output parity. Compare logical_requests_per_second and request_wall_ms across microbatch sizes; all requests use the same homogeneous sequence shape."
+}

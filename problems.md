@@ -641,6 +641,18 @@ sekinroq). Demak qo‘shimcha worker bu GPU’da capacity yoki tezlik yechimi em
 deployment baseline’i one-worker-per-GPU bo‘lishi kerak. Batching/admission
 keyingi runtime eksperimenti sifatida ochiq qoldi.
 
+Shape-homogeneous grouped control esa kuchli runtime signal berdi: bir xil
+32 logical requestda B=1/B=2/B=4/B=8 uchun logical throughput mos ravishda
+`385.2/630.7/1130.3/3083.6 req/s` bo‘ldi, prediction mismatch `0`, maksimal
+logit farqi `5.72e-6`.
+
+Lekin bu natija requestlarni client oldindan guruhlagan offline control edi.
+Haqiqiy 2 ms admission queue’ni 4 client, 32 individual request va B=1…8
+prewarm bilan tekshirganda direct `94.3 ms / 339.3 req/s`, queue esa
+`161.5 ms / 198.2 req/s` chiqdi; observed batch `8`, parity `0 mismatch`.
+Shuning uchun queue sifati to‘g‘ri, ammo hozirgi past-latency local arrival
+rate’da foydasiz: defaultga kiritilmadi, opt-in tajriba sifatida qoldi.
+
 Mustaqil uzoq quality control’da fused va torch backendlari uch seed/to‘rt
 condition bo‘yicha exact accuracy’da bir xil chiqdi, maksimal CE farqi
 `1.61e-8`. Seed19 uniform exact `66.61%` va hard mean `31.76%` bilan seed17/18

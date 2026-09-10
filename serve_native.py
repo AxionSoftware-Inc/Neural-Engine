@@ -23,6 +23,13 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--max-shapes", type=int, default=8)
     parser.add_argument("--warmup-iters", type=int, default=5)
+    parser.add_argument("--max-batch-size", type=int, default=8)
+    parser.add_argument(
+        "--batch-window-ms",
+        type=float,
+        default=0.0,
+        help="opt-in shape-homogeneous admission window; 0 disables batching",
+    )
     parser.add_argument("--no-graphs", action="store_true")
     args = parser.parse_args()
 
@@ -32,6 +39,8 @@ def main() -> None:
         max_shapes=args.max_shapes,
         warmup_iters=args.warmup_iters,
         capture_graphs=not args.no_graphs,
+        max_batch_size=args.max_batch_size,
+        batch_window_ms=args.batch_window_ms,
     )
     server = NativeFusedHTTPServer((args.host, args.port), service)
     print(json.dumps({"listening": f"http://{args.host}:{args.port}", **service.health()}))
@@ -41,6 +50,7 @@ def main() -> None:
         pass
     finally:
         server.server_close()
+        service.close()
 
 
 if __name__ == "__main__":

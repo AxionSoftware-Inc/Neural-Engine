@@ -233,6 +233,31 @@ therefore one worker per GPU unless a tested admission/batching layer can
 combine requests before graph replay. The result is a small-batch serving
 measurement, not a claim about all batch sizes or multiple physical GPUs.
 
+### Shape-homogeneous micro-batching
+
+An offline grouped-request control used the same 32 logical seed-23004
+requests, four client workers, and sequence length 32. Grouping requests into
+fixed shapes preserved predictions exactly and produced no mismatches. Logical
+throughput was `385.2 req/s` at B=1, `630.7 req/s` at B=2, `1130.3 req/s` at
+B=4, and `3083.6 req/s` at B=8. The corresponding wall times were `83.1`,
+`50.7`, `28.3`, and `10.4 ms`; maximum logit difference from the B=1 fused
+reference stayed between `4.29e-6` and `5.72e-6`.
+
+This is a positive kernel/HTTP-shape signal, but it is not by itself an
+admission result: the client explicitly formed each grouped request.
+
+The real opt-in admission queue was then tested with the same individual
+requests, four client workers, `max_batch_size=8`, and a 2 ms shape window.
+Even after prewarming B=1…8 graph shapes, direct serving took `94.3 ms`
+(`339.3 req/s`) while the queue took `161.5 ms` (`198.2 req/s`). It did reach
+an observed batch of 8 and preserved output parity (`0` prediction mismatches,
+maximum logit error `5.72e-6`), but its queue/response overhead outweighed the
+compute saving at this local arrival rate. A cold run was worse because
+variable arrival groups caused extra graph captures. The queue therefore
+remains opt-in and is not accepted as a default serving policy; a future
+version needs request-rate-aware admission, shape prewarming, and a latency
+budget before claiming benefit.
+
 ## Long quality control
 
 The fused learned checkpoints were rerun through the 96-batch-per-condition
@@ -289,6 +314,9 @@ approximate a configuration it does not support.
 - [HTTP server concurrency JSON](diagnostic_native_fused_http_server_concurrency_s17_20260910.json)
 - [Native fused CUDA multi-worker JSON](diagnostic_native_fused_multi_worker_cuda_s17_20260910.json)
 - [Native fused one-vs-two-worker scaling JSON](diagnostic_native_fused_worker_scaling_s17_20260910.json)
+- [Native fused grouped microbatch JSON](diagnostic_native_fused_microbatch_s17_20260910_32req.json)
+- [Native fused admission JSON](diagnostic_native_fused_admission_s17_20260910_prewarmed.json)
+- [Native fused admission, 8-client stress JSON](diagnostic_native_fused_admission_s17_20260910_8clients.json)
 - [Seed17 fused runtime smoke JSON](diagnostic_native_fused_runtime_s17_480_20260910.json)
 - [Long fused learned-width OOD JSON](diagnostic_native_fused_learned_ood_long96_20260910.json)
 - [Independent long fused OOD JSON](diagnostic_native_fused_ood_long48_all3_20260910.json)
@@ -306,6 +334,8 @@ approximate a configuration it does not support.
 - [Multi-process serving launcher](../serve_native_workers.py)
 - [Multi-worker round-robin benchmark](../benchmark_native_workers.py)
 - [Shared-GPU worker-scaling benchmark](../benchmark_native_worker_scaling.py)
+- [Grouped microbatch benchmark](../benchmark_native_microbatch.py)
+- [Admission-queue benchmark](../benchmark_native_admission.py)
 - [HTTP service adapter](../neural_engine/native_fused_server.py)
 - [Python wrapper](../neural_engine/native_fused_dispatch.py)
 - [CUDA kernel](../neural_engine/native_fused_dispatch.cu)
