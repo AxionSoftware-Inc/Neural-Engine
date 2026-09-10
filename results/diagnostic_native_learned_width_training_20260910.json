@@ -46,6 +46,27 @@
         "high_edge_values": 11520
       },
       "source_checkpoint": "results\\checkpoints\\ne500_stable_prefix_active16_s18_3000.pt"
+    },
+    "results\\checkpoints\\ne500_stable_prefix_active16_s19_3000_learned_width.pt": {
+      "training": {
+        "train_bce": 0.2163843810558319,
+        "valid_bce": 0.21937723457813263,
+        "train_accuracy": 0.9230549931526184,
+        "valid_accuracy": 0.9229058027267456,
+        "train_positive_rate": 0.0443250872194767,
+        "valid_positive_rate": 0.0418836809694767,
+        "train_predicted_wide_rate": 0.0577121302485466,
+        "valid_predicted_wide_rate": 0.0565863698720932
+      },
+      "feature_count": 92160,
+      "label_positive_rate": 0.0438368059694767,
+      "condition_label_counts": {
+        "uniform_all": 11520,
+        "combination_heldout": 11520,
+        "low_edge_values": 11520,
+        "high_edge_values": 11520
+      },
+      "source_checkpoint": "results\\checkpoints\\ne500_stable_prefix_active16_s19_3000.pt"
     }
   }
 }

@@ -1,0 +1,78 @@
+{
+  "experiment": "native_dynamic_width_runtime",
+  "device": "cuda",
+  "warmup": 10,
+  "repeats": 100,
+  "examples_per_task": 1,
+  "checkpoints": {
+    "ne500_stable_prefix_active16_s17_3000.pt": {
+      "batch_size": 15,
+      "variants": {
+        "fixed_k8": {
+          "mean_ms": 7.3349489999964135,
+          "samples_per_second": 2045.0039938938,
+          "active_width_mean": 8.0,
+          "active_width_fraction": 0.5
+        },
+        "fixed_k16": {
+          "mean_ms": 7.399315000002389,
+          "samples_per_second": 2027.2146813583631,
+          "active_width_mean": 16.0,
+          "active_width_fraction": 1.0
+        },
+        "learned_k8_k16": {
+          "mean_ms": 7.265121000000363,
+          "samples_per_second": 2064.659349789116,
+          "active_width_mean": 16.0,
+          "active_width_fraction": 1.0
+        }
+      }
+    },
+    "ne500_stable_prefix_active16_s18_3000.pt": {
+      "batch_size": 15,
+      "variants": {
+        "fixed_k8": {
+          "mean_ms": 7.668976000004477,
+          "samples_per_second": 1955.9325782205137,
+          "active_width_mean": 8.0,
+          "active_width_fraction": 0.5
+        },
+        "fixed_k16": {
+          "mean_ms": 7.407081000001199,
+          "samples_per_second": 2025.0892355568371,
+          "active_width_mean": 16.0,
+          "active_width_fraction": 1.0
+        },
+        "learned_k8_k16": {
+          "mean_ms": 7.546788999998171,
+          "samples_per_second": 1987.6002893420812,
+          "active_width_mean": 16.0,
+          "active_width_fraction": 1.0
+        }
+      }
+    },
+    "ne500_stable_prefix_active16_s19_3000.pt": {
+      "batch_size": 15,
+      "variants": {
+        "fixed_k8": {
+          "mean_ms": 7.535150000003341,
+          "samples_per_second": 1990.670391431272,
+          "active_width_mean": 8.0,
+          "active_width_fraction": 0.5
+        },
+        "fixed_k16": {
+          "mean_ms": 7.194846000002144,
+          "samples_per_second": 2084.8257210780507,
+          "active_width_mean": 16.0,
+          "active_width_fraction": 1.0
+        },
+        "learned_k8_k16": {
+          "mean_ms": 7.7061049999974784,
+          "samples_per_second": 1946.5086447699464,
+          "active_width_mean": 16.0,
+          "active_width_fraction": 1.0
+        }
+      }
+    }
+  }
+}

@@ -161,6 +161,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         config["dynamic_width_mode"] = "learned"
         config["dynamic_width_min"] = args.dynamic_width_min
         config["dynamic_width_threshold"] = args.threshold
+        config["dynamic_width_min_batch"] = args.min_batch
         model = make_model(config).to(device)
         missing, unexpected = model.load_state_dict(checkpoint["model_state"], strict=False)
         if missing != ["dynamic_width_head.weight", "dynamic_width_head.bias"] or unexpected:
@@ -203,6 +204,7 @@ def main() -> None:
     parser.add_argument("--lambda-target", type=float, default=0.05)
     parser.add_argument("--dynamic-width-min", type=int, default=8)
     parser.add_argument("--threshold", type=float, default=0.5)
+    parser.add_argument("--min-batch", type=int, default=32)
     parser.add_argument("--seed-offset", type=int, default=7000)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--output-dir", default="results/checkpoints")

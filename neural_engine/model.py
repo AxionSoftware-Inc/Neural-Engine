@@ -58,7 +58,8 @@ class NeuralEngineV0(nn.Module):
                  route_target_supervision: bool = False,
                  dynamic_width_mode: str = "none",
                  dynamic_width_min: int | None = None,
-                 dynamic_width_threshold: float = 0.8):
+                 dynamic_width_threshold: float = 0.8,
+                 dynamic_width_min_batch: int = 0):
         super().__init__()
         if circuit_mode not in {"parallel", "serial"}:
             raise ValueError("circuit_mode must be 'parallel' or 'serial'")
@@ -158,9 +159,12 @@ class NeuralEngineV0(nn.Module):
             raise ValueError("dynamic_width_min must be between 1 and active_circuits - 1")
         if not 0.0 <= dynamic_width_threshold <= 1.0:
             raise ValueError("dynamic_width_threshold must be between 0 and 1")
+        if dynamic_width_min_batch < 0:
+            raise ValueError("dynamic_width_min_batch must be non-negative")
         self.dynamic_width_mode = dynamic_width_mode
         self.dynamic_width_min = int(dynamic_width_min)
         self.dynamic_width_threshold = float(dynamic_width_threshold)
+        self.dynamic_width_min_batch = int(dynamic_width_min_batch)
         self.dynamic_width_head = (nn.Linear(state_dim, 1)
                                    if dynamic_width_mode == "learned" else None)
         if self.dynamic_width_head is not None:
@@ -509,8 +513,20 @@ class NeuralEngineV0(nn.Module):
                         override_gains = forced_route_gains[active_indices, step].to(
                             device=inputs.device)
                     route_gain = torch.where(override, override_gains, route_gain)
-            route_widths, width_entropy = self._choose_route_width(weights, step_query)
-            if (self.dynamic_width_mode != "none" and not self.training
+            small_batch_fallback = (self.dynamic_width_mode != "none"
+                                    and self.dynamic_width_min_batch
+                                    and step_query.shape[0] < self.dynamic_width_min_batch)
+            if small_batch_fallback:
+                # Two grouped launches are slower than one full-width launch
+                # for tiny batches on the current backend. Preserve quality
+                # and avoid a latency regression in that serving regime.
+                route_widths = torch.full(
+                    (weights.shape[0],), self.active_circuits,
+                    dtype=torch.long, device=weights.device)
+                width_entropy = torch.zeros_like(route_gain)
+            else:
+                route_widths, width_entropy = self._choose_route_width(weights, step_query)
+            if (not small_batch_fallback and self.dynamic_width_mode != "none" and not self.training
                     and route_widths.lt(self.active_circuits).any()):
                 circuit_delta = torch.zeros_like(step_query)
                 narrow = route_widths.eq(self.dynamic_width_min)

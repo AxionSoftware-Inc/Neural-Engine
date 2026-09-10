@@ -431,7 +431,7 @@ hard-task regret, mean executed width va real runtime bilan tekshirish.
 
 ### C-P003-NATIVE-DYNAMIC-WIDTH-003 — Learned width predictor preserves quality
 
-**Status:** `PROMISING OPT-IN — QUALITY/PARAMETER GATE PASSED; RUNTIME AND THIRD-SEED OPEN`
+**Status:** `PROMISING OPT-IN — QUALITY GATE PASSED; LONGER RUN OPEN`
 **Muammo:** P-003 / P-007
 
 Frozen 500M K=16 modelidan paired K=8/K=16 step-loss label bilan `384→1`
@@ -447,13 +447,42 @@ probelarda `8.4–8.5/16`. Bu entropy proxydagi `~8.5%` tejashdan ancha yaxshi
 va oraclening taxminan yarim-width nuqtasiga yaqin. Head faqat `385` yangi
 parametr qo‘shadi; circuit bank/body o‘zgarmadi.
 
-Bu hali default emas: paired frozen-trajectory label, uchinchi seed, uzunroq
-continuation va haqiqiy wall-clock dispatch benchmarki kerak. Katta taskni K=8
-ga noto‘g‘ri yuborish regreti, oson taskni K=16ga yuborish xarajati bilan birga
-tekshiriladi. Learned-width checkpointlari opt-in saqlandi.
+Seed19 scratchdan mustaqil tekshirildi: uniform `66.476% → 66.484%`,
+combination `66.623% → 66.597%`, low-edge `91.059% → 90.955%`, high-edge
+`88.568% → 88.828%`; learned active width `8.2–8.8/16` oralig‘ida qoldi.
+U warm-start seedlar bilan capacity comparison’ga qo‘shilmaydi, lekin predictor
+signalining faqat seed17/18ga xos emasligini ko‘rsatadi. Uzoqroq continuation,
+K=8ga noto‘g‘ri yuborish regreti va body bilan joint training hali ochiq.
+Learned-width checkpointlari opt-in saqlandi.
 
 **Batafsil:** `results/P003_NATIVE_LEARNED_WIDTH_AUDIT_20260910.md` va
 `results/diagnostic_native_learned_width_20260910.json`.
+
+### C-P003-NATIVE-DYNAMIC-WIDTH-004 — Grouped dispatch overhead reduces width savings
+
+**Status:** `POSITIVE RUNTIME SIGNAL — OPT-IN ONLY; LONGER RUN/KERNEL FUSION OPEN`
+**Muammo:** P-003 / Runtime
+
+RTX 3060 timing screen’da balanced batch 480, 5 warm-up va 20 synchronized
+CUDA repeat bilan uch seed o‘rtachasida fixed K=8 `32.39 ms`, fixed K=16
+`55.44 ms`, learned K=8/16 `39.89 ms` chiqdi. Learned path fixed K=16ga
+nisbatan `~28.1%` latency kamayishi va `~39.0%` throughput oshishini berdi;
+mean active width `8.58/16` (`~46.4%` slot reduction). Demak circuit
+computation kamayishi real tezlikka aylanayapti, lekin narrow/wide samplelarni
+alohida dispatch qilish overheadi ideal width tejamining bir qismini yutmoqda;
+learned path fixed K=8dan `~23.1%` sekinroq.
+
+Batch=15da `dynamic_width_min_batch=32` guard K=16ga fallback qildi; learned
+`7.51 ms`, fixed K=16 `7.33 ms` (`~2.3%` overhead) bo‘ldi. Unguarded oldingi
+variant `~11.8 ms` bo‘lgan, shuning uchun guard small-batch regressiyasini
+sezilarli kamaytirdi.
+
+Bu hali default emas. Uzunroq continuation va kernel fusion profili kerak.
+Keyingi optimizatsiya — grouped-dispatch kernel fusion; sifat va route qarori
+o‘zgarmaydi.
+
+**Batafsil:** `results/P003_NATIVE_DYNAMIC_WIDTH_RUNTIME_AUDIT_20260910.md` va
+`results/diagnostic_native_width_runtime_all3_20260910.json`.
 
 500M bankda `routing_capacity=22800` va `routing_depth=5` clamp qilinadigan
 control full 500Mga nisbatan uniformda `+0.495 pp`, hard-taskda `+1.259 pp`

@@ -98,6 +98,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
     model_kwargs["dynamic_width_mode"] = config.get("dynamic_width_mode", "none")
     model_kwargs["dynamic_width_min"] = config.get("dynamic_width_min")
     model_kwargs["dynamic_width_threshold"] = config.get("dynamic_width_threshold", 0.8)
+    model_kwargs["dynamic_width_min_batch"] = config.get("dynamic_width_min_batch", 0)
     if config.get("architecture") == "typed_register":
         for key in ("task_context", "task_context_update", "adaptive_halting",
                     "halt_threshold", "routing_coverage_temperature",
@@ -111,7 +112,7 @@ def make_model(config: dict[str, Any]) -> nn.Module:
                     "step_circuit_adapter_start_step",
                     "soft_routing_temperature", "route_target_supervision",
                     "dynamic_width_mode", "dynamic_width_min",
-                    "dynamic_width_threshold",
+                    "dynamic_width_threshold", "dynamic_width_min_batch",
                     "routing_reuse_weight", "routing_reuse_start_level",
                     "input_reinjection_schedule"):
             model_kwargs.pop(key, None)
@@ -568,6 +569,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                        "dynamic_width_mode": model.dynamic_width_mode,
                        "dynamic_width_min": model.dynamic_width_min,
                        "dynamic_width_threshold": model.dynamic_width_threshold,
+                       "dynamic_width_min_batch": model.dynamic_width_min_batch,
                        "family_count": model.family_count,
                        "adaptive_halting": model.adaptive_halting,
                        "router_type": type(model.router).__name__,

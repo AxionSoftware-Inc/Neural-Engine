@@ -52,25 +52,46 @@ preserving the K=16 quality ceiling on this two-seed OOD screen. It also
 explains why entropy-gating was weak: entropy was not sufficiently aligned with
 the actual K=8 versus K=16 loss gap.
 
+## Independent scratch seed sanity check
+
+Seed19 was trained independently from scratch for 3,000 steps. Its absolute
+quality is lower than seeds 17/18 because it did not inherit the 300M
+stable-prefix parent, so it is not pooled into the main capacity comparison.
+The width result nevertheless held relative to its own K=16 control:
+
+| Condition | K=16 exact | Learned exact | Delta | Learned hard mean | Mean width |
+|---|---:|---:|---:|---:|---:|
+| Uniform | 66.476% | **66.484%** | **+0.009 pp** | 31.619% | 8.81 |
+| Combination holdout | 66.623% | 66.597% | −0.026 pp | 31.163% | 8.81 |
+| Low edge | 91.059% | 90.955% | −0.104 pp | 77.908% | 8.23 |
+| High edge | 88.568% | **88.828%** | **+0.260 pp** | 72.635% | 8.39 |
+
+Thus the learned selector did not depend on the favorable warm-start quality,
+but the low absolute seed19 quality means a longer and better-matched third
+seed remains useful.
+
 The result is not yet a default change. Calibration labels came from frozen
 paired trajectories, and the predictor was not jointly trained with the
-recurrent body. The next controls are a third seed, longer continuation, a
-true wall-clock profile, and a regret audit that penalizes sending hard examples
-to K=8 more than sending easy examples to K=16.
+recurrent body. The remaining control is longer continuation plus a regret
+audit that penalizes sending hard examples to K=8 more than sending easy
+examples to K=16.
 
 ## Decision
 
-`PROMISING OPT-IN — QUALITY/PARAMETER GATE PASSED; RUNTIME AND THIRD-SEED OPEN`.
+`PROMISING OPT-IN — QUALITY GATE PASSED; LONGER CONTINUATION OPEN`.
 
 Keep the learned-width checkpoints and head opt-in. Do not replace the K=8 or
-K=16 defaults yet. If the third-seed and runtime controls hold, this becomes the
-preferred route for larger native banks: capacity can remain high while active
-parameters are selected per example.
+K=16 defaults yet. With the independent scratch seed and large-batch runtime
+control now positive, this is the preferred opt-in route for larger native
+banks: capacity can remain high while active parameters are selected per
+example.
 
 ## Raw evidence and reproduction
 
 - [Learned-width OOD JSON](diagnostic_native_learned_width_20260910.json)
+- [Three-seed learned-width OOD JSON](diagnostic_native_learned_width_all3_20260910.json)
 - [Head-training JSON](diagnostic_native_learned_width_training_20260910.json)
+- [Independent seed19 OOD JSON](diagnostic_native_learned_width_s19_20260910.json)
 - [Head training benchmark](../benchmark_native_learned_width.py)
 - [K=16 source configuration](../configs/ne_500m_v12_factorized_shared_routekeys_step_adapter_two_edge_mix_stable_prefix_active16.yaml)
 
