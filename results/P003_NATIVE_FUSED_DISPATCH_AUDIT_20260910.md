@@ -102,6 +102,16 @@ the current batch/sequence parity sweep for the tested 500M configuration, but
 it is not yet a production integration test with request-shape caching or
 concurrent requests.
 
+## Serving reuse and stream-safety smoke
+
+For each of the three seeds, B=120 requests at sequence lengths 6 and 32 were
+run repeatedly in alternating shape order and then concurrently on two CUDA
+streams. Both fixed K=16 and learned K=8/16 fused paths stayed within
+`5.72e-6` maximum logit error of their torch references in both tests. No
+shape-switch or cross-stream output contamination was observed. This validates
+the kernel's current read-only serving contract, but it does not yet provide a
+request pool, shape-cache eviction policy, or a production server integration.
+
 ## Long quality control
 
 The fused learned checkpoints were rerun through the 96-batch-per-condition
@@ -121,13 +131,13 @@ its route partition is variable; this kernel does not hide that separate issue.
 
 ## Decision
 
-`PROMISING OPT-IN — BATCH/SEQUENCE/FALLBACK VALIDATED; PRODUCTION VALIDATION OPEN`.
+`PROMISING OPT-IN — BATCH/SEQUENCE/FALLBACK/STREAM SMOKE VALIDATED; PRODUCTION INTEGRATION OPEN`.
 
 Keep native fused dispatch opt-in and leave PyTorch as the default. Batch,
-sequence-shape, and representative fallback checks now pass, but production
-shape caching/concurrency and an independent longer quality run remain before
-any default switch. The kernel must never silently approximate a configuration
-it does not support.
+sequence-shape, fallback, and stream-safety checks now pass, but a production
+request shape-cache/fallback integration and an independent longer quality run
+remain before any default switch. The kernel must never silently approximate a
+configuration it does not support.
 
 ## Raw evidence and reproduction
 
@@ -135,6 +145,7 @@ it does not support.
 - [960-batch runtime JSON](diagnostic_native_fused_runtime_all3_960_20260910.json)
 - [Batch-shape sweep JSON](diagnostic_native_fused_shape_sweep_all3_20260910.json)
 - [Sequence-shape sweep JSON](diagnostic_native_fused_sequence_sweep_all3_20260910.json)
+- [Serving reuse/stream smoke JSON](diagnostic_native_fused_serving_smoke_all3_20260910.json)
 - [Seed17 fused runtime smoke JSON](diagnostic_native_fused_runtime_s17_480_20260910.json)
 - [Long fused learned-width OOD JSON](diagnostic_native_fused_learned_ood_long96_20260910.json)
 - [Fused fixed K=16 Graph batch-1 JSON](diagnostic_native_cuda_graph_fused_fixed16_b1_20260910.json)
@@ -145,6 +156,7 @@ it does not support.
 - [CUDA kernel](../neural_engine/native_fused_dispatch.cu)
 - [Batch-shape sweep](../benchmark_native_fused_shape_sweep.py)
 - [Sequence-shape sweep](../benchmark_native_fused_sequence_sweep.py)
+- [Serving smoke](../benchmark_native_fused_serving_smoke.py)
 
 ```powershell
 python benchmark_native_width_runtime.py `

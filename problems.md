@@ -540,7 +540,7 @@ custom static-index kernel. Dynamic route’ni hozircha eager/opt-in qoldirish.
 
 ### C-RUNTIME-NATIVE-FUSED-001 — Factorized native dispatch overhead
 
-**Status:** `PROMISING OPT-IN — BATCH/SEQUENCE/FALLBACK VALIDATED; PRODUCTION VALIDATION OPEN`
+**Status:** `PROMISING OPT-IN — BATCH/SEQUENCE/FALLBACK/STREAM SMOKE VALIDATED; PRODUCTION INTEGRATION OPEN`
 **Muammo:** Runtime track / P-003 / P-007
 
 Ordered factorized-additive 500M bank uchun inference-only custom CUDA kernel
@@ -574,7 +574,10 @@ address residual holatlarida native extension chaqirilmaydi, PyTorch yo‘li
 ishlaydi. Sequence `6/8/16/32` sweepida B=120 uchun fixed K=16 yutug‘i
 `40.7%/48.9%/50.2%/50.9%`, learned yutug‘i esa `29.5%/29.6%/30.7%/27.9%`
 bo‘ldi; maksimal parity xatosi `5.72e-6`. Shu sabab batch/sequence/fallback
-bosqichi yopildi, production integration hali ochiq.
+bosqichi yopildi. B=120, seq=6/32 shape’larini navbatlab va ikki CUDA
+stream’da parallel ishlatgan serving smoke’da ham maksimal parity `5.72e-6`
+bo‘ldi; shape/state aralashuvi kuzatilmadi. Production shape-cache, eviction
+va server integration hali ochiq.
 
 **Keyingi tajriba:** production shape-cache/concurrency validation va mustaqil
 uzoq quality control. **Batafsil:**

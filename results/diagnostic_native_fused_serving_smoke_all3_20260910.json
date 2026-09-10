@@ -1,0 +1,119 @@
+{
+  "experiment": "native_fused_serving_smoke",
+  "device": "cuda",
+  "examples_per_task": 8,
+  "sequence_lengths": [
+    6,
+    32
+  ],
+  "checkpoints": {
+    "ne500_stable_prefix_active16_s17_3000.pt": {
+      "shapes": {
+        "b120_s6": {
+          "sequence_length": 6
+        },
+        "b120_s32": {
+          "sequence_length": 32
+        }
+      },
+      "variants": {
+        "native_fused_fixed_k16": {
+          "shapes": {
+            "b120_s6": {
+              "max_logit_error_vs_torch": 5.7220458984375e-06
+            },
+            "b120_s32": {
+              "max_logit_error_vs_torch": 5.7220458984375e-06
+            }
+          },
+          "interleaved_max_error": 5.7220458984375e-06,
+          "concurrent_max_error": 3.814697265625e-06
+        },
+        "native_fused_learned": {
+          "shapes": {
+            "b120_s6": {
+              "max_logit_error_vs_torch": 3.814697265625e-06
+            },
+            "b120_s32": {
+              "max_logit_error_vs_torch": 3.814697265625e-06
+            }
+          },
+          "interleaved_max_error": 3.814697265625e-06,
+          "concurrent_max_error": 3.814697265625e-06
+        }
+      }
+    },
+    "ne500_stable_prefix_active16_s18_3000.pt": {
+      "shapes": {
+        "b120_s6": {
+          "sequence_length": 6
+        },
+        "b120_s32": {
+          "sequence_length": 32
+        }
+      },
+      "variants": {
+        "native_fused_fixed_k16": {
+          "shapes": {
+            "b120_s6": {
+              "max_logit_error_vs_torch": 3.814697265625e-06
+            },
+            "b120_s32": {
+              "max_logit_error_vs_torch": 5.7220458984375e-06
+            }
+          },
+          "interleaved_max_error": 5.7220458984375e-06,
+          "concurrent_max_error": 5.7220458984375e-06
+        },
+        "native_fused_learned": {
+          "shapes": {
+            "b120_s6": {
+              "max_logit_error_vs_torch": 5.7220458984375e-06
+            },
+            "b120_s32": {
+              "max_logit_error_vs_torch": 3.814697265625e-06
+            }
+          },
+          "interleaved_max_error": 5.7220458984375e-06,
+          "concurrent_max_error": 3.814697265625e-06
+        }
+      }
+    },
+    "ne500_stable_prefix_active16_s19_3000.pt": {
+      "shapes": {
+        "b120_s6": {
+          "sequence_length": 6
+        },
+        "b120_s32": {
+          "sequence_length": 32
+        }
+      },
+      "variants": {
+        "native_fused_fixed_k16": {
+          "shapes": {
+            "b120_s6": {
+              "max_logit_error_vs_torch": 1.9073486328125e-06
+            },
+            "b120_s32": {
+              "max_logit_error_vs_torch": 2.86102294921875e-06
+            }
+          },
+          "interleaved_max_error": 3.814697265625e-06,
+          "concurrent_max_error": 1.9073486328125e-06
+        },
+        "native_fused_learned": {
+          "shapes": {
+            "b120_s6": {
+              "max_logit_error_vs_torch": 2.86102294921875e-06
+            },
+            "b120_s32": {
+              "max_logit_error_vs_torch": 1.9073486328125e-06
+            }
+          },
+          "interleaved_max_error": 2.86102294921875e-06,
+          "concurrent_max_error": 2.86102294921875e-06
+        }
+      }
+    }
+  }
+}

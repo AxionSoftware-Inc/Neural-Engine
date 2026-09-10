@@ -33,6 +33,7 @@
 - [P-003 — Native fused runtime JSON, batch 960](diagnostic_native_fused_runtime_all3_960_20260910.json)
 - [P-003 — Native fused batch-shape sweep JSON](diagnostic_native_fused_shape_sweep_all3_20260910.json)
 - [P-003 — Native fused sequence-shape sweep JSON](diagnostic_native_fused_sequence_sweep_all3_20260910.json)
+- [P-003 — Native fused serving reuse/stream smoke JSON](diagnostic_native_fused_serving_smoke_all3_20260910.json)
 - [P-003 — Native fused learned OOD quality JSON](diagnostic_native_fused_learned_ood_long96_20260910.json)
 - [P-003 — Native fused fixed-K=16 Graph JSONs](diagnostic_native_cuda_graph_fused_fixed16_b1_20260910.json)
 - [P-003 — Native warm-start versus continuation control](diagnostic_native_warmstart_vs_continued_20260910.json)
