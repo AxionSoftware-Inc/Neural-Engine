@@ -41,6 +41,22 @@ The result is positive on all four probes. Dead traffic is nearly unchanged
 on the ordinary stream (`20.65% → 21.22%`) and slightly lower on both edge
 probes (`50.99% → 49.33%` low, `46.67% → 45.38%` high).
 
+## Capacity check under the same recipe
+
+The exact two-edge recipe was then run on 500M for 10,000 steps with the same
+two seeds and evaluator.
+
+| Probe | 300M mix | 500M mix | 500M − 300M | Hard delta |
+|---|---:|---:|---:|---:|
+| uniform all | 77.865% | 76.736% | **−1.128 pp** | **−2.192 pp** |
+| combination holdout | 78.893% | 77.678% | **−1.215 pp** | **−2.908 pp** |
+| low edge `[0,7]` | 95.725% | 96.011% | **+0.286 pp** | **+0.694 pp** |
+| high edge `[56,63]` | 94.562% | 95.482% | **+0.920 pp** | **+2.181 pp** |
+
+500M retains and slightly improves the edge specialization, but loses on the
+ordinary and held-out-combination streams. Thus the recipe fixes distribution
+coverage, not the underlying 300M→500M capacity-scaling problem.
+
 For context, high-edge-only sampling reached about 97% high-edge accuracy,
 but reduced low-edge accuracy by 3.711 pp and was not accepted as a general
 recipe. Training longer was necessary: at 3,000 steps the two-edge mix was
@@ -55,10 +71,11 @@ high-edge probes together. It substantially weakens the claim that the
 remaining edge failure is purely a router or capacity problem: data coverage
 is a major contributor.
 
-P-003 remains active because this does not establish monotonic 300M→500M
-scaling. Before using it as the standard training protocol, repeat the recipe
-at 500M with two seeds and compare the best 300M and 500M models under this
-common recipe. Do not jump to 700M/1B until that comparison is complete.
+P-003 remains active: the matched 500M run is worse on ordinary and
+held-out-combination quality despite being slightly better on edge probes.
+The 300M two-edge recipe is the current reference; 500M is not promoted as a
+default and blind 700M/1B expansion is deferred until the scaling bottleneck
+is understood.
 
 ## Reproduction
 
@@ -72,4 +89,5 @@ Raw outputs:
 
 - `results/diagnostic_native_step_adapter_vs_two_edge_mix_10000.json`
 - `results/diagnostic_native_step_adapter_two_edge_mix_3000.json`
+- `results/diagnostic_native_two_edge_mix_300m_500m_10000.json`
 - `data/generator.py` and `train.py` implement the opt-in sampler.

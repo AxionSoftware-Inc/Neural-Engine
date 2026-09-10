@@ -1644,5 +1644,8 @@ examples into the step-adapter training stream. At 10,000 steps and two seeds,
 uniform accuracy improved `+0.599 pp` and hard-task mean `+2.268 pp`; low-edge
 and high-edge probe accuracy improved `+17.340/+22.097 pp` respectively.
 This is a strong robustness result, but it is a training recipe rather than an
-architecture change. It remains opt-in until the same protocol is validated
-at 500M. See `P003_NATIVE_EDGE_MIX_AUDIT_20260910.md`.
+architecture change. It remains opt-in. The matched 500M run preserved edge
+gains but lost `1.128 pp` on
+uniform and `2.192 pp` on hard-task mean, so 300M remains the current reference
+and 700M/1B expansion stays deferred. See
+`P003_NATIVE_EDGE_MIX_AUDIT_20260910.md`.

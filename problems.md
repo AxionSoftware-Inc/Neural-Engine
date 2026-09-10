@@ -1531,7 +1531,7 @@ candidate; keyingi ish high-edge/value representation validation.
 
 ### C-P003-NATIVE-EDGE-COVERAGE-001 — Low/high edge training coverage
 
-**Status:** `PROMISING OPT-IN — 500M VALIDATION OPEN`
+**Status:** `PROMISING OPT-IN — 500M SCALING NEGATIVE`
 **Muammo:** P-003 / P-007
 
 **Natija:** 300M rank-8 step-adapterda 25% ikki-edge mix 10k, seed17/18
@@ -1539,6 +1539,10 @@ juftligida uniform accuracyni `+0.599 pp`, combination holdoutni `+0.629 pp`,
 low-edge’ni `+17.340 pp` va high-edge’ni `+22.097 pp` yaxshiladi. Hard-task
 mean ordinary probe’da `+2.268 pp` oshdi. 3k screen yomon ko‘ringani uchun
 long-budget validation zarur bo‘ldi. Bu model body yoki active pathni
-o‘zgartirmaydi; u faqat rare value regimesni trainingda ko‘paytiradi. 500Mda
-shu recipe qayta tekshirilishi kerak, shundan keyin default haqida qaror qilinadi.
+o‘zgartirmaydi; u faqat rare value regimesni trainingda ko‘paytiradi. Shu
+recipe 500Mda qayta tekshirilganda edge foydasi saqlanib qoldi
+(`+0.286/+0.920 pp` low/high), lekin uniform `−1.128 pp` va hard-task
+`−2.192 pp` bo‘ldi. Shuning uchun recipe 300M uchun current reference opt-in,
+500M esa scaling bo‘yicha salbiy nazorat; default va 700M/1B qarori ochiq
+qoladi.
 **Batafsil:** `results/P003_NATIVE_EDGE_MIX_AUDIT_20260910.md`.
