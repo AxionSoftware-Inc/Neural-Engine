@@ -32,9 +32,18 @@ def run(args: argparse.Namespace) -> dict:
 
     model = make_model(config).to(device)
     init_checkpoint = torch.load(args.init_checkpoint, map_location=device)
-    missing, unexpected = model.load_state_dict(
-        init_checkpoint["model_state"], strict=False
-    )
+    checkpoint_state = init_checkpoint["model_state"]
+    model_state = model.state_dict()
+    compatible_state = {}
+    shape_mismatches = []
+    for key, value in checkpoint_state.items():
+        if key not in model_state:
+            continue
+        if model_state[key].shape != value.shape:
+            shape_mismatches.append(key)
+            continue
+        compatible_state[key] = value
+    missing, unexpected = model.load_state_dict(compatible_state, strict=False)
     allowed_prefixes = (
         "algebraic_integer_output_decoder.",
         "algebraic_integer_digit_embeddings.",
@@ -47,9 +56,15 @@ def run(args: argparse.Namespace) -> dict:
     allowed_missing = {
         key for key in model.state_dict() if key.startswith(allowed_prefixes)
     }
-    if not set(missing).issubset(allowed_missing) or unexpected:
+    if (
+        not set(missing).issubset(allowed_missing)
+        or unexpected
+        or not all(key.startswith(allowed_prefixes) for key in shape_mismatches)
+    ):
         raise RuntimeError(
-            f"unexpected checkpoint migration: missing={missing}, unexpected={unexpected}"
+            "unexpected checkpoint migration: "
+            f"missing={missing}, unexpected={unexpected}, "
+            f"shape_mismatches={shape_mismatches}"
         )
     full_parameter_count = sum(parameter.numel() for parameter in model.parameters())
 
@@ -178,6 +193,7 @@ def run(args: argparse.Namespace) -> dict:
         "codec_calibration_weight": codec_weight,
         "codec_value_range": [codec_value_min, codec_value_max],
         "codec_loss_mean": sum(codec_losses) / len(codec_losses) if codec_losses else None,
+        "checkpoint_shape_mismatches": shape_mismatches,
         "train": train_eval,
         "evaluation": heldout_eval,
     }
