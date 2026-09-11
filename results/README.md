@@ -1456,6 +1456,20 @@ and not overclaimed as a perfectly paired control. Rank16 remains the leading
 opt-in candidate pending four-seed unseen-range validation. See
 `V0_230_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_FULL_RANGE_4SEED.md`.
 
+V0.231 completes four-seed unseen-range validation. Rank16 reaches `58.20%`
+mean unseen accuracy and `50.59%` depth-4 versus the matched no-interaction
+`55.42%`/`47.66%` (`+2.78/+2.93 pp`); CE improves by `−0.3815`. The gain is
+positive in all four seeds, so rank16 is validated as the leading opt-in
+quality/active-budget candidate. Default remains unchanged; the next screen is
+an above-range stress test (`train 0..63`, eval `64..95`). See
+`V0_231_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_OOD_4SEED.md`.
+
+V0.232 configures the next above-range extrapolation screen: train operands
+`0..63`, evaluate `64..95`, keeping rank16 interaction and the same active
+budget. Results and a matched no-interaction control are pending; this is a
+value-range generalization test, not a capacity/700M/1B test. See
+`V0_232_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_OOD_ABOVE_RANGE.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

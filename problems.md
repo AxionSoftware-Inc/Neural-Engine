@@ -627,6 +627,21 @@ opt-in; exact four-seed unseen-range validation remains before default.
 
 **Audit:** `results/V0_230_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_FULL_RANGE_4SEED.md`.
 
+**Four-seed unseen-range validation (2026-09-11):** Rank16 interaction beats
+the matched no-interaction control on `0..31 → 32..63` by `+2.78 pp` mean
+overall and `+2.93 pp` depth-4; CE improves `−0.3815`. All four seeds are
+positive. Rank16 is now the leading quality/active-budget opt-in candidate;
+P-003 remains active for above-range generalization and default validation.
+
+**Audit:** `results/V0_231_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_OOD_4SEED.md`.
+
+**Above-range extrapolation planned (2026-09-11):** The next P-003 gate trains
+rank16 on operands `0..63` and evaluates on `64..95`, with a larger safe target
+offset. A matched no-interaction control is required; this is a representation
+generalization test and does not authorize 700M/1B capacity scaling.
+
+**Audit/config:** `results/V0_232_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_OOD_ABOVE_RANGE.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
