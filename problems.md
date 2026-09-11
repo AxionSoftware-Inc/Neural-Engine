@@ -890,6 +890,15 @@ ostida qayta sinovga qo‘yilmadi.
 
 **Audit:** `results/V0_257_258_DYNAMIC_NONMOD_RANK64_LONG_TRAIN_AUDIT.md`.
 
+**Depth-3 unseen value extrapolation (2026-09-11):** V0.255 `96..127`
+unseen qiymatlarida, class overflow’ni chetlab depth-3 alohida tekshirilganda,
+seed17/18 o‘rtachasi all `96.289%`, add/subtract/multiply esa `100%` bo‘ldi.
+**VALUE-COVERAGE VALIDATSIYASI O‘TDI.** Bu codec range coverage’ning kuchli
+dalili, lekin exact algebraic state known benchmark semanticsni beradi;
+general learned arithmetic yoki 700M/1B scaling isboti emas.
+
+**Audit:** `results/V0_259_DYNAMIC_NONMOD_DEPTH3_UNSEEN_VALUE_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

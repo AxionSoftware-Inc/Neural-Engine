@@ -1646,6 +1646,12 @@ fixed-96 multiply remains `100%`. Rank64 is retained as a lower-budget opt-in
 higher-quality peak. Rank32 is not scheduled. See
 `V0_257_258_DYNAMIC_NONMOD_RANK64_LONG_TRAIN_AUDIT.md`.
 
+V0.259 validates V0.255 on unseen operands `96..127` at legal depth 3. Both
+seeds reach `100%` on add, subtract, and multiply; mixed all-operation mean
+is `96.289%`. The depth-4 range is intentionally not used because its targets
+overflow the current class space. See
+`V0_259_DYNAMIC_NONMOD_DEPTH3_UNSEEN_VALUE_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
