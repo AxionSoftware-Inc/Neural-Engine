@@ -592,6 +592,15 @@ regression for the best rank remain.
 
 **Audit:** `results/V0_226_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_OOD.md`.
 
+**Rank-8 cost ablation (2026-09-11):** On the same unseen-range gate, rank-8
+interaction beats no interaction by `+2.54 pp` mean overall and `+2.93 pp`
+depth-4, with CE improving `−0.1341`. It adds only `11,328` total and
+estimated active parameters; hard quality is within `0.10 pp` overall and
+`0.59 pp` depth-4 of rank16. This is the current low-cost opt-in, pending
+full-range regression and final rank selection.
+
+**Audit:** `results/V0_227_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK8_OOD.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

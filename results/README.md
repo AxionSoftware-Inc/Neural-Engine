@@ -1428,6 +1428,13 @@ than rank32's but the cost is about half; rank16 is a **PROMISING LOWER-COST
 OPT-IN**. Rank8 is the next ablation. See
 `V0_226_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_OOD.md`.
 
+V0.227 tests rank-8 on the same unseen-range gate. It beats the matched control
+by `+2.54 pp` mean overall and `+2.93 pp` depth-4, with CE improving by
+`−0.1341`, at only `11,328` extra total/active-estimate parameters. Its hard
+quality is nearly rank16's, so rank8 is the current **PROMISING LOW-COST OPT-IN**;
+full-range regression decides the preferred rank. See
+`V0_227_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK8_OOD.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
