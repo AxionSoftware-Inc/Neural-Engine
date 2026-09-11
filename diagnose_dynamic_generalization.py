@@ -21,6 +21,8 @@ def make_generator(
     value_max: int,
     operation: str | None = None,
 ) -> DynamicCompositionGenerator:
+    modulus_config = config.get("generator_modulus", config.get("modulus", 64))
+    modulus = None if modulus_config is None else int(modulus_config)
     generator = DynamicCompositionGenerator(
         max_ops=int(config["max_ops"]),
         train_max_ops=int(config.get("train_max_ops", config["max_ops"])),
@@ -28,6 +30,8 @@ def make_generator(
         value_min=value_min,
         value_max=value_max,
         split=split,
+        modulus=modulus,
+        target_offset=int(config.get("target_offset", 0)),
     )
     if operation is not None:
         generator.operation_names = (operation,)
@@ -47,8 +51,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     model.eval()
 
     ranges = {
-        "in_range_0_31": (0, 31),
-        "unseen_range_32_63": (32, 63),
+        f"range_{value_min}_{value_max}": (value_min, value_max)
+        for value_min, value_max in args.value_range
     }
     results: dict[str, Any] = {}
     for range_name, (value_min, value_max) in ranges.items():
@@ -64,7 +68,13 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     value_max=value_max,
                     operation=operation,
                 )
-                report = evaluate(model, generator, device, args.examples_per_depth)
+                report = evaluate(
+                    model,
+                    generator,
+                    device,
+                    args.examples_per_depth,
+                    compact_factorized=bool(config.get("compact_factorized_eval", False)),
+                )
                 report.pop("route_audit", None)
                 report["value_range"] = [value_min, value_max]
                 report["operation"] = operation_name
@@ -76,6 +86,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "model_name": config["model"],
         "device": str(device),
         "examples_per_depth": args.examples_per_depth,
+        "value_ranges": [list(pair) for pair in args.value_range],
         "random_baseline": 1.0 / int(config["num_classes"]),
         "results": results,
     }
@@ -95,6 +106,12 @@ def main() -> None:
     parser.add_argument("--device", default="auto")
     parser.add_argument("--seed", type=int, default=1700)
     parser.add_argument("--examples-per-depth", type=int, default=512)
+    parser.add_argument(
+        "--value-range", dest="value_range", action="append", nargs=2,
+        type=int, metavar=("MIN", "MAX"),
+        default=((0, 31), (32, 63)),
+        help="inclusive operand range; repeat to evaluate multiple ranges",
+    )
     run(parser.parse_args())
 
 

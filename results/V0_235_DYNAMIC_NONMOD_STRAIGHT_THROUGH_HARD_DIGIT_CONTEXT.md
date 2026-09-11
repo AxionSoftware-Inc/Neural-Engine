@@ -23,7 +23,7 @@ regression seen in V0.233.
 - train operands `0..63`, held-out operands `64..95`;
 - train depths `1..2`, eval depths `3..4`;
 - target offset `134,217,728`, `num_classes=8,589,934,592`;
-- fresh 5000-step runs, batch `128`, seeds `17` and `18`;
+- fresh 5000-step runs, batch `128`, seeds `17`, `18`, `19`, and `20`;
 - same factorized bank, active-8 route, and compact evaluator.
 
 The treatment must beat the matched control on hard above-range and depth-4
