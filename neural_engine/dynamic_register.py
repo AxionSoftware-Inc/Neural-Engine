@@ -211,6 +211,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         operation_write_adapter_rank: int = 0,
         operation_write_adapter_scale: float = 1.0,
         operation_write_adapter_mode: str = "post_state",
+        operation_output_adapter_rank: int = 0,
+        operation_output_adapter_scale: float = 1.0,
         operation_circuit_bank: bool = False,
         operation_router_keys: bool = False,
         operation_transition_rank: int = 0,
@@ -302,6 +304,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("operation_write_adapter_rank must be non-negative")
         if operation_write_adapter_scale < 0.0:
             raise ValueError("operation_write_adapter_scale must be non-negative")
+        if operation_output_adapter_rank < 0:
+            raise ValueError("operation_output_adapter_rank must be non-negative")
+        if operation_output_adapter_scale < 0.0:
+            raise ValueError("operation_output_adapter_scale must be non-negative")
         if operation_write_adapter_mode not in {
             "post_state", "pre_writer", "terminal_only"
         }:
@@ -433,6 +439,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.operation_write_adapter_rank = int(operation_write_adapter_rank)
         self.operation_write_adapter_scale = float(operation_write_adapter_scale)
         self.operation_write_adapter_mode = operation_write_adapter_mode
+        self.operation_output_adapter_rank = int(operation_output_adapter_rank)
+        self.operation_output_adapter_scale = float(operation_output_adapter_scale)
         self.operation_circuit_bank = bool(operation_circuit_bank)
         self.operation_router_keys = bool(operation_router_keys)
         self.operation_transition_rank = int(operation_transition_rank)
@@ -580,6 +588,16 @@ class DynamicRegisterNeuralEngine(nn.Module):
             self.operation_write_adapter_bias = nn.Parameter(torch.zeros(3, state_dim))
             nn.init.normal_(self.operation_write_adapter_down, std=0.02)
             nn.init.normal_(self.operation_write_adapter_up, std=0.02)
+        if self.operation_output_adapter_rank:
+            self.operation_output_adapter_down = nn.Parameter(torch.empty(
+                3, state_dim, self.operation_output_adapter_rank
+            ))
+            self.operation_output_adapter_up = nn.Parameter(torch.empty(
+                3, self.operation_output_adapter_rank, state_dim
+            ))
+            self.operation_output_adapter_bias = nn.Parameter(torch.zeros(3, state_dim))
+            nn.init.normal_(self.operation_output_adapter_down, std=0.02)
+            nn.init.normal_(self.operation_output_adapter_up, std=0.02)
         if self.operation_transition_rank:
             self.operation_transition_down = nn.Parameter(torch.empty(
                 3, state_dim, self.operation_transition_rank
@@ -825,6 +843,19 @@ class DynamicRegisterNeuralEngine(nn.Module):
         ) + self.operation_transition_bias[operation_ids]
         return nn.functional.gelu(adapted)
 
+    def _operation_output_adapter(
+        self, state: torch.Tensor, operation_ids: torch.Tensor
+    ) -> torch.Tensor:
+        down = torch.einsum(
+            "bd,bdr->br", state,
+            self.operation_output_adapter_down[operation_ids]
+        )
+        adapted = torch.einsum(
+            "br,brd->bd", down,
+            self.operation_output_adapter_up[operation_ids]
+        ) + self.operation_output_adapter_bias[operation_ids]
+        return nn.functional.gelu(adapted)
+
     def _algebraic_state_update(
         self,
         state: torch.Tensor,
@@ -970,6 +1001,11 @@ class DynamicRegisterNeuralEngine(nn.Module):
         post_state_steps = []
         step_state_steps = []
         algebraic_state_steps = []
+        # Padded steps keep the last real operation so the terminal readout
+        # remains operation-conditioned for shorter programs.
+        last_operation_ids = torch.zeros(
+            batch_size, dtype=torch.long, device=device
+        )
 
         for step in range(self.max_ops):
             if collect_state_stats:
@@ -1201,6 +1237,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
                         current_operation_ids,
                     )
                     algebraic_state = next_algebraic_state
+                next_last_operation_ids = last_operation_ids.clone()
+                next_last_operation_ids[active_indices] = current_operation_ids
+                last_operation_ids = next_last_operation_ids
                 if self.modular_prior_enabled:
                     operand_values = (
                         inputs[active_indices, self.value_start + step + 1]
@@ -1276,6 +1315,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 else:
                     step_features = modular_state
                 step_state = step_state + self.modular_projection(step_features)
+            if self.operation_output_adapter_rank:
+                step_state = step_state + self.operation_output_adapter_scale * (
+                    self._operation_output_adapter(step_state, last_operation_ids)
+                )
             if collect_state_stats:
                 step_state_steps.append(step_state.clone())
                 if self.algebraic_state_mode in {"polynomial2", "polynomial2_fourier"}:
@@ -1390,6 +1433,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 self.operation_write_adapter_down.numel()
                 + self.operation_write_adapter_up.numel()
                 + self.operation_write_adapter_bias.numel()
+            )
+        if self.operation_output_adapter_rank:
+            shared += (
+                self.operation_output_adapter_down.numel()
+                + self.operation_output_adapter_up.numel()
+                + self.operation_output_adapter_bias.numel()
             )
         if self.operation_transition_rank:
             shared += (
@@ -1527,6 +1576,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "operation_write_adapter_rank": self.operation_write_adapter_rank,
             "operation_write_adapter_scale": self.operation_write_adapter_scale,
             "operation_write_adapter_mode": self.operation_write_adapter_mode,
+            "operation_output_adapter_rank": self.operation_output_adapter_rank,
+            "operation_output_adapter_scale": self.operation_output_adapter_scale,
             "operation_circuit_bank": self.operation_circuit_bank,
             "operation_router_keys": self.operation_router_keys,
             "operation_router_key_params": operation_router_key_params,
