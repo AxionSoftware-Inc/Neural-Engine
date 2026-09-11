@@ -12,6 +12,7 @@ import yaml
 from data.dynamic_composition import DynamicCompositionGenerator
 from train_dynamic_composition import (
     evaluate,
+    factorized_digit_targets,
     make_model,
     output_loss,
     seed_everything,
@@ -98,7 +99,15 @@ def run(args: argparse.Namespace) -> dict:
 
     model.train()
     losses = []
+    codec_losses = []
     started = time.perf_counter()
+    codec_weight = float(config.get("codec_calibration_weight", 0.0))
+    codec_value_min = int(config.get("codec_value_min", -81450625))
+    codec_value_max = int(config.get("codec_value_max", 81450625))
+    if codec_weight < 0.0:
+        raise ValueError("codec_calibration_weight must be non-negative")
+    if codec_value_min > codec_value_max:
+        raise ValueError("codec_value_min must not exceed codec_value_max")
     for step in range(1, args.steps + 1):
         batch = train_generator.task_balanced_batch(args.batch_size, device)
         validate_class_targets(
@@ -107,6 +116,32 @@ def run(args: argparse.Namespace) -> dict:
         optimizer.zero_grad(set_to_none=True)
         logits, stats = model(batch.inputs, return_full_logits=False)
         loss = output_loss(model, logits, stats, batch.targets)
+        if codec_weight:
+            codec_values = torch.randint(
+                codec_value_min,
+                codec_value_max + 1,
+                (args.batch_size,),
+                device=device,
+                dtype=torch.long,
+            )
+            codec_features = model._algebraic_integer_output_features(codec_values)
+            codec_state = model.algebraic_integer_output_decoder(codec_features)
+            codec_digit_logits = model.algebraic_integer_output_head.digit_logits(
+                codec_state
+            )
+            codec_targets = factorized_digit_targets(
+                codec_values + int(config.get("target_offset", 0)),
+                model.output_digit_base,
+                model.output_digit_count,
+            )
+            codec_loss = torch.stack(
+                [
+                    nn.functional.cross_entropy(logit, target)
+                    for logit, target in zip(codec_digit_logits, codec_targets)
+                ]
+            ).sum()
+            codec_losses.append(float(codec_loss.detach().cpu()))
+            loss = loss + codec_weight * codec_loss
         if not torch.isfinite(loss):
             raise FloatingPointError(f"non-finite loss at step {step}")
         loss.backward()
@@ -140,6 +175,9 @@ def run(args: argparse.Namespace) -> dict:
         "trainable_parameter_count": sum(parameter.numel() for parameter in trainable),
         "train_loss_first": losses[0],
         "train_loss_last": losses[-1],
+        "codec_calibration_weight": codec_weight,
+        "codec_value_range": [codec_value_min, codec_value_max],
+        "codec_loss_mean": sum(codec_losses) / len(codec_losses) if codec_losses else None,
         "train": train_eval,
         "evaluation": heldout_eval,
     }
