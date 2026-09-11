@@ -109,10 +109,13 @@ def main() -> None:
     parser.add_argument(
         "--value-range", dest="value_range", action="append", nargs=2,
         type=int, metavar=("MIN", "MAX"),
-        default=[(0, 31), (32, 63)],
+        default=None,
         help="inclusive operand range; repeat to evaluate multiple ranges",
     )
-    run(parser.parse_args())
+    args = parser.parse_args()
+    if args.value_range is None:
+        args.value_range = [(0, 31), (32, 63)]
+    run(args)
 
 
 if __name__ == "__main__":
