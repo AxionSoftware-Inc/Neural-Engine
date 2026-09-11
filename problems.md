@@ -992,6 +992,20 @@ bilinear residual.
 
 **Audit:** `results/V0_267_DYNAMIC_NONMOD_BILINEAR_ALL_DEPTHS_AUDIT.md`.
 
+**Supervised scalar value-contract screen (2026-09-12):** V0.268 added the
+existing one-dimensional `(old, operand, old*operand, bias)` scalar lane with
+normalized intermediate-value supervision and query/read injection. On the
+small `0..7` task with depths 1–2 train and 3–4 held out, the original reports
+gave control/treatment means `67.773% → 54.883%` (`−12.891 pp`). A larger
+paired held-out evaluation with 1,024 identical examples per depth gave
+`68.921% → 56.494%` (`−12.427 pp`), with both seeds and both held-out depths
+regressing. **V0.268 REJECTED.** This closes the scalar-contract family as a
+quality fix; P-003/P-004 remain active, and the next representation must be a
+genuinely vector-valued typed register/carry interface rather than more scalar
+loss or scale sweeps.
+
+**Audit:** `results/V0_268_DYNAMIC_NONMOD_STRUCTURED_CONTRACT_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

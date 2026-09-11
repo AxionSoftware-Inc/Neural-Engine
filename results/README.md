@@ -1701,6 +1701,15 @@ depth-4 stayed flat. Route/factor usage increased without a stable quality
 gain. **V0.267 REJECTED FOR ADOPTION AND SCALING; OPT-IN DIAGNOSTIC ONLY.**
 See `V0_267_DYNAMIC_NONMOD_BILINEAR_ALL_DEPTHS_AUDIT.md`.
 
+V0.268 adds a normalized supervised scalar value-contract with
+`(old, operand, old*operand, bias)` transition and query/read injection on the
+small `0..7` task. It lowers the two-seed mean from `68.921%` to `56.494%` on a
+larger paired held-out evaluation (`−12.427 pp`), with both depth-3 and
+depth-4 regressing. **V0.268 REJECTED.** The one-dimensional scalar packet is
+closed as a quality fix; the next state experiment must be genuinely
+vector-valued and typed. See
+`V0_268_DYNAMIC_NONMOD_STRUCTURED_CONTRACT_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

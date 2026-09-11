@@ -24,6 +24,7 @@ def run_checkpoint(
     seed: int,
     value_min: int,
     value_max: int,
+    split: str,
     device: torch.device,
 ) -> dict:
     payload = torch.load(path, map_location="cpu", weights_only=True)
@@ -41,7 +42,7 @@ def run_checkpoint(
         target_offset=int(config.get("target_offset", 0)),
         value_min=value_min,
         value_max=value_max,
-        split="all",
+        split=split,
     )
     result = evaluate(
         model,
@@ -67,6 +68,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=1702)
     parser.add_argument("--value-min", type=int, default=0)
     parser.add_argument("--value-max", type=int, default=95)
+    parser.add_argument("--split", choices=("all", "train", "heldout"), default="all")
     parser.add_argument("--device", default="auto")
     parser.add_argument("--output", default=None)
     args = parser.parse_args()
@@ -77,6 +79,7 @@ def main() -> None:
         "examples_per_depth": args.examples_per_depth,
         "seed": args.seed,
         "value_range": [args.value_min, args.value_max],
+        "split": args.split,
         "device": str(device),
         "checkpoints": [
             run_checkpoint(
@@ -85,6 +88,7 @@ def main() -> None:
                 seed=args.seed,
                 value_min=args.value_min,
                 value_max=args.value_max,
+                split=args.split,
                 device=device,
             )
             for path in args.checkpoint
