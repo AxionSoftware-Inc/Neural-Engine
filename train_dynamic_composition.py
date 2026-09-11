@@ -137,6 +137,8 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "algebraic_integer_output_decoder", "algebraic_integer_digit_dim",
         "algebraic_integer_output_decoder_mode",
         "algebraic_integer_output_head",
+        "algebraic_integer_output_factor_rank",
+        "algebraic_integer_output_digit_interaction_rank",
         "algebraic_state_value_scale", "algebraic_state_fourier_base",
         "operator_valued_product_encoder", "operator_valued_packet_width",
         "operator_valued_basis_count",

@@ -231,6 +231,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         algebraic_integer_digit_dim: int = 16,
         algebraic_integer_output_decoder_mode: str = "all",
         algebraic_integer_output_head: bool = False,
+        algebraic_integer_output_factor_rank: int | None = None,
+        algebraic_integer_output_digit_interaction_rank: int | None = None,
         algebraic_state_value_scale: float = 4096.0,
         algebraic_state_fourier_base: int = 128,
         operator_valued_product_encoder: bool = False,
@@ -405,6 +407,20 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError(
                 "algebraic_integer_output_head requires factorized_digits output"
             )
+        if algebraic_integer_output_factor_rank is None:
+            algebraic_integer_output_factor_rank = output_factor_rank
+        if algebraic_integer_output_digit_interaction_rank is None:
+            algebraic_integer_output_digit_interaction_rank = (
+                output_digit_interaction_rank
+            )
+        if algebraic_integer_output_factor_rank < 0:
+            raise ValueError(
+                "algebraic_integer_output_factor_rank must be non-negative"
+            )
+        if algebraic_integer_output_digit_interaction_rank < 0:
+            raise ValueError(
+                "algebraic_integer_output_digit_interaction_rank must be non-negative"
+            )
         if output_temperature <= 0.0:
             raise ValueError("output_temperature must be positive")
         if output_digit_base < 2:
@@ -512,6 +528,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
         )
         self.algebraic_integer_output_head_enabled = bool(
             algebraic_integer_output_head
+        )
+        self.algebraic_integer_output_factor_rank = int(
+            algebraic_integer_output_factor_rank
+        )
+        self.algebraic_integer_output_digit_interaction_rank = int(
+            algebraic_integer_output_digit_interaction_rank
         )
         self.algebraic_state_value_scale = float(algebraic_state_value_scale)
         self.algebraic_state_fourier_base = int(algebraic_state_fourier_base)
@@ -834,9 +856,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 state_dim,
                 num_classes,
                 output_digit_base,
-                output_factor_rank,
+                self.algebraic_integer_output_factor_rank,
                 output_digit_count,
-                output_digit_interaction_rank,
+                self.algebraic_integer_output_digit_interaction_rank,
                 output_digit_context_mode,
             )
 
@@ -1810,6 +1832,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "algebraic_integer_digit_dim": self.algebraic_integer_digit_dim,
             "algebraic_integer_output_decoder_mode": self.algebraic_integer_output_decoder_mode,
             "algebraic_integer_output_head": self.algebraic_integer_output_head_enabled,
+            "algebraic_integer_output_factor_rank": self.algebraic_integer_output_factor_rank,
+            "algebraic_integer_output_digit_interaction_rank": self.algebraic_integer_output_digit_interaction_rank,
             "algebraic_state_value_scale": self.algebraic_state_value_scale,
             "algebraic_state_fourier_base": self.algebraic_state_fourier_base,
             "operator_valued_product_encoder": self.operator_valued_product_encoder,
