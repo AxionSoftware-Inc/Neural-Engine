@@ -583,6 +583,15 @@ active for generalization/calibration; next is rank-16 OOD cost ablation.
 
 **Audit:** `results/V0_225_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_FULL_RANGE_5000.md`.
 
+**Rank-16 cost ablation (2026-09-11):** On the same unseen-range gate,
+rank-16 interaction beats the matched no-interaction control by `+2.64 pp`
+overall and `+3.52 pp` depth-4; CE improves by `−0.5941` across seed17/18.
+The added total/active-estimate budget is only `22,656`, about half of rank32.
+This is a promising lower-cost opt-in, not default; rank8 OOD and full-range
+regression for the best rank remain.
+
+**Audit:** `results/V0_226_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_OOD.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

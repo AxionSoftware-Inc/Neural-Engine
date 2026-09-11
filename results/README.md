@@ -1421,6 +1421,13 @@ regresses by `+0.2128`, so the path remains **OPT-IN**, not default. The next
 gate is rank-16 OOD ablation for lower cost and better calibration. See
 `V0_225_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_FULL_RANGE_5000.md`.
 
+V0.226 tests rank-16 on the unseen-range gate. It beats the matched control by
+`+2.64 pp` mean overall and `+3.52 pp` depth-4, with CE improving by `−0.5941`,
+at only `22,656` extra total/active-estimate parameters. The gain is smaller
+than rank32's but the cost is about half; rank16 is a **PROMISING LOWER-COST
+OPT-IN**. Rank8 is the next ablation. See
+`V0_226_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_OOD.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
