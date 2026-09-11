@@ -1639,6 +1639,13 @@ matched range; unseen fixed-96 subtract is `50%`. It is rejected after the
 early quality gate, so rank128 V0.255 remains the leading opt-in budget. See
 `V0_256_DYNAMIC_NONMOD_RANK64_FULL_RANGE_CODEC_AUDIT.md`.
 
+V0.257–V0.258 extend rank64 training to 15k steps. The two-seed matched mean
+is `96.973%` aggregate, `99.414%` multiply, and `99.219%` subtract; unseen
+fixed-96 multiply remains `100%`. Rank64 is retained as a lower-budget opt-in
+(`207,362` trainable parameters), while rank128 V0.255 remains the faster,
+higher-quality peak. Rank32 is not scheduled. See
+`V0_257_258_DYNAMIC_NONMOD_RANK64_LONG_TRAIN_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

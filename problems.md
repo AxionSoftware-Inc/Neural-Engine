@@ -879,6 +879,17 @@ opt-in bo‘lib qoldi; rank32 shu gate ostida to‘liq screen qilinmaydi.
 
 **Audit:** `results/V0_256_DYNAMIC_NONMOD_RANK64_FULL_RANGE_CODEC_AUDIT.md`.
 
+**Rank64 long-training continuation (2026-09-11):** 5k-step rank64 screendagi
+underfitni ajratish uchun 15k qadamga uzaytirildi. Seed17/18 o‘rtachasi matched
+`0..95` all `96.973%`, add `100%`, subtract `99.219%`, multiply `99.414%`;
+unseen fixed `96` da all `95.605%`, add/subtract/multiply `100%` bo‘ldi.
+Rank64 `207,362` trainable parametr bilan ishlaydi, lekin rank128 V0.255’dan
+aggregate taxminan `1.07 pp` past va ko‘proq training vaqt oladi. **LOWER-
+BUDGET OPT-IN SIFATIDA QOLDIRILDI; PEAK QUALITY EMAS.** Rank32 shu frontier
+ostida qayta sinovga qo‘yilmadi.
+
+**Audit:** `results/V0_257_258_DYNAMIC_NONMOD_RANK64_LONG_TRAIN_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
