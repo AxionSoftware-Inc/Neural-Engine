@@ -552,6 +552,17 @@ deferred.
 
 **Audit:** `results/V0_222_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_OOD_AUDIT.md`.
 
+**5000-step continuation (2026-09-11):** Cross-digit interaction rank-32
+reaches `60.16%` mean unseen-range accuracy and `55.86%` depth-4 after 5000
+steps, up from `55.96%`/`50.59%` at 3000 steps. Mean CE nevertheless worsens
+from `9.9377` to `12.0836`; this is not yet attributable to the interaction
+because a matched no-interaction 5000-step control is missing. The signal is
+`PROMISING OPT-IN`, not solved. Required next controls are matched 5000-step
+no-interaction OOD and interaction full-range `0..63` regression; default and
+capacity scaling remain unchanged.
+
+**Audit:** `results/V0_223_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_OOD_5000_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

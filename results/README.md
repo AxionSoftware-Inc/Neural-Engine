@@ -1399,6 +1399,13 @@ carry/readout bottleneck, but it remains **OPT-IN** pending 5000-step and
 full-range regression controls. See
 `V0_222_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_OOD_AUDIT.md`.
 
+V0.223 extends that interaction variant to 5000 steps. Mean unseen-range
+accuracy rises again to `60.16%` and depth-4 to `55.86%`, but CE worsens to
+`12.0836`. The hard-accuracy improvement is promising, while the calibration
+change is mixed and requires a matched 5000-step no-interaction control plus a
+full-range regression screen. The variant remains **OPT-IN**, not default. See
+`V0_223_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_OOD_5000_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
