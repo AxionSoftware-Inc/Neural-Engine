@@ -1570,6 +1570,14 @@ decoder is therefore rejected for multiply adoption; the next test preserves
 the exact integer packet and uses a lossless base-512 value codec. See
 `V0_243_DYNAMIC_NONMOD_ALGEBRAIC_OUTPUT_DECODER_AUDIT.md`.
 
+V0.244 preserves the algebraic value in an exact int64 register and learns a
+base-512 digit codec. This is the first strong multiply-specific signal:
+multiply rises `15.430% → 23.047%`, depth-3 `23.242% → 36.719%`, and depth-4
+`7.617% → 9.375%`. Applying that codec to every operation damages subtract
+`99.707% → 80.176%`, so it is not a default. The next controlled test applies
+the integer codec only to multiply and keeps the learned readout for
+add/subtract. See `V0_244_DYNAMIC_NONMOD_EXACT_INTEGER_OUTPUT_CODEC_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

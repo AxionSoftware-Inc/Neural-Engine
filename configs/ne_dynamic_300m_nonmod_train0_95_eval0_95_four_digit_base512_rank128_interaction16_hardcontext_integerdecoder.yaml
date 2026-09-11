@@ -34,6 +34,7 @@ algebraic_state_mode: polynomial2_fourier
 algebraic_state_scale: 1.0
 algebraic_integer_output_decoder: true
 algebraic_integer_digit_dim: 16
+algebraic_integer_output_decoder_mode: multiply_only
 algebraic_state_value_scale: 1073741824.0
 algebraic_state_fourier_base: 512
 output_mode: factorized_digits

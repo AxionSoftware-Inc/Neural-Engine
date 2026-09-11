@@ -229,6 +229,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         algebraic_output_decoder: bool = False,
         algebraic_integer_output_decoder: bool = False,
         algebraic_integer_digit_dim: int = 16,
+        algebraic_integer_output_decoder_mode: str = "all",
         algebraic_state_value_scale: float = 4096.0,
         algebraic_state_fourier_base: int = 128,
         operator_valued_product_encoder: bool = False,
@@ -365,6 +366,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
             )
         if algebraic_integer_digit_dim < 1:
             raise ValueError("algebraic_integer_digit_dim must be positive")
+        if algebraic_integer_output_decoder_mode not in {"all", "multiply_only"}:
+            raise ValueError(
+                "algebraic_integer_output_decoder_mode must be all or multiply_only"
+            )
         if algebraic_state_value_scale <= 0.0:
             raise ValueError("algebraic_state_value_scale must be positive")
         if algebraic_state_fourier_base < 2:
@@ -493,6 +498,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
             algebraic_integer_output_decoder
         )
         self.algebraic_integer_digit_dim = int(algebraic_integer_digit_dim)
+        self.algebraic_integer_output_decoder_mode = (
+            algebraic_integer_output_decoder_mode
+        )
         self.algebraic_state_value_scale = float(algebraic_state_value_scale)
         self.algebraic_state_fourier_base = int(algebraic_state_fourier_base)
         self.operator_valued_product_encoder = bool(operator_valued_product_encoder)
@@ -1456,11 +1464,20 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     algebraic_state_steps.append(algebraic_state.clone())
             if self.output_mode == "factorized_digits":
                 if self.algebraic_integer_output_decoder_enabled:
-                    output_state = self.algebraic_integer_output_decoder(
+                    integer_output_state = self.algebraic_integer_output_decoder(
                         self._algebraic_integer_output_features(
                             algebraic_integer_state
                         )
                     )
+                    if self.algebraic_integer_output_decoder_mode == "multiply_only":
+                        learned_output_state = self.output[0](step_state)
+                        output_state = torch.where(
+                            last_operation_ids.eq(2).unsqueeze(-1),
+                            integer_output_state,
+                            learned_output_state,
+                        )
+                    else:
+                        output_state = integer_output_state
                 elif self.algebraic_output_decoder_enabled:
                     output_state = self.algebraic_output_decoder(
                         self._algebraic_state_features(algebraic_state)
@@ -1750,6 +1767,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "algebraic_output_decoder": self.algebraic_output_decoder_enabled,
             "algebraic_integer_output_decoder": self.algebraic_integer_output_decoder_enabled,
             "algebraic_integer_digit_dim": self.algebraic_integer_digit_dim,
+            "algebraic_integer_output_decoder_mode": self.algebraic_integer_output_decoder_mode,
             "algebraic_state_value_scale": self.algebraic_state_value_scale,
             "algebraic_state_fourier_base": self.algebraic_state_fourier_base,
             "operator_valued_product_encoder": self.operator_valued_product_encoder,

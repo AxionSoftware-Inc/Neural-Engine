@@ -775,6 +775,18 @@ no circuit-bank or raw-capacity increase.
 
 **Audit:** `results/V0_243_DYNAMIC_NONMOD_ALGEBRAIC_OUTPUT_DECODER_AUDIT.md`.
 
+**Exact integer output codec (2026-09-11):** A separate int64 algebraic
+register plus learned base-512 digit embeddings raises multiply from
+`15.430%` to `23.047%` mean held-out, depth-3 from `23.242%` to `36.719%`,
+and depth-4 from `7.617%` to `9.375%`. However, using the codec for every
+operation damages subtract `99.707% → 80.176%`. **RETAINED AS A STRONG
+MULTIPLY-SPECIFIC DIAGNOSTIC, NOT DEFAULT.** This confirms numeric precision /
+codec representation is part of P-003, while mixed operations need
+operation-conditioned readouts. Next test: integer codec for multiply only;
+learned readout for add/subtract.
+
+**Audit:** `results/V0_244_DYNAMIC_NONMOD_EXACT_INTEGER_OUTPUT_CODEC_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
