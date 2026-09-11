@@ -642,6 +642,17 @@ generalization test and does not authorize 700M/1B capacity scaling.
 
 **Audit/config:** `results/V0_232_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_OOD_ABOVE_RANGE.md`.
 
+**Above-range result (2026-09-11):** The matched two-seed `0..63 → 64..95`
+screen failed the hard-quality gate. Interaction rank16 averaged `48.73%`
+overall and `42.38%` depth-4 versus no interaction `50.39%`/`43.36%`, or
+`−1.66/−0.98 pp`; CE alone improved `−0.1660` and is not sufficient evidence.
+The result is mixed by seed and indicates that the earlier unseen-range gain
+does not transfer beyond the full training interval. Keep rank16 opt-in only
+for `0..31 → 32..63`; P-003 remains active for a representation that
+extrapolates reliably.
+
+**Audit:** `results/V0_232_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_OOD_ABOVE_RANGE.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

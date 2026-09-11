@@ -1464,10 +1464,14 @@ quality/active-budget candidate. Default remains unchanged; the next screen is
 an above-range stress test (`train 0..63`, eval `64..95`). See
 `V0_231_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_OOD_4SEED.md`.
 
-V0.232 configures the next above-range extrapolation screen: train operands
-`0..63`, evaluate `64..95`, keeping rank16 interaction and the same active
-budget. Results and a matched no-interaction control are pending; this is a
-value-range generalization test, not a capacity/700M/1B test. See
+V0.232 completes the above-range extrapolation screen: train operands `0..63`,
+evaluate `64..95`, keeping rank16 interaction and the same active budget. The
+matched two-seed mean is `48.73%` overall and `42.38%` depth-4, versus
+`50.39%`/`43.36%` for no interaction (`−1.66/−0.98 pp`); CE improved by
+`−0.1660`, but hard accuracy was mixed by seed and failed the quality gate.
+Rank16 is rejected for this harder extrapolation split and remains opt-in only
+for the earlier `0..31 → 32..63` result. This is a value-range
+generalization result, not a capacity/700M/1B test. See
 `V0_232_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_OOD_ABOVE_RANGE.md`.
 
 V0.201 rejects injecting the learned scalar lane into the next operation's

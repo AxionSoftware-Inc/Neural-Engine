@@ -1,7 +1,7 @@
 # V0.232 — rank-16 interaction above-range extrapolation
 
 **Date:** 2026-09-11  
-**Status:** `RUN CONFIGURED; RESULTS PENDING`
+**Status:** `COMPLETED; ABOVE-RANGE GATE REJECTED INTERACTION`
 
 ## Question
 
@@ -18,7 +18,7 @@ larger classifier class envelope: `num_classes=8,589,934,592` (`2^33`), which
 is still a compact factorized head (`64 + 3*512` digit logits), not a dense
 8.6-billion-logit layer.
 
-## Planned protocol
+## Protocol
 
 - rank-16 cross-digit interaction;
 - learned value encoder and polynomial2/Fourier algebraic state;
@@ -34,14 +34,63 @@ The comparison must be made with a matched no-interaction control under the
 same above-range split; no quality conclusion should be drawn from the
 treatment alone.
 
-## Raw runs
+## Preflight note
 
 The first preflight run used the earlier `num_classes=1,073,741,824` envelope
 and correctly stopped during final evaluation because an above-range target
 reached about `3.75B`. It produced no valid metrics and is excluded from the
 comparison. The config was corrected before the valid rerun.
 
-Pending completion after the corrected rerun. Config:
+## Results
+
+| Arm | Seed | Train accuracy | Above-range accuracy | Depth 3 | Depth 4 | CE |
+|---|---:|---:|---:|---:|---:|---:|
+| No interaction | 17 | 98.05% | 50.00% | 55.08% | 44.92% | 11.9260 |
+| No interaction | 18 | 99.41% | 50.78% | 59.77% | 41.80% | 9.5744 |
+| **No interaction mean** |  | **98.73%** | **50.39%** | **57.42%** | **43.36%** | **10.7502** |
+| Interaction rank 16 | 17 | 97.85% | 51.95% | 56.25% | 47.66% | 11.7484 |
+| Interaction rank 16 | 18 | 99.02% | 45.51% | 53.91% | 37.11% | 9.4201 |
+| **Interaction rank 16 mean** |  | **98.44%** | **48.73%** | **55.08%** | **42.38%** | **10.5843** |
+
+Matched treatment minus control deltas:
+
+- above-range accuracy: `−1.66 pp`;
+- depth-3 accuracy: `−2.34 pp`;
+- depth-4 accuracy: `−0.98 pp`;
+- CE: `−0.1660` (numerically improved, but hard accuracy declined).
+
+The per-seed hard-accuracy deltas are mixed: seed17 is positive (`+1.95 pp`
+overall, `+2.73 pp` depth-4), while seed18 is negative (`−5.27 pp`,
+`−4.69 pp`). The mean therefore fails the quality gate and is not evidence
+that interaction improves extrapolation beyond the full training interval.
+
+This does not invalidate the earlier `0..31 → 32..63` rank16 result: it shows
+that the gain is split-dependent and does not transfer to the harder
+`0..63 → 64..95` extrapolation screen. Both arms use the same enlarged
+factorized class envelope, so the comparison remains valid.
+
+## Decision
+
+Rank16 cross-digit interaction is **rejected for above-range extrapolation**
+and remains opt-in only for the previously validated split. The default is
+unchanged. The result points to a remaining representation/generalization
+problem (especially the learned value path and recurrent extrapolation), not
+to a simple need for more output interaction capacity. Do not scale to 700M/1B
+from this result.
+
+## Raw runs
+
+Treatment:
+
+- `results/runs/nonmod_train0_63_eval64_95_four_digit_base512_rank128_interaction16_above_range_seed17_5000.json`
+- `results/runs/nonmod_train0_63_eval64_95_four_digit_base512_rank128_interaction16_above_range_seed18_5000.json`
+
+Control:
+
+- `results/runs/nonmod_train0_63_eval64_95_four_digit_base512_rank128_nointeraction_above_range_seed17_5000.json`
+- `results/runs/nonmod_train0_63_eval64_95_four_digit_base512_rank128_nointeraction_above_range_seed18_5000.json`
+
+Corrected config:
 `configs/ne_dynamic_300m_nonmod_train0_63_eval64_95_four_digit_base512_rank128_interaction16_above_range.yaml`.
 
 Matched control config:
