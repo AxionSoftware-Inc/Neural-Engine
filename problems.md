@@ -742,6 +742,17 @@ modify that transition under the same clean protocol.
 
 **Audit:** `results/V0_240_DYNAMIC_NONMOD_WIDE_RANGE_HARDCONTEXT_AUDIT.md`.
 
+**Algebraic write-bridge follow-up (2026-09-11):** Reusing the exact
+polynomial/Fourier packet before the learned state writer gives a small
+aggregate taskwise gain, `82.715% → 83.301%` (`+0.586 pp`), but it worsens
+subtract `99.707% → 97.461%` and leaves multiply unchanged at `15.430%`;
+depth-4 multiply remains `7.8125%`. **REJECTED FOR MAIN QUALITY ADOPTION.**
+The packet is not enough as an additive write hint. P-003 remains active; the
+next experiment will test authoritative algebraic read dataflow with the
+same circuits, budget, and clean wide-support protocol.
+
+**Audit:** `results/V0_241_DYNAMIC_NONMOD_ALGEBRAIC_WRITE_BRIDGE_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

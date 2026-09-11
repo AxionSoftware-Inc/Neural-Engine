@@ -1545,6 +1545,14 @@ justify 700M/1B scaling. The next experiment must target the multiply
 state/dataflow transition rather than another router or raw-capacity change.
 See `V0_240_DYNAMIC_NONMOD_WIDE_RANGE_HARDCONTEXT_AUDIT.md`.
 
+V0.241 tests reusing the exact algebraic packet at the learned state-write
+boundary. It lifts aggregate taskwise accuracy from `82.715%` to `83.301%`
+(`+0.586 pp`) and improves CE, but subtract falls `99.707% → 97.461%` and
+multiply is unchanged at `15.430%` (depth-4 `7.8125% → 7.8125%`). The bridge
+adds no parameters and is rejected for main quality adoption; the next test
+will change the query read dataflow rather than add another write residual.
+See `V0_241_DYNAMIC_NONMOD_ALGEBRAIC_WRITE_BRIDGE_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

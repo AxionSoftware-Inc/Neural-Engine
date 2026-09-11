@@ -224,6 +224,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         algebraic_state_mode: str = "none",
         algebraic_state_scale: float = 1.0,
         algebraic_output_bridge_scale: float = 0.0,
+        algebraic_state_write_scale: float = 0.0,
+        algebraic_state_authoritative_read: bool = False,
         algebraic_state_value_scale: float = 4096.0,
         algebraic_state_fourier_base: int = 128,
         operator_valued_product_encoder: bool = False,
@@ -339,6 +341,16 @@ class DynamicRegisterNeuralEngine(nn.Module):
         if algebraic_output_bridge_scale and algebraic_state_mode == "none":
             raise ValueError(
                 "algebraic_output_bridge_scale requires algebraic_state_mode"
+            )
+        if algebraic_state_write_scale < 0.0:
+            raise ValueError("algebraic_state_write_scale must be non-negative")
+        if algebraic_state_write_scale and algebraic_state_mode == "none":
+            raise ValueError(
+                "algebraic_state_write_scale requires algebraic_state_mode"
+            )
+        if algebraic_state_authoritative_read and algebraic_state_mode == "none":
+            raise ValueError(
+                "algebraic_state_authoritative_read requires algebraic_state_mode"
             )
         if algebraic_state_value_scale <= 0.0:
             raise ValueError("algebraic_state_value_scale must be positive")
@@ -459,6 +471,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.algebraic_state_mode = algebraic_state_mode
         self.algebraic_state_scale = float(algebraic_state_scale)
         self.algebraic_output_bridge_scale = float(algebraic_output_bridge_scale)
+        self.algebraic_state_write_scale = float(algebraic_state_write_scale)
+        self.algebraic_state_authoritative_read = bool(
+            algebraic_state_authoritative_read
+        )
         self.algebraic_state_value_scale = float(algebraic_state_value_scale)
         self.algebraic_state_fourier_base = int(algebraic_state_fourier_base)
         self.operator_valued_product_encoder = bool(operator_valued_product_encoder)
@@ -1041,7 +1057,17 @@ class DynamicRegisterNeuralEngine(nn.Module):
                             active_accumulator, current_operation_ids
                         )
                     )
-                if (
+                if self.algebraic_state_authoritative_read:
+                    # The exact packet is already maintained by the forward
+                    # pass.  This opt-in path changes only which representation
+                    # the pair/router reads; the learned accumulator still
+                    # receives the normal sparse writer update below.
+                    read_accumulator = self.algebraic_state_projection(
+                        self._algebraic_state_features(
+                            algebraic_state[active_indices]
+                        )
+                    )
+                elif (
                     self.structured_scalar_state
                     and self.structured_scalar_authoritative
                 ):
@@ -1196,6 +1222,19 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     write_input = write_input + self.operation_transition_scale * (
                         self._operation_transition(
                             write_input, current_operation_ids
+                        )
+                    )
+                if self.algebraic_state_write_scale:
+                    # Reuse the compact semantic packet at the write boundary.
+                    # Query-side exposure alone can be erased by the sparse
+                    # circuit correction and recurrent writer; this optional
+                    # bridge tests whether repeated state writes need the same
+                    # persistent value signal.
+                    write_input = write_input + self.algebraic_state_write_scale * (
+                        self.algebraic_state_projection(
+                            self._algebraic_state_features(
+                                algebraic_state[active_indices]
+                            )
                         )
                     )
                 candidate = self._write_state(active_accumulator, write_input)
@@ -1606,6 +1645,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "algebraic_state_mode": self.algebraic_state_mode,
             "algebraic_state_scale": self.algebraic_state_scale,
             "algebraic_output_bridge_scale": self.algebraic_output_bridge_scale,
+            "algebraic_state_write_scale": self.algebraic_state_write_scale,
+            "algebraic_state_authoritative_read": self.algebraic_state_authoritative_read,
             "algebraic_state_value_scale": self.algebraic_state_value_scale,
             "algebraic_state_fourier_base": self.algebraic_state_fourier_base,
             "operator_valued_product_encoder": self.operator_valued_product_encoder,
