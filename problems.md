@@ -601,6 +601,14 @@ full-range regression and final rank selection.
 
 **Audit:** `results/V0_227_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK8_OOD.md`.
 
+**Rank-8 full-range regression (2026-09-11):** The low-cost rank-8 path fails
+the full-range `0..63` gate: mean held-out `80.37%` and depth-4 `75.00%` versus
+no-interaction `82.62%`/`77.54%`, with CE worsening by `+0.1751`. It is
+`REJECTED FOR DEFAULT` despite the unseen-range gain. Rank16 full-range
+regression is the remaining cost/quality decision between rank8 and rank32.
+
+**Audit:** `results/V0_228_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK8_FULL_RANGE.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

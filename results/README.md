@@ -1435,6 +1435,13 @@ quality is nearly rank16's, so rank8 is the current **PROMISING LOW-COST OPT-IN*
 full-range regression decides the preferred rank. See
 `V0_227_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK8_OOD.md`.
 
+V0.228 rejects rank8 for default adoption after full-range regression. Its
+mean held-out accuracy is `80.37%` and depth-4 `75.00%`, below the matched
+no-interaction `82.62%`/`77.54%` by `−2.25/−2.54 pp`; CE also worsens by
+`+0.1751`. Rank8 remains a diagnostic low-cost OOD path, but rank16 and rank32
+are the viable interaction candidates. See
+`V0_228_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK8_FULL_RANGE.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
