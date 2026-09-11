@@ -1499,6 +1499,16 @@ breakthrough. The default and capacity remain unchanged; no 700M/1B scaling
 follows from this screen. See
 `V0_235_DYNAMIC_NONMOD_STRAIGHT_THROUGH_HARD_DIGIT_CONTEXT.md`.
 
+V0.236 task-wise inference diagnosis localizes the V0.235 signal. On the
+above-range held-out split, hard-context rank16 versus matched no-interaction
+controls gives `add 100% → 100%`, `subtract 57.52% → 78.81%` (`+21.29 pp`),
+but `multiply 0% → 0%` across all four seeds; subtract depth-4 improves
+`27.73% → 59.67%`, while multiply depth-4 remains `0%`. The hard-context
+gain is therefore operation-specific and does not solve the main multiply
+composition ceiling. Keep the codec opt-in; the next architectural test must
+target multiply state transition/dataflow, not capacity scaling. See
+`V0_236_DYNAMIC_HARDCONTEXT_TASKWISE_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

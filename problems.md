@@ -682,6 +682,19 @@ distinct state/value-contract hypothesis rather than increasing capacity.
 
 **Audit:** `results/V0_235_DYNAMIC_NONMOD_STRAIGHT_THROUGH_HARD_DIGIT_CONTEXT.md`.
 
+**Task-wise hard-context diagnosis (2026-09-11):** The four-seed operation
+breakdown shows that the V0.235 gain is localized: `add` is `100%` in both
+arms, hard-context raises `subtract` from `57.52%` to `78.81%` overall and
+from `27.73%` to `59.67%` at depth-4, but `multiply` is `0%` in both arms at
+all held-out depths. Multiply CE is also slightly worse under hard context.
+Therefore the remaining hard ceiling is not a generic router failure and
+hard digit context is not the solution to it. **RETAIN HARD-CONTEXT AS
+OPT-IN ONLY; KEEP DEFAULT UNCHANGED.** The next architectural experiment
+should isolate an operation-specific multiply state transition/dataflow,
+with add/subtract controls; no 700M/1B scaling follows yet.
+
+**Audit:** `results/V0_236_DYNAMIC_HARDCONTEXT_TASKWISE_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

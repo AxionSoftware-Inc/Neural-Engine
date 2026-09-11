@@ -1,7 +1,7 @@
 # V0.236 — hard-context task-wise diagnostic
 
 **Date:** 2026-09-11  
-**Status:** `RUN CONFIGURED; RESULTS PENDING`
+**Status:** `DIAGNOSTIC COMPLETE; MULTIPLY CEILING CONFIRMED`
 
 ## Question
 
@@ -44,4 +44,32 @@ python diagnose_dynamic_generalization.py `
 
 ## Results
 
-Pending completion.
+All four hard-context treatment checkpoints and four matched no-interaction
+controls were evaluated on the above-range `64..95` held-out distribution.
+Each operation row aggregates four seeds, depths 3/4, and 256 examples per
+depth. The control and treatment use the same compact factorized evaluator.
+
+| operation | arm | held-out | depth-3 | depth-4 | CE |
+|---|---|---:|---:|---:|---:|
+| add | no-interaction control | 100.00% | 100.00% | 100.00% | 0.013073 |
+| add | hard-context rank16 | 100.00% | 100.00% | 100.00% | 0.008087 |
+| subtract | no-interaction control | 57.5195% | 87.3047% | 27.7344% | 8.443558 |
+| subtract | hard-context rank16 | 78.8086% | 97.9492% | 59.6680% | 4.167495 |
+| multiply | no-interaction control | 0.00% | 0.00% | 0.00% | 37.819530 |
+| multiply | hard-context rank16 | 0.00% | 0.00% | 0.00% | 39.053754 |
+
+The hard-context deltas are therefore `0.00 pp` for add, `+21.2891 pp`
+overall / `+10.6445 pp` depth-3 / `+31.9336 pp` depth-4 for subtract, and
+`0.00 pp` at every multiply accuracy level. Multiply CE is slightly worse
+(`+1.2342`) under hard context. The V0.235 aggregate gain is thus not a
+general routing improvement: it is primarily a subtract/readout interaction
+gain, while the multiply composition path remains completely unresolved.
+
+## Decision
+
+The diagnostic confirms that hard digit context is useful as an opt-in
+subtract codec, but it is not the fix for the main composition ceiling. Keep
+it opt-in and do not make it the default. Do not scale to 700M/1B before a
+separate multiply-state experiment shows non-zero held-out multiply accuracy.
+The next architectural test should target operation-specific multiply state
+transition/dataflow, with add and subtract held as controls.
