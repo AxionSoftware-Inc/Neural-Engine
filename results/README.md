@@ -1610,6 +1610,15 @@ mixes its exact packet into recurrent query/router state. See
 `V0_248_DYNAMIC_NONMOD_FROZEN_INTEGER_OVERLAY_RANK32_AUDIT.md` and
 `V0_249_252_DYNAMIC_NONMOD_INTEGER_CODEC_CALIBRATION_SWEEP_AUDIT.md`.
 
+V0.253 tests that query-read hypothesis directly. Adding the exact packet to
+the shared recurrent query with fixed scales `0.5–4.0` leaves multiply
+unchanged at `61.43%` but lowers aggregate from the within-run `85.16%` control
+to `81.35%`, `69.34%`, `49.02%`, and `40.92%`. Shared add/subtract interference
+is the failure mode, so raw query injection is rejected. V0.252 remains an
+opt-in terminal multiply overlay; the next test must use an operation-
+conditioned normalized transition or gate. See
+`V0_253_DYNAMIC_NONMOD_INTEGER_STATE_QUERY_PROBE_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

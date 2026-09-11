@@ -837,6 +837,19 @@ packetni learned query/router statega kichik scale bilan aralashtirishdir.
 
 **Audit:** `results/V0_249_252_DYNAMIC_NONMOD_INTEGER_CODEC_CALIBRATION_SWEEP_AUDIT.md`.
 
+**Exact packet recurrent query-read probe (2026-09-11):** V0.252 exact
+integer packetni shared recurrent queryga fixed scale bilan qo‘shish sinovdan
+o‘tkazildi. `scale=0.0` controlda aggregate `85.156%`, `0.5` da `81.348%`,
+`1.0` da `69.336%`, `2.0` da `49.023%` bo‘ldi; `4.0` da `40.918%` gacha
+tushdi. Multiply barcha scale'larda aynan `61.430%` bo‘lib qoldi, ya’ni
+packet multiply yo‘liga kirmadi; salbiy ta’sir shared add/subtract pathga
+bo‘ldi. **SHARED RAW QUERY INJECTION RAD ETILDI.** V0.252 terminal
+multiply-only overlay sifatida qoladi; P-003 hal bo‘lgani yo‘q. Keyingi
+sinov alohida operation-conditioned, normalized transition/gate bo‘lishi
+kerak, umumiy query residuali takrorlanmaydi.
+
+**Audit:** `results/V0_253_DYNAMIC_NONMOD_INTEGER_STATE_QUERY_PROBE_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
