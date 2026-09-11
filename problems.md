@@ -499,15 +499,23 @@ default pending a longer matched run; the two-digit path is `REJECTED`.
 **Audits:** `results/V0_216_DYNAMIC_NONMOD_TWO_DIGIT_BASE32768_AUDIT.md`,
 `results/V0_217_DYNAMIC_NONMOD_FOUR_DIGIT_BASE512_AUDIT.md`.
 
-**Longer-budget verification (2026-09-11):** Fresh 5000-step seed19/20 runs
-with the four-digit base-512 codec reach `79.79%` mean held-out and `71.68%`
-depth-4, versus `76.46%`/`66.02%` for their matched 3000-step runs. Seed19
-improves especially strongly (`60.55% → 70.70%` at depth 4), so some earlier
-seed variance was insufficient optimization budget. The output-code
-granularity hypothesis is strengthened, but default adoption still waits for
-a matched 5000-step seed17/18 or four-seed report.
+**Longer-budget verification (2026-09-11):** Fresh 5000-step runs on all four
+seeds with the four-digit base-512 codec reach `81.20%` mean held-out and
+`74.61%` depth-4, versus `78.03%`/`70.21%` for their matched 3000-step runs.
+Seed19 improves especially strongly (`60.55% → 70.70%` at depth 4), so some
+earlier seed variance was insufficient optimization budget. The output-code
+granularity hypothesis is strengthened and this is now the leading full-range
+candidate; default adoption waits for target-offset and fresh-data robustness.
 
 **Audit:** `results/V0_218_DYNAMIC_NONMOD_FOUR_DIGIT_BASE512_5000STEP_AUDIT.md`.
+
+**Offset robustness (2026-09-11):** Changing the target offset from `1,048,576`
+to `2,097,152` on matched seed17/18 four-digit runs changes mean held-out
+accuracy only `79.59% → 79.30%` and depth-4 only `74.41% → 74.22%`. The
+four-digit gain is not absolute-offset memorization. The remaining active
+question is fresh value/operation-distribution robustness, not raw capacity.
+
+**Audit:** `results/V0_219_DYNAMIC_NONMOD_FOUR_DIGIT_BASE512_OFFSET_ROBUSTNESS.md`.
 
 ---
 

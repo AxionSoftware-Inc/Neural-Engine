@@ -1355,13 +1355,22 @@ the default. See
 `V0_216_DYNAMIC_NONMOD_TWO_DIGIT_BASE32768_AUDIT.md` and
 `V0_217_DYNAMIC_NONMOD_FOUR_DIGIT_BASE512_AUDIT.md`.
 
-V0.218 runs the leading four-digit codec for 5000 fresh-training steps on
-seeds19/20. The mean reaches `79.79%` held-out and `71.68%` depth-4, adding
-`+3.32/+5.66 pp` over the matched 3000-step runs. Seed19's depth-4 result
+V0.218 verifies the leading four-digit codec at 5000 fresh-training steps on
+all four seeds. The mean reaches `81.20%` held-out and `74.61%` depth-4,
+adding `+3.17/+4.39 pp` over the matched four-seed 3000-step runs and beating
+the aligned three-digit control by `+13.23/+16.21 pp`. Seed19's depth-4 result
 rises from `60.55%` to `70.70%`, showing that part of the earlier variance was
-optimization budget rather than a hard representation failure. The codec
-remains opt-in until a matched 5000-step seed17/18 or four-seed screen is
-complete. See `V0_218_DYNAMIC_NONMOD_FOUR_DIGIT_BASE512_5000STEP_AUDIT.md`.
+optimization budget rather than a hard representation failure. The codec is
+now the leading full-range candidate, but remains opt-in until target-offset
+and fresh-data robustness checks complete. See
+`V0_218_DYNAMIC_NONMOD_FOUR_DIGIT_BASE512_5000STEP_AUDIT.md`.
+
+V0.219 passes target-offset robustness for the four-digit codec. Shifting the
+offset from `1,048,576` to `2,097,152` changes the matched seed17/18 mean only
+from `79.59%` to `79.30%` overall and from `74.41%` to `74.22%` at depth 4.
+The representation is therefore not dependent on one absolute label offset;
+the four-digit config remains the leading opt-in candidate. See
+`V0_219_DYNAMIC_NONMOD_FOUR_DIGIT_BASE512_OFFSET_ROBUSTNESS.md`.
 
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
