@@ -1517,6 +1517,14 @@ adapter is not adopted; the next screen directly preserves the exact
 algebraic value packet into the output codec. See
 `V0_237_DYNAMIC_NONMOD_OPERATION_OUTPUT_ADAPTER_AUDIT.md`.
 
+V0.238 rejects a zero-parameter direct bridge from the existing algebraic
+packet to the output codec. It leaves multiply at `0% → 0%` in the matched
+task-wise held-out test; only subtract improves. Aggregate accuracy moves
+slightly but CE worsens by `+0.7328`, so the bridge is not adopted. Before
+another state-architecture change, the next control widens the training
+operand range to `0..95` to separate product-range OOD from recurrent
+composition failure. See `V0_238_DYNAMIC_NONMOD_ALGEBRAIC_OUTPUT_BRIDGE_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

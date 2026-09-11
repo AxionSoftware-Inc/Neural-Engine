@@ -1,7 +1,7 @@
 # V0.238 — direct algebraic packet output bridge
 
 **Date:** 2026-09-11  
-**Status:** `RUN CONFIGURED; RESULTS PENDING`
+**Status:** `REJECTED; MULTIPLY UNCHANGED`
 
 ## Question
 
@@ -34,4 +34,22 @@ is not merely parameter capacity in the output head.
 
 ## Results
 
-Pending completion.
+The two fresh runs completed with unchanged total and active parameter
+counts. On the matched random held-out evaluation, the baseline-to-bridge
+means are `58.2031% → 58.7891%` overall, `63.8672% → 63.6719%`
+depth-3, and `52.5391% → 53.9063%` depth-4; mean CE worsens from
+`10.892668` to `11.625465` (`+0.732797`). The apparent hard-accuracy change
+is small and seed-matched task-wise evaluation is more revealing:
+
+| operation | control held-out | bridge held-out | delta |
+|---|---:|---:|---:|
+| add | 100.00% | 100.00% | 0.00 pp |
+| subtract | 55.7617% | 60.2539% | +4.4922 pp |
+| multiply | 0.00% | 0.00% | 0.00 pp |
+
+The bridge adds no parameters and does not create any multiply correctness;
+the remaining signal is again subtract-specific. **REJECTED FOR ADOPTION.**
+The exact packet is present, but the current above-range protocol asks the
+model to decode products outside the product range seen during training. The
+next control therefore widens the training operand range before changing the
+state architecture.

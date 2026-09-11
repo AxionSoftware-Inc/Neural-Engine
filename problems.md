@@ -706,6 +706,17 @@ the learned state and circuit path unchanged.
 
 **Audit:** `results/V0_237_DYNAMIC_NONMOD_OPERATION_OUTPUT_ADAPTER_AUDIT.md`.
 
+**Direct algebraic output bridge (2026-09-11):** Reusing the existing exact
+polynomial2/Fourier packet after output LayerNorm adds no parameters, but the
+matched task-wise multiply result remains `0%` at depths 3/4. Subtract alone
+improves; aggregate CE worsens by `+0.7328`. **REJECTED FOR ADOPTION.** Before
+adding another state mechanism, test whether the failure is simply product-
+range OOD: train on operands `0..95` and evaluate unseen depths on the same
+range. If multiply then works, the prior `0..63 → 64..95` result is a data
+support limitation, not evidence for more capacity.
+
+**Audit:** `results/V0_238_DYNAMIC_NONMOD_ALGEBRAIC_OUTPUT_BRIDGE_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
