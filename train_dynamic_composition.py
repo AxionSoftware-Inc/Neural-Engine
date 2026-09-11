@@ -140,6 +140,7 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "output_mode", "output_temperature", "output_scalar_bias", "output_digit_base",
         "output_factor_rank", "output_digit_count",
         "output_digit_interaction_rank",
+        "output_digit_context_mode",
         "macro_cell_count", "macro_cell_rank", "macro_cell_depth",
         "macro_router_branch", "macro_router_depth", "macro_candidate_pool",
         "active_macro_cells", "macro_cell_scale",

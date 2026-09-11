@@ -66,6 +66,7 @@ class FactorizedDigitOutput(nn.Module):
         projection_rank: int = 0,
         digit_count: int = 2,
         interaction_rank: int = 0,
+        context_mode: str = "soft",
     ):
         super().__init__()
         if digit_base < 2:
@@ -81,12 +82,17 @@ class FactorizedDigitOutput(nn.Module):
             raise ValueError("projection_rank must be non-negative")
         if interaction_rank < 0:
             raise ValueError("interaction_rank must be non-negative")
+        if context_mode not in {"soft", "straight_through_hard"}:
+            raise ValueError(
+                "context_mode must be soft or straight_through_hard"
+            )
         self.num_classes = int(num_classes)
         self.digit_base = int(digit_base)
         self.digit_count = int(digit_count)
         self.high_classes = num_classes // factor
         self.projection_rank = int(projection_rank)
         self.interaction_rank = int(interaction_rank)
+        self.context_mode = context_mode
         if self.projection_rank:
             self.shared_projection = nn.Linear(input_dim, self.projection_rank)
             classifier_dim = self.projection_rank
@@ -127,6 +133,11 @@ class FactorizedDigitOutput(nn.Module):
             logits.append(current)
             if index < len(self.digit_heads) - 1:
                 probabilities = current.softmax(dim=-1)
+                if self.context_mode == "straight_through_hard":
+                    hard = torch.nn.functional.one_hot(
+                        current.argmax(dim=-1), num_classes=current.shape[-1]
+                    ).to(probabilities.dtype)
+                    probabilities = probabilities + (hard - probabilities).detach()
                 context = probabilities @ self.digit_context_embeddings[index].weight
                 states = base_states + self.digit_context_projections[index](context)
         return tuple(logits)
@@ -229,6 +240,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         output_factor_rank: int = 0,
         output_digit_count: int = 2,
         output_digit_interaction_rank: int = 0,
+        output_digit_context_mode: str = "soft",
         macro_cell_count: int = 0,
         macro_cell_rank: int = 8,
         macro_cell_depth: int = 4,
@@ -349,6 +361,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("output_factor_rank must be non-negative")
         if output_digit_interaction_rank < 0:
             raise ValueError("output_digit_interaction_rank must be non-negative")
+        if output_digit_context_mode not in {"soft", "straight_through_hard"}:
+            raise ValueError(
+                "output_digit_context_mode must be soft or straight_through_hard"
+            )
         if output_digit_interaction_rank and output_mode != "factorized_digits":
             raise ValueError(
                 "output_digit_interaction_rank requires factorized_digits output"
@@ -446,6 +462,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.output_factor_rank = int(output_factor_rank)
         self.output_digit_count = int(output_digit_count)
         self.output_digit_interaction_rank = int(output_digit_interaction_rank)
+        self.output_digit_context_mode = output_digit_context_mode
         self.macro_cell_count = int(macro_cell_count)
         self.macro_cell_rank = int(macro_cell_rank)
         self.macro_cell_depth = int(macro_cell_depth)
@@ -704,6 +721,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     output_factor_rank,
                     output_digit_count,
                     output_digit_interaction_rank,
+                    output_digit_context_mode,
                 ),
             )
         else:
@@ -1544,6 +1562,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "output_factor_rank": self.output_factor_rank,
             "output_digit_count": self.output_digit_count,
             "output_digit_interaction_rank": self.output_digit_interaction_rank,
+            "output_digit_context_mode": self.output_digit_context_mode,
             "macro_cell_count": self.macro_cell_count,
             "macro_cell_rank": self.macro_cell_rank,
             "macro_cell_depth": self.macro_cell_depth,
