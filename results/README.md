@@ -1534,6 +1534,17 @@ separate protocol requirement, but deep multiply composition remains the hard
 task and capacity scaling is still deferred. See
 `V0_239_DYNAMIC_NONMOD_WIDE_TRAIN_RANGE_CONTROL.md`.
 
+V0.240 validates straight-through hard digit context on the clean `0..95`
+wide-support/depth-holdout protocol. The two-seed aggregate moves from
+`79.199%` to `79.688%` (`+0.488 pp`) and CE improves from `3.554884` to
+`3.312335`, with no parameter or active-budget increase. Task-wise, however,
+the gain is localized to subtract (`91.99% → 99.71%`); multiply remains
+`15.43% → 15.43%`, with depth-4 only `7.62% → 7.81%`. Hard context is kept as
+an opt-in subtract-quality signal, not adopted as default and not used to
+justify 700M/1B scaling. The next experiment must target the multiply
+state/dataflow transition rather than another router or raw-capacity change.
+See `V0_240_DYNAMIC_NONMOD_WIDE_RANGE_HARDCONTEXT_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

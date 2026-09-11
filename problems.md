@@ -729,6 +729,19 @@ clean protocol, not add raw capacity.
 
 **Audit:** `results/V0_239_DYNAMIC_NONMOD_WIDE_TRAIN_RANGE_CONTROL.md`.
 
+**Clean wide-support hard-context follow-up (2026-09-11):** On the matched
+`0..95` operand/depth-holdout protocol, straight-through hard digit context
+raises aggregate held-out accuracy only `79.199% → 79.688%` (`+0.488 pp`)
+and improves CE `3.554884 → 3.312335`. The operation-wise result is decisive:
+`add` stays `100%`, `subtract` rises `91.99% → 99.71%`, but `multiply` is
+unchanged at `15.43%`; depth-4 multiply is only `7.62% → 7.81%`. Therefore
+hard context is **RETAINED AS OPT-IN FOR SUBTRACT, DEFAULT UNCHANGED**, while
+the main P-003 ceiling remains an operation-specific multiply state/dataflow
+transition. Another router/capacity sweep is deferred; the next test should
+modify that transition under the same clean protocol.
+
+**Audit:** `results/V0_240_DYNAMIC_NONMOD_WIDE_RANGE_HARDCONTEXT_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
