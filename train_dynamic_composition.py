@@ -133,6 +133,7 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "algebraic_output_bridge_scale",
         "algebraic_state_write_scale",
         "algebraic_state_authoritative_read",
+        "algebraic_output_decoder",
         "algebraic_state_value_scale", "algebraic_state_fourier_base",
         "operator_valued_product_encoder", "operator_valued_packet_width",
         "operator_valued_basis_count",

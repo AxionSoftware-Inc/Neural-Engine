@@ -226,6 +226,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         algebraic_output_bridge_scale: float = 0.0,
         algebraic_state_write_scale: float = 0.0,
         algebraic_state_authoritative_read: bool = False,
+        algebraic_output_decoder: bool = False,
         algebraic_state_value_scale: float = 4096.0,
         algebraic_state_fourier_base: int = 128,
         operator_valued_product_encoder: bool = False,
@@ -352,6 +353,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError(
                 "algebraic_state_authoritative_read requires algebraic_state_mode"
             )
+        if algebraic_output_decoder and algebraic_state_mode == "none":
+            raise ValueError(
+                "algebraic_output_decoder requires algebraic_state_mode"
+            )
         if algebraic_state_value_scale <= 0.0:
             raise ValueError("algebraic_state_value_scale must be positive")
         if algebraic_state_fourier_base < 2:
@@ -475,6 +480,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.algebraic_state_authoritative_read = bool(
             algebraic_state_authoritative_read
         )
+        self.algebraic_output_decoder_enabled = bool(algebraic_output_decoder)
         self.algebraic_state_value_scale = float(algebraic_state_value_scale)
         self.algebraic_state_fourier_base = int(algebraic_state_fourier_base)
         self.operator_valued_product_encoder = bool(operator_valued_product_encoder)
@@ -654,6 +660,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
             self.algebraic_state_projection = nn.Sequential(
                 nn.Linear(algebraic_input_dim, state_dim), nn.Tanh()
             )
+            if self.algebraic_output_decoder_enabled:
+                # Separate output codec: do not force the recurrent learned
+                # state to serve as the value-to-digit representation.
+                self.algebraic_output_decoder = nn.Sequential(
+                    nn.LayerNorm(algebraic_input_dim),
+                    nn.Linear(algebraic_input_dim, state_dim),
+                    nn.GELU(),
+                )
         if self.modular_prior_enabled:
             if self.modular_prior_mode == "fixed":
                 left = torch.arange(self.modulus).view(-1, 1)
@@ -1371,14 +1385,19 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 if self.algebraic_state_mode in {"polynomial2", "polynomial2_fourier"}:
                     algebraic_state_steps.append(algebraic_state.clone())
             if self.output_mode == "factorized_digits":
-                output_state = self.output[0](step_state)
-                if self.algebraic_output_bridge_scale:
-                    output_state = output_state + (
-                        self.algebraic_output_bridge_scale
-                        * self.algebraic_state_projection(
-                            self._algebraic_state_features(algebraic_state)
-                        )
+                if self.algebraic_output_decoder_enabled:
+                    output_state = self.algebraic_output_decoder(
+                        self._algebraic_state_features(algebraic_state)
                     )
+                else:
+                    output_state = self.output[0](step_state)
+                    if self.algebraic_output_bridge_scale:
+                        output_state = output_state + (
+                            self.algebraic_output_bridge_scale
+                            * self.algebraic_state_projection(
+                                self._algebraic_state_features(algebraic_state)
+                            )
+                        )
                 digits = self.output[1].digit_logits(output_state)
                 if return_full_logits:
                     step_logits.append(self.output[1].combine(*digits))
@@ -1507,6 +1526,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             )
         if self.algebraic_state_mode in {"polynomial2", "polynomial2_fourier"}:
             shared += count_parameters(self.algebraic_state_projection)
+            if self.algebraic_output_decoder_enabled:
+                shared += count_parameters(self.algebraic_output_decoder)
         if self.write_gate_enabled:
             shared += count_parameters(self.write_gate)
         if self.circuit_input_norm is not None:
@@ -1647,6 +1668,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "algebraic_output_bridge_scale": self.algebraic_output_bridge_scale,
             "algebraic_state_write_scale": self.algebraic_state_write_scale,
             "algebraic_state_authoritative_read": self.algebraic_state_authoritative_read,
+            "algebraic_output_decoder": self.algebraic_output_decoder_enabled,
             "algebraic_state_value_scale": self.algebraic_state_value_scale,
             "algebraic_state_fourier_base": self.algebraic_state_fourier_base,
             "operator_valued_product_encoder": self.operator_valued_product_encoder,
