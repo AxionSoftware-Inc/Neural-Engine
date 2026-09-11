@@ -1331,6 +1331,17 @@ still trails the leading two-digit codec substantially. Independent digit
 heads remain rejected; the next path needs cross-digit/carry interaction. See
 `V0_214_DYNAMIC_NONMOD_THREE_DIGIT_FOURIER_BASE_AUDIT.md`.
 
+V0.215 adds a soft cross-digit context path to that aligned three-digit
+codec: each later digit head receives a rank-32 projection of the previous
+digit's predicted distribution. On the matched full `0--63`, depth-4,
+seed17/18 screen, held-out accuracy moves only `67.97% → 68.85%` (`+0.88
+pp`) and depth-4 `58.40% → 59.77%` (`+1.37 pp`). Mean CE regresses
+`3.4489 → 3.5180`, with seed18 showing no depth-4 gain. The extra path adds
+`73,728` total/active parameters, so this is a small diagnostic signal, not a
+capacity fix. It remains opt-in and the independent three-digit codec is still
+rejected for default adoption. See
+`V0_215_DYNAMIC_NONMOD_CROSS_DIGIT_INTERACTION_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

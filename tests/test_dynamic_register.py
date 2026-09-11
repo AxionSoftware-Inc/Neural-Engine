@@ -842,6 +842,41 @@ def test_dynamic_register_factorized_digit_output_supports_three_digit_codec():
     assert model.parameter_report()["output_digit_count"] == 3
 
 
+def test_dynamic_register_factorized_digit_output_supports_cross_digit_context():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        num_classes=4096,
+        modulus=None,
+        seq_len=8,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        output_mode="factorized_digits",
+        output_digit_base=16,
+        output_digit_count=3,
+        output_factor_rank=8,
+        output_digit_interaction_rank=4,
+    )
+    generator = DynamicCompositionGenerator(
+        max_ops=2,
+        train_max_ops=1,
+        modulus=None,
+        value_min=0,
+        value_max=3,
+        target_offset=64,
+        seed=344,
+    )
+    logits, stats = model(generator.batch(4).inputs)
+    assert logits.shape == (4, 4096)
+    assert len(stats["digit_logits"]) == 3
+    assert model.parameter_report()["output_digit_interaction_rank"] == 4
+
+
 def test_dynamic_register_can_skip_full_factorized_logits_during_training():
     model = DynamicRegisterNeuralEngine(
         max_ops=2,

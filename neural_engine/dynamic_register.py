@@ -65,6 +65,7 @@ class FactorizedDigitOutput(nn.Module):
         digit_base: int,
         projection_rank: int = 0,
         digit_count: int = 2,
+        interaction_rank: int = 0,
     ):
         super().__init__()
         if digit_base < 2:
@@ -78,11 +79,14 @@ class FactorizedDigitOutput(nn.Module):
             )
         if projection_rank < 0:
             raise ValueError("projection_rank must be non-negative")
+        if interaction_rank < 0:
+            raise ValueError("interaction_rank must be non-negative")
         self.num_classes = int(num_classes)
         self.digit_base = int(digit_base)
         self.digit_count = int(digit_count)
         self.high_classes = num_classes // factor
         self.projection_rank = int(projection_rank)
+        self.interaction_rank = int(interaction_rank)
         if self.projection_rank:
             self.shared_projection = nn.Linear(input_dim, self.projection_rank)
             classifier_dim = self.projection_rank
@@ -93,6 +97,18 @@ class FactorizedDigitOutput(nn.Module):
         self.digit_heads = nn.ModuleList(
             nn.Linear(classifier_dim, size) for size in digit_sizes
         )
+        if self.interaction_rank:
+            self.digit_context_embeddings = nn.ModuleList(
+                nn.Embedding(size, self.interaction_rank)
+                for size in digit_sizes[:-1]
+            )
+            self.digit_context_projections = nn.ModuleList(
+                nn.Linear(self.interaction_rank, classifier_dim, bias=False)
+                for _ in digit_sizes[:-1]
+            )
+        else:
+            self.digit_context_embeddings = None
+            self.digit_context_projections = None
         # Keep the two-head names for callers and checkpoints using the
         # original compact interface.
         self.high = self.digit_heads[0]
@@ -102,7 +118,18 @@ class FactorizedDigitOutput(nn.Module):
     def digit_logits(self, states: torch.Tensor) -> tuple[torch.Tensor, ...]:
         if self.shared_projection is not None:
             states = self.shared_projection(states)
-        return tuple(head(states) for head in self.digit_heads)
+        if self.interaction_rank == 0:
+            return tuple(head(states) for head in self.digit_heads)
+        base_states = states
+        logits = []
+        for index, head in enumerate(self.digit_heads):
+            current = head(states)
+            logits.append(current)
+            if index < len(self.digit_heads) - 1:
+                probabilities = current.softmax(dim=-1)
+                context = probabilities @ self.digit_context_embeddings[index].weight
+                states = base_states + self.digit_context_projections[index](context)
+        return tuple(logits)
 
     def combine(
         self, *digit_logits: torch.Tensor
@@ -200,6 +227,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         output_digit_base: int = 128,
         output_factor_rank: int = 0,
         output_digit_count: int = 2,
+        output_digit_interaction_rank: int = 0,
         macro_cell_count: int = 0,
         macro_cell_rank: int = 8,
         macro_cell_depth: int = 4,
@@ -316,6 +344,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("output_digit_base must be at least two")
         if output_factor_rank < 0:
             raise ValueError("output_factor_rank must be non-negative")
+        if output_digit_interaction_rank < 0:
+            raise ValueError("output_digit_interaction_rank must be non-negative")
+        if output_digit_interaction_rank and output_mode != "factorized_digits":
+            raise ValueError(
+                "output_digit_interaction_rank requires factorized_digits output"
+            )
         if output_factor_rank and output_mode != "factorized_digits":
             raise ValueError("output_factor_rank requires factorized_digits output")
         if output_digit_count < 2:
@@ -403,6 +437,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.output_digit_base = int(output_digit_base)
         self.output_factor_rank = int(output_factor_rank)
         self.output_digit_count = int(output_digit_count)
+        self.output_digit_interaction_rank = int(output_digit_interaction_rank)
         self.macro_cell_count = int(macro_cell_count)
         self.macro_cell_rank = int(macro_cell_rank)
         self.macro_cell_depth = int(macro_cell_depth)
@@ -660,6 +695,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     output_digit_base,
                     output_factor_rank,
                     output_digit_count,
+                    output_digit_interaction_rank,
                 ),
             )
         else:
@@ -1500,6 +1536,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "output_digit_base": self.output_digit_base,
             "output_factor_rank": self.output_factor_rank,
             "output_digit_count": self.output_digit_count,
+            "output_digit_interaction_rank": self.output_digit_interaction_rank,
             "macro_cell_count": self.macro_cell_count,
             "macro_cell_rank": self.macro_cell_rank,
             "macro_cell_depth": self.macro_cell_depth,

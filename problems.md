@@ -467,6 +467,21 @@ aniq mexanizmni topadigan diagnostic experiment yozing. Natija faqat “model
 kattaroq bo‘ldi” emas, qaysi circuitlar yangi capacity'dan foyda olayotganini
 ko‘rsatsin.
 
+**Full-range output codec screen (2026-09-11):** range `0--63` depth-4
+uchun mustaqil uchta digit head va Fourier-base alignment tekshirildi. Base
+`1024` aligned codec ikki seedda `67.97%` mean held-out accuracy va `58.40%`
+depth-4 berdi. Keyingi yumshoq cross-digit context variantida oldingi digit
+taqsimoti embedding orqali keyingi headga uzatildi; natija `68.85%` mean va
+`59.77%` depth-4 bo‘ldi, lekin mean CE `+0.0691` yomonlashdi va seed18
+depth-4 o‘zgarmadi. Qo‘shimcha `73,728` parametr bo‘lsa ham `+2 pp` gate
+ bajarilmadi. Variant `REJECTED FOR DEFAULT`, opt-in diagnostika sifatida
+qoldi. Bu full-range codec muammosi capacity-only emasligini kuchaytiradi:
+keyingi yo‘l digit headsni kattalashtirish emas, structured carry/quotient
+contract yoki two-digit codecning range chegarasini to‘g‘ri kengaytirish
+bo‘lishi kerak.
+
+**Audit:** `results/V0_215_DYNAMIC_NONMOD_CROSS_DIGIT_INTERACTION_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
