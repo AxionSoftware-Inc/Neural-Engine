@@ -651,10 +651,11 @@ parameter and a corrected paired rerun in V0.233.
 
 **Audit:** `results/V0_232_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_OOD_ABOVE_RANGE.md`.
 
-**Corrected rerun (preliminary):** With `value_encoder_modulus=128`, seeds17/18
-show a small `+1.07 pp` overall and `+0.78 pp` depth-4 mean hard-accuracy
-gain for rank16, but CE worsens `+0.3472` and depth-4 is seed-mixed. Seeds19/20
-are pending; this is not a default change.
+**Corrected rerun (four seeds):** With `value_encoder_modulus=128`, rank16
+improves hard accuracy by `+0.98 pp` overall and `+0.98 pp` depth-4 on the
+valid `0..63 → 64..95` screen; the gain is non-negative in all four seeds but
+small, and CE worsens by `+0.3885`. Keep it opt-in; this does not justify
+700M/1B scaling or a default change.
 
 **Corrected rerun:** `results/V0_233_DYNAMIC_NONMOD_VALUE_ENCODER_RANGE_FIX_ABOVE_RANGE.md`.
 

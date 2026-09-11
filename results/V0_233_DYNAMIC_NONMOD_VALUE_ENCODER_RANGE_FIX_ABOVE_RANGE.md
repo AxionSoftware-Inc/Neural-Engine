@@ -1,7 +1,7 @@
 # V0.233 — corrected above-range representation test
 
 **Date:** 2026-09-11  
-**Status:** `PRELIMINARY RESULT; FOUR-SEED VALIDATION IN PROGRESS`
+**Status:** `VALIDATED SMALL HARD-QUALITY GAIN; DEFAULT UNCHANGED`
 
 ## Motivation
 
@@ -24,34 +24,52 @@ leaving the circuit bank, router, state, and output interaction unchanged.
 - target offset `134,217,728`;
 - `num_classes=8,589,934,592` (`2^33`) for the full non-modular target
   envelope, still represented by compact factorized digit heads;
-- fresh 5000-step runs, batch `128`, seeds `17` and `18`;
+- fresh 5000-step runs, batch `128`, seeds `17`, `18`, `19`, and `20`;
 - same factorized bank, active-8 route, and compact evaluator.
 
 The treatment must beat the matched control on hard above-range accuracy and
 depth-4 accuracy before it can be considered a generalization improvement.
 The earlier V0.232 metrics are not part of this comparison.
 
-## Preliminary results: seeds 17 and 18
+## Results
 
 | Arm | Seed | Train accuracy | Above-range accuracy | Depth 3 | Depth 4 | CE |
 |---|---:|---:|---:|---:|---:|---:|
 | No interaction | 17 | 98.24% | 56.84% | 61.33% | 52.34% | 11.2941 |
 | No interaction | 18 | 99.61% | 59.57% | 66.41% | 52.73% | 10.4912 |
-| **No interaction mean** |  | **98.93%** | **58.20%** | **63.87%** | **52.54%** | **10.8927** |
+| No interaction | 19 | 98.44% | 56.25% | 69.14% | 43.36% | 11.7247 |
+| No interaction | 20 | 98.63% | 55.86% | 62.50% | 49.22% | 11.3267 |
+| **No interaction mean** |  | **98.73%** | **57.13%** | **64.84%** | **49.41%** | **11.2092** |
 | Interaction rank 16 | 17 | 98.24% | 57.81% | 64.06% | 51.56% | 11.8264 |
 | Interaction rank 16 | 18 | 99.41% | 60.74% | 66.41% | 55.08% | 10.6533 |
-| **Interaction rank 16 mean** |  | **98.83%** | **59.28%** | **65.23%** | **53.32%** | **11.2399** |
+| Interaction rank 16 | 19 | 98.44% | 58.01% | 69.92% | 46.09% | 12.4176 |
+| Interaction rank 16 | 20 | 99.22% | 55.86% | 62.89% | 48.83% | 11.4935 |
+| **Interaction rank 16 mean** |  | **98.83%** | **58.11%** | **65.82%** | **50.39%** | **11.5977** |
 
-Preliminary treatment-minus-control deltas are `+1.07 pp` overall,
-`+1.37 pp` depth-3, `+0.78 pp` depth-4, and `+0.3472` CE (worse). Overall
-accuracy is positive in both seeds, but depth-4 is mixed and the gain is
-small; this is not a default-adoption result. Seeds19/20 are being added
-before making the final decision.
+Four-seed treatment-minus-control deltas are `+0.98 pp` overall,
+`+0.98 pp` depth-3, `+0.98 pp` depth-4, and `+0.3885` CE (worse). Overall
+hard accuracy is non-negative in all four seeds; depth-4 is mixed by seed,
+with a positive four-seed mean. The hard-quality gain is real but small and
+comes with a CE regression, so this is not a default-adoption result.
 
 ## Raw runs
 
-Four-seed completion pending. Treatment config:
+Treatment config:
 `configs/ne_dynamic_300m_nonmod_train0_63_eval64_95_four_digit_base512_rank128_interaction16_value128.yaml`.
+
+Treatment runs:
+
+- `results/runs/nonmod_train0_63_eval64_95_four_digit_base512_rank128_interaction16_value128_seed17_5000.json`
+- `results/runs/nonmod_train0_63_eval64_95_four_digit_base512_rank128_interaction16_value128_seed18_5000.json`
+- `results/runs/nonmod_train0_63_eval64_95_four_digit_base512_rank128_interaction16_value128_seed19_5000.json`
+- `results/runs/nonmod_train0_63_eval64_95_four_digit_base512_rank128_interaction16_value128_seed20_5000.json`
 
 Control config:
 `configs/ne_dynamic_300m_nonmod_train0_63_eval64_95_four_digit_base512_rank128_nointeraction_value128.yaml`.
+
+Control runs:
+
+- `results/runs/nonmod_train0_63_eval64_95_four_digit_base512_rank128_nointeraction_value128_seed17_5000.json`
+- `results/runs/nonmod_train0_63_eval64_95_four_digit_base512_rank128_nointeraction_value128_seed18_5000.json`
+- `results/runs/nonmod_train0_63_eval64_95_four_digit_base512_rank128_nointeraction_value128_seed19_5000.json`
+- `results/runs/nonmod_train0_63_eval64_95_four_digit_base512_rank128_nointeraction_value128_seed20_5000.json`
