@@ -539,6 +539,19 @@ scaling is still deferred.
 
 **Audit:** `results/V0_221_DYNAMIC_NONMOD_FIXED_FOURIER_UNSEEN_VALUE_RANGE_AUDIT.md`.
 
+**Cross-digit output interaction screen (2026-09-11):** Existing rank-32
+conditional digit context was enabled on the same `0..31 → 32..63` gate.
+Two-seed mean unseen accuracy rose `51.66% → 55.96%` (`+4.30 pp`), depth-4
+`47.85% → 50.59%` (`+2.73 pp`), and CE improved `10.1647 → 9.9377`. The cost
+was `45,312` total/active-estimate parameters; router and circuit computation
+were unchanged. This is the strongest current signal that carry/cross-digit
+readout contributes to P-003, but 3000 steps are insufficient for adoption.
+The variant is `RETAINED AS OPT-IN`; next gate is matched 5000-step unseen-range
+continuation plus full-range `0..63` regression. Capacity-only scaling remains
+deferred.
+
+**Audit:** `results/V0_222_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_OOD_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

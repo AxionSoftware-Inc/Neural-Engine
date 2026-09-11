@@ -1390,6 +1390,15 @@ is value/carry information through recurrent state, composition, and readout,
 not input embedding alone. See
 `V0_221_DYNAMIC_NONMOD_FIXED_FOURIER_UNSEEN_VALUE_RANGE_AUDIT.md`.
 
+V0.222 enables the existing rank-32 cross-digit interaction in the four-digit
+readout on the same unseen-range gate. Mean accuracy rises from `51.66%` to
+`55.96%` (`+4.30 pp`), depth-4 from `47.85%` to `50.59%` (`+2.73 pp`), and CE
+improves by `−0.2269`, at a `45,312` total/active-estimate parameter cost.
+This is the strongest direct unseen-range signal so far and supports a
+carry/readout bottleneck, but it remains **OPT-IN** pending 5000-step and
+full-range regression controls. See
+`V0_222_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_OOD_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
