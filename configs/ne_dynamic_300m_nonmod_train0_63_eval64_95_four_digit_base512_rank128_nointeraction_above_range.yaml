@@ -1,4 +1,4 @@
-model: ne_dynamic_300m_nonmod_train0_63_eval64_95_four_digit_base512_rank128_interaction16_above_range
+model: ne_dynamic_300m_nonmod_train0_63_eval64_95_four_digit_base512_rank128_nointeraction_above_range
 architecture: dynamic_register
 vocab_size: 128
 num_classes: 8589934592
@@ -37,7 +37,6 @@ output_mode: factorized_digits
 output_digit_base: 512
 output_digit_count: 4
 output_factor_rank: 128
-output_digit_interaction_rank: 16
 stage_loss_weight: 0.5
 compact_factorized_eval: true
 batch_size: 128
