@@ -659,6 +659,15 @@ small, and CE worsens by `+0.3885`. Keep it opt-in; this does not justify
 
 **Corrected rerun:** `results/V0_233_DYNAMIC_NONMOD_VALUE_ENCODER_RANGE_FIX_ABOVE_RANGE.md`.
 
+**Hybrid Fourier follow-up (2026-09-11):** Adding the fixed Fourier basis to
+the corrected value128 encoder did not improve the interaction path: the
+two-seed hybrid interaction mean was `58.40%` overall / `52.34%` depth-4
+versus hybrid control `58.79%`/`52.15%`, with CE `+1.1784` worse. It is
+rejected for adoption; learned-value128 rank16 remains the hard-quality
+opt-in candidate and P-003 stays active.
+
+**Audit:** `results/V0_234_DYNAMIC_NONMOD_HYBRID_VALUE_ENCODER_ABOVE_RANGE.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

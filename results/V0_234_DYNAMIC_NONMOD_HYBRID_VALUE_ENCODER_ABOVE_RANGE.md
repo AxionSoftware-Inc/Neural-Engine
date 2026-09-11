@@ -1,7 +1,7 @@
 # V0.234 — hybrid Fourier value encoder above-range screen
 
 **Date:** 2026-09-11  
-**Status:** `RUN CONFIGURED; RESULTS PENDING`
+**Status:** `REJECTED; HYBRID DOES NOT IMPROVE INTERACTION ARM`
 
 ## Question
 
@@ -30,10 +30,44 @@ avoid regressing against the corrected learned-encoder baseline in V0.233.
 This is an opt-in representation screen, not a default change or capacity
 scaling experiment.
 
+## Results: seeds 17 and 18
+
+| Arm | Seed | Train accuracy | Above-range accuracy | Depth 3 | Depth 4 | CE |
+|---|---:|---:|---:|---:|---:|---:|
+| Hybrid no interaction | 17 | 98.44% | 56.84% | 62.89% | 50.78% | 11.5744 |
+| Hybrid no interaction | 18 | 99.02% | 60.74% | 67.97% | 53.52% | 9.9660 |
+| **Hybrid control mean** |  | **98.73%** | **58.79%** | **65.43%** | **52.15%** | **10.7702** |
+| Hybrid interaction rank 16 | 17 | 98.24% | 58.01% | 64.45% | 51.56% | 12.4079 |
+| Hybrid interaction rank 16 | 18 | 99.22% | 58.79% | 64.45% | 53.13% | 11.4894 |
+| **Hybrid interaction mean** |  | **98.73%** | **58.40%** | **64.45%** | **52.34%** | **11.9486** |
+
+Treatment-minus-control deltas are `−0.39 pp` overall, `−0.98 pp`
+depth-3, `+0.20 pp` depth-4, and `+1.1784` CE (worse). Against the corrected
+learned-value128 rank16 treatment in V0.233, hybrid also drops overall and
+depth-4 hard accuracy. The fixed basis therefore does not provide a useful
+interaction enhancement under this budget.
+
+## Decision
+
+Reject `hybrid_fourier` for adoption in the current above-range path. Keep the
+corrected learned-value128 rank16 model as the leading hard-quality opt-in;
+the default remains unchanged. This result does not close P-003, but it rules
+out another low-cost input representation tweak before any capacity scaling.
+
 ## Raw runs
 
-Pending completion. Treatment config:
+Treatment config:
 `configs/ne_dynamic_300m_nonmod_train0_63_eval64_95_four_digit_base512_rank128_interaction16_hybrid_value128.yaml`.
+
+Treatment runs:
+
+- `results/runs/nonmod_train0_63_eval64_95_four_digit_base512_rank128_interaction16_hybrid_value128_seed17_5000.json`
+- `results/runs/nonmod_train0_63_eval64_95_four_digit_base512_rank128_interaction16_hybrid_value128_seed18_5000.json`
 
 Control config:
 `configs/ne_dynamic_300m_nonmod_train0_63_eval64_95_four_digit_base512_rank128_nointeraction_hybrid_value128.yaml`.
+
+Control runs:
+
+- `results/runs/nonmod_train0_63_eval64_95_four_digit_base512_rank128_nointeraction_hybrid_value128_seed17_5000.json`
+- `results/runs/nonmod_train0_63_eval64_95_four_digit_base512_rank128_nointeraction_hybrid_value128_seed18_5000.json`

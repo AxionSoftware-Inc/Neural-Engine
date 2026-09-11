@@ -1481,6 +1481,13 @@ consistent but small; rank16 remains opt-in and the default is unchanged.
 This is not enough evidence for 700M/1B scaling. See
 `V0_233_DYNAMIC_NONMOD_VALUE_ENCODER_RANGE_FIX_ABOVE_RANGE.md`.
 
+V0.234 rejects the hybrid Fourier input representation on the same corrected
+above-range screen. Its two-seed interaction mean is `58.40%` overall and
+`52.34%` depth-4 versus `58.79%`/`52.15%` for the hybrid control; CE regresses
+by `+1.1784`, and it is below the learned-value128 rank16 baseline. The fixed
+basis is not adopted; default and capacity scaling remain unchanged. See
+`V0_234_DYNAMIC_NONMOD_HYBRID_VALUE_ENCODER_ABOVE_RANGE.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
