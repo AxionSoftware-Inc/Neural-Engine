@@ -1619,6 +1619,20 @@ opt-in terminal multiply overlay; the next test must use an operation-
 conditioned normalized transition or gate. See
 `V0_253_DYNAMIC_NONMOD_INTEGER_STATE_QUERY_PROBE_AUDIT.md`.
 
+V0.254 applies the exact integer digit head to all terminal operations on the
+frozen V0.252 body. Aggregate rises to `97.852%` and multiply to `71.875%`,
+while add/subtract reach `100%` in both seeds. This is retained as a strong
+opt-in numeric readout, not a router or raw-capacity result. See
+`V0_254_DYNAMIC_NONMOD_ALL_OPERATION_INTEGER_OVERLAY_AUDIT.md`.
+
+V0.255 then calibrates that codec over the full legal target-class range.
+Matched `0..95` held-out aggregate reaches `98.047%`, with all three
+operations at `100%`; unseen fixed operand `96` also reaches `100%` multiply
+and `95.313%` aggregate. The leading candidate remains opt-in because the
+exact algebraic state supplies known benchmark semantics; this is not yet a
+claim about universal 700M/1B scaling. See
+`V0_255_DYNAMIC_NONMOD_FULL_RANGE_INTEGER_CODEC_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

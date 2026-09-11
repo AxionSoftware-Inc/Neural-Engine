@@ -850,6 +850,26 @@ kerak, umumiy query residuali takrorlanmaydi.
 
 **Audit:** `results/V0_253_DYNAMIC_NONMOD_INTEGER_STATE_QUERY_PROBE_AUDIT.md`.
 
+**All-operation frozen integer overlay (2026-09-11):** V0.254 exact integer
+headni add/subtract/multiply terminal output uchun qo‘lladi. Body, router va
+circuit bank muzlatilgan holda aggregate `84.180% → 97.852%`, multiply
+`59.863% → 71.875%` bo‘ldi; add/subtract ikkala seedda `100%` ga chiqdi.
+**STRONG OPT-IN NUMERIC READOUT SIFATIDA QOLDIRILDI; DEFAULT O‘ZGARMADI.**
+Bu router yoki raw capacity yechimi emas, terminal numeric readout signalidir.
+
+**Audit:** `results/V0_254_DYNAMIC_NONMOD_ALL_OPERATION_INTEGER_OVERLAY_AUDIT.md`.
+
+**Full-range integer codec calibration (2026-09-11):** V0.255 codec
+kalibrovkasini eski `±81.45M` dan barcha legal class targetlariga kengaytirdi.
+Matched `0..95` held-out’da aggregate `98.047%`, add/subtract/multiply uchalasi
+`100%` bo‘ldi. Unseen fixed operand `96` da aggregate `95.313%`, multiply
+`100%` bo‘ldi; V0.254 unseen multiply `0%` edi. **V0.255 LEADING OPT-IN
+QUALITY CANDIDATE.** Biroq exact algebraic state benchmark operatsiyasini
+oldindan hisoblaydi, shuning uchun bu 700M/1B universal scaling isboti emas va
+default learned path hali o‘zgartirilmaydi.
+
+**Audit:** `results/V0_255_DYNAMIC_NONMOD_FULL_RANGE_INTEGER_CODEC_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
