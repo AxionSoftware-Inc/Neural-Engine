@@ -145,7 +145,7 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "algebraic_state_value_scale", "algebraic_state_fourier_base",
         "operator_valued_product_encoder", "operator_valued_packet_width",
         "operator_valued_basis_count",
-        "numeric_state_dim", "numeric_state_scale",
+        "numeric_state_dim", "numeric_state_scale", "numeric_state_value_scale",
         "modular_prior_mode",
         "modular_template_init",
         "circuit_residual_scale",

@@ -1006,6 +1006,25 @@ loss or scale sweeps.
 
 **Audit:** `results/V0_268_DYNAMIC_NONMOD_STRUCTURED_CONTRACT_AUDIT.md`.
 
+**Learned numeric vector-state screen (2026-09-12):** V0.269 enabled the
+existing 16D learned numeric scratch state on the small `0..7` depth-transfer
+task. A larger paired held-out evaluation gave `66.211% → 67.993%`
+(`+1.782 pp`) across two seeds, below the adoption gate and not reproduced by
+the smaller final batch (`67.773% → 67.578%`). **V0.269 RETAINED AS OPT-IN
+DIAGNOSTIC, NOT ADOPTED.**
+
+**Audit:** `results/V0_269_DYNAMIC_NONMOD_NUMERIC_STATE16_AUDIT.md`.
+
+**Wide numeric vector-state control (2026-09-12):** V0.270 repeated the same
+16D lane on operands `0..95` with depths 3–4 held out. In a larger paired
+evaluation, control and treatment both had `1.880%` two-seed mean accuracy
+(`0.000 pp`); the original small reports also favored control. **V0.270
+REJECTED AS A WIDE-RANGE QUALITY SOLUTION.** P-003/P-004 remain active. The
+next architecture must expose explicit carry/digit structure rather than
+adding a generic vector scratch channel.
+
+**Audit:** `results/V0_270_DYNAMIC_NONMOD_WIDE_NUMERIC_STATE16_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

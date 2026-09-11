@@ -1710,6 +1710,15 @@ closed as a quality fix; the next state experiment must be genuinely
 vector-valued and typed. See
 `V0_268_DYNAMIC_NONMOD_STRUCTURED_CONTRACT_AUDIT.md`.
 
+V0.269 tests the existing 16D learned numeric scratch state on small `0..7`
+depth transfer. A larger paired evaluation gives `+1.782 pp`, but the smaller
+final batch is flat/slightly negative, so it remains opt-in only. V0.270 then
+tests the same lane on wide operands `0..95`; both control and treatment reach
+the same `1.880%` two-seed mean (`0.000 pp`). The plain vector scratch state is
+therefore not a wide-range solution; the next target is explicit carry/digit
+structure. See `V0_269_DYNAMIC_NONMOD_NUMERIC_STATE16_AUDIT.md` and
+`V0_270_DYNAMIC_NONMOD_WIDE_NUMERIC_STATE16_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

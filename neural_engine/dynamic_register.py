@@ -243,6 +243,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         operator_valued_basis_count: int = 8,
         numeric_state_dim: int = 0,
         numeric_state_scale: float = 1.0,
+        numeric_state_value_scale: float = 128.0,
         modular_prior: bool = False,
         modular_prior_mode: str = "fixed",
         modular_template_init: str = "identity",
@@ -400,6 +401,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("numeric_state_dim must be non-negative")
         if numeric_state_scale < 0.0:
             raise ValueError("numeric_state_scale must be non-negative")
+        if numeric_state_value_scale <= 0.0:
+            raise ValueError("numeric_state_value_scale must be positive")
         if modular_prior_mode not in {"fixed", "templates"}:
             raise ValueError("modular_prior_mode must be fixed or templates")
         if modular_template_init not in {"identity", "random"}:
@@ -568,6 +571,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.operator_valued_basis_count = int(operator_valued_basis_count)
         self.numeric_state_dim = int(numeric_state_dim)
         self.numeric_state_scale = float(numeric_state_scale)
+        self.numeric_state_value_scale = float(numeric_state_value_scale)
         self.modular_prior_enabled = bool(modular_prior)
         self.modular_prior_mode = modular_prior_mode
         self.modular_template_init = modular_template_init
@@ -1163,9 +1167,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
             numeric_values = (
                 inputs[:, self.value_start:self.value_start + self.max_ops + 1]
                 - VALUE_TOKEN_OFFSET
-            ).clamp(0, self.modulus - 1).to(operand_states.dtype)
+            ).clamp_min(0).to(operand_states.dtype)
+            if self.modulus is not None:
+                numeric_values = numeric_values.clamp_max(self.modulus - 1)
+                numeric_value_scale = float(max(self.modulus - 1, 1))
+            else:
+                numeric_value_scale = self.numeric_state_value_scale
             numeric_operands = self.numeric_value_encoder(
-                numeric_values.unsqueeze(-1) / float(max(self.modulus - 1, 1))
+                numeric_values.unsqueeze(-1) / numeric_value_scale
             )
             numeric_state = numeric_operands[:, 0]
         input_context = (
@@ -1945,6 +1954,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             ),
             "numeric_state_dim": self.numeric_state_dim,
             "numeric_state_scale": self.numeric_state_scale,
+            "numeric_state_value_scale": self.numeric_state_value_scale,
             "modular_prior": self.modular_prior_enabled,
             "modular_prior_mode": self.modular_prior_mode,
             "modular_template_init": self.modular_template_init,
