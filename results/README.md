@@ -1660,6 +1660,12 @@ the next gate is removing the hand-coded algebraic prior rather than scaling
 the bank to 700M/1B. See
 `V0_260_261_DYNAMIC_NONMOD_RANK128_LONG_TRAIN_AUDIT.md`.
 
+V0.262 pairs the V0.260/261 exact-codec evaluation with circuit residual on vs
+off. Both seeds show `0.0 pp` delta for all operations, add, subtract, and
+multiply. The codec quality is therefore not a learned sparse-circuit result;
+the next gate is a prior-free dataflow benchmark. See
+`V0_262_DYNAMIC_NONMOD_INTEGER_CODEC_CIRCUIT_ABLATION_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

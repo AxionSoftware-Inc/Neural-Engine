@@ -911,6 +911,17 @@ kerak emas.
 
 **Audit:** `results/V0_260_261_DYNAMIC_NONMOD_RANK128_LONG_TRAIN_AUDIT.md`.
 
+**Integer codec circuit ablation (2026-09-11):** V0.260/261 checkpointlarda
+aynı held-out batch bilan circuit residual `1.0` va `0.0` solishtirildi.
+Seed17/18’da all operations delta `0.0 pp`, add/subtract `0.0 pp`, multiply
+ham `0.0 pp` bo‘ldi. **CODEC NATIJASIDA SPARSE CIRCUIT/ROUTER HISSASI
+ANIQLANMADI.** Bu circuitlarni umumiy modeldan o‘chirish kerak degani emas;
+faqat exact-prior opt-in branchdagi 99–100% raqamlar learned circuit yutug‘i
+emas. Keyingi gate output learned state’ni bypass qila olmaydigan prior-free
+task/dataflow benchmark bo‘lishi kerak.
+
+**Audit:** `results/V0_262_DYNAMIC_NONMOD_INTEGER_CODEC_CIRCUIT_ABLATION_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
