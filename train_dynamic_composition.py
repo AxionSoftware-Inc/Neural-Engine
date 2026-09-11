@@ -112,6 +112,7 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "query_factor_mix_scale", "factor_pair_rank", "factor_pair_scale",
         "route_exploration_prob",
         "input_reinjection_scale", "write_gate", "value_encoder_mode",
+        "value_encoder_modulus",
         "factor_mix_mode", "route_context_mode", "modular_prior",
         "state_layout",
         "state_update_mode", "state_residual_scale",

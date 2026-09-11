@@ -119,6 +119,30 @@ def test_dynamic_register_fixed_fourier_value_encoder_has_no_trainable_projectio
     assert model.parameter_report()["value_encoder_mode"] == "fixed_fourier"
 
 
+def test_dynamic_register_nonmod_value_encoder_can_represent_values_above_63():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=1,
+        seq_len=4,
+        d_model=32,
+        state_dim=32,
+        num_circuits=16,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=4,
+        modulus=None,
+        value_encoder_modulus=128,
+    )
+    inputs = torch.tensor([
+        [1, 2, 96, 96],   # raw operand 64
+        [1, 2, 127, 127], # raw operand 95
+    ])
+    encoded = model.encode_program(inputs)
+    assert model.parameter_report()["value_encoder_modulus"] == 128
+    assert not torch.allclose(encoded[0, 2], encoded[1, 2])
+
+
 def test_dynamic_register_hybrid_fourier_value_encoder_keeps_learned_projection():
     model = DynamicRegisterNeuralEngine(
         max_ops=4,

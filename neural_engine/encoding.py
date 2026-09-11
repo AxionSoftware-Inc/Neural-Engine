@@ -52,6 +52,8 @@ def encode_tokens(inputs: torch.Tensor, token_embedding: nn.Embedding,
     tokens = token_embedding(embedding_inputs)
     if value_encoder is None:
         return tokens
+    if value_modulus < 2:
+        raise ValueError("value_modulus must be at least two")
     values = (inputs.float() - VALUE_TOKEN_OFFSET).clamp(0, value_modulus - 1)
     angles = values.unsqueeze(-1) * (2.0 * math.pi / value_modulus)
     features = [values.unsqueeze(-1) / (value_modulus - 1)]

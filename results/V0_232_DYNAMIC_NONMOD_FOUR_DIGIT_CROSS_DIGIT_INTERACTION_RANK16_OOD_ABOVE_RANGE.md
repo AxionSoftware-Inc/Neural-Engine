@@ -1,7 +1,7 @@
 # V0.232 — rank-16 interaction above-range extrapolation
 
 **Date:** 2026-09-11  
-**Status:** `COMPLETED; ABOVE-RANGE GATE REJECTED INTERACTION`
+**Status:** `INVALIDATED; INPUT ENCODING COLLAPSED ABOVE-RANGE VALUES`
 
 ## Question
 
@@ -18,6 +18,11 @@ larger classifier class envelope: `num_classes=8,589,934,592` (`2^33`), which
 is still a compact factorized head (`64 + 3*512` digit logits), not a dense
 8.6-billion-logit layer.
 
+At the time of this run, the non-modular input encoder still used its legacy
+64-value range. Consequently, raw operands `64..95` were not represented as
+distinct numeric inputs. This is an input/benchmark validity failure, not an
+architecture result.
+
 ## Protocol
 
 - rank-16 cross-digit interaction;
@@ -27,21 +32,24 @@ is still a compact factorized head (`64 + 3*512` digit logits), not a dense
 - train depths `1..2`, eval depths `3..4`;
 - target offset `134,217,728`;
 - `num_classes=8,589,934,592` for the above-range target envelope;
+- legacy effective input encoder range `0..63` (the defect);
 - 5000 steps, batch `128`, seeds `17` and `18`;
 - same factorized bank, active-8 route, and compact evaluator.
 
-The comparison must be made with a matched no-interaction control under the
-same above-range split; no quality conclusion should be drawn from the
-treatment alone.
+The comparison was made with a matched no-interaction control, but no quality
+conclusion can be drawn because both arms received collapsed above-range
+inputs. V0.233 reruns the screen with `value_encoder_modulus=128`.
 
 ## Preflight note
 
 The first preflight run used the earlier `num_classes=1,073,741,824` envelope
 and correctly stopped during final evaluation because an above-range target
 reached about `3.75B`. It produced no valid metrics and is excluded from the
-comparison. The config was corrected before the valid rerun.
+comparison. After increasing the class envelope, the run completed, but the
+input encoder defect was then identified; those completed metrics are retained
+below only for auditability and are excluded from model comparison.
 
-## Results
+## Invalid run diagnostics (excluded)
 
 | Arm | Seed | Train accuracy | Above-range accuracy | Depth 3 | Depth 4 | CE |
 |---|---:|---:|---:|---:|---:|---:|
@@ -61,22 +69,19 @@ Matched treatment minus control deltas:
 
 The per-seed hard-accuracy deltas are mixed: seed17 is positive (`+1.95 pp`
 overall, `+2.73 pp` depth-4), while seed18 is negative (`−5.27 pp`,
-`−4.69 pp`). The mean therefore fails the quality gate and is not evidence
-that interaction improves extrapolation beyond the full training interval.
+`−4.69 pp`). These numbers are not evidence for or against interaction,
+because the above-range inputs were not distinct at the model boundary.
 
-This does not invalidate the earlier `0..31 → 32..63` rank16 result: it shows
-that the gain is split-dependent and does not transfer to the harder
-`0..63 → 64..95` extrapolation screen. Both arms use the same enlarged
-factorized class envelope, so the comparison remains valid.
+This does not invalidate the earlier `0..31 → 32..63` rank16 result. It only
+shows that the attempted `0..63 → 64..95` screen must be rerun after fixing
+the input representation.
 
 ## Decision
 
-Rank16 cross-digit interaction is **rejected for above-range extrapolation**
-and remains opt-in only for the previously validated split. The default is
-unchanged. The result points to a remaining representation/generalization
-problem (especially the learned value path and recurrent extrapolation), not
-to a simple need for more output interaction capacity. Do not scale to 700M/1B
-from this result.
+V0.232 is **invalidated as a model comparison**. The default is unchanged and
+no interaction decision is made from these runs. The concrete defect is fixed
+by the explicit `value_encoder_modulus` parameter; V0.233 is the valid
+follow-up. Do not scale to 700M/1B from an invalid screen.
 
 ## Raw runs
 
@@ -90,8 +95,12 @@ Control:
 - `results/runs/nonmod_train0_63_eval64_95_four_digit_base512_rank128_nointeraction_above_range_seed17_5000.json`
 - `results/runs/nonmod_train0_63_eval64_95_four_digit_base512_rank128_nointeraction_above_range_seed18_5000.json`
 
-Corrected config:
+Invalid-run config:
 `configs/ne_dynamic_300m_nonmod_train0_63_eval64_95_four_digit_base512_rank128_interaction16_above_range.yaml`.
 
 Matched control config:
 `configs/ne_dynamic_300m_nonmod_train0_63_eval64_95_four_digit_base512_rank128_nointeraction_above_range.yaml`.
+
+Corrected implementation and rerun:
+`neural_engine/encoding.py`, `neural_engine/dynamic_register.py`, and
+`results/V0_233_DYNAMIC_NONMOD_VALUE_ENCODER_RANGE_FIX_ABOVE_RANGE.md`.

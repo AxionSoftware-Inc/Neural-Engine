@@ -185,6 +185,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         input_reinjection_scale: float = 0.0,
         write_gate: bool = False,
         value_encoder_mode: str = "learned",
+        value_encoder_modulus: int | None = None,
         factor_mix_mode: str = "per_address",
         route_context_mode: str = "full",
         state_layout: str = "flat",
@@ -263,6 +264,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError(
                 "value_encoder_mode must be learned, fixed_fourier, or hybrid_fourier"
             )
+        if value_encoder_modulus is not None and value_encoder_modulus < 2:
+            raise ValueError("value_encoder_modulus must be at least two")
         if route_context_mode not in {"full", "operation_step", "hybrid"}:
             raise ValueError(
                 "route_context_mode must be full, operation_step, or hybrid"
@@ -385,6 +388,11 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.input_reinjection_scale = float(input_reinjection_scale)
         self.write_gate_enabled = bool(write_gate)
         self.value_encoder_mode = value_encoder_mode
+        self.value_encoder_modulus = int(
+            self.modulus
+            if self.modulus is not None
+            else (value_encoder_modulus or VALUE_MODULUS)
+        )
         self.factor_mix_mode = factor_mix_mode
         self.ordered_factor_slots = bool(ordered_factor_slots)
         self.query_factor_mix_scale = float(query_factor_mix_scale)
@@ -716,9 +724,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("inputs are shorter than the configured program layout")
         tokens = encode_tokens(
             inputs, self.token_embedding, self.value_encoder,
-            value_modulus=(
-                self.modulus if self.modulus is not None else VALUE_MODULUS
-            ),
+            value_modulus=self.value_encoder_modulus,
         )
         positions = self.position_embedding[: inputs.shape[1]]
         scale = self.position_scale[: inputs.shape[1]]
@@ -1471,6 +1477,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "input_reinjection_scale": self.input_reinjection_scale,
             "write_gate": self.write_gate_enabled,
             "value_encoder_mode": self.value_encoder_mode,
+            "value_encoder_modulus": self.value_encoder_modulus,
             "factor_mix_mode": self.factor_mix_mode,
             "ordered_factor_slots": self.ordered_factor_slots,
             "query_factor_mix_scale": self.query_factor_mix_scale,
