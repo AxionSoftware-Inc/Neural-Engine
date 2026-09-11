@@ -244,6 +244,13 @@ class DynamicRegisterNeuralEngine(nn.Module):
         numeric_state_dim: int = 0,
         numeric_state_scale: float = 1.0,
         numeric_state_value_scale: float = 128.0,
+        typed_digit_state: bool = False,
+        typed_digit_dim: int = 16,
+        typed_digit_base: int = 512,
+        typed_digit_count: int = 4,
+        typed_digit_scale: float = 1.0,
+        typed_digit_value_offset: int = 0,
+        typed_digit_operand_offset: int = 0,
         modular_prior: bool = False,
         modular_prior_mode: str = "fixed",
         modular_template_init: str = "identity",
@@ -403,6 +410,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("numeric_state_scale must be non-negative")
         if numeric_state_value_scale <= 0.0:
             raise ValueError("numeric_state_value_scale must be positive")
+        if typed_digit_dim < 1:
+            raise ValueError("typed_digit_dim must be positive")
+        if typed_digit_base < 2:
+            raise ValueError("typed_digit_base must be at least two")
+        if typed_digit_count < 2:
+            raise ValueError("typed_digit_count must be at least two")
+        if typed_digit_scale < 0.0:
+            raise ValueError("typed_digit_scale must be non-negative")
         if modular_prior_mode not in {"fixed", "templates"}:
             raise ValueError("modular_prior_mode must be fixed or templates")
         if modular_template_init not in {"identity", "random"}:
@@ -467,6 +482,15 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 raise ValueError(
                     "num_classes must be divisible by output_digit_base^(output_digit_count-1)"
                 )
+        if typed_digit_state and output_mode != "factorized_digits":
+            raise ValueError("typed digit state requires factorized_digits output")
+        if typed_digit_state and (
+            typed_digit_base != output_digit_base
+            or typed_digit_count != output_digit_count
+        ):
+            raise ValueError(
+                "typed digit state must use the configured factorized output layout"
+            )
         if macro_cell_count < 0:
             raise ValueError("macro_cell_count must be non-negative")
         if macro_cell_count:
@@ -572,6 +596,13 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.numeric_state_dim = int(numeric_state_dim)
         self.numeric_state_scale = float(numeric_state_scale)
         self.numeric_state_value_scale = float(numeric_state_value_scale)
+        self.typed_digit_state = bool(typed_digit_state)
+        self.typed_digit_dim = int(typed_digit_dim)
+        self.typed_digit_base = int(typed_digit_base)
+        self.typed_digit_count = int(typed_digit_count)
+        self.typed_digit_scale = float(typed_digit_scale)
+        self.typed_digit_value_offset = int(typed_digit_value_offset)
+        self.typed_digit_operand_offset = int(typed_digit_operand_offset)
         self.modular_prior_enabled = bool(modular_prior)
         self.modular_prior_mode = modular_prior_mode
         self.modular_template_init = modular_template_init
@@ -669,6 +700,37 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 nn.LayerNorm(self.numeric_state_dim),
                 nn.Linear(self.numeric_state_dim, state_dim),
                 nn.Tanh(),
+            )
+        if self.typed_digit_state:
+            self.typed_digit_state_dim = self.typed_digit_dim * self.typed_digit_count
+            self.typed_digit_sizes = [
+                num_classes // (
+                    self.typed_digit_base ** (self.typed_digit_count - 1)
+                )
+            ] + [self.typed_digit_base] * (self.typed_digit_count - 1)
+            self.typed_digit_embeddings = nn.ModuleList(
+                nn.Embedding(size, self.typed_digit_dim)
+                for size in self.typed_digit_sizes
+            )
+            self.typed_digit_operation_embedding = nn.Embedding(
+                3, self.typed_digit_state_dim
+            )
+            typed_transition_dim = 3 * self.typed_digit_state_dim
+            self.typed_digit_transition = nn.Sequential(
+                nn.LayerNorm(typed_transition_dim),
+                nn.Linear(typed_transition_dim, 2 * self.typed_digit_state_dim),
+                nn.GELU(),
+                nn.Linear(2 * self.typed_digit_state_dim, self.typed_digit_state_dim),
+                nn.Tanh(),
+            )
+            self.typed_digit_projection = nn.Sequential(
+                nn.LayerNorm(self.typed_digit_state_dim),
+                nn.Linear(self.typed_digit_state_dim, state_dim),
+                nn.Tanh(),
+            )
+            self.typed_digit_heads = nn.ModuleList(
+                nn.Linear(self.typed_digit_dim, size)
+                for size in self.typed_digit_sizes
             )
         if self.operation_adapter_rank:
             self.operation_adapter_down = nn.Parameter(torch.empty(
@@ -1026,6 +1088,54 @@ class DynamicRegisterNeuralEngine(nn.Module):
         ) + self.operation_bilinear_bias[operation_ids]
         return nn.functional.gelu(adapted)
 
+    def _typed_digit_indices(self, values: torch.Tensor) -> tuple[torch.Tensor, ...]:
+        """Convert non-negative shifted values into the typed digit slots."""
+        base = self.typed_digit_base
+        digits = [
+            (values // (base ** (self.typed_digit_count - 1))).clamp(
+                0, self.typed_digit_sizes[0] - 1
+            )
+        ]
+        for index in range(1, self.typed_digit_count):
+            power = base ** (self.typed_digit_count - 1 - index)
+            digits.append((values // power).remainder(base))
+        return tuple(digits)
+
+    def _typed_digit_state_from_values(
+        self, values: torch.Tensor, offset: int
+    ) -> torch.Tensor:
+        shifted = (values + int(offset)).clamp_min(0).to(dtype=torch.long)
+        digits = self._typed_digit_indices(shifted)
+        return torch.cat(
+            [embedding(digit) for embedding, digit in zip(
+                self.typed_digit_embeddings, digits
+            )],
+            dim=-1,
+        )
+
+    def _typed_digit_transition(
+        self,
+        state: torch.Tensor,
+        operand: torch.Tensor,
+        operation_ids: torch.Tensor,
+    ) -> torch.Tensor:
+        operation = self.typed_digit_operation_embedding(operation_ids)
+        update = self.typed_digit_transition(
+            torch.cat((state, operand, operation), dim=-1)
+        )
+        return state + self.typed_digit_scale * update
+
+    def _typed_digit_logits(
+        self, state: torch.Tensor
+    ) -> tuple[torch.Tensor, ...]:
+        slots = state.reshape(
+            *state.shape[:-1], self.typed_digit_count, self.typed_digit_dim
+        )
+        return tuple(
+            head(slots[..., index, :])
+            for index, head in enumerate(self.typed_digit_heads)
+        )
+
     def _operation_output_adapter(
         self, state: torch.Tensor, operation_ids: torch.Tensor
     ) -> torch.Tensor:
@@ -1177,6 +1287,17 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 numeric_values.unsqueeze(-1) / numeric_value_scale
             )
             numeric_state = numeric_operands[:, 0]
+        if self.typed_digit_state:
+            typed_values = (
+                inputs[:, self.value_start:self.value_start + self.max_ops + 1]
+                - VALUE_TOKEN_OFFSET
+            )
+            typed_state = self._typed_digit_state_from_values(
+                typed_values[:, 0], self.typed_digit_value_offset
+            )
+            typed_operands = self._typed_digit_state_from_values(
+                typed_values, self.typed_digit_operand_offset
+            )
         input_context = (
             (operand_states * operand_mask.unsqueeze(-1)).sum(dim=1)
             / operand_mask.sum(dim=1, keepdim=True).clamp_min(1).to(operand_states.dtype)
@@ -1216,6 +1337,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         query_state_steps = []
         post_state_steps = []
         step_state_steps = []
+        typed_digit_steps = []
         algebraic_state_steps = []
         # Padded steps keep the last real operation so the terminal readout
         # remains operation-conditioned for shorter programs.
@@ -1309,6 +1431,15 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     )
                     query = query + self.numeric_state_scale * self.numeric_state_projection(
                         numeric_candidate
+                    )
+                if self.typed_digit_state:
+                    typed_candidate = self._typed_digit_transition(
+                        typed_state[active_indices],
+                        typed_operands[active_indices, step + 1],
+                        current_operation_ids,
+                    )
+                    query = query + self.typed_digit_scale * (
+                        self.typed_digit_projection(typed_candidate)
                     )
                 if self.structured_scalar_state:
                     scalar_operand = scalar_operands[active_indices, step + 1]
@@ -1481,6 +1612,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     next_numeric_state = numeric_state.clone()
                     next_numeric_state[active_indices] = numeric_candidate
                     numeric_state = next_numeric_state
+                if self.typed_digit_state:
+                    next_typed_state = typed_state.clone()
+                    next_typed_state[active_indices] = typed_candidate
+                    typed_state = next_typed_state
                 if self.structured_scalar_state:
                     next_scalar_state = scalar_state.clone()
                     next_scalar_state[active_indices] = scalar_candidate
@@ -1563,6 +1698,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
             if self.numeric_state_dim:
                 step_state = step_state + self.numeric_state_scale * self.numeric_state_projection(
                     numeric_state
+                )
+            if self.typed_digit_state:
+                step_state = step_state + self.typed_digit_scale * (
+                    self.typed_digit_projection(typed_state)
                 )
             if self.structured_scalar_state:
                 scalar_projection = self.structured_scalar_projection(
@@ -1653,6 +1792,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 digit_steps.append(digits)
             else:
                 step_logits.append(self.output(step_state))
+            if self.typed_digit_state:
+                typed_digit_steps.append(self._typed_digit_logits(typed_state))
             if self.structured_scalar_state:
                 scalar_step_states.append(scalar_state)
 
@@ -1686,6 +1827,11 @@ class DynamicRegisterNeuralEngine(nn.Module):
             if self.output_digit_count == 2:
                 stats["digit_high_logits"] = digit_logits[0]
                 stats["digit_low_logits"] = digit_logits[1]
+        if self.typed_digit_state:
+            stats["typed_digit_logits"] = tuple(
+                torch.stack([step[index] for step in typed_digit_steps], dim=1)
+                for index in range(self.typed_digit_count)
+            )
         if collect_state_stats:
             stats["pre_accumulator_states"] = torch.stack(pre_state_steps, dim=1)
             stats["query_states"] = torch.stack(query_state_steps, dim=1)
@@ -1733,6 +1879,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 + count_parameters(self.numeric_operation_embedding)
                 + count_parameters(self.numeric_transition)
                 + count_parameters(self.numeric_state_projection)
+            )
+        if self.typed_digit_state:
+            shared += (
+                count_parameters(self.typed_digit_embeddings)
+                + count_parameters(self.typed_digit_operation_embedding)
+                + count_parameters(self.typed_digit_transition)
+                + count_parameters(self.typed_digit_projection)
+                + count_parameters(self.typed_digit_heads)
             )
         if self.operation_adapter_rank:
             shared += (
@@ -1955,6 +2109,13 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "numeric_state_dim": self.numeric_state_dim,
             "numeric_state_scale": self.numeric_state_scale,
             "numeric_state_value_scale": self.numeric_state_value_scale,
+            "typed_digit_state": self.typed_digit_state,
+            "typed_digit_dim": self.typed_digit_dim,
+            "typed_digit_base": self.typed_digit_base,
+            "typed_digit_count": self.typed_digit_count,
+            "typed_digit_scale": self.typed_digit_scale,
+            "typed_digit_value_offset": self.typed_digit_value_offset,
+            "typed_digit_operand_offset": self.typed_digit_operand_offset,
             "modular_prior": self.modular_prior_enabled,
             "modular_prior_mode": self.modular_prior_mode,
             "modular_template_init": self.modular_template_init,

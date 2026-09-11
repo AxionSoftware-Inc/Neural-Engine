@@ -1025,6 +1025,20 @@ adding a generic vector scratch channel.
 
 **Audit:** `results/V0_270_DYNAMIC_NONMOD_WIDE_NUMERIC_STATE16_AUDIT.md`.
 
+**Explicit typed-digit recurrent state (2026-09-12):** V0.271 replaced the
+generic 16D scratch lane with four learned base-512 digit slots, an
+operation-conditioned transition, and intermediate digit-contract loss. On
+the small `0..7` screen, the larger paired two-seed mean moved
+`66.553% → 67.041%` (`+0.488 pp`) and CE improved, but the gain stayed below
+the adoption gate. On the wide `0..95` screen, the same two-seed mean moved
+`2.148% → 1.978%` (`−0.171 pp`) and CE worsened; train accuracy remained
+`9.77%/5.47%` at 2,000 steps. **V0.271 REJECTED FOR DEFAULT ADOPTION AND
+SCALING.** This is evidence that a typed packet alone does not provide a
+range-stable learned carry/composition operator. P-003/P-004 remain active;
+do not scale the bank to 700M/1B from this result.
+
+**Audit:** `results/V0_271_DYNAMIC_NONMOD_TYPED_DIGIT_STATE_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

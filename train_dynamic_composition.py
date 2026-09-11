@@ -95,6 +95,35 @@ def structured_scalar_contract_loss(
     return torch.stack(terms).mean()
 
 
+def typed_digit_contract_loss(
+    model: DynamicRegisterNeuralEngine,
+    stats: dict[str, torch.Tensor],
+    stage_targets: torch.Tensor,
+    stage_mask: torch.Tensor,
+) -> torch.Tensor:
+    """Supervise the typed recurrent register on every executed stage digit."""
+    if not model.typed_digit_state:
+        return stage_targets.new_zeros((), dtype=torch.float32)
+    digit_logits = stats["typed_digit_logits"]
+    digit_targets = factorized_digit_targets(
+        stage_targets, model.typed_digit_base, model.typed_digit_count
+    )
+    terms = []
+    for stage in range(model.max_ops):
+        mask = stage_mask[:, stage]
+        if not mask.any():
+            continue
+        terms.extend(
+            nn.functional.cross_entropy(
+                logits[mask, stage], target[mask, stage]
+            )
+            for logits, target in zip(digit_logits, digit_targets)
+        )
+    if not terms:
+        return stage_targets.new_zeros((), dtype=torch.float32)
+    return torch.stack(terms).mean()
+
+
 def seed_everything(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
@@ -146,6 +175,9 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "operator_valued_product_encoder", "operator_valued_packet_width",
         "operator_valued_basis_count",
         "numeric_state_dim", "numeric_state_scale", "numeric_state_value_scale",
+        "typed_digit_state", "typed_digit_dim", "typed_digit_base",
+        "typed_digit_count", "typed_digit_scale", "typed_digit_value_offset",
+        "typed_digit_operand_offset",
         "modular_prior_mode",
         "modular_template_init",
         "circuit_residual_scale",
@@ -459,6 +491,20 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 target_offset,
                 contract_scale,
             )
+        typed_contract_weight = float(
+            config.get("typed_digit_contract_loss_weight", 0.0)
+        )
+        if (
+            typed_contract_weight
+            and batch.stage_targets is not None
+            and batch.stage_mask is not None
+        ):
+            loss = loss + typed_contract_weight * typed_digit_contract_loss(
+                model,
+                stats,
+                batch.stage_targets,
+                batch.stage_mask,
+            )
         loss = loss - 0.0001 * stats["router_entropy"]
         if not torch.isfinite(loss):
             raise FloatingPointError(f"non-finite loss at step {step}")
@@ -504,6 +550,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         ),
         "structured_scalar_target_scale": float(
             config.get("structured_scalar_target_scale", 1.0)
+        ),
+        "typed_digit_contract_loss_weight": float(
+            config.get("typed_digit_contract_loss_weight", 0.0)
         ),
     }
     report.update(model.parameter_report())

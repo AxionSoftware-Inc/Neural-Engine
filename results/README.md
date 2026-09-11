@@ -1719,6 +1719,14 @@ therefore not a wide-range solution; the next target is explicit carry/digit
 structure. See `V0_269_DYNAMIC_NONMOD_NUMERIC_STATE16_AUDIT.md` and
 `V0_270_DYNAMIC_NONMOD_WIDE_NUMERIC_STATE16_AUDIT.md`.
 
+V0.271 implements that explicit typed-digit state as four learned base-512
+slots with an operation-conditioned transition and intermediate digit-contract
+loss. On small `0..7`, the larger paired mean improves only `+0.488 pp` while
+CE improves; on wide `0..95`, the paired mean regresses `−0.171 pp` and the
+training screen remains near chance. The typed packet is therefore rejected
+for default adoption and scaling: it is not a range-stable learned carry
+operator. See `V0_271_DYNAMIC_NONMOD_TYPED_DIGIT_STATE_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
