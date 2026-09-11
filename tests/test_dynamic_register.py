@@ -1248,12 +1248,14 @@ def test_dynamic_register_exact_integer_output_decoder_is_opt_in():
         algebraic_integer_output_decoder=True,
         algebraic_integer_digit_dim=8,
         algebraic_integer_output_decoder_mode="multiply_only",
+        algebraic_integer_output_head=True,
     )
     generator = DynamicCompositionGenerator(max_ops=2, train_max_ops=2, seed=346)
     logits, _ = model(generator.batch(4).inputs)
     assert logits.shape == (4, 64)
     assert model.parameter_report()["algebraic_integer_output_decoder"] is True
     assert model.parameter_report()["algebraic_integer_output_decoder_mode"] == "multiply_only"
+    assert model.parameter_report()["algebraic_integer_output_head"] is True
 
 
 def test_dynamic_register_can_collect_recurrent_state_trace():

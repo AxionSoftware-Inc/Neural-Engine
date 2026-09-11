@@ -787,6 +787,16 @@ learned readout for add/subtract.
 
 **Audit:** `results/V0_244_DYNAMIC_NONMOD_EXACT_INTEGER_OUTPUT_CODEC_AUDIT.md`.
 
+**Multiply-only integer decoder (2026-09-11):** Selecting the exact integer
+decoder only for terminal multiply preserves a multiply gain (`15.430% →
+22.559%`, depth-3 `23.047% → 35.938%`) but, when the whole model is retrained,
+subtract collapses `99.707% → 79.688%` and aggregate accuracy falls to
+`66.309%`. **REJECTED AS END-TO-END TRAINING CONFIGURATION.** The exact integer
+signal remains valid; next step is a frozen V0.240 checkpoint overlay training
+only the new multiply decoder so existing add/subtract cannot regress.
+
+**Audit:** `results/V0_245_DYNAMIC_NONMOD_MULTIPLY_ONLY_INTEGER_CODEC_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

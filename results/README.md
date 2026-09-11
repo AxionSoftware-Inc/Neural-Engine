@@ -1578,6 +1578,14 @@ multiply rises `15.430% → 23.047%`, depth-3 `23.242% → 36.719%`, and depth-4
 the integer codec only to multiply and keeps the learned readout for
 add/subtract. See `V0_244_DYNAMIC_NONMOD_EXACT_INTEGER_OUTPUT_CODEC_AUDIT.md`.
 
+V0.245 routes the exact integer decoder only to terminal multiply, but trains
+the whole model from scratch. Multiply still improves `15.430% → 22.559%`
+(depth-3 `23.047% → 35.938%`), while subtract collapses `99.707% → 79.688%`
+and aggregate accuracy falls to `66.309%`. The end-to-end mixed configuration
+is rejected; the exact integer signal is retained for a frozen-checkpoint
+overlay experiment that cannot disturb add/subtract. See
+`V0_245_DYNAMIC_NONMOD_MULTIPLY_ONLY_INTEGER_CODEC_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
