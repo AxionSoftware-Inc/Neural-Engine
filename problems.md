@@ -618,6 +618,15 @@ full-range validation is still required before default adoption.
 
 **Audit:** `results/V0_229_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_FULL_RANGE.md`.
 
+**Four-seed full-range validation (2026-09-11):** Rank16 interaction reaches
+`83.40%` mean held-out and `77.05%` depth-4 across seeds17/18/19/20, versus
+the existing four-seed no-interaction reference `81.20%`/`74.61%`, a
+`+2.20/+2.44 pp` gain. CE is effectively unchanged (`2.6888` vs `2.6938`).
+The rank16 path is now validated as the leading full-range quality/cost
+opt-in; exact four-seed unseen-range validation remains before default.
+
+**Audit:** `results/V0_230_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_FULL_RANGE_4SEED.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

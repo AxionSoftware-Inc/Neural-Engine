@@ -1448,6 +1448,14 @@ regression and `22,656` extra total/active-estimate parameters. Rank16 is the
 current **LEADING QUALITY/COST OPT-IN CANDIDATE**, pending seed19/20 validation.
 See `V0_229_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_FULL_RANGE.md`.
 
+V0.230 completes four-seed full-range rank16 validation. The mean is `83.40%`
+held-out and `77.05%` depth-4, versus the existing four-seed no-interaction
+reference `81.20%`/`74.61%` (`+2.20/+2.44 pp`); CE is effectively unchanged
+(`2.6888` versus `2.6938`). The safe-offset/reference distinction is recorded
+and not overclaimed as a perfectly paired control. Rank16 remains the leading
+opt-in candidate pending four-seed unseen-range validation. See
+`V0_230_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_FULL_RANGE_4SEED.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
