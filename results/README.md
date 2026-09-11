@@ -1553,6 +1553,15 @@ adds no parameters and is rejected for main quality adoption; the next test
 will change the query read dataflow rather than add another write residual.
 See `V0_241_DYNAMIC_NONMOD_ALGEBRAIC_WRITE_BRIDGE_AUDIT.md`.
 
+V0.242 makes the exact algebraic packet authoritative for the query/router
+read. It lowers aggregate taskwise accuracy from `82.715%` to `82.227%`
+(`-0.488 pp`) and depth-4 from `78.906%` to `77.734%`; subtract also regresses
+`99.707% → 95.605%`. Multiply is unchanged at `15.430%`, with depth-4 still
+`7.8125%`. The learned state cannot simply be replaced by the packet, so this
+variant is rejected for adoption. The next diagnostic isolates a direct
+packet-to-digit decoder; capacity scaling remains deferred. See
+`V0_242_DYNAMIC_NONMOD_ALGEBRAIC_AUTHORITATIVE_READ_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

@@ -753,6 +753,17 @@ same circuits, budget, and clean wide-support protocol.
 
 **Audit:** `results/V0_241_DYNAMIC_NONMOD_ALGEBRAIC_WRITE_BRIDGE_AUDIT.md`.
 
+**Algebraic authoritative-read follow-up (2026-09-11):** Replacing the
+learned accumulator with the exact algebraic packet projection for pair/router
+reads lowers aggregate taskwise accuracy `82.715% → 82.227%` and depth-4
+`78.906% → 77.734%`; subtract falls `99.707% → 95.605%`. Multiply remains
+unchanged at `15.430%` and depth-4 at `7.8125%`. **REJECTED FOR MAIN QUALITY
+ADOPTION.** P-003 is therefore not solved by choosing a different query state
+source. The next test should isolate a learned packet-to-digit decoder before
+any capacity scaling.
+
+**Audit:** `results/V0_242_DYNAMIC_NONMOD_ALGEBRAIC_AUTHORITATIVE_READ_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
