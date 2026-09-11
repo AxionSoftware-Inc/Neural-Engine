@@ -1488,6 +1488,15 @@ by `+1.1784`, and it is below the learned-value128 rank16 baseline. The fixed
 basis is not adopted; default and capacity scaling remain unchanged. See
 `V0_234_DYNAMIC_NONMOD_HYBRID_VALUE_ENCODER_ABOVE_RANGE.md`.
 
+V0.235 tests straight-through hard digit context on the corrected above-range
+screen. Rank16 interaction improves the two-seed mean from `58.20%` to
+`59.67%` held-out and from `63.87%` to `66.41%` at depth-3, but depth-4 moves
+only `52.54% → 52.93%` and is negative on seed17. Mean CE improves slightly
+by `−0.0556`, so this is a small positive opt-in signal, not a large
+architectural breakthrough. The default and capacity remain unchanged; no
+700M/1B scaling follows from this screen. See
+`V0_235_DYNAMIC_NONMOD_STRAIGHT_THROUGH_HARD_DIGIT_CONTEXT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

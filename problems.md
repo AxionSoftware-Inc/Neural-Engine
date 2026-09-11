@@ -668,6 +668,19 @@ opt-in candidate and P-003 stays active.
 
 **Audit:** `results/V0_234_DYNAMIC_NONMOD_HYBRID_VALUE_ENCODER_ABOVE_RANGE.md`.
 
+**Straight-through hard digit context (2026-09-11):** Replacing the soft
+previous-digit distribution with a straight-through hard argmax in the
+rank16 cross-digit interaction gives a small two-seed gain on the corrected
+above-range screen: held-out `58.20% → 59.67%` (`+1.46 pp`) and depth-3
+`63.87% → 66.41%` (`+2.54 pp`). Depth-4 changes only `52.54% → 52.93%`
+(`+0.39 pp`), with seed17 regressing `0.78 pp`; mean CE improves only
+`−0.0556`. **RETAINED AS OPT-IN; DEFAULT UNCHANGED.** This is not evidence
+for 700M/1B scaling and does not close P-003. The next test must either
+validate the hard-context signal on more seeds/tasks or move to a distinct
+state/value-contract hypothesis rather than increasing capacity.
+
+**Audit:** `results/V0_235_DYNAMIC_NONMOD_STRAIGHT_THROUGH_HARD_DIGIT_CONTEXT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
