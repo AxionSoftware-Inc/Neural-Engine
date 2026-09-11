@@ -1676,6 +1676,15 @@ held-out multiply `5.273%/6.250%`. The prior-free control is rejected and the
 next target is learned typed state/dataflow, not 700M/1B scaling. See
 `V0_263_264_DYNAMIC_NONMOD_PRIOR_ABLATION_AUDIT.md`.
 
+V0.265 adds a learned rank-16 operation-conditioned accumulator×operand
+bilinear residual at the write boundary. Across two prior-free 300M-virtual
+runs, held-out all accuracy moves `6.641% → 7.422%` (`+0.781 pp`), while
+held-out multiply remains about `5.7–6.4%` and fixed unseen-96 multiply is
+`0%` in both seeds. The branch is retained as an opt-in diagnostic but is
+below the +2 pp gate; the next control trains prior-free variants on all
+depths before considering a larger typed transition. See
+`V0_265_DYNAMIC_NONMOD_BILINEAR_TRANSITION_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

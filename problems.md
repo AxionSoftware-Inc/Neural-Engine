@@ -948,6 +948,21 @@ value contract with operation-specific transition capacity; no 700M/1B scale.
 
 **Audit:** `results/V0_263_264_DYNAMIC_NONMOD_PRIOR_ABLATION_AUDIT.md`.
 
+**Operation-conditioned bilinear write transition (2026-09-11):** V0.265
+added a learned rank-16 accumulator×operand interaction at the state-write
+boundary, with three operation-specific parameter sets and no exact numeric
+prior. On the same prior-free wide-support/depth-holdout protocol, held-out
+all accuracy moved `6.641% → 7.422%` across seed17/18 (`+0.781 pp`), below the
+`+2 pp` adoption gate. The separate operation probe kept multiply near chance
+(`5.664%/6.445%`) and fixed unseen-96 multiply at `0%/0%`. **RETAINED AS
+OPT-IN DIAGNOSTIC, NOT ADOPTED.** The idea gives a small reproducible signal,
+but does not establish a learned value contract or solve deep composition.
+Next control: train prior-free variants on all depths to separate untrained
+step extrapolation from a genuine transition failure; no rank increase or
+700M/1B scale yet.
+
+**Audit:** `results/V0_265_DYNAMIC_NONMOD_BILINEAR_TRANSITION_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

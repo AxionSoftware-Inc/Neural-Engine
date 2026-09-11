@@ -126,6 +126,8 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "operation_circuit_bank",
         "operation_router_keys",
         "operation_transition_rank", "operation_transition_scale",
+        "operation_bilinear_transition_rank",
+        "operation_bilinear_transition_scale",
         "structured_scalar_state", "structured_scalar_scale",
         "structured_scalar_read_scale",
         "structured_scalar_authoritative",

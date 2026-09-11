@@ -217,6 +217,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         operation_router_keys: bool = False,
         operation_transition_rank: int = 0,
         operation_transition_scale: float = 1.0,
+        operation_bilinear_transition_rank: int = 0,
+        operation_bilinear_transition_scale: float = 1.0,
         structured_scalar_state: bool = False,
         structured_scalar_scale: float = 1.0,
         structured_scalar_read_scale: float = 0.0,
@@ -330,6 +332,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("operation_transition_rank must be non-negative")
         if operation_transition_scale < 0.0:
             raise ValueError("operation_transition_scale must be non-negative")
+        if operation_bilinear_transition_rank < 0:
+            raise ValueError(
+                "operation_bilinear_transition_rank must be non-negative"
+            )
+        if operation_bilinear_transition_scale < 0.0:
+            raise ValueError(
+                "operation_bilinear_transition_scale must be non-negative"
+            )
         if structured_scalar_scale < 0.0:
             raise ValueError("structured_scalar_scale must be non-negative")
         if structured_scalar_read_scale < 0.0:
@@ -514,6 +524,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.operation_router_keys = bool(operation_router_keys)
         self.operation_transition_rank = int(operation_transition_rank)
         self.operation_transition_scale = float(operation_transition_scale)
+        self.operation_bilinear_transition_rank = int(
+            operation_bilinear_transition_rank
+        )
+        self.operation_bilinear_transition_scale = float(
+            operation_bilinear_transition_scale
+        )
         self.structured_scalar_state = bool(structured_scalar_state)
         self.structured_scalar_scale = float(structured_scalar_scale)
         self.structured_scalar_read_scale = float(structured_scalar_read_scale)
@@ -702,6 +718,23 @@ class DynamicRegisterNeuralEngine(nn.Module):
             self.operation_transition_bias = nn.Parameter(torch.zeros(3, state_dim))
             nn.init.normal_(self.operation_transition_down, std=0.02)
             nn.init.normal_(self.operation_transition_up, std=0.02)
+        if self.operation_bilinear_transition_rank:
+            bilinear_rank = self.operation_bilinear_transition_rank
+            self.operation_bilinear_acc_down = nn.Parameter(torch.empty(
+                3, state_dim, bilinear_rank
+            ))
+            self.operation_bilinear_operand_down = nn.Parameter(torch.empty(
+                3, state_dim, bilinear_rank
+            ))
+            self.operation_bilinear_up = nn.Parameter(torch.empty(
+                3, bilinear_rank, state_dim
+            ))
+            self.operation_bilinear_bias = nn.Parameter(
+                torch.zeros(3, state_dim)
+            )
+            nn.init.normal_(self.operation_bilinear_acc_down, std=0.02)
+            nn.init.normal_(self.operation_bilinear_operand_down, std=0.02)
+            nn.init.normal_(self.operation_bilinear_up, std=0.02)
         if self.structured_scalar_state:
             # A shared scalar value lane.  The four learned coefficients are
             # intentionally operation-specific but the state format is not:
@@ -966,6 +999,27 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "br,brd->bd", down,
             self.operation_transition_up[operation_ids]
         ) + self.operation_transition_bias[operation_ids]
+        return nn.functional.gelu(adapted)
+
+    def _operation_bilinear_transition(
+        self,
+        state: torch.Tensor,
+        operand: torch.Tensor,
+        operation_ids: torch.Tensor,
+    ) -> torch.Tensor:
+        """Apply a learned operation-specific low-rank state/operand product."""
+        acc_projection = torch.einsum(
+            "bd,bdr->br", state,
+            self.operation_bilinear_acc_down[operation_ids],
+        )
+        operand_projection = torch.einsum(
+            "bd,bdr->br", operand,
+            self.operation_bilinear_operand_down[operation_ids],
+        )
+        fused = acc_projection * operand_projection
+        adapted = torch.einsum(
+            "br,brd->bd", fused, self.operation_bilinear_up[operation_ids]
+        ) + self.operation_bilinear_bias[operation_ids]
         return nn.functional.gelu(adapted)
 
     def _operation_output_adapter(
@@ -1361,6 +1415,15 @@ class DynamicRegisterNeuralEngine(nn.Module):
                             write_input, current_operation_ids
                         )
                     )
+                if self.operation_bilinear_transition_rank:
+                    write_input = write_input + (
+                        self.operation_bilinear_transition_scale
+                        * self._operation_bilinear_transition(
+                            active_accumulator,
+                            active_operand,
+                            current_operation_ids,
+                        )
+                    )
                 if self.algebraic_state_write_scale:
                     # Reuse the compact semantic packet at the write boundary.
                     # Query-side exposure alone can be erased by the sparse
@@ -1696,6 +1759,13 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 + self.operation_transition_up.numel()
                 + self.operation_transition_bias.numel()
             )
+        if self.operation_bilinear_transition_rank:
+            shared += (
+                self.operation_bilinear_acc_down.numel()
+                + self.operation_bilinear_operand_down.numel()
+                + self.operation_bilinear_up.numel()
+                + self.operation_bilinear_bias.numel()
+            )
         if self.structured_scalar_state:
             shared += (
                 self.structured_scalar_transition.numel()
@@ -1841,6 +1911,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "operation_router_key_active_estimate": operation_router_key_active,
             "operation_transition_rank": self.operation_transition_rank,
             "operation_transition_scale": self.operation_transition_scale,
+            "operation_bilinear_transition_rank": (
+                self.operation_bilinear_transition_rank
+            ),
+            "operation_bilinear_transition_scale": (
+                self.operation_bilinear_transition_scale
+            ),
             "structured_scalar_state": self.structured_scalar_state,
             "structured_scalar_scale": self.structured_scalar_scale,
             "structured_scalar_read_scale": self.structured_scalar_read_scale,

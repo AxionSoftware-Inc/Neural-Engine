@@ -510,6 +510,28 @@ def test_dynamic_register_operation_transition_conditions_write_input():
     assert model.parameter_report()["operation_transition_rank"] == 4
 
 
+def test_dynamic_register_bilinear_transition_conditions_write_input():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        operation_bilinear_transition_rank=4,
+    )
+    generator = DynamicCompositionGenerator(max_ops=2, train_max_ops=2, seed=17)
+    logits, _ = model(generator.batch(4).inputs)
+    assert logits.shape == (4, 64)
+    assert model.operation_bilinear_acc_down.shape == (3, 32, 4)
+    assert model.operation_bilinear_operand_down.shape == (3, 32, 4)
+    assert model.parameter_report()["operation_bilinear_transition_rank"] == 4
+
+
 def test_dynamic_register_scalar_gaussian_output_preserves_class_shape():
     model = DynamicRegisterNeuralEngine(
         max_ops=2,
