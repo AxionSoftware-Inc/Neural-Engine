@@ -670,14 +670,15 @@ opt-in candidate and P-003 stays active.
 
 **Straight-through hard digit context (2026-09-11):** Replacing the soft
 previous-digit distribution with a straight-through hard argmax in the
-rank16 cross-digit interaction gives a small two-seed gain on the corrected
-above-range screen: held-out `58.20% → 59.67%` (`+1.46 pp`) and depth-3
-`63.87% → 66.41%` (`+2.54 pp`). Depth-4 changes only `52.54% → 52.93%`
-(`+0.39 pp`), with seed17 regressing `0.78 pp`; mean CE improves only
-`−0.0556`. **RETAINED AS OPT-IN; DEFAULT UNCHANGED.** This is not evidence
-for 700M/1B scaling and does not close P-003. The next test must either
-validate the hard-context signal on more seeds/tasks or move to a distinct
-state/value-contract hypothesis rather than increasing capacity.
+rank16 cross-digit interaction gives a four-seed gain on the corrected
+above-range screen: held-out `57.13% → 58.89%` (`+1.76 pp`), depth-3
+`64.84% → 67.09%` (`+2.25 pp`), and depth-4 `49.41% → 50.68%`
+(`+1.27 pp`). Mean CE improves by `−0.2593`; overall accuracy is positive in
+all four seeds, although seed17 depth-4 falls `0.78 pp`. **VALIDATED AS
+OPT-IN; DEFAULT UNCHANGED.** The signal remains below the `+2 pp` default
+gate, is not evidence for 700M/1B scaling, and does not close P-003. The
+next test should validate task/fresh-distribution robustness or move to a
+distinct state/value-contract hypothesis rather than increasing capacity.
 
 **Audit:** `results/V0_235_DYNAMIC_NONMOD_STRAIGHT_THROUGH_HARD_DIGIT_CONTEXT.md`.
 

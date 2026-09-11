@@ -1489,12 +1489,14 @@ basis is not adopted; default and capacity scaling remain unchanged. See
 `V0_234_DYNAMIC_NONMOD_HYBRID_VALUE_ENCODER_ABOVE_RANGE.md`.
 
 V0.235 tests straight-through hard digit context on the corrected above-range
-screen. Rank16 interaction improves the two-seed mean from `58.20%` to
-`59.67%` held-out and from `63.87%` to `66.41%` at depth-3, but depth-4 moves
-only `52.54% → 52.93%` and is negative on seed17. Mean CE improves slightly
-by `−0.0556`, so this is a small positive opt-in signal, not a large
-architectural breakthrough. The default and capacity remain unchanged; no
-700M/1B scaling follows from this screen. See
+screen. Across four seeds, rank16 interaction improves held-out accuracy from
+`57.13%` to `58.89%` (`+1.76 pp`), depth-3 from `64.84%` to `67.09%`
+(`+2.25 pp`), and depth-4 from `49.41%` to `50.68%` (`+1.27 pp`); mean CE
+improves by `−0.2593`. Overall accuracy is positive in all four seeds, but
+the gain remains below the `+2 pp` default gate and depth-4 is still seed
+variable. This validates a useful opt-in signal, not a large architectural
+breakthrough. The default and capacity remain unchanged; no 700M/1B scaling
+follows from this screen. See
 `V0_235_DYNAMIC_NONMOD_STRAIGHT_THROUGH_HARD_DIGIT_CONTEXT.md`.
 
 V0.201 rejects injecting the learned scalar lane into the next operation's
