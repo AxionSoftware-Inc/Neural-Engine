@@ -609,6 +609,15 @@ regression is the remaining cost/quality decision between rank8 and rank32.
 
 **Audit:** `results/V0_228_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK8_FULL_RANGE.md`.
 
+**Rank-16 full-range regression (2026-09-11):** Rank16 interaction beats the
+matched no-interaction control by `+1.27 pp` mean held-out and `+1.56 pp`
+depth-4, with CE worsening only `+0.0432` and `22,656` extra total/active-
+estimate parameters. It is nearly rank32's hard quality at roughly half the
+cost, making rank16 the leading quality/cost opt-in candidate. Four-seed
+full-range validation is still required before default adoption.
+
+**Audit:** `results/V0_229_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_FULL_RANGE.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

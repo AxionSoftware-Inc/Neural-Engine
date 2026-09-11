@@ -1442,6 +1442,12 @@ no-interaction `82.62%`/`77.54%` by `−2.25/−2.54 pp`; CE also worsens by
 are the viable interaction candidates. See
 `V0_228_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK8_FULL_RANGE.md`.
 
+V0.229 tests rank16 on full-range `0..63`. It beats the no-interaction control
+by `+1.27 pp` mean held-out and `+1.56 pp` depth-4, with only `+0.0432` CE
+regression and `22,656` extra total/active-estimate parameters. Rank16 is the
+current **LEADING QUALITY/COST OPT-IN CANDIDATE**, pending seed19/20 validation.
+See `V0_229_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_FULL_RANGE.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
