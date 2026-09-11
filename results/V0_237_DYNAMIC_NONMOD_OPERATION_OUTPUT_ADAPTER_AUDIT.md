@@ -1,7 +1,7 @@
 # V0.237 — operation-conditioned output adapter screen
 
 **Date:** 2026-09-11  
-**Status:** `RUN CONFIGURED; RESULTS PENDING`
+**Status:** `REJECTED; MULTIPLY UNCHANGED`
 
 ## Question
 
@@ -31,4 +31,30 @@ path. This is an opt-in diagnostic, not a default change.
 
 ## Results
 
-Pending completion.
+The two fresh runs completed. Against the matched no-interaction rank-128
+reference, the aggregate held-out result changes only from `58.2031%` to
+`58.6914%` (`+0.4883 pp`), depth-3 from `63.8672%` to `64.6484%`
+(`+0.7813 pp`), and depth-4 from `52.5391%` to `52.7344%`
+(`+0.1953 pp`). Mean CE regresses from `10.892668` to `12.438559`
+(`+1.545890`). The adapter adds `38,016` total/active-estimate parameters
+(`7,477,191 → 7,515,207` total; `2,178,032 → 2,216,048` active estimate).
+
+| operation | control held-out | adapter held-out | delta |
+|---|---:|---:|---:|
+| add | 100.00% | 100.00% | 0.00 pp |
+| subtract | 55.7617% | 58.6914% | +2.9297 pp |
+| multiply | 0.00% | 0.00% | 0.00 pp |
+
+On the operation-specific diagnostic, subtract depth-4 improves from
+`27.3438%` to `34.1797%`, but subtract depth-3 falls from `84.1797%` to
+`83.2031%`; multiply remains exactly `0%` at both held-out depths in both
+arms. The adapter therefore does not address the primary ceiling and its
+small aggregate gain is not worth the CE regression.
+
+## Decision
+
+**REJECT FOR ADOPTION.** Operation-conditioned readout is not enough to make
+the unseen multiply path work. Keep the code as an opt-in diagnostic, leave
+the default unchanged, and do not scale capacity. The next experiment should
+preserve the exact algebraic value packet directly into the output codec,
+rather than only conditioning a learned readout on the operation ID.

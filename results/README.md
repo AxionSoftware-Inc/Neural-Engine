@@ -1509,6 +1509,14 @@ composition ceiling. Keep the codec opt-in; the next architectural test must
 target multiply state transition/dataflow, not capacity scaling. See
 `V0_236_DYNAMIC_HARDCONTEXT_TASKWISE_AUDIT.md`.
 
+V0.237 rejects an operation-conditioned low-rank output adapter as a
+multiply fix. It adds `38,016` parameters and changes aggregate held-out
+accuracy only `58.20% → 58.69%` (`+0.49 pp`) while worsening mean CE by
+`+1.5459`; operation-wise multiply remains `0% → 0%` at depths 3/4. The
+adapter is not adopted; the next screen directly preserves the exact
+algebraic value packet into the output codec. See
+`V0_237_DYNAMIC_NONMOD_OPERATION_OUTPUT_ADAPTER_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

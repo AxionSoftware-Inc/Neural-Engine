@@ -695,6 +695,17 @@ with add/subtract controls; no 700M/1B scaling follows yet.
 
 **Audit:** `results/V0_236_DYNAMIC_HARDCONTEXT_TASKWISE_AUDIT.md`.
 
+**Operation-conditioned output readout (2026-09-11):** A per-operation
+rank-16 output adapter added `38,016` parameters but changed aggregate
+held-out accuracy only `+0.49 pp` and worsened CE by `+1.5459`. Task-wise
+multiply stayed at `0%` for both control and treatment at depths 3/4; only
+subtract moved slightly. **REJECTED FOR ADOPTION.** The issue is not merely
+missing operation identity at the final readout. The next test must pass the
+existing exact algebraic value packet directly into the output codec, with
+the learned state and circuit path unchanged.
+
+**Audit:** `results/V0_237_DYNAMIC_NONMOD_OPERATION_OUTPUT_ADAPTER_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

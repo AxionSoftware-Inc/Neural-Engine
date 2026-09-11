@@ -223,6 +223,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         structured_scalar_authoritative: bool = False,
         algebraic_state_mode: str = "none",
         algebraic_state_scale: float = 1.0,
+        algebraic_output_bridge_scale: float = 0.0,
         algebraic_state_value_scale: float = 4096.0,
         algebraic_state_fourier_base: int = 128,
         operator_valued_product_encoder: bool = False,
@@ -333,6 +334,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("algebraic_state_mode currently requires modulus=None")
         if algebraic_state_scale < 0.0:
             raise ValueError("algebraic_state_scale must be non-negative")
+        if algebraic_output_bridge_scale < 0.0:
+            raise ValueError("algebraic_output_bridge_scale must be non-negative")
+        if algebraic_output_bridge_scale and algebraic_state_mode == "none":
+            raise ValueError(
+                "algebraic_output_bridge_scale requires algebraic_state_mode"
+            )
         if algebraic_state_value_scale <= 0.0:
             raise ValueError("algebraic_state_value_scale must be positive")
         if algebraic_state_fourier_base < 2:
@@ -451,6 +458,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.structured_scalar_authoritative = bool(structured_scalar_authoritative)
         self.algebraic_state_mode = algebraic_state_mode
         self.algebraic_state_scale = float(algebraic_state_scale)
+        self.algebraic_output_bridge_scale = float(algebraic_output_bridge_scale)
         self.algebraic_state_value_scale = float(algebraic_state_value_scale)
         self.algebraic_state_fourier_base = int(algebraic_state_fourier_base)
         self.operator_valued_product_encoder = bool(operator_valued_product_encoder)
@@ -1325,6 +1333,13 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     algebraic_state_steps.append(algebraic_state.clone())
             if self.output_mode == "factorized_digits":
                 output_state = self.output[0](step_state)
+                if self.algebraic_output_bridge_scale:
+                    output_state = output_state + (
+                        self.algebraic_output_bridge_scale
+                        * self.algebraic_state_projection(
+                            self._algebraic_state_features(algebraic_state)
+                        )
+                    )
                 digits = self.output[1].digit_logits(output_state)
                 if return_full_logits:
                     step_logits.append(self.output[1].combine(*digits))
@@ -1590,6 +1605,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "structured_scalar_authoritative": self.structured_scalar_authoritative,
             "algebraic_state_mode": self.algebraic_state_mode,
             "algebraic_state_scale": self.algebraic_state_scale,
+            "algebraic_output_bridge_scale": self.algebraic_output_bridge_scale,
             "algebraic_state_value_scale": self.algebraic_state_value_scale,
             "algebraic_state_fourier_base": self.algebraic_state_fourier_base,
             "operator_valued_product_encoder": self.operator_valued_product_encoder,
