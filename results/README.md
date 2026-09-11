@@ -1372,6 +1372,15 @@ The representation is therefore not dependent on one absolute label offset;
 the four-digit config remains the leading opt-in candidate. See
 `V0_219_DYNAMIC_NONMOD_FOUR_DIGIT_BASE512_OFFSET_ROBUSTNESS.md`.
 
+V0.220 tests unseen operand-range generalization: train on `0--31` and
+evaluate on `32--63` with a safe target offset. The four-digit codec reaches
+`51.66%` mean overall and `47.85%` depth-4 while train accuracy is `99.22%`.
+This is a partial improvement signal but not a solution: full-range training
+reaches `81.20%`/`74.61%`, so value-range extrapolation remains an active P-003
+problem. The first unsafe-offset attempt was stopped by the target guard and
+is not a quality result. See
+`V0_220_DYNAMIC_NONMOD_FOUR_DIGIT_UNSEEN_VALUE_RANGE_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

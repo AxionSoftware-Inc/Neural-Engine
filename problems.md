@@ -517,6 +517,16 @@ question is fresh value/operation-distribution robustness, not raw capacity.
 
 **Audit:** `results/V0_219_DYNAMIC_NONMOD_FOUR_DIGIT_BASE512_OFFSET_ROBUSTNESS.md`.
 
+**Unseen value-range screen (2026-09-11):** Training only on operands
+`0..31` and evaluating on `32..63` gives `51.66%` mean accuracy and `47.85%`
+depth-4 despite `99.22%` train accuracy. The four-digit representation is
+strong for full-range training but does not solve value-range extrapolation;
+P-003 remains active for an explicit algebraic value/carry contract or
+curriculum. An initial unsafe-offset attempt was rejected by the target-range
+guard and is not counted as a quality result.
+
+**Audit:** `results/V0_220_DYNAMIC_NONMOD_FOUR_DIGIT_UNSEEN_VALUE_RANGE_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
