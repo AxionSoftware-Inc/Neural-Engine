@@ -899,6 +899,18 @@ general learned arithmetic yoki 700M/1B scaling isboti emas.
 
 **Audit:** `results/V0_259_DYNAMIC_NONMOD_DEPTH3_UNSEEN_VALUE_AUDIT.md`.
 
+**Rank128 long-training codec continuation (2026-09-11):** V0.260/261 V0.255
+overlay’iga yana 10k qadam qo‘shdi. Seed17/18 o‘rtachasi matched `0..95` all
+`99.805%`, add/subtract `100%`, multiply `99.902%`; unseen fixed `96` da all
+`96.680%`, add/subtract/multiply `100%` bo‘ldi. **PEAK OPT-IN CHECKPOINT
+SIFATIDA QOLDIRILDI.** Bu natija body/router o‘zgarmagan holda chiqdi; paired
+circuit ablation `0.0 pp` farq bergan, shuning uchun bu sparse routing yutug‘i
+emas, numeric codec controlidir. Keyingi gate known exact algebraic priorni
+kamaytirib learned circuit value-contractni tekshirish; 700M/1B scaling hozir
+kerak emas.
+
+**Audit:** `results/V0_260_261_DYNAMIC_NONMOD_RANK128_LONG_TRAIN_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

@@ -1652,6 +1652,14 @@ is `96.289%`. The depth-4 range is intentionally not used because its targets
 overflow the current class space. See
 `V0_259_DYNAMIC_NONMOD_DEPTH3_UNSEEN_VALUE_AUDIT.md`.
 
+V0.260–V0.261 continue the rank128 full-range codec to 15k total steps. The
+two-seed matched mean reaches `99.805%` aggregate and `99.902%` multiply, with
+add/subtract at `100%`; unseen fixed-96 remains `100%` for each operation.
+This is the peak opt-in numeric checkpoint. Circuit ablation was neutral, so
+the next gate is removing the hand-coded algebraic prior rather than scaling
+the bank to 700M/1B. See
+`V0_260_261_DYNAMIC_NONMOD_RANK128_LONG_TRAIN_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
