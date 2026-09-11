@@ -1555,7 +1555,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
                                 learned_output_state,
                             )
                     else:
-                        output_state = integer_output_state
+                        if self.algebraic_integer_output_head_enabled:
+                            digits = self.algebraic_integer_output_head.digit_logits(
+                                integer_output_state
+                            )
+                        else:
+                            output_state = integer_output_state
                 elif self.algebraic_output_decoder_enabled:
                     output_state = self.algebraic_output_decoder(
                         self._algebraic_state_features(algebraic_state)
