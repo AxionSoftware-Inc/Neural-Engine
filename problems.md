@@ -482,6 +482,23 @@ bo‘lishi kerak.
 
 **Audit:** `results/V0_215_DYNAMIC_NONMOD_CROSS_DIGIT_INTERACTION_AUDIT.md`.
 
+**Representation granularity screen (2026-09-11):** A two-digit base-32768
+codec failed to learn the train split (`51.66%` mean) and reached only
+`11.72%` held-out / `8.79%` depth-4. Keeping each local decision small with a
+four-digit base-512 codec instead reached `79.59%` held-out and `74.41%`
+depth-4 across seed17/18, while using `7.47M` total and `2.17M` estimated
+active parameters. Fresh seed19 reaches `74.41%` overall and `60.55%` depth-4,
+while seed20 reaches `78.52%`/`71.48%`; the four-seed mean is
+`78.03%`/`70.21%`. The seed variance is material but the mean remains
+`+10.06/+11.81 pp` above the aligned three-digit control. This is a strong
+positive signal that the full-range failure is partly an output-code
+granularity/interface problem, not simply insufficient bank capacity. The
+four-digit path is now the leading full-range opt-in and remains out of
+default pending a longer matched run; the two-digit path is `REJECTED`.
+
+**Audits:** `results/V0_216_DYNAMIC_NONMOD_TWO_DIGIT_BASE32768_AUDIT.md`,
+`results/V0_217_DYNAMIC_NONMOD_FOUR_DIGIT_BASE512_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

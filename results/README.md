@@ -1342,6 +1342,19 @@ capacity fix. It remains opt-in and the independent three-digit codec is still
 rejected for default adoption. See
 `V0_215_DYNAMIC_NONMOD_CROSS_DIGIT_INTERACTION_AUDIT.md`.
 
+V0.216 rejects the full-range two-digit base-32768 codec: the 32K-way heads
+only reached `11.72%` mean held-out accuracy and `8.79%` depth-4, with train
+accuracy stuck near `52%`. This isolates a per-head optimization failure, not
+a routing gain. V0.217 then keeps each local decision small with four
+base-512 digits. Across four seeds it reaches `78.03%` mean held-out and
+`70.21%` depth-4 on `0--63`, still above the aligned three-digit control at
+`67.97%`/`58.40%`, while using `7.47M/2.17M` total/active parameters. This is
+the first large full-range positive signal after V0.210 and the current
+leading opt-in codec; a longer matched run is still required before changing
+the default. See
+`V0_216_DYNAMIC_NONMOD_TWO_DIGIT_BASE32768_AUDIT.md` and
+`V0_217_DYNAMIC_NONMOD_FOUR_DIGIT_BASE512_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
