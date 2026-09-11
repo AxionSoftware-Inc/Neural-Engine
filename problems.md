@@ -1039,6 +1039,19 @@ do not scale the bank to 700M/1B from this result.
 
 **Audit:** `results/V0_271_DYNAMIC_NONMOD_TYPED_DIGIT_STATE_AUDIT.md`.
 
+**Typed-digit carry-chain transition (2026-09-12):** V0.272 processed the
+typed register from low-order to high-order slot with a learned carry packet.
+On small `0..7`, the larger paired two-seed mean improved
+`66.553% → 67.163%` (`+0.610 pp`) and CE improved. On wide `0..95`, hard
+accuracy improved only `2.148% → 2.441%` (`+0.293 pp`) while CE worsened by
+`+0.5707`; depth-4 also fell slightly. **V0.272 RETAINED AS OPT-IN
+DIAGNOSTIC, REJECTED FOR DEFAULT ADOPTION AND SCALING.** This supports a
+role for transition inductive bias, but one local carry packet is not enough
+for range-stable learned multiplication/composition. P-003/P-004 remain
+active; no 700M/1B scaling follows.
+
+**Audit:** `results/V0_272_DYNAMIC_NONMOD_TYPED_DIGIT_CARRY_CHAIN_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

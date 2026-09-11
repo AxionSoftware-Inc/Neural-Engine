@@ -958,6 +958,49 @@ def test_dynamic_register_factorized_digit_output_supports_straight_through_hard
     assert model.parameter_report()["output_digit_context_mode"] == "straight_through_hard"
 
 
+def test_dynamic_register_typed_digit_carry_chain_updates_all_slots():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        num_classes=4096,
+        modulus=None,
+        seq_len=8,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        output_mode="factorized_digits",
+        output_digit_base=16,
+        output_digit_count=3,
+        output_factor_rank=8,
+        typed_digit_state=True,
+        typed_digit_dim=4,
+        typed_digit_base=16,
+        typed_digit_count=3,
+        typed_digit_value_offset=64,
+        typed_digit_carry_chain=True,
+    )
+    generator = DynamicCompositionGenerator(
+        max_ops=2,
+        train_max_ops=1,
+        modulus=None,
+        value_min=0,
+        value_max=3,
+        target_offset=64,
+        seed=346,
+    )
+    logits, stats = model(generator.batch(4).inputs)
+    assert logits.shape == (4, 4096)
+    assert len(stats["typed_digit_logits"]) == 3
+    assert all(digit.shape == (4, 2, 16) for digit in stats["typed_digit_logits"])
+    report = model.parameter_report()
+    assert report["typed_digit_state"] is True
+    assert report["typed_digit_carry_chain"] is True
+
+
 def test_dynamic_register_can_bridge_existing_algebraic_packet_to_output():
     model = DynamicRegisterNeuralEngine(
         max_ops=2,

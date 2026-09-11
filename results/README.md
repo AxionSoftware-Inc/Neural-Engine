@@ -1727,6 +1727,12 @@ training screen remains near chance. The typed packet is therefore rejected
 for default adoption and scaling: it is not a range-stable learned carry
 operator. See `V0_271_DYNAMIC_NONMOD_TYPED_DIGIT_STATE_AUDIT.md`.
 
+V0.272 adds a learned low-to-high carry chain between those typed digit slots.
+The paired hard-accuracy gain is `+0.610 pp` on small `0..7` and `+0.293 pp`
+on wide `0..95`, but wide CE worsens by `+0.5707` and the +2 pp gate is not
+met. It remains an opt-in transition diagnostic; default architecture and
+capacity are unchanged. See `V0_272_DYNAMIC_NONMOD_TYPED_DIGIT_CARRY_CHAIN_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

@@ -251,6 +251,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         typed_digit_scale: float = 1.0,
         typed_digit_value_offset: int = 0,
         typed_digit_operand_offset: int = 0,
+        typed_digit_carry_chain: bool = False,
         modular_prior: bool = False,
         modular_prior_mode: str = "fixed",
         modular_template_init: str = "identity",
@@ -603,6 +604,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.typed_digit_scale = float(typed_digit_scale)
         self.typed_digit_value_offset = int(typed_digit_value_offset)
         self.typed_digit_operand_offset = int(typed_digit_operand_offset)
+        self.typed_digit_carry_chain = bool(typed_digit_carry_chain)
         self.modular_prior_enabled = bool(modular_prior)
         self.modular_prior_mode = modular_prior_mode
         self.modular_template_init = modular_template_init
@@ -712,17 +714,42 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 nn.Embedding(size, self.typed_digit_dim)
                 for size in self.typed_digit_sizes
             )
+            operation_embedding_dim = (
+                self.typed_digit_dim
+                if self.typed_digit_carry_chain
+                else self.typed_digit_state_dim
+            )
             self.typed_digit_operation_embedding = nn.Embedding(
-                3, self.typed_digit_state_dim
+                3, operation_embedding_dim
             )
-            typed_transition_dim = 3 * self.typed_digit_state_dim
-            self.typed_digit_transition = nn.Sequential(
-                nn.LayerNorm(typed_transition_dim),
-                nn.Linear(typed_transition_dim, 2 * self.typed_digit_state_dim),
-                nn.GELU(),
-                nn.Linear(2 * self.typed_digit_state_dim, self.typed_digit_state_dim),
-                nn.Tanh(),
-            )
+            if self.typed_digit_carry_chain:
+                # Process the least-significant slot first, then pass a
+                # learned carry packet toward more-significant slots.  This
+                # is an inductive bias for composition, not an exact
+                # arithmetic oracle.
+                self.typed_digit_carry_position = nn.Embedding(
+                    self.typed_digit_count, self.typed_digit_dim
+                )
+                carry_transition_dim = 4 * self.typed_digit_dim
+                self.typed_digit_carry_transition = nn.Sequential(
+                    nn.LayerNorm(carry_transition_dim),
+                    nn.Linear(carry_transition_dim, 2 * self.typed_digit_dim),
+                    nn.GELU(),
+                    nn.Linear(2 * self.typed_digit_dim, 2 * self.typed_digit_dim),
+                    nn.Tanh(),
+                )
+                self.typed_digit_transition = None
+            else:
+                typed_transition_dim = 3 * self.typed_digit_state_dim
+                self.typed_digit_transition = nn.Sequential(
+                    nn.LayerNorm(typed_transition_dim),
+                    nn.Linear(typed_transition_dim, 2 * self.typed_digit_state_dim),
+                    nn.GELU(),
+                    nn.Linear(2 * self.typed_digit_state_dim, self.typed_digit_state_dim),
+                    nn.Tanh(),
+                )
+                self.typed_digit_carry_position = None
+                self.typed_digit_carry_transition = None
             self.typed_digit_projection = nn.Sequential(
                 nn.LayerNorm(self.typed_digit_state_dim),
                 nn.Linear(self.typed_digit_state_dim, state_dim),
@@ -1120,10 +1147,37 @@ class DynamicRegisterNeuralEngine(nn.Module):
         operation_ids: torch.Tensor,
     ) -> torch.Tensor:
         operation = self.typed_digit_operation_embedding(operation_ids)
-        update = self.typed_digit_transition(
-            torch.cat((state, operand, operation), dim=-1)
+        if not self.typed_digit_carry_chain:
+            update = self.typed_digit_transition(
+                torch.cat((state, operand, operation), dim=-1)
+            )
+            return state + self.typed_digit_scale * update
+        state_slots = state.reshape(
+            *state.shape[:-1], self.typed_digit_count, self.typed_digit_dim
         )
-        return state + self.typed_digit_scale * update
+        operand_slots = operand.reshape(
+            *operand.shape[:-1], self.typed_digit_count, self.typed_digit_dim
+        )
+        carry = operation
+        updated_slots = [None] * self.typed_digit_count
+        for index in reversed(range(self.typed_digit_count)):
+            position = self.typed_digit_carry_position.weight[index]
+            position = position.reshape(
+                *((1,) * (state_slots.ndim - 2)), self.typed_digit_dim
+            ).expand_as(state_slots[..., index, :])
+            transition = self.typed_digit_carry_transition(
+                torch.cat(
+                    (state_slots[..., index, :], operand_slots[..., index, :], carry, position),
+                    dim=-1,
+                )
+            )
+            slot_update, carry_update = transition.chunk(2, dim=-1)
+            updated_slot = state_slots[..., index, :] + self.typed_digit_scale * slot_update
+            carry = torch.tanh(carry + self.typed_digit_scale * carry_update)
+            updated_slots[index] = updated_slot
+        return torch.stack(updated_slots, dim=-2).reshape(
+            *state.shape[:-1], self.typed_digit_state_dim
+        )
 
     def _typed_digit_logits(
         self, state: torch.Tensor
@@ -1884,7 +1938,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
             shared += (
                 count_parameters(self.typed_digit_embeddings)
                 + count_parameters(self.typed_digit_operation_embedding)
-                + count_parameters(self.typed_digit_transition)
+                + (
+                    count_parameters(self.typed_digit_carry_position)
+                    + count_parameters(self.typed_digit_carry_transition)
+                    if self.typed_digit_carry_chain
+                    else count_parameters(self.typed_digit_transition)
+                )
                 + count_parameters(self.typed_digit_projection)
                 + count_parameters(self.typed_digit_heads)
             )
@@ -2116,6 +2175,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "typed_digit_scale": self.typed_digit_scale,
             "typed_digit_value_offset": self.typed_digit_value_offset,
             "typed_digit_operand_offset": self.typed_digit_operand_offset,
+            "typed_digit_carry_chain": self.typed_digit_carry_chain,
             "modular_prior": self.modular_prior_enabled,
             "modular_prior_mode": self.modular_prior_mode,
             "modular_template_init": self.modular_template_init,
