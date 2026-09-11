@@ -1229,6 +1229,31 @@ def test_dynamic_register_algebraic_output_decoder_is_opt_in():
     assert model.parameter_report()["algebraic_output_decoder"] is True
 
 
+def test_dynamic_register_exact_integer_output_decoder_is_opt_in():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=16,
+        state_dim=16,
+        num_circuits=32,
+        circuit_rank=2,
+        router_depth=2,
+        candidate_pool=4,
+        active_circuits=2,
+        factor_count=6,
+        modulus=None,
+        algebraic_state_mode="polynomial2",
+        output_mode="factorized_digits",
+        output_digit_base=8,
+        algebraic_integer_output_decoder=True,
+        algebraic_integer_digit_dim=8,
+    )
+    generator = DynamicCompositionGenerator(max_ops=2, train_max_ops=2, seed=346)
+    logits, _ = model(generator.batch(4).inputs)
+    assert logits.shape == (4, 64)
+    assert model.parameter_report()["algebraic_integer_output_decoder"] is True
+
+
 def test_dynamic_register_can_collect_recurrent_state_trace():
     model = DynamicRegisterNeuralEngine(
         max_ops=3,

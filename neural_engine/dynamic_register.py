@@ -227,6 +227,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         algebraic_state_write_scale: float = 0.0,
         algebraic_state_authoritative_read: bool = False,
         algebraic_output_decoder: bool = False,
+        algebraic_integer_output_decoder: bool = False,
+        algebraic_integer_digit_dim: int = 16,
         algebraic_state_value_scale: float = 4096.0,
         algebraic_state_fourier_base: int = 128,
         operator_valued_product_encoder: bool = False,
@@ -357,6 +359,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError(
                 "algebraic_output_decoder requires algebraic_state_mode"
             )
+        if algebraic_integer_output_decoder and algebraic_state_mode == "none":
+            raise ValueError(
+                "algebraic_integer_output_decoder requires algebraic_state_mode"
+            )
+        if algebraic_integer_digit_dim < 1:
+            raise ValueError("algebraic_integer_digit_dim must be positive")
         if algebraic_state_value_scale <= 0.0:
             raise ValueError("algebraic_state_value_scale must be positive")
         if algebraic_state_fourier_base < 2:
@@ -481,6 +489,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
             algebraic_state_authoritative_read
         )
         self.algebraic_output_decoder_enabled = bool(algebraic_output_decoder)
+        self.algebraic_integer_output_decoder_enabled = bool(
+            algebraic_integer_output_decoder
+        )
+        self.algebraic_integer_digit_dim = int(algebraic_integer_digit_dim)
         self.algebraic_state_value_scale = float(algebraic_state_value_scale)
         self.algebraic_state_fourier_base = int(algebraic_state_fourier_base)
         self.operator_valued_product_encoder = bool(operator_valued_product_encoder)
@@ -666,6 +678,19 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 self.algebraic_output_decoder = nn.Sequential(
                     nn.LayerNorm(algebraic_input_dim),
                     nn.Linear(algebraic_input_dim, state_dim),
+                    nn.GELU(),
+                )
+            if self.algebraic_integer_output_decoder_enabled:
+                self.algebraic_integer_digit_embeddings = nn.ModuleList(
+                    nn.Embedding(self.output_digit_base, self.algebraic_integer_digit_dim)
+                    for _ in range(self.output_digit_count)
+                )
+                integer_feature_dim = (
+                    self.output_digit_count * self.algebraic_integer_digit_dim + 1
+                )
+                self.algebraic_integer_output_decoder = nn.Sequential(
+                    nn.LayerNorm(integer_feature_dim),
+                    nn.Linear(integer_feature_dim, state_dim),
                     nn.GELU(),
                 )
         if self.modular_prior_enabled:
@@ -942,6 +967,28 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 features.append(torch.cos(angle * harmonic))
         return torch.cat(features, dim=-1)
 
+    def _algebraic_integer_output_features(
+        self, values: torch.Tensor
+    ) -> torch.Tensor:
+        """Encode an exact integer value as learned base-digit features.
+
+        The recurrent algebraic packet remains float for the normal query
+        path.  This diagnostic output path keeps a separate int64 register so
+        large products do not lose low-order bits before digit decoding.
+        """
+        magnitude = values.abs()
+        digits = []
+        for _ in range(self.output_digit_count):
+            digits.append(torch.remainder(magnitude, self.output_digit_base))
+            magnitude = torch.div(
+                magnitude, self.output_digit_base, rounding_mode="floor"
+            )
+        embedded = [embedding(digit) for embedding, digit in zip(
+            self.algebraic_integer_digit_embeddings, digits
+        )]
+        sign = values.lt(0).to(embedded[0].dtype).unsqueeze(-1)
+        return torch.cat((*embedded, sign), dim=-1)
+
     def _write_state(
         self, accumulator: torch.Tensor, write_input: torch.Tensor
     ) -> torch.Tensor:
@@ -990,6 +1037,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 algebraic_operands[:, 0] / value_scale,
                 algebraic_operands[:, 0].square() / (value_scale * value_scale),
             ), dim=-1)
+        if self.algebraic_integer_output_decoder_enabled:
+            algebraic_integer_operands = (
+                inputs[:, self.value_start:self.value_start + self.max_ops + 1]
+                - VALUE_TOKEN_OFFSET
+            ).to(torch.long)
+            algebraic_integer_state = algebraic_integer_operands[:, 0]
         if self.numeric_state_dim:
             numeric_values = (
                 inputs[:, self.value_start:self.value_start + self.max_ops + 1]
@@ -1298,6 +1351,23 @@ class DynamicRegisterNeuralEngine(nn.Module):
                         current_operation_ids,
                     )
                     algebraic_state = next_algebraic_state
+                if self.algebraic_integer_output_decoder_enabled:
+                    integer_operand = algebraic_integer_operands[
+                        active_indices, step + 1
+                    ]
+                    integer_state = algebraic_integer_state[active_indices]
+                    integer_updated = torch.where(
+                        current_operation_ids.eq(0),
+                        integer_state + integer_operand,
+                        torch.where(
+                            current_operation_ids.eq(1),
+                            integer_state - integer_operand,
+                            integer_state * integer_operand,
+                        ),
+                    )
+                    next_algebraic_integer_state = algebraic_integer_state.clone()
+                    next_algebraic_integer_state[active_indices] = integer_updated
+                    algebraic_integer_state = next_algebraic_integer_state
                 next_last_operation_ids = last_operation_ids.clone()
                 next_last_operation_ids[active_indices] = current_operation_ids
                 last_operation_ids = next_last_operation_ids
@@ -1385,7 +1455,13 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 if self.algebraic_state_mode in {"polynomial2", "polynomial2_fourier"}:
                     algebraic_state_steps.append(algebraic_state.clone())
             if self.output_mode == "factorized_digits":
-                if self.algebraic_output_decoder_enabled:
+                if self.algebraic_integer_output_decoder_enabled:
+                    output_state = self.algebraic_integer_output_decoder(
+                        self._algebraic_integer_output_features(
+                            algebraic_integer_state
+                        )
+                    )
+                elif self.algebraic_output_decoder_enabled:
                     output_state = self.algebraic_output_decoder(
                         self._algebraic_state_features(algebraic_state)
                     )
@@ -1528,6 +1604,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
             shared += count_parameters(self.algebraic_state_projection)
             if self.algebraic_output_decoder_enabled:
                 shared += count_parameters(self.algebraic_output_decoder)
+            if self.algebraic_integer_output_decoder_enabled:
+                shared += count_parameters(self.algebraic_integer_digit_embeddings)
+                shared += count_parameters(self.algebraic_integer_output_decoder)
         if self.write_gate_enabled:
             shared += count_parameters(self.write_gate)
         if self.circuit_input_norm is not None:
@@ -1669,6 +1748,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "algebraic_state_write_scale": self.algebraic_state_write_scale,
             "algebraic_state_authoritative_read": self.algebraic_state_authoritative_read,
             "algebraic_output_decoder": self.algebraic_output_decoder_enabled,
+            "algebraic_integer_output_decoder": self.algebraic_integer_output_decoder_enabled,
+            "algebraic_integer_digit_dim": self.algebraic_integer_digit_dim,
             "algebraic_state_value_scale": self.algebraic_state_value_scale,
             "algebraic_state_fourier_base": self.algebraic_state_fourier_base,
             "operator_valued_product_encoder": self.operator_valued_product_encoder,

@@ -1562,6 +1562,14 @@ variant is rejected for adoption. The next diagnostic isolates a direct
 packet-to-digit decoder; capacity scaling remains deferred. See
 `V0_242_DYNAMIC_NONMOD_ALGEBRAIC_AUTHORITATIVE_READ_AUDIT.md`.
 
+V0.243 isolates a direct learned decoder from the existing algebraic packet.
+Aggregate taskwise accuracy rises `82.715% → 85.156%`, but this is only the
+subtract side: subtract reaches `100%` while multiply falls `15.430% →
+13.574%` and depth-4 multiply `7.8125% → 6.8359%`. The floating-point packet
+decoder is therefore rejected for multiply adoption; the next test preserves
+the exact integer packet and uses a lossless base-512 value codec. See
+`V0_243_DYNAMIC_NONMOD_ALGEBRAIC_OUTPUT_DECODER_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

@@ -764,6 +764,17 @@ any capacity scaling.
 
 **Audit:** `results/V0_242_DYNAMIC_NONMOD_ALGEBRAIC_AUTHORITATIVE_READ_AUDIT.md`.
 
+**Direct packet output decoder (2026-09-11):** A separate learned decoder
+from the existing polynomial2/Fourier packet improves aggregate taskwise
+accuracy `82.715% → 85.156%`, but only because subtract reaches `100%`;
+multiply falls `15.430% → 13.574%` and depth-4 falls `7.8125% → 6.8359%`.
+**REJECTED FOR MULTIPLY QUALITY ADOPTION.** This points to low-order precision
+loss or aliasing in the normalized float packet for large products. The next
+test uses a separate exact-integer packet with learned base-512 digit decoding;
+no circuit-bank or raw-capacity increase.
+
+**Audit:** `results/V0_243_DYNAMIC_NONMOD_ALGEBRAIC_OUTPUT_DECODER_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
