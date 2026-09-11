@@ -816,6 +816,27 @@ DIAGNOSTIC SIFATIDA QOLDIRILDI, LEADING VARIANT EMAS.** Keyingi screen rank32.
 
 **Audit:** `results/V0_247_DYNAMIC_NONMOD_FROZEN_INTEGER_OVERLAY_RANK64_AUDIT.md`.
 
+**Rank32 frozen integer overlay (2026-09-11):** Overlay rankini 32ga tushirish
+qualityni saqlamadi: aggregate `82.715% → 78.418%`, multiply `15.430% →
+13.672%`; add/subtract muzlatilgani uchun `100.000%/99.707%` o‘zgarmadi.
+**REJECTED FOR QUALITY.** Rank128 quality varianti bo‘lib qoldi; rank64 faqat
+budget diagnostikasi.
+
+**Audit:** `results/V0_248_DYNAMIC_NONMOD_FROZEN_INTEGER_OVERLAY_RANK32_AUDIT.md`.
+
+**Integer codec calibration sweep (2026-09-11):** Exact output codecga
+`−81.45M…+81.45M` random raw-value calibration qo‘shilganda weight1.0 va
+0.25 aggregate qualityni tushirdi, ammo deep multiply yaxshilandi. Weight0.10
+aggregate `82.715% → 82.813%`, multiply `15.430% → 52.930%`; weight0.05 esa
+aggregate `82.715% → 84.180%`, multiply `15.430% → 59.863%`, depth-3
+`80.078%`, depth-4 `39.648%` berdi. Add/subtract ikkala seedda saqlandi.
+**V0.252 RETAINED AS LEADING OPT-IN SIGNAL; DEFAULT O‘ZGARMADI.** Bu output
+codec va range-coverage foydasini ko‘rsatadi, lekin recurrent intermediate
+dataflow va universal scale muammosini hali isbotlamaydi. Keyingi test exact
+packetni learned query/router statega kichik scale bilan aralashtirishdir.
+
+**Audit:** `results/V0_249_252_DYNAMIC_NONMOD_INTEGER_CODEC_CALIBRATION_SWEEP_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

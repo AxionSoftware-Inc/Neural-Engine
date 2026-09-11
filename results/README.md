@@ -1600,6 +1600,16 @@ It is retained as a lower-budget diagnostic; rank128 remains the leading
 quality variant and rank32 is the next screen. See
 `V0_247_DYNAMIC_NONMOD_FROZEN_INTEGER_OVERLAY_RANK64_AUDIT.md`.
 
+V0.248 rank32 is rejected: aggregate falls to `78.418%` and multiply to
+`13.672%`, despite exact preservation of frozen add/subtract. The subsequent
+V0.249–V0.252 codec-calibration sweep finds a strong range-coverage effect.
+At weight `0.05`, V0.252 reaches aggregate `84.180%` and multiply `59.863%`
+(`80.078%` at depth 3, `39.648%` at depth 4), with add/subtract unchanged.
+It is the leading opt-in overlay, not a default architecture; the next test
+mixes its exact packet into recurrent query/router state. See
+`V0_248_DYNAMIC_NONMOD_FROZEN_INTEGER_OVERLAY_RANK32_AUDIT.md` and
+`V0_249_252_DYNAMIC_NONMOD_INTEGER_CODEC_CALIBRATION_SWEEP_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
