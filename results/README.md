@@ -1666,6 +1666,16 @@ multiply. The codec quality is therefore not a learned sparse-circuit result;
 the next gate is a prior-free dataflow benchmark. See
 `V0_262_DYNAMIC_NONMOD_INTEGER_CODEC_CIRCUIT_ABLATION_AUDIT.md`.
 
+V0.263 makes that dependency explicit. On the same peak checkpoints, disabling
+only the exact integer readout leaves `79.102–82.227%` held-out quality, while
+the full codec remains `99.609–100.000%`; disabling the algebraic state too
+gives `0.000%` in this inference-only stress test. Learned multiply is only
+`11.328–11.523%`. V0.264 retrains the same 300M virtual body without either
+prior: the two seeds reach only `6.836%/6.445%` on held-out depths 3–4, with
+held-out multiply `5.273%/6.250%`. The prior-free control is rejected and the
+next target is learned typed state/dataflow, not 700M/1B scaling. See
+`V0_263_264_DYNAMIC_NONMOD_PRIOR_ABLATION_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

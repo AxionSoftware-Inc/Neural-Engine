@@ -922,6 +922,32 @@ task/dataflow benchmark bo‘lishi kerak.
 
 **Audit:** `results/V0_262_DYNAMIC_NONMOD_INTEGER_CODEC_CIRCUIT_ABLATION_AUDIT.md`.
 
+**Prior-dependence ablation (2026-09-11):** V0.263 was run on the peak
+V0.260/261 checkpoints with three inference modes. Full exact codec quality
+was `99.609–100.000%` on held-out `0..95`, while disabling only the exact
+integer readout left the learned readout at `79.102–82.227%`; fixed unseen `96`
+fell to `62.305–68.555%`. Disabling the algebraic state as well produced
+`0.000%` in this inference-only stress test. Held-out learned multiply was
+only `11.328–11.523%`, despite full-codec multiply at about `99.8%`. **The
+peak score is therefore a numeric-prior/codec result, not a learned circuit
+result.** V0.263 is diagnostic only; default unchanged.
+
+**Audit:** `results/V0_263_264_DYNAMIC_NONMOD_PRIOR_ABLATION_AUDIT.md`.
+
+**Retrained prior-free control (2026-09-11):** V0.264 removed both the exact
+integer codec and algebraic state from the same 300M virtual body, then trained
+two seeds for 5k steps on wide operands `0..95`, depths 1–2, with depths 3–4
+held out. Train accuracy reached only `35.352%/41.602%`; held-out accuracy was
+`6.836%/6.445%` (seed17/18). The operation probe gave held-out multiply
+`5.273%/6.250%` and fixed unseen `96` all-operation `11.914%/16.406%`.
+**V0.264 REJECTED.** This is a clean negative control: removing the prior and
+retraining does not recover the composition dataflow, so the remaining P-003
+ceiling is architectural state transition/circuit computation, not a missing
+router screen or insufficient raw capacity. Next work is a learned typed
+value contract with operation-specific transition capacity; no 700M/1B scale.
+
+**Audit:** `results/V0_263_264_DYNAMIC_NONMOD_PRIOR_ABLATION_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
