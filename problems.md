@@ -563,6 +563,17 @@ capacity scaling remain unchanged.
 
 **Audit:** `results/V0_223_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_OOD_5000_AUDIT.md`.
 
+**Matched 5000-step control (2026-09-11):** Against a fresh no-interaction
+control with the same split, seeds, and budget, output interaction rank-32
+improves unseen accuracy by `+3.91 pp` mean and depth-4 by `+4.10 pp`; CE also
+improves by `−0.3212`. Both seeds agree. The added cost is `45,312` total and
+estimated active parameters, with router/circuit computation unchanged. This
+validates the carry/cross-digit readout hypothesis as an opt-in direction, but
+P-003 is not solved: full-range `0..63` regression and rank/cost ablation are
+still required before default adoption.
+
+**Audit:** `results/V0_224_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_MATCHED_5000_CONTROL.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

@@ -1406,6 +1406,14 @@ change is mixed and requires a matched 5000-step no-interaction control plus a
 full-range regression screen. The variant remains **OPT-IN**, not default. See
 `V0_223_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_OOD_5000_AUDIT.md`.
 
+V0.224 supplies that matched 5000-step no-interaction control. Interaction
+rank-32 beats it by `+3.91 pp` mean unseen accuracy and `+4.10 pp` depth-4,
+while CE improves by `−0.3212`; both seeds agree. This validates a meaningful
+carry/cross-digit readout signal at a `45,312` total/active-estimate parameter
+cost. It remains **OPT-IN** pending matched full-range `0..63` regression and
+rank/cost ablation. See
+`V0_224_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_MATCHED_5000_CONTROL.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
