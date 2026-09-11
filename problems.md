@@ -717,6 +717,18 @@ support limitation, not evidence for more capacity.
 
 **Audit:** `results/V0_238_DYNAMIC_NONMOD_ALGEBRAIC_OUTPUT_BRIDGE_AUDIT.md`.
 
+**Wide-support control (2026-09-11):** Training on operands `0..95` while
+holding out only depths restores non-zero multiply accuracy without changing
+capacity: mean held-out multiply `15.43%`, depth-3 `23.24%`, depth-4 `7.62%`;
+add is `100%` and subtract `91.99%`. The earlier `0..63 → 64..95` multiply
+`0%` result was therefore partly a product-range OOD confounder. The clean
+protocol is now wide-support/depth-holdout for architecture comparisons.
+P-003 remains active because deep multiply is still weak; **no 700M/1B
+scaling** follows. Next work should improve deep multiply dataflow on this
+clean protocol, not add raw capacity.
+
+**Audit:** `results/V0_239_DYNAMIC_NONMOD_WIDE_TRAIN_RANGE_CONTROL.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

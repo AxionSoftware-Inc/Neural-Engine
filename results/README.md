@@ -1525,6 +1525,15 @@ another state-architecture change, the next control widens the training
 operand range to `0..95` to separate product-range OOD from recurrent
 composition failure. See `V0_238_DYNAMIC_NONMOD_ALGEBRAIC_OUTPUT_BRIDGE_AUDIT.md`.
 
+V0.239 fixes the interpretation of the previous multiply failure. Training
+and evaluating on operand support `0..95` restores multiply to `15.43%` mean
+held-out, `23.24%` depth-3, and `7.62%` depth-4, versus `0%` under the
+confounded `0..63 → 64..95` product-range OOD split; add is `100%` and
+subtract `91.99%`. No parameters were added. Product-range support is now a
+separate protocol requirement, but deep multiply composition remains the hard
+task and capacity scaling is still deferred. See
+`V0_239_DYNAMIC_NONMOD_WIDE_TRAIN_RANGE_CONTROL.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
