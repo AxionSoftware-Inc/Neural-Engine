@@ -1586,6 +1586,20 @@ is rejected; the exact integer signal is retained for a frozen-checkpoint
 overlay experiment that cannot disturb add/subtract. See
 `V0_245_DYNAMIC_NONMOD_MULTIPLY_ONLY_INTEGER_CODEC_AUDIT.md`.
 
+V0.246 validates that frozen overlay: training only a separate multiply digit
+head plus exact integer decoder raises matched held-out multiply
+`15.430% → 23.145%` and aggregate `82.715% → 83.691%`, while add and subtract
+remain unchanged. It is retained as a strong opt-in signal, not a default;
+the next screen reduces its `337,474` trainable parameters. See
+`V0_246_DYNAMIC_NONMOD_FROZEN_INTEGER_OVERLAY_AUDIT.md`.
+
+V0.247 halves only the multiply overlay projection rank to 64 while leaving
+the V0.240 base output head unchanged. Multiply reaches `19.922%` and add /
+subtract remain `100.000%/99.707%`, but aggregate improves only `+0.098 pp`.
+It is retained as a lower-budget diagnostic; rank128 remains the leading
+quality variant and rank32 is the next screen. See
+`V0_247_DYNAMIC_NONMOD_FROZEN_INTEGER_OVERLAY_RANK64_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

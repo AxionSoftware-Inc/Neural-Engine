@@ -797,6 +797,25 @@ only the new multiply decoder so existing add/subtract cannot regress.
 
 **Audit:** `results/V0_245_DYNAMIC_NONMOD_MULTIPLY_ONLY_INTEGER_CODEC_AUDIT.md`.
 
+**Frozen integer overlay (2026-09-11):** Loading V0.240 and freezing the full
+body while training only an exact-integer decoder plus a multiply-specific
+digit head preserved add (`100.000%`) and subtract (`99.707%`) exactly, while
+raising multiply from `15.430%` to `23.145%` (`+7.715 pp`) and aggregate
+held-out accuracy from `82.715%` to `83.691%` across seed17/18. **RETAINED AS
+STRONG OPT-IN SIGNAL; NOT DEFAULT.** The improvement is operation-specific and
+adds `337,474` trainable parameters, so the next problem is reducing that
+overlay budget without losing the gain.
+
+**Audit:** `results/V0_246_DYNAMIC_NONMOD_FROZEN_INTEGER_OVERLAY_AUDIT.md`.
+
+**Lower-rank frozen integer overlay (2026-09-11):** Rank64 overlay bilan
+multiply `15.430% → 19.922%` (`+4.492 pp`), add `100.000%` va subtract
+`99.707%` saqlanib qoldi. Bu rank128dagi `+7.715 pp` foydaning bir qismini
+saqlaydi, lekin aggregate foyda faqat `+0.098 pp`; **RANK64 LOWER-BUDGET
+DIAGNOSTIC SIFATIDA QOLDIRILDI, LEADING VARIANT EMAS.** Keyingi screen rank32.
+
+**Audit:** `results/V0_247_DYNAMIC_NONMOD_FROZEN_INTEGER_OVERLAY_RANK64_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
