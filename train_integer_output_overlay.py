@@ -47,7 +47,7 @@ def run(args: argparse.Namespace) -> dict:
     allowed_missing = {
         key for key in model.state_dict() if key.startswith(allowed_prefixes)
     }
-    if set(missing) != allowed_missing or unexpected:
+    if not set(missing).issubset(allowed_missing) or unexpected:
         raise RuntimeError(
             f"unexpected checkpoint migration: missing={missing}, unexpected={unexpected}"
         )
