@@ -1633,6 +1633,12 @@ exact algebraic state supplies known benchmark semantics; this is not yet a
 claim about universal 700M/1B scaling. See
 `V0_255_DYNAMIC_NONMOD_FULL_RANGE_INTEGER_CODEC_AUDIT.md`.
 
+V0.256 rank64 reduces the trainable overlay from `337,474` to `207,362`, but
+the first seed falls to `90.430%` aggregate and `81.055%` subtract on the
+matched range; unseen fixed-96 subtract is `50%`. It is rejected after the
+early quality gate, so rank128 V0.255 remains the leading opt-in budget. See
+`V0_256_DYNAMIC_NONMOD_RANK64_FULL_RANGE_CODEC_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

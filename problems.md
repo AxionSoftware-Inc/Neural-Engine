@@ -870,6 +870,15 @@ default learned path hali o‘zgartirilmaydi.
 
 **Audit:** `results/V0_255_DYNAMIC_NONMOD_FULL_RANGE_INTEGER_CODEC_AUDIT.md`.
 
+**Rank64 full-range codec screen (2026-09-11):** Overlay budgetni
+`337,474 → 207,362` tushirish uchun rank64 sinov qilindi. Seed17 matched
+`0..95` aggregate `90.430%`, add `100%`, subtract `81.055%`, multiply
+`92.773%`; unseen fixed `96` da subtract `50%`, multiply `100%` bo‘ldi.
+**QUALITY GATE BAJARILMAGANI UCHUN RAD ETILDI.** Rank128 V0.255 leading
+opt-in bo‘lib qoldi; rank32 shu gate ostida to‘liq screen qilinmaydi.
+
+**Audit:** `results/V0_256_DYNAMIC_NONMOD_RANK64_FULL_RANGE_CODEC_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
