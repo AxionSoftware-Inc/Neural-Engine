@@ -1381,6 +1381,15 @@ problem. The first unsafe-offset attempt was stopped by the target guard and
 is not a quality result. See
 `V0_220_DYNAMIC_NONMOD_FOUR_DIGIT_UNSEEN_VALUE_RANGE_AUDIT.md`.
 
+V0.221 tests the existing `fixed_fourier` input value encoder on the same
+unseen-range gate. It reaches only `46.29%` mean overall and `41.99%` depth-4,
+versus `51.66%`/`47.85%` for the learned-encoder control; mean CE worsens by
+`+0.5183`. The encoder still fits the seen range, but does not provide unseen
+value transfer and is **REJECTED AS A DIRECT OOD FIX**. The remaining bottleneck
+is value/carry information through recurrent state, composition, and readout,
+not input embedding alone. See
+`V0_221_DYNAMIC_NONMOD_FIXED_FOURIER_UNSEEN_VALUE_RANGE_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

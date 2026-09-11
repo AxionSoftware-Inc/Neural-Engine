@@ -527,6 +527,18 @@ guard and is not counted as a quality result.
 
 **Audit:** `results/V0_220_DYNAMIC_NONMOD_FOUR_DIGIT_UNSEEN_VALUE_RANGE_AUDIT.md`.
 
+**Fixed Fourier input-encoder screen (2026-09-11):** Replacing the learned
+value encoder with the existing fixed mod-64 Fourier encoder on the same
+`0..31 → 32..63` unseen-range gate gives `46.29%` mean accuracy and `41.99%`
+depth-4, versus `51.66%` and `47.85%` for the learned-encoder control. Mean CE
+worsens from `10.1647` to `10.6830`; train accuracy remains `99.32%`. Thus the
+input embedding alone is not the direct fix. The fixed Fourier option is
+`REJECTED AS A DIRECT OOD FIX`; P-003 remains active for a value/carry contract
+that survives recurrent composition and final readout. Capacity-only 700M/1B
+scaling is still deferred.
+
+**Audit:** `results/V0_221_DYNAMIC_NONMOD_FIXED_FOURIER_UNSEEN_VALUE_RANGE_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
