@@ -1414,6 +1414,13 @@ cost. It remains **OPT-IN** pending matched full-range `0..63` regression and
 rank/cost ablation. See
 `V0_224_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_MATCHED_5000_CONTROL.md`.
 
+V0.225 passes the matched full-range `0..63` hard-quality regression: rank-32
+interaction reaches `83.98%` mean held-out and `79.49%` depth-4 versus
+`82.62%`/`77.54%` for the no-interaction control (`+1.37/+1.95 pp`). Mean CE
+regresses by `+0.2128`, so the path remains **OPT-IN**, not default. The next
+gate is rank-16 OOD ablation for lower cost and better calibration. See
+`V0_225_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_FULL_RANGE_5000.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

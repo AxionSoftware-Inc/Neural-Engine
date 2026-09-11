@@ -574,6 +574,15 @@ still required before default adoption.
 
 **Audit:** `results/V0_224_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_MATCHED_5000_CONTROL.md`.
 
+**Full-range regression (2026-09-11):** With operands `0..63` in both train
+and evaluation, interaction rank-32 reaches `83.98%` mean held-out and
+`79.49%` depth-4 versus the matched no-interaction `82.62%`/`77.54%`, a
+`+1.37/+1.95 pp` hard-quality gain. CE regresses by `+0.2128`, especially on
+seed18, so the variant passes hard quality but is not default. P-003 remains
+active for generalization/calibration; next is rank-16 OOD cost ablation.
+
+**Audit:** `results/V0_225_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_FULL_RANGE_5000.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
