@@ -1733,6 +1733,13 @@ on wide `0..95`, but wide CE worsens by `+0.5707` and the +2 pp gate is not
 met. It remains an opt-in transition diagnostic; default architecture and
 capacity are unchanged. See `V0_272_DYNAMIC_NONMOD_TYPED_DIGIT_CARRY_CHAIN_AUDIT.md`.
 
+V0.273 repeats the wide carry-chain comparison for 5,000 matched training
+steps. The control reaches `6.958%` mean held-out accuracy and the chain
+`6.177%` (`−0.781 pp`), with CE also worse by `+0.5146`. The short-screen
+carry gain was therefore not stable; the chain is rejected for adoption and
+scaling, while the matched learning-curve evidence is retained. See
+`V0_273_DYNAMIC_NONMOD_CARRY_CHAIN_LONG_TRAIN_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

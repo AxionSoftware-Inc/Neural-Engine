@@ -1052,6 +1052,17 @@ active; no 700M/1B scaling follows.
 
 **Audit:** `results/V0_272_DYNAMIC_NONMOD_TYPED_DIGIT_CARRY_CHAIN_AUDIT.md`.
 
+**Carry-chain matched long training (2026-09-12):** V0.273 repeated the
+wide `0..95` control/treatment with 5,000 steps to remove the short-screen
+budget confound. The control two-seed paired mean rose to `6.958%`, while the
+carry-chain reached `6.177%` (`−0.781 pp`); CE worsened by `+0.5146` and both
+seeds regressed overall. **V0.273 REJECTED FOR QUALITY ADOPTION AND
+SCALING.** The earlier 2k carry gain was not stable under a matched longer
+learning curve. Training budget is a real factor, but this carry inductive
+bias does not solve P-003/P-004. No 700M/1B scaling follows.
+
+**Audit:** `results/V0_273_DYNAMIC_NONMOD_CARRY_CHAIN_LONG_TRAIN_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
