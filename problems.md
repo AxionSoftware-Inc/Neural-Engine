@@ -963,6 +963,20 @@ step extrapolation from a genuine transition failure; no rank increase or
 
 **Audit:** `results/V0_265_DYNAMIC_NONMOD_BILINEAR_TRANSITION_AUDIT.md`.
 
+**Prior-free all-depth control (2026-09-11):** V0.266 trained the same
+prior-free 300M-virtual model on depths 1–4, removing the possibility that
+V0.264/265 failed only because depth-3/4 steps were untrained. Train accuracy
+was just `12.012%/12.207%` and eval accuracy `11.719%/10.938%` across seed17/18;
+depth-4 stayed `3.125%/5.469%`, and held-out operation probe multiply was
+`6.445%/6.445%`. Routing used nonzero factor/virtual rows, so this is not
+simply a dead-router artifact. **V0.266 REJECTED.** P-003 is now localized to
+the learned value/state representation and its interface with sparse circuit
+updates. Next test should add a small supervised learned value contract at
+the recurrent boundary, retaining exact codec only as a separate hybrid
+baseline; no 700M/1B scaling yet.
+
+**Audit:** `results/V0_266_DYNAMIC_NONMOD_PRIOR_FREE_ALL_DEPTHS_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

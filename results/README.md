@@ -1685,6 +1685,14 @@ below the +2 pp gate; the next control trains prior-free variants on all
 depths before considering a larger typed transition. See
 `V0_265_DYNAMIC_NONMOD_BILINEAR_TRANSITION_AUDIT.md`.
 
+V0.266 trains the prior-free four-digit model on all depths 1–4 rather than
+holding out depths 3–4. It still reaches only `11.719%/10.938%` eval accuracy
+across seed17/18 (`11.328%` mean), with depth-4 at `3.125%/5.469%` and
+multiply near chance. This rejects depth extrapolation as the sole cause of
+the failure and localizes the bottleneck to learned value/state representation
+and sparse-circuit updates. See
+`V0_266_DYNAMIC_NONMOD_PRIOR_FREE_ALL_DEPTHS_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
