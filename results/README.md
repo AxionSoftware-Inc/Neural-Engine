@@ -1693,6 +1693,14 @@ the failure and localizes the bottleneck to learned value/state representation
 and sparse-circuit updates. See
 `V0_266_DYNAMIC_NONMOD_PRIOR_FREE_ALL_DEPTHS_AUDIT.md`.
 
+V0.267 trains the rank-16 operation-conditioned accumulator×operand write
+residual on all depths 1–4. The small run summary looked positive (`+2.246 pp`
+mean), but a larger paired evaluation using 1,024 identical examples per
+depth reduced the two-seed gain to only `+0.232 pp`; seed17 regressed and
+depth-4 stayed flat. Route/factor usage increased without a stable quality
+gain. **V0.267 REJECTED FOR ADOPTION AND SCALING; OPT-IN DIAGNOSTIC ONLY.**
+See `V0_267_DYNAMIC_NONMOD_BILINEAR_ALL_DEPTHS_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

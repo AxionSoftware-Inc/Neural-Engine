@@ -977,6 +977,21 @@ baseline; no 700M/1B scaling yet.
 
 **Audit:** `results/V0_266_DYNAMIC_NONMOD_PRIOR_FREE_ALL_DEPTHS_AUDIT.md`.
 
+**Bilinear all-depth control (2026-09-12):** V0.267 trained the rank-16
+operation-conditioned accumulator×operand write residual on all depths 1–4,
+removing the depth-holdout confound from V0.265. The small final evaluation
+showed `11.328% → 13.574%` mean (`+2.246 pp`), but this was seed-driven
+(`+0.195 pp` for seed17 versus `+4.297 pp` for seed18) and depth-4 did not
+improve. A larger paired evaluation with 1,024 identical examples per depth
+reduced the mean difference to only `11.902% → 12.134%` (`+0.232 pp`), with
+seed17 regressing `12.134% → 9.912%`. Route diversity increased substantially
+without a corresponding quality gain. **V0.267 REJECTED FOR ADOPTION AND
+SCALING; OPT-IN DIAGNOSTIC ONLY.** P-003/P-004 remain active. The next test
+must target a reusable typed value/carry contract rather than a larger
+bilinear residual.
+
+**Audit:** `results/V0_267_DYNAMIC_NONMOD_BILINEAR_ALL_DEPTHS_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
