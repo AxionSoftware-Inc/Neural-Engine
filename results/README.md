@@ -1472,9 +1472,11 @@ range fix and valid rerun are tracked in V0.233. This is an input-validity
 issue, not a capacity/700M/1B result. See
 `V0_232_DYNAMIC_NONMOD_FOUR_DIGIT_CROSS_DIGIT_INTERACTION_RANK16_OOD_ABOVE_RANGE.md`.
 
-V0.233 configures the corrected above-range screen with
-`value_encoder_modulus=128`, matched rank16/no-interaction arms, and the same
-`0..63 → 64..95` protocol. Results are pending. See
+V0.233 is the corrected above-range screen with `value_encoder_modulus=128`,
+matched rank16/no-interaction arms, and the same `0..63 → 64..95` protocol.
+Preliminary seeds17/18 show a small `+1.07 pp` overall and `+0.78 pp` depth-4
+mean hard-accuracy gain, but CE worsens by `+0.3472` and depth-4 is mixed;
+seeds19/20 are pending before a final decision. See
 `V0_233_DYNAMIC_NONMOD_VALUE_ENCODER_RANGE_FIX_ABOVE_RANGE.md`.
 
 V0.201 rejects injecting the learned scalar lane into the next operation's

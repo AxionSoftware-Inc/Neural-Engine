@@ -1,7 +1,7 @@
 # V0.233 — corrected above-range representation test
 
 **Date:** 2026-09-11  
-**Status:** `RUN CONFIGURED; RESULTS PENDING`
+**Status:** `PRELIMINARY RESULT; FOUR-SEED VALIDATION IN PROGRESS`
 
 ## Motivation
 
@@ -31,9 +31,26 @@ The treatment must beat the matched control on hard above-range accuracy and
 depth-4 accuracy before it can be considered a generalization improvement.
 The earlier V0.232 metrics are not part of this comparison.
 
+## Preliminary results: seeds 17 and 18
+
+| Arm | Seed | Train accuracy | Above-range accuracy | Depth 3 | Depth 4 | CE |
+|---|---:|---:|---:|---:|---:|---:|
+| No interaction | 17 | 98.24% | 56.84% | 61.33% | 52.34% | 11.2941 |
+| No interaction | 18 | 99.61% | 59.57% | 66.41% | 52.73% | 10.4912 |
+| **No interaction mean** |  | **98.93%** | **58.20%** | **63.87%** | **52.54%** | **10.8927** |
+| Interaction rank 16 | 17 | 98.24% | 57.81% | 64.06% | 51.56% | 11.8264 |
+| Interaction rank 16 | 18 | 99.41% | 60.74% | 66.41% | 55.08% | 10.6533 |
+| **Interaction rank 16 mean** |  | **98.83%** | **59.28%** | **65.23%** | **53.32%** | **11.2399** |
+
+Preliminary treatment-minus-control deltas are `+1.07 pp` overall,
+`+1.37 pp` depth-3, `+0.78 pp` depth-4, and `+0.3472` CE (worse). Overall
+accuracy is positive in both seeds, but depth-4 is mixed and the gain is
+small; this is not a default-adoption result. Seeds19/20 are being added
+before making the final decision.
+
 ## Raw runs
 
-Pending completion. Treatment config:
+Four-seed completion pending. Treatment config:
 `configs/ne_dynamic_300m_nonmod_train0_63_eval64_95_four_digit_base512_rank128_interaction16_value128.yaml`.
 
 Control config:
