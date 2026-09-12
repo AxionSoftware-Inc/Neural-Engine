@@ -63,3 +63,18 @@ def test_factorized_targets_preserve_wide_leading_digit_head():
     digits = factorized_digit_targets(targets, base, 8)
     assert torch.equal(digits[0], torch.tensor([0, 15, 16, 31]))
     assert all(torch.equal(digit, torch.zeros(4, dtype=torch.long)) for digit in digits[1:])
+
+
+def test_fixed_operation_batch_accepts_high_value_stress_range():
+    config = {**_config(), "operationwise_value_min": 80, "operationwise_value_max": 95}
+    batch = fixed_operation_batch(
+        config, "multiply", depth=4, count=8, seed=19, device=torch.device("cpu")
+    )
+    assert int(batch.inputs[:, 5:10].min()) >= 80 + 32
+    assert int(batch.inputs[:, 5:10].max()) <= 95 + 32
+
+
+def test_operationwise_depths_are_not_duplicated_when_train_and_max_touch():
+    config = {**_config(), "train_max_ops": 3, "max_ops": 4}
+    depths = tuple(dict.fromkeys((int(config["train_max_ops"]) + 1, int(config["max_ops"]))))
+    assert depths == (4,)

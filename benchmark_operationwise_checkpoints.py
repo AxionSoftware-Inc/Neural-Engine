@@ -41,6 +41,8 @@ def fixed_operation_batch(
     count: int,
     seed: int,
     device: torch.device,
+    value_min: int | None = None,
+    value_max: int | None = None,
 ) -> Batch:
     """Build a deterministic batch of homogeneous non-modular programs."""
     if operation not in OPERATIONS:
@@ -51,8 +53,8 @@ def fixed_operation_batch(
         raise ValueError("depth must be within max_ops")
     if depth <= train_max_ops:
         raise ValueError("operation-wise diagnostic expects held-out depth")
-    value_min = int(config.get("operationwise_value_min", 0))
-    value_max = int(config.get("operationwise_value_max", 95))
+    value_min = int(config.get("operationwise_value_min", 0) if value_min is None else value_min)
+    value_max = int(config.get("operationwise_value_max", 95) if value_max is None else value_max)
     target_offset = int(config.get("target_offset", 0))
     seq_len = int(config["seq_len"])
     rng = np.random.default_rng(seed)
@@ -152,7 +154,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         model.load_state_dict(payload["model_state"])
         model.eval()
         for operation_index, operation in enumerate(OPERATIONS):
-            for depth in (int(config["train_max_ops"]) + 1, int(config["max_ops"])):
+            depths = tuple(dict.fromkeys((int(config["train_max_ops"]) + 1, int(config["max_ops"]))))
+            for depth in depths:
                 batch = fixed_operation_batch(
                     config,
                     operation,
@@ -160,6 +163,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     args.examples_per_case,
                     seed=10_000 + checkpoint_seed * 100 + operation_index * 10 + depth,
                     device=device,
+                    value_min=args.value_min,
+                    value_max=args.value_max,
                 )
                 metrics = evaluate_fixed_batch(
                     model, batch, int(config["output_digit_base"])
@@ -197,6 +202,8 @@ def main() -> None:
     parser.add_argument("--examples-per-case", type=int, default=512)
     parser.add_argument("--device", default="auto")
     parser.add_argument("--seed", type=int, default=17)
+    parser.add_argument("--value-min", type=int, default=None)
+    parser.add_argument("--value-max", type=int, default=None)
     parser.add_argument(
         "--output",
         default="results/operationwise_fixed_checkpoint_eval_v0_292.json",

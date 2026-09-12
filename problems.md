@@ -1316,6 +1316,18 @@ no default or scale-up.** Next is training depths `1..3` and testing depth `4`
 to isolate depth coverage from architecture. See
 `results/V0_298_299_CONTRACT_FIX_HIGH_VALUE_STRESS_AUDIT.md`.
 
+V0.301 trains the same prior-free typed-carry/numeric-multiply model on depths
+`1..3` and holds out only depth `4` for 5,000 steps. Seed17 reaches only
+`2.930%` held-out accuracy; fixed depth-4 add/subtract/multiply are
+`8.594%/8.594%/4.688%`, versus the V0.298 reference's
+`36.328%/34.961%/4.102%`. The extra depth coverage therefore damages the
+previously stronger add/subtract transfer and barely changes multiply.
+**REJECTED FOR ADOPTION; no 700M/1B scale.** Seed18 is a matched replication
+before the final two-seed decision. The next architecture target is an
+explicit operation-conditioned algebraic/value transition, not more depth
+coverage, router tweaks, or bank capacity. See
+`results/V0_301_DYNAMIC_NONMOD_DEPTH3_TRAIN_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
