@@ -311,6 +311,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         structured_scalar_authoritative: bool = False,
         algebraic_state_mode: str = "none",
         algebraic_state_operation_conditioned: bool = False,
+        algebraic_state_multiply_residual: bool = False,
         algebraic_state_scale: float = 1.0,
         algebraic_output_bridge_scale: float = 0.0,
         algebraic_state_write_scale: float = 0.0,
@@ -456,6 +457,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
             )
         if algebraic_state_mode != "none" and modulus is not None:
             raise ValueError("algebraic_state_mode currently requires modulus=None")
+        if algebraic_state_multiply_residual and algebraic_state_mode == "none":
+            raise ValueError(
+                "algebraic_state_multiply_residual requires algebraic_state_mode"
+            )
         if algebraic_state_scale < 0.0:
             raise ValueError("algebraic_state_scale must be non-negative")
         if algebraic_output_bridge_scale < 0.0:
@@ -703,6 +708,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.algebraic_state_mode = algebraic_state_mode
         self.algebraic_state_operation_conditioned = bool(
             algebraic_state_operation_conditioned
+        )
+        self.algebraic_state_multiply_residual = bool(
+            algebraic_state_multiply_residual
         )
         self.algebraic_state_scale = float(algebraic_state_scale)
         self.algebraic_output_bridge_scale = float(algebraic_output_bridge_scale)
@@ -1046,6 +1054,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 )
             else:
                 self.algebraic_state_projection = projection_factory()
+            if self.algebraic_state_multiply_residual:
+                self.algebraic_state_multiply_projection = projection_factory()
             if self.algebraic_output_decoder_enabled:
                 # Separate output codec: do not force the recurrent learned
                 # state to serve as the value-to-digit representation.
@@ -1545,16 +1555,29 @@ class DynamicRegisterNeuralEngine(nn.Module):
     ) -> torch.Tensor:
         """Project algebraic features with an optional operation-specific map."""
         if not isinstance(self.algebraic_state_projection, nn.ModuleList):
-            return self.algebraic_state_projection(features)
-        if operation_ids is None:
-            raise ValueError(
-                "operation_ids are required for operation-conditioned algebraic state"
-            )
-        projected = features.new_empty(*features.shape[:-1], self.state_dim)
-        for operation_id, projection in enumerate(self.algebraic_state_projection):
-            mask = operation_ids.eq(operation_id)
-            if mask.any():
-                projected[mask] = projection(features[mask])
+            projected = self.algebraic_state_projection(features)
+        else:
+            if operation_ids is None:
+                raise ValueError(
+                    "operation_ids are required for operation-conditioned algebraic state"
+                )
+            projected = features.new_empty(*features.shape[:-1], self.state_dim)
+            for operation_id, projection in enumerate(self.algebraic_state_projection):
+                mask = operation_ids.eq(operation_id)
+                if mask.any():
+                    projected[mask] = projection(features[mask])
+        if self.algebraic_state_multiply_residual:
+            if operation_ids is None:
+                raise ValueError(
+                    "operation_ids are required for multiply algebraic residual"
+                )
+            residual = features.new_zeros(projected.shape)
+            multiply_mask = operation_ids.eq(2)
+            if multiply_mask.any():
+                residual[multiply_mask] = self.algebraic_state_multiply_projection(
+                    features[multiply_mask]
+                )
+            projected = projected + residual
         return projected
 
     def _algebraic_integer_output_features(
@@ -2523,6 +2546,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "algebraic_state_mode": self.algebraic_state_mode,
             "algebraic_state_operation_conditioned": (
                 self.algebraic_state_operation_conditioned
+            ),
+            "algebraic_state_multiply_residual": (
+                self.algebraic_state_multiply_residual
             ),
             "algebraic_state_scale": self.algebraic_state_scale,
             "algebraic_output_bridge_scale": self.algebraic_output_bridge_scale,

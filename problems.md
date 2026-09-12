@@ -1396,6 +1396,30 @@ transitionidir.
 
 **Batafsil:** `results/V0_306_308_MULTIPLY_CODEC_PROJECTION_AUDIT.md`.
 
+**V0.309–V0.311 algebraic dataflow screens (2026-09-12):** V0.309’ning
+operation-conditioned rank-32 bilinear write transitioni seed17da
+`39.0137%` held-out (`48.9258%/29.1016%` d3/d4) berdi; V0.310 multiply-only
+algebraic residual `38.4277%` (`48.9258%/27.9297%`) bilan yomonroq chiqdi.
+V0.311 additive output bridge (`0.25`) seed17/18da `40.6250%/37.1094%`,
+ikki-seed mean `38.8672%` bo‘ldi. Bu V0.304 meanidan faqat `+0.2686 pp`, d3
+`−0.0977 pp`, d4 `+0.6348 pp`; operationwise multiply mean `1.2695%/1.6602%`
+va high-value `80..95` multiply `0%/0%` bo‘lib qoldi. **V0.309, V0.310 va
+V0.311 main quality uchun REJECTED.** Katta projection/rank yoki additive
+output hint persistent learned post-operation value/carry contract yo‘qligini
+hal qilmadi. P-003/P-004 `ACTIVE`; 700M/1B scaling boshlanmaydi.
+
+**Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
+
+**V0.312 typed-digit write follow-up (2026-09-12):** learned typed-digit
+carry state multiply-only `0.25` write bridge bilan recurrent state’ga
+qo‘shildi. Seed17 2k held-out `39.4531%` bo‘lib, V0.304 seed17 `39.5020%`dan
+`−0.0488 pp`; CE `9.08746`gacha yomonlashdi. Fixed multiply
+`2.3438%/1.7578%`, high-value `0%/0%` bo‘ldi. **V0.312 REJECTED.** Additive
+typed write ham persistent learned multiply/carry contract hosil qilmadi.
+P-003/P-004 `ACTIVE`; keyingi sinov cross-digit pair interaction kernel.
+
+**Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

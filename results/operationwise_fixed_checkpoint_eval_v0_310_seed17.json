@@ -1,0 +1,144 @@
+{
+  "benchmark": "operationwise_fixed_checkpoint_eval",
+  "device": "cuda",
+  "examples_per_case": 512,
+  "operations": [
+    "add",
+    "subtract",
+    "multiply"
+  ],
+  "records": [
+    {
+      "checkpoint": "results/checkpoints/v0_310_multiply_algebraic_residual_seed17_2000.pt",
+      "variant": "v0_310_multiply_algebraic_residual",
+      "seed": 17,
+      "operation": "add",
+      "depth": 3,
+      "count": 512,
+      "accuracy": 0.884765625,
+      "loss": 0.5380415320396423,
+      "digit_accuracy": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.884765625,
+        1.0,
+        1.0
+      ],
+      "router_entropy": 0.6295454502105713,
+      "unique_virtual_circuits": 500
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_310_multiply_algebraic_residual_seed17_2000.pt",
+      "variant": "v0_310_multiply_algebraic_residual",
+      "seed": 17,
+      "operation": "add",
+      "depth": 4,
+      "count": 512,
+      "accuracy": 0.642578125,
+      "loss": 2.114715814590454,
+      "digit_accuracy": [
+        1.0,
+        0.998046875,
+        0.998046875,
+        0.998046875,
+        1.0,
+        0.64453125,
+        1.0,
+        1.0
+      ],
+      "router_entropy": 0.6917986273765564,
+      "unique_virtual_circuits": 510
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_310_multiply_algebraic_residual_seed17_2000.pt",
+      "variant": "v0_310_multiply_algebraic_residual",
+      "seed": 17,
+      "operation": "subtract",
+      "depth": 3,
+      "count": 512,
+      "accuracy": 0.998046875,
+      "loss": 0.05143958330154419,
+      "digit_accuracy": [
+        1.0,
+        0.998046875,
+        0.998046875,
+        0.998046875,
+        0.998046875,
+        0.998046875,
+        1.0,
+        1.0
+      ],
+      "router_entropy": 0.6630012392997742,
+      "unique_virtual_circuits": 573
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_310_multiply_algebraic_residual_seed17_2000.pt",
+      "variant": "v0_310_multiply_algebraic_residual",
+      "seed": 17,
+      "operation": "subtract",
+      "depth": 4,
+      "count": 512,
+      "accuracy": 0.95703125,
+      "loss": 0.41447150707244873,
+      "digit_accuracy": [
+        1.0,
+        0.994140625,
+        0.994140625,
+        0.994140625,
+        0.994140625,
+        0.962890625,
+        1.0,
+        1.0
+      ],
+      "router_entropy": 0.7604607343673706,
+      "unique_virtual_circuits": 603
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_310_multiply_algebraic_residual_seed17_2000.pt",
+      "variant": "v0_310_multiply_algebraic_residual",
+      "seed": 17,
+      "operation": "multiply",
+      "depth": 3,
+      "count": 512,
+      "accuracy": 0.025390625,
+      "loss": 21.310211181640625,
+      "digit_accuracy": [
+        1.0,
+        0.79296875,
+        0.37109375,
+        0.150390625,
+        0.072265625,
+        0.068359375,
+        0.998046875,
+        0.9296875
+      ],
+      "router_entropy": 0.22851653397083282,
+      "unique_virtual_circuits": 521
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_310_multiply_algebraic_residual_seed17_2000.pt",
+      "variant": "v0_310_multiply_algebraic_residual",
+      "seed": 17,
+      "operation": "multiply",
+      "depth": 4,
+      "count": 512,
+      "accuracy": 0.01953125,
+      "loss": 42.918540954589844,
+      "digit_accuracy": [
+        0.650390625,
+        0.283203125,
+        0.119140625,
+        0.083984375,
+        0.0859375,
+        0.095703125,
+        0.771484375,
+        0.390625
+      ],
+      "router_entropy": 0.29453617334365845,
+      "unique_virtual_circuits": 547
+    }
+  ]
+}

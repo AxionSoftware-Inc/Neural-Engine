@@ -168,6 +168,7 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "structured_scalar_read_scale",
         "structured_scalar_authoritative",
         "algebraic_state_mode", "algebraic_state_operation_conditioned",
+        "algebraic_state_multiply_residual",
         "algebraic_state_scale",
         "algebraic_output_bridge_scale",
         "algebraic_state_write_scale",
