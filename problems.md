@@ -1063,6 +1063,28 @@ bias does not solve P-003/P-004. No 700M/1B scaling follows.
 
 **Audit:** `results/V0_273_DYNAMIC_NONMOD_CARRY_CHAIN_LONG_TRAIN_AUDIT.md`.
 
+**Progressive value curriculum (2026-09-12):** V0.274 kept the same
+300M virtual-bank architecture and active budget, but opened the training
+value range in three stages: `0--7` for steps 1--1,000, `0--31` through
+2,500, then `0--95` through 5,000. On a fixed 1,024-example paired
+held-out-depth evaluation, four seeds improved mean accuracy from `7.031%` to
+`20.422%` (`+13.391 pp`) and mean CE from `11.3819` to `9.6007`; every seed
+improved. Factor-row coverage also increased from `35--66` to `72--113` rows.
+This is the first strong wide-range training signal, but it changes the data
+curriculum rather than the architecture, so it is **RETAINED AS AN OPT-IN
+TRAINING PROTOCOL, NOT A DEFAULT ARCHITECTURE OR SCALE JUSTIFICATION**.
+
+**Generator-reset control (2026-09-12):** V0.277 repeated the same three
+generator resets with `0--95` in every stage. Its four-seed mean was only
+`6.482%` with CE `11.4907`, below both the curriculum and ordinary control.
+Therefore the V0.274 gain is not explained by RNG/generator reset alone;
+progressive value difficulty is the active hypothesis. P-003/P-004 remain
+active. The next gate is alternative curriculum boundaries plus unseen-value
+evaluation before any 700M/1B run.
+
+**Audits:** `results/V0_274_DYNAMIC_NONMOD_VALUE_CURRICULUM_AUDIT.md` and
+`results/V0_277_DYNAMIC_NONMOD_VALUE_RESET_CONTROL_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

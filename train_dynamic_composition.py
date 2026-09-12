@@ -415,6 +415,47 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         value_max=args.train_value_max,
         split="train" if args.heldout_depths else "all",
     )
+    value_curriculum = config.get("value_curriculum")
+    normalized_curriculum = None
+    if value_curriculum is not None:
+        if not isinstance(value_curriculum, list) or not value_curriculum:
+            raise ValueError("value_curriculum must be a non-empty list")
+        normalized_curriculum = []
+        previous_until = 0
+        for stage in value_curriculum:
+            if not isinstance(stage, dict):
+                raise ValueError("each value_curriculum stage must be a mapping")
+            until_step = int(stage["until_step"])
+            value_min = int(stage.get("value_min", args.train_value_min))
+            value_max = int(stage.get("value_max", args.train_value_max))
+            if until_step <= previous_until:
+                raise ValueError(
+                    "value_curriculum until_step values must be strictly increasing"
+                )
+            if value_min > value_max:
+                raise ValueError("value_curriculum value range must be ordered")
+            normalized_curriculum.append({
+                "until_step": until_step,
+                "value_min": value_min,
+                "value_max": value_max,
+            })
+            previous_until = until_step
+        if normalized_curriculum[-1]["until_step"] < args.steps:
+            raise ValueError(
+                "value_curriculum must cover all requested training steps"
+            )
+        first_stage = normalized_curriculum[0]
+        train_generator = DynamicCompositionGenerator(
+            max_ops=int(config["max_ops"]),
+            train_max_ops=int(config.get("train_max_ops", config["max_ops"])),
+            seed=run_seed + 1001,
+            modulus=generator_modulus,
+            target_offset=target_offset,
+            value_min=first_stage["value_min"],
+            value_max=first_stage["value_max"],
+            split="train" if args.heldout_depths else "all",
+        )
+    curriculum_stage_index = 0
     eval_generator = DynamicCompositionGenerator(
         max_ops=int(config["max_ops"]),
         train_max_ops=int(config.get("train_max_ops", config["max_ops"])),
@@ -431,6 +472,25 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     losses = []
     start = time.perf_counter()
     for step in range(1, steps + 1):
+        if normalized_curriculum is not None:
+            next_stage_index = next(
+                index
+                for index, stage in enumerate(normalized_curriculum)
+                if step <= stage["until_step"]
+            )
+            if next_stage_index != curriculum_stage_index:
+                stage = normalized_curriculum[next_stage_index]
+                train_generator = DynamicCompositionGenerator(
+                    max_ops=int(config["max_ops"]),
+                    train_max_ops=int(config.get("train_max_ops", config["max_ops"])),
+                    seed=run_seed + 1001 + next_stage_index,
+                    modulus=generator_modulus,
+                    target_offset=target_offset,
+                    value_min=stage["value_min"],
+                    value_max=stage["value_max"],
+                    split="train" if args.heldout_depths else "all",
+                )
+                curriculum_stage_index = next_stage_index
         batch_size = args.batch_size or int(config["batch_size"])
         batch = train_generator.task_balanced_batch(batch_size, device)
         num_classes = int(model.output[-1].out_features)
@@ -538,6 +598,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "eval_depths": list(eval_generator.allowed_depths),
         "train_value_range": [args.train_value_min, args.train_value_max],
         "eval_value_range": [args.eval_value_min, args.eval_value_max],
+        "train_value_curriculum": normalized_curriculum,
         "generator_modulus": generator_modulus,
         "target_offset": target_offset,
         "compact_factorized_eval": compact_factorized_eval,

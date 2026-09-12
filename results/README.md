@@ -1740,6 +1740,22 @@ carry gain was therefore not stable; the chain is rejected for adoption and
 scaling, while the matched learning-curve evidence is retained. See
 `V0_273_DYNAMIC_NONMOD_CARRY_CHAIN_LONG_TRAIN_AUDIT.md`.
 
+V0.274 keeps that 300M architecture fixed and progressively opens the training
+value range (`0..7 → 0..31 → 0..95`). Across four seeds and a fixed 1,024-
+example-per-depth paired evaluation, mean held-out accuracy rises from
+`7.031%` to `20.422%` (`+13.391 pp`) and CE falls from `11.3819` to `9.6007`;
+all seeds improve. Factor-row coverage also rises consistently. This is a
+strong training-protocol signal, but not yet a claim that the architecture
+scales monotonically: **RETAINED AS OPT-IN TRAINING PROTOCOL; DEFAULT AND
+700M/1B SCALING DEFERRED**. See
+`V0_274_DYNAMIC_NONMOD_VALUE_CURRICULUM_AUDIT.md`.
+
+V0.277 is the generator-reset-only control for V0.274: the same reset
+boundaries, but `0..95` in every stage. Its four-seed mean is only `6.482%`
+(CE `11.4907`), so reset alone does not explain the curriculum gain. Keep it
+as a causal control in subsequent schedule screens. See
+`V0_277_DYNAMIC_NONMOD_VALUE_RESET_CONTROL_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
