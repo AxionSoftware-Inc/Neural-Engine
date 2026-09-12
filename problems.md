@@ -1151,6 +1151,16 @@ keeping the prior-free and unseen-value gates.
 
 **Audit:** `results/V0_283_DYNAMIC_NONMOD_V0255_RECHECK_AUDIT.md`.
 
+**V0.260/261 peak-overlay recheck (2026-09-12):** The longer-trained exact
+integer overlay checkpoints were rerun with the current evaluator. Two-seed
+mean accuracy is `99.829%`, CE `0.0162`, depth-3 `99.902%`, depth-4 `99.756%`.
+**RETAINED AS PEAK QUALITY REFERENCE, NOT FULLY LEARNED-CIRCUIT EVIDENCE.**
+The exact integer packet supplies the arithmetic transition. The next task is
+compressing/distilling its numeric representation into the learned recurrent
+state while keeping prior-free results separate.
+
+**Audit:** `results/V0_284_DYNAMIC_NONMOD_V0260_RECHECK_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

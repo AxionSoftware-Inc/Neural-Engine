@@ -1804,6 +1804,13 @@ exact packet supplies arithmetic semantics. The next target is overlay
 compression/distillation with prior-free and unseen-value gates preserved. See
 `V0_283_DYNAMIC_NONMOD_V0255_RECHECK_AUDIT.md`.
 
+V0.284 rechecks the longer-trained V0.260/V0.261 peak overlay. Mean accuracy
+is `99.829%`, CE `0.0162`, depth-3 `99.902%`, and depth-4 `99.756%`. **This
+is the current quality ceiling/reference, not fully learned-circuit evidence**:
+the exact integer packet supplies arithmetic semantics. The next task is
+compressing/distilling that numeric representation into the learned state.
+See `V0_284_DYNAMIC_NONMOD_V0260_RECHECK_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
