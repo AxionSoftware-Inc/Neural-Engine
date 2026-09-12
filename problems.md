@@ -1297,6 +1297,25 @@ solution. The next test is a small multiply-only typed residual at the actual
 accumulator write boundary. See
 `results/V0_295_TYPED_OUTPUT_AUTHORITATIVE_AUDIT.md`.
 
+V0.296/V0.297 test that `0.1×` typed residual at the multiply write boundary
+(2k pilot and matched 5k seed17). Under the pre-contract-fix loss, fixed
+multiply is only `3.320%/2.344%` and `3.516%/3.906%` at depths 3/4; no quality
+gain appears and subtract regresses. **SUPERSEDED BY V0.298 CONTRACT FIX;
+not retained as a clean quality signal.**
+
+V0.298 fixes the eight-digit leading-head target contract: the first head has
+32 classes, so it must not be wrapped modulo 16. Corrected 5k seed17/18
+retraining reproduces the old hard frontier exactly (`20.508%` mean; depth-3
+`26.660%`; depth-4 `14.355%`). **Correctness fix accepted; quality frontier
+unchanged.**
+
+V0.299 high-value stress (`80..95` inputs, homogeneous multiply) gives `0%`
+at both held-out depths for both corrected checkpoints. The ordinary random
+screen was not exposing the leading/magnitude regime. **Diagnostic complete;
+no default or scale-up.** Next is training depths `1..3` and testing depth `4`
+to isolate depth coverage from architecture. See
+`results/V0_298_299_CONTRACT_FIX_HIGH_VALUE_STRESS_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

@@ -1899,6 +1899,18 @@ training collapses to `0.293%` held-out; fixed add/subtract are
 readout. Next is a small multiply-only typed residual at the accumulator write
 boundary. See `V0_295_TYPED_OUTPUT_AUTHORITATIVE_AUDIT.md`.
 
+V0.296/V0.297 test a `0.1×` typed residual at the multiply write boundary. The
+pre-contract-fix runs show no multiply gain and subtract regression; they are
+superseded by V0.298 and are not clean quality evidence.
+
+V0.298 fixes the leading digit target contract (`32` leading classes, not
+`16`) and retrains the V0.290 bridge for two seeds. Hard results reproduce the
+old `20.508%` mean exactly, so the correctness fix does not change the current
+quality frontier. V0.299 high-value stress on `80..95` homogeneous multiply
+gets `0%` at both held-out depths for both seeds. **No default or scale-up.**
+Next is a depth-coverage experiment (`train depths 1..3 → eval depth 4`). See
+`V0_298_299_CONTRACT_FIX_HIGH_VALUE_STRESS_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
