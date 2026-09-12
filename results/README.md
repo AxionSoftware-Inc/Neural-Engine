@@ -1918,7 +1918,15 @@ add/subtract/multiply are `9.570%/8.984%/6.055%` versus
 `36.621%/30.859%/4.199%`. More depth coverage is therefore not the missing
 multiply solution and harms the prior add/subtract transfer. **Rejected for
 adoption and scaling.** See `V0_301_DYNAMIC_NONMOD_DEPTH3_TRAIN_AUDIT.md`.
-`V0_301_DYNAMIC_NONMOD_DEPTH3_TRAIN_AUDIT.md`.
+
+V0.302 replaces the dense `384×384` product transform with a shared
+operator-valued map. Across matched seeds it reduces active parameters from
+`2.051M` to `1.910M` and raises aggregate held-out accuracy from `4.150%` to
+`8.301%`, but fixed multiply is unchanged/slightly worse (`3.418% → 3.320%`
+at depth 3 and `3.125% → 3.027%` at depth 4); the gain is add/subtract-only
+and CE worsens. **Retained as opt-in efficiency diagnostic, not default or
+700M/1B multiply evidence.** Next is operation-conditioned operator
+coefficients. See `V0_302_DYNAMIC_NONMOD_OPERATOR_VALUED_PRODUCT_AUDIT.md`.
 
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the

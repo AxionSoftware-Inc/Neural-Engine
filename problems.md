@@ -1327,6 +1327,16 @@ architecture target is an explicit operation-conditioned algebraic/value
 transition, not more depth coverage, router tweaks, or bank capacity. See
 `results/V0_301_DYNAMIC_NONMOD_DEPTH3_TRAIN_AUDIT.md`.
 
+V0.302 replaces the dense `384×384` product transform with a shared
+operator-valued map (`16`-wide packets, `8` basis matrices). Across two matched
+2k seeds, active parameters fall `2.051M → 1.910M` and held-out accuracy rises
+`4.150% → 8.301%`, but fixed multiply is flat/slightly worse:
+depth-3 `3.418% → 3.320%`, depth-4 `3.125% → 3.027%`. The gain is concentrated
+in add/subtract and mean CE worsens. **RETAINED AS OPT-IN EFFICIENCY SIGNAL;
+not a multiply solution or default.** Next is operation-conditioned operator
+coefficients, especially for multiply. See
+`results/V0_302_DYNAMIC_NONMOD_OPERATOR_VALUED_PRODUCT_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
