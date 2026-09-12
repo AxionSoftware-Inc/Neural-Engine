@@ -15,7 +15,10 @@ from .encoding import (
     encode_tokens,
 )
 from .instrumentation import count_parameters
-from .operator_valued import OperatorValuedLinear
+from .operator_valued import (
+    OperationConditionedOperatorValuedLinear,
+    OperatorValuedLinear,
+)
 from .macro_cells import MacroCellBank
 from .modular_templates import (
     modular_add_state,
@@ -322,6 +325,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         algebraic_state_value_scale: float = 4096.0,
         algebraic_state_fourier_base: int = 128,
         operator_valued_product_encoder: bool = False,
+        operator_valued_product_operation_conditioned: bool = False,
         operator_valued_packet_width: int = 16,
         operator_valued_basis_count: int = 8,
         numeric_state_dim: int = 0,
@@ -491,6 +495,13 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError("operator_valued_packet_width must be positive")
         if operator_valued_basis_count < 1:
             raise ValueError("operator_valued_basis_count must be positive")
+        if (
+            operator_valued_product_operation_conditioned
+            and not operator_valued_product_encoder
+        ):
+            raise ValueError(
+                "operation-conditioned operator product requires operator_valued_product_encoder"
+            )
         if operator_valued_product_encoder and state_dim % operator_valued_packet_width:
             raise ValueError(
                 "state_dim must be divisible by operator_valued_packet_width"
@@ -718,6 +729,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.algebraic_state_value_scale = float(algebraic_state_value_scale)
         self.algebraic_state_fourier_base = int(algebraic_state_fourier_base)
         self.operator_valued_product_encoder = bool(operator_valued_product_encoder)
+        self.operator_valued_product_operation_conditioned = bool(
+            operator_valued_product_operation_conditioned
+        )
         self.operator_valued_packet_width = int(operator_valued_packet_width)
         self.operator_valued_basis_count = int(operator_valued_basis_count)
         self.numeric_state_dim = int(numeric_state_dim)
@@ -794,6 +808,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
             nn.GELU(),
         )
         product_transform: nn.Module = (
+            OperationConditionedOperatorValuedLinear(
+                state_dim,
+                state_dim,
+                num_operations=3,
+                packet_width=self.operator_valued_packet_width,
+                basis_count=self.operator_valued_basis_count,
+            )
+            if self.operator_valued_product_operation_conditioned else
             OperatorValuedLinear(
                 state_dim,
                 state_dim,
@@ -1720,7 +1742,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
                         self.structured_scalar_read_scale * scalar_read
                     )
                 pair = self.pair_encoder(torch.cat([read_accumulator, active_operand], dim=-1))
-                pair = pair + self.product_encoder(read_accumulator * active_operand)
+                product_input = read_accumulator * active_operand
+                if self.operator_valued_product_operation_conditioned:
+                    product_features = self.product_encoder[1](
+                        product_input, current_operation_ids
+                    )
+                else:
+                    product_features = self.product_encoder(product_input)
+                pair = pair + product_features
                 query = (
                     pair
                     + self.operation_embedding(current_operation_ids)
@@ -2475,6 +2504,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "algebraic_state_value_scale": self.algebraic_state_value_scale,
             "algebraic_state_fourier_base": self.algebraic_state_fourier_base,
             "operator_valued_product_encoder": self.operator_valued_product_encoder,
+            "operator_valued_product_operation_conditioned": (
+                self.operator_valued_product_operation_conditioned
+            ),
             "operator_valued_packet_width": self.operator_valued_packet_width,
             "operator_valued_basis_count": self.operator_valued_basis_count,
             "operator_valued_product_scalar_dof": (

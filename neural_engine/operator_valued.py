@@ -103,3 +103,124 @@ class OperatorValuedLinear(nn.Module):
             "compression_ratio": self.effective_matrix_entries / max(scalar_dof, 1),
             "theoretical_macs": self.theoretical_macs,
         }
+
+
+class OperationConditionedOperatorValuedLinear(nn.Module):
+    """Operator-valued linear map with operation-specific packet mixing.
+
+    The dense packet basis is shared across operations, while each operation
+    gets its own coefficient map and bias.  This keeps the reusable operator
+    primitive small but prevents add/subtract/multiply from competing for one
+    product transform.
+    """
+
+    def __init__(self, in_features: int, out_features: int,
+                 num_operations: int = 3, packet_width: int = 16,
+                 basis_count: int = 8, bias: bool = True) -> None:
+        super().__init__()
+        if in_features < 1 or out_features < 1:
+            raise ValueError("in_features and out_features must be positive")
+        if num_operations < 1:
+            raise ValueError("num_operations must be positive")
+        if packet_width < 1:
+            raise ValueError("packet_width must be positive")
+        if basis_count < 1:
+            raise ValueError("basis_count must be positive")
+        if in_features % packet_width or out_features % packet_width:
+            raise ValueError("feature dimensions must be divisible by packet_width")
+        self.in_features = int(in_features)
+        self.out_features = int(out_features)
+        self.num_operations = int(num_operations)
+        self.packet_width = int(packet_width)
+        self.basis_count = int(basis_count)
+        self.input_packets = in_features // packet_width
+        self.output_packets = out_features // packet_width
+        self.basis = nn.Parameter(torch.empty(basis_count, packet_width, packet_width))
+        self.coeff = nn.Parameter(torch.empty(
+            num_operations, self.output_packets, self.input_packets, basis_count
+        ))
+        self.bias = nn.Parameter(
+            torch.empty(num_operations, out_features)
+        ) if bias else None
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        nn.init.normal_(self.basis, std=1.0 / math.sqrt(self.packet_width))
+        nn.init.normal_(self.coeff, std=1.0 / math.sqrt(self.basis_count))
+        if self.bias is not None:
+            nn.init.zeros_(self.bias)
+
+    @property
+    def scalar_dof(self) -> int:
+        return sum(parameter.numel() for parameter in self.parameters())
+
+    @property
+    def effective_matrix_entries(self) -> int:
+        return self.in_features * self.out_features * self.num_operations
+
+    @property
+    def theoretical_macs(self) -> int:
+        basis_apply = self.input_packets * self.basis_count * self.packet_width**2
+        mix = (
+            self.num_operations * self.output_packets * self.input_packets
+            * self.basis_count * self.packet_width
+        )
+        return basis_apply + mix
+
+    def effective_blocks(self, operation_id: int) -> torch.Tensor:
+        operation_id = int(operation_id)
+        if not 0 <= operation_id < self.num_operations:
+            raise ValueError("operation_id is out of range")
+        return torch.einsum(
+            "oia,agh->oigh", self.coeff[operation_id], self.basis
+        )
+
+    def effective_weight(self, operation_id: int) -> torch.Tensor:
+        blocks = self.effective_blocks(operation_id)
+        return blocks.permute(0, 3, 1, 2).reshape(
+            self.out_features, self.in_features
+        )
+
+    def forward(
+        self, inputs: torch.Tensor, operation_ids: torch.Tensor
+    ) -> torch.Tensor:
+        if inputs.shape[-1] != self.in_features:
+            raise ValueError(
+                f"expected last dimension {self.in_features}, got {inputs.shape[-1]}"
+            )
+        if tuple(operation_ids.shape) != tuple(inputs.shape[:-1]):
+            raise ValueError(
+                "operation_ids must match inputs leading dimensions"
+            )
+        flat_inputs = inputs.reshape(-1, self.input_packets, self.packet_width)
+        flat_operations = operation_ids.reshape(-1).to(dtype=torch.long)
+        if flat_operations.numel() and (
+            flat_operations.min() < 0
+            or flat_operations.max() >= self.num_operations
+        ):
+            raise ValueError("operation_ids contain an out-of-range value")
+        transformed = torch.einsum("nig,agh->niah", flat_inputs, self.basis)
+        coeff = self.coeff[flat_operations]
+        outputs = torch.einsum("noia,niah->noh", coeff, transformed)
+        outputs = outputs.reshape(*inputs.shape[:-1], self.out_features)
+        if self.bias is not None:
+            outputs = outputs + self.bias[flat_operations].reshape(
+                *inputs.shape[:-1], self.out_features
+            )
+        return outputs
+
+    def parameter_report(self) -> dict[str, int | float]:
+        scalar_dof = self.scalar_dof
+        return {
+            "in_features": self.in_features,
+            "out_features": self.out_features,
+            "num_operations": self.num_operations,
+            "packet_width": self.packet_width,
+            "basis_count": self.basis_count,
+            "input_packets": self.input_packets,
+            "output_packets": self.output_packets,
+            "scalar_dof": scalar_dof,
+            "effective_matrix_entries": self.effective_matrix_entries,
+            "compression_ratio": self.effective_matrix_entries / max(scalar_dof, 1),
+            "theoretical_macs": self.theoretical_macs,
+        }

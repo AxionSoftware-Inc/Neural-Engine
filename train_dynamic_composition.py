@@ -180,6 +180,7 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "algebraic_integer_state_read_scale",
         "algebraic_state_value_scale", "algebraic_state_fourier_base",
         "operator_valued_product_encoder", "operator_valued_packet_width",
+        "operator_valued_product_operation_conditioned",
         "operator_valued_basis_count",
         "numeric_state_dim", "numeric_state_scale", "numeric_state_value_scale",
         "typed_digit_state", "typed_digit_dim", "typed_digit_base",
