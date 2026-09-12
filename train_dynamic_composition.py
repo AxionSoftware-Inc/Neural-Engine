@@ -47,10 +47,17 @@ def output_loss(
 def factorized_digit_targets(
     targets: torch.Tensor, digit_base: int, digit_count: int,
 ) -> tuple[torch.Tensor, ...]:
-    return tuple(
+    # The leading head can have more than ``digit_base`` classes when the
+    # declared class space is not exactly ``digit_base ** digit_count``.  In
+    # the current 2**33 / base-16 / 8-digit codec it has 32 classes.  Wrapping
+    # that target with remainder(base) silently aliases leading digits 16..31,
+    # which is especially destructive for large multiplication results.
+    leading = targets // (digit_base ** (digit_count - 1))
+    trailing = tuple(
         (targets // (digit_base ** (digit_count - 1 - index))).remainder(digit_base)
-        for index in range(digit_count)
+        for index in range(1, digit_count)
     )
+    return (leading, *trailing)
 
 
 def factorized_digit_loss(

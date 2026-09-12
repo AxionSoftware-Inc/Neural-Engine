@@ -113,7 +113,10 @@ def evaluate_fixed_batch(
         digits = logits[:, -1].argmax(dim=-1)
         predictions = predictions + digits * power
         predicted_digits.append(digits)
-        target_digits.append((batch.targets // power).remainder(digit_base))
+        target_digit = batch.targets // power
+        if index:
+            target_digit = target_digit.remainder(digit_base)
+        target_digits.append(target_digit)
     correct = predictions.eq(batch.targets)
     digit_accuracy = [
         float(predicted.eq(target).float().mean().cpu())

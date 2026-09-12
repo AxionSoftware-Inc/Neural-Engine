@@ -3,6 +3,7 @@ import torch
 from benchmark_operationwise_checkpoints import fixed_operation_batch
 from data.composition import apply_operation
 from data.dynamic_composition import DynamicCompositionGenerator
+from train_dynamic_composition import factorized_digit_targets
 
 
 def _config():
@@ -53,3 +54,12 @@ def test_dynamic_generator_can_focus_training_on_one_operation():
         active_operation_tokens,
         torch.full_like(active_operation_tokens, 4),
     )
+
+
+def test_factorized_targets_preserve_wide_leading_digit_head():
+    base = 16
+    power = base ** 7
+    targets = torch.tensor([0, 15 * power, 16 * power, 31 * power])
+    digits = factorized_digit_targets(targets, base, 8)
+    assert torch.equal(digits[0], torch.tensor([0, 15, 16, 31]))
+    assert all(torch.equal(digit, torch.zeros(4, dtype=torch.long)) for digit in digits[1:])
