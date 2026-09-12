@@ -1201,6 +1201,21 @@ remain active; next is a reusable operation-conditioned transition test, not a
 longer teacher-forcing schedule. See
 `results/V0_287_DYNAMIC_NONMOD_BASE16_SCHEDULED_TEACHER_AUDIT.md`.
 
+**V0.288 base-16 curriculum × typed-carry 2×2 (2026-09-12):** A matched
+5,000-step, two-seed screen separated progressive value curriculum from the
+eight-digit typed-carry architecture. Plain base-16 control reached `20.776%`
+held-out accuracy; curriculum control fell to `18.213%`; typed carry plain was
+`18.018%`; typed carry plus curriculum reached `19.898%`. Thus curriculum
+rescued typed carry relative to its own baseline by `+1.880 pp` and improved CE
+by `−1.2446`, but still lost to the simplest control by `−0.879 pp` overall and
+`−1.660 pp` at depth 4. Typed carry also costs `+57,984` active-estimate
+parameters and about `26.9%` more training time. **RETAINED AS DIAGNOSTIC;
+REJECTED FOR QUALITY ADOPTION.** Curriculum is not codec-independent, and the
+typed transition is not yet a better reusable circuit. P-003/P-004 remain
+active; next must target the transition/dataflow contract and beat the plain
+base-16 control on hard accuracy. See
+`results/V0_288_DYNAMIC_NONMOD_BASE16_CURRICULUM_TYPED_CARRY_2X2_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

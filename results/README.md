@@ -1834,6 +1834,15 @@ diagnostic.** This does not justify capacity scaling; the next experiment must
 change the reusable transition contract. See
 `V0_287_DYNAMIC_NONMOD_BASE16_SCHEDULED_TEACHER_AUDIT.md`.
 
+V0.288 performs a matched 2×2 of base-16 control/typed-carry with and without
+the progressive value curriculum. Plain control is the hard-accuracy leader at
+`20.776%`; typed-carry plus curriculum reaches `19.898%`, improving its own
+plain typed baseline by `+1.880 pp` and CE by `−1.2446`, but remaining `−0.879
+pp` below control. **Diagnostic only; rejected for quality adoption and scale-up.**
+The curriculum benefit is not codec-independent, so the next Native test must
+change the transition/dataflow contract. See
+`V0_288_DYNAMIC_NONMOD_BASE16_CURRICULUM_TYPED_CARRY_2X2_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
