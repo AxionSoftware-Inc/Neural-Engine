@@ -1818,6 +1818,12 @@ student does not absorb a reusable numeric state contract. **Rejected; no
 scale-up follows.** See
 `V0_285_DYNAMIC_NONMOD_NUMERIC_STATE_DISTILLATION_AUDIT.md`.
 
+V0.286 screens eight base-16 output digits plus a learned carry-chain state.
+The two-seed mean hard-accuracy gain is only `+0.562 pp` (CE `−0.3259`) and
+depth-4 gain `+0.146 pp`, below the adoption gate with seed variance. The
+variant is retained as a diagnostic and does not justify scale-up. See
+`V0_286_DYNAMIC_NONMOD_EIGHT_DIGIT_BASE16_TYPED_CARRY_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

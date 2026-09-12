@@ -1175,6 +1175,17 @@ teacher-forcing schedule, not another terminal logit loss. No 700M/1B scaling
 follows. See
 `results/V0_285_DYNAMIC_NONMOD_NUMERIC_STATE_DISTILLATION_AUDIT.md`.
 
+**Eight base-16 digit carry screen (V0.286, 2026-09-12):** the same `2^33`
+class space was represented by eight small digit heads and, in treatment, an
+eight-slot learned carry-chain state. Across two seeds, typed carry changed
+held-out accuracy `2.930% → 3.491%` (`+0.562 pp`) and CE `12.3192 → 11.9933`,
+but depth-4 improved only `+0.146 pp` and seed17 regressed. **RETAINED AS
+DIAGNOSTIC; REJECTED FOR QUALITY ADOPTION.** Local digit granularity helps CE
+slightly but does not make the learned operation transition compositional.
+P-003/P-004 remain active; next is an explicit reusable transition or staged
+teacher-forced transition test, not another output-base split. See
+`results/V0_286_DYNAMIC_NONMOD_EIGHT_DIGIT_BASE16_TYPED_CARRY_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
