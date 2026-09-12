@@ -1118,6 +1118,28 @@ interaction under the algebraic OOD protocol, not scale-up.
 
 **Audit:** `results/V0_280_DYNAMIC_NONMOD_ALGEBRAIC_CURRICULUM_OOD_AUDIT.md`.
 
+**Algebraic interaction + curriculum (2026-09-12):** V0.281 combined the
+rank-16 cross-digit output interaction with the progressive `0--7 → 0--31 →
+0--63` schedule. Unseen `64--95` two-seed mean was `56.567%`, below the
+no-curriculum interaction reference `58.105%` (`−1.538 pp`); depth-3 fell
+`5.371 pp` and depth-4 rose only `2.295 pp`. **V0.281 REJECTED FOR QUALITY
+ADOPTION.** These two mechanisms do not add constructively; P-003/P-004
+remain active. Next is a compact range-calibrated numeric codec/decoder, not
+more interaction, curriculum stacking, or bank scale.
+
+**Audit:** `results/V0_281_DYNAMIC_NONMOD_ALGEBRAIC_INTERACTION_CURRICULUM_OOD_AUDIT.md`.
+
+**Geometric digit output (2026-09-12):** V0.282 replaced categorical
+factorized digit logits with ordered scalar-coordinate Gaussian logits. The
+one-seed 5,000-step algebraic OOD run ended at only `1.953%` train accuracy
+and `0.000%` unseen `64--95` accuracy (CE `410.2556`). **V0.282 REJECTED.**
+The head's optimization geometry is incompatible with the current state/loss
+scale. Keep it as tested opt-in code; P-003/P-004 remain active. The next
+quality path is the validated exact-integer overlay, reported separately from
+the prior-free learned circuit.
+
+**Audit:** `results/V0_282_DYNAMIC_NONMOD_GEOMETRIC_DIGIT_OUTPUT_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

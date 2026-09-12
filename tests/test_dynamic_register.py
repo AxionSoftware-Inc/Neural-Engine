@@ -178,6 +178,35 @@ def test_dynamic_register_shared_factor_mix_has_constant_mix_storage():
     assert tuple(model.circuits.factor_mix.shape) == (2,)
 
 
+def test_dynamic_register_geometric_digit_output_is_ordered_and_compact():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        num_classes=512 ** 3 * 2,
+        output_mode="factorized_digits",
+        output_digit_base=512,
+        output_digit_count=4,
+        output_factor_rank=8,
+        output_digit_geometry=True,
+        output_digit_temperature=2.0,
+    )
+    states = torch.zeros(3, 32)
+    digits = model.output[1].digit_logits(states)
+    assert len(digits) == 4
+    assert tuple(digits[0].shape) == (3, 2)
+    assert tuple(digits[1].shape) == (3, 512)
+    assert torch.isfinite(digits[-1]).all()
+    assert model.parameter_report()["output_digit_geometry"] is True
+
+
 def test_dynamic_register_operation_step_routing_is_value_independent():
     model = DynamicRegisterNeuralEngine(
         max_ops=2,

@@ -1780,6 +1780,22 @@ algebraic OOD lane**; the next focused test is low-rank cross-digit
 interaction, not capacity scaling. See
 `V0_280_DYNAMIC_NONMOD_ALGEBRAIC_CURRICULUM_OOD_AUDIT.md`.
 
+V0.281 combines that curriculum with rank-16 cross-digit interaction. The
+two-seed unseen `64..95` mean is `56.567%`, below the no-curriculum interaction
+reference `58.105%` by `1.538 pp`; depth-3 falls `5.371 pp`. **The mechanisms
+do not add constructively and V0.281 is rejected for adoption.** The next
+target is a compact range-calibrated numeric codec/decoder, not more stacking
+or bank capacity. See
+`V0_281_DYNAMIC_NONMOD_ALGEBRAIC_INTERACTION_CURRICULUM_OOD_AUDIT.md`.
+
+V0.282 tests an ordered scalar-coordinate Gaussian digit head on the algebraic
+OOD lane. It fails to learn even the training target (`1.953%` train accuracy)
+and reaches `0.000%` on unseen `64..95` (CE `410.2556`). **Rejected; the
+geometric head is not compatible with the current loss/state scale.** The
+validated exact-integer overlay remains a separate opt-in quality candidate;
+the prior-free learned path is not conflated with it. See
+`V0_282_DYNAMIC_NONMOD_GEOMETRIC_DIGIT_OUTPUT_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

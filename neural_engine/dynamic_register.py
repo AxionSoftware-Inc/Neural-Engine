@@ -158,6 +158,89 @@ class FactorizedDigitOutput(nn.Module):
         return self.combine(*self.digit_logits(states))
 
 
+class GeometricFactorizedDigitOutput(nn.Module):
+    """Factorized digit output with ordered scalar coordinates.
+
+    Each digit head predicts one continuous coordinate and scores digit classes
+    by distance to their ordered positions.  This is an opt-in alternative to
+    independent categorical logits; it is intended to test whether unseen
+    digit values can transfer through an ordered readout.
+    """
+
+    def __init__(
+        self,
+        input_dim: int,
+        num_classes: int,
+        digit_base: int,
+        projection_rank: int = 0,
+        digit_count: int = 2,
+        temperature: float = 1.0,
+    ):
+        super().__init__()
+        if digit_base < 2:
+            raise ValueError("digit_base must be at least two")
+        if digit_count < 2:
+            raise ValueError("digit_count must be at least two")
+        factor = digit_base ** (digit_count - 1)
+        if num_classes % factor:
+            raise ValueError(
+                "num_classes must be divisible by digit_base^(digit_count-1)"
+            )
+        if projection_rank < 0:
+            raise ValueError("projection_rank must be non-negative")
+        if temperature <= 0.0:
+            raise ValueError("temperature must be positive")
+        self.num_classes = int(num_classes)
+        self.digit_base = int(digit_base)
+        self.digit_count = int(digit_count)
+        self.high_classes = num_classes // factor
+        self.projection_rank = int(projection_rank)
+        self.temperature = float(temperature)
+        if self.projection_rank:
+            self.shared_projection = nn.Linear(input_dim, self.projection_rank)
+            classifier_dim = self.projection_rank
+        else:
+            self.shared_projection = None
+            classifier_dim = input_dim
+        digit_sizes = [self.high_classes] + [self.digit_base] * (self.digit_count - 1)
+        self.coordinate_heads = nn.ModuleList(
+            nn.Linear(classifier_dim, 1) for _ in digit_sizes
+        )
+        for index, size in enumerate(digit_sizes):
+            self.register_buffer(
+                f"positions_{index}",
+                torch.arange(size, dtype=torch.float32),
+                persistent=False,
+            )
+        self.out_features = self.num_classes
+        self.high = self.coordinate_heads[0]
+        self.low = self.coordinate_heads[-1]
+
+    def digit_logits(self, states: torch.Tensor) -> tuple[torch.Tensor, ...]:
+        if self.shared_projection is not None:
+            states = self.shared_projection(states)
+        scale = self.temperature ** 2
+        logits = []
+        for index, head in enumerate(self.coordinate_heads):
+            coordinate = head(states)
+            positions = getattr(self, f"positions_{index}").to(states.dtype)
+            logits.append(-0.5 * (coordinate - positions).square() / scale)
+        return tuple(logits)
+
+    def combine(self, *digit_logits: torch.Tensor) -> torch.Tensor:
+        if len(digit_logits) != self.digit_count:
+            raise ValueError("digit logits do not match configured digit count")
+        combined = digit_logits[0]
+        for logits in digit_logits[1:]:
+            combined = (combined.unsqueeze(-1) + logits.unsqueeze(-2)).reshape(
+                combined.shape[0], -1
+            )
+        return combined
+
+    def forward(self, states: torch.Tensor) -> torch.Tensor:
+        return self.combine(*self.digit_logits(states))
+
+
 class DynamicRegisterNeuralEngine(nn.Module):
     """Attention-free recurrent register machine with sparse circuit routing.
 
@@ -265,6 +348,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         output_digit_count: int = 2,
         output_digit_interaction_rank: int = 0,
         output_digit_context_mode: str = "soft",
+        output_digit_geometry: bool = False,
+        output_digit_temperature: float = 1.0,
         macro_cell_count: int = 0,
         macro_cell_rank: int = 8,
         macro_cell_depth: int = 4,
@@ -469,6 +554,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError(
                 "output_digit_context_mode must be soft or straight_through_hard"
             )
+        if output_digit_temperature <= 0.0:
+            raise ValueError("output_digit_temperature must be positive")
+        if output_digit_geometry and output_mode != "factorized_digits":
+            raise ValueError("output_digit_geometry requires factorized_digits output")
+        if output_digit_geometry and output_digit_interaction_rank:
+            raise ValueError(
+                "output_digit_geometry is incompatible with digit interaction"
+            )
         if output_digit_interaction_rank and output_mode != "factorized_digits":
             raise ValueError(
                 "output_digit_interaction_rank requires factorized_digits output"
@@ -618,6 +711,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.output_digit_count = int(output_digit_count)
         self.output_digit_interaction_rank = int(output_digit_interaction_rank)
         self.output_digit_context_mode = output_digit_context_mode
+        self.output_digit_geometry = bool(output_digit_geometry)
+        self.output_digit_temperature = float(output_digit_temperature)
         self.macro_cell_count = int(macro_cell_count)
         self.macro_cell_rank = int(macro_cell_rank)
         self.macro_cell_depth = int(macro_cell_depth)
@@ -971,8 +1066,16 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 ),
             )
         elif output_mode == "factorized_digits":
-            self.output = nn.Sequential(
-                nn.LayerNorm(state_dim),
+            output_head = (
+                GeometricFactorizedDigitOutput(
+                    state_dim,
+                    num_classes,
+                    output_digit_base,
+                    output_factor_rank,
+                    output_digit_count,
+                    output_digit_temperature,
+                )
+                if output_digit_geometry else
                 FactorizedDigitOutput(
                     state_dim,
                     num_classes,
@@ -981,7 +1084,11 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     output_digit_count,
                     output_digit_interaction_rank,
                     output_digit_context_mode,
-                ),
+                )
+            )
+            self.output = nn.Sequential(
+                nn.LayerNorm(state_dim),
+                output_head,
             )
         else:
             self.output = nn.Sequential(
@@ -2189,6 +2296,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "output_digit_count": self.output_digit_count,
             "output_digit_interaction_rank": self.output_digit_interaction_rank,
             "output_digit_context_mode": self.output_digit_context_mode,
+            "output_digit_geometry": self.output_digit_geometry,
+            "output_digit_temperature": self.output_digit_temperature,
             "macro_cell_count": self.macro_cell_count,
             "macro_cell_rank": self.macro_cell_rank,
             "macro_cell_depth": self.macro_cell_depth,
