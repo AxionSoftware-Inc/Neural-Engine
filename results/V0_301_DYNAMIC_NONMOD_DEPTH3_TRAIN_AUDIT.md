@@ -22,27 +22,35 @@ The frozen architecture is the V0.298 numeric-convolution typed-carry model:
 - seed17 first, seed18 matched replication;
 - no curriculum, no teacher forcing, no output authority, no write residual.
 
-## Seed17 result
+## Results
 
-The run completed in `1,573.12 s` on CUDA. Final train loss was `6.32758`.
+Both runs completed in about 26 minutes on CUDA. Final train losses were
+`6.32758` (seed17) and `6.05121` (seed18).
 
-| Metric | V0.298 reference (train 1–2 / eval 3–4) | V0.301 (train 1–3 / eval 4) |
-|---|---:|---:|
-| held-out depth-4 overall accuracy | 14.3555% | 2.9297% |
-| depth-4 add accuracy | 36.3281% | 8.5938% |
-| depth-4 subtract accuracy | 34.9609% | 8.5938% |
-| depth-4 multiply accuracy | 4.1016% | 4.6875% |
+| Metric | V0.298 reference | V0.301 seed17 | V0.301 seed18 | V0.301 mean |
+|---|---:|---:|---:|---:|
+| held-out depth-4 overall accuracy | 14.3555% | 2.9297% | 3.0273% | 2.9785% |
+| held-out depth-4 CE | 11.7713 | 7.4911 | 7.5344 | 7.5128 |
+| depth-4 add accuracy | 36.6211% | 8.5938% | 10.5469% | 9.5703% |
+| depth-4 subtract accuracy | 30.8594% | 8.5938% | 9.3750% | 8.9844% |
+| depth-4 multiply accuracy | 4.1992% | 4.6875% | 7.4219% | 6.0547% |
 
-The operation-wise screen used 512 fixed homogeneous programs per operation.
-The V0.301 digit accuracies for multiply were
-`[65.04%, 33.79%, 15.04%, 12.50%, 10.35%, 13.48%, 25.98%, 78.52%]`.
-Thus the multiply result is only slightly above the V0.298 reference and its
-first internal digits remain poor. Add and subtract transfer regress sharply.
+The matched two-seed deltas versus V0.298 are `−11.3770 pp` overall,
+`−27.0508 pp` add, `−21.8750 pp` subtract, and `+1.8555 pp` multiply in the
+fixed operation-wise screen. The small multiply increase is not enough to
+offset the broad regression and does not cross the quality gate.
+
+The operation-wise screen used 512 fixed homogeneous programs per operation
+and seed. The V0.301 seed17 digit accuracies for multiply were
+`[65.04%, 33.79%, 15.04%, 12.50%, 10.35%, 13.48%, 25.98%, 78.52%]`; seed18
+was `[64.84%, 31.45%, 16.80%, 12.50%, 14.26%, 14.26%, 24.02%, 80.47%]`.
+The first internal digits remain poor. Add and subtract transfer regress
+sharply in both seeds.
 
 ## Interpretation
 
 The hypothesis is **rejected for adoption**. More training coverage at depth 3
-did not unlock depth-4 composition. The result also does not support the idea
+did not unlock depth-4 composition in either seed. The result also does not support the idea
 that the earlier failure was simply “not enough steps on depth 3”. In this
 protocol, the extra depth changes the training distribution and harms the
 previously stronger depth-4 add/subtract transfer while leaving multiply near
@@ -77,6 +85,12 @@ The current evidence points to a deeper state-transition/value-codec problem:
   `results/checkpoints/v0_301_train_depth3_seed17_5000.pt`
 - Seed17 operation-wise evaluation:
   `results/operationwise_fixed_checkpoint_eval_v0_301.json`
+- Seed18 run:
+  `results/runs/v0_301_train_depth3_seed18_5000.json`
+- Seed18 checkpoint:
+  `results/checkpoints/v0_301_train_depth3_seed18_5000.pt`
+- Seed18 operation-wise evaluation:
+  `results/operationwise_fixed_checkpoint_eval_v0_301_seed18.json`
 
-Seed18 replication was launched with the identical command and will be added
-to this audit before finalizing the adoption decision.
+The operation-wise evaluator now de-duplicates the depth list when
+`train_max_ops + 1 == max_ops`, preventing duplicate records in this protocol.
