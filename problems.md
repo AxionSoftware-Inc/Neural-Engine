@@ -1485,6 +1485,12 @@ high-value d4 `81.9336%`, eval `98.2422%`, d4 `96.6797%`. Biroq targeted
 batch route entropy va active virtual-circuit coverage’ni pasaytiradi; shu
 sababli route specialization robustnessi hali ochiq.
 
+V0.324 targeted ulushni `12.5%`ga tushirdi: seed17 eval `98.4863%`, d4
+`96.4844%`, ordinary d4 multiply `63.2813%`, high-value d4 multiply
+`72.6563%`; add/sub d4 `100%/100%`. Bu 25% V0.323 o‘rtachasidagi `81.9336%`
+high-value d4dan past, ammo umumiy sifat saqlandi. **V0.324 RETAINED AS
+LOWER-COVERAGE CONTROL; hozirgi eng yaxshi balanced tanlov V0.323 25%.**
+
 **Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
 
 ---

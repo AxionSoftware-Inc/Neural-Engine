@@ -231,6 +231,7 @@ high-value-multiply-only control. V0.322 samples one value range per program
 | V0.323 + targeted multiply 25% | 17 | 98.3887% | 96.8750% | 66.4063% | 80.4688% |
 | V0.323 + targeted multiply 25% | 18 | 98.0957% | 96.4844% | 61.9141% | 83.3984% |
 | V0.323 mean | 17/18 | 98.2422% | 96.6797% | 64.1602% | 81.9336% |
+| V0.324 + targeted multiply 12.5% | 17 | 98.4863% | 96.4844% | 63.2813% | 72.6563% |
 
 V0.321 proves the architecture can learn the high-value multiply contract when
 the task is isolated, but it destroys add/subtract generality and is not a
@@ -249,6 +250,11 @@ is `99.8047%`. Across seeds, the high-value d4 gain is therefore reproducible,
 but the route audit still shows specialization (lower entropy and fewer active
 virtual circuits than V0.320). This is a quality win with a routing-coverage
 tradeoff, not yet evidence that the current 25% fraction is optimal.
+
+V0.324 halves the targeted fraction and preserves the broad eval score, but
+high-value d4 multiply falls to `72.6563%` (seed17), below both V0.323 seeds.
+This is still a positive lower-cost control, but it does not replace the
+25% setting under the current 2,000-step budget.
 
 **V0.320 RETAINED AS ALL-DEPTH CONTROL; V0.321 REJECTED AS A SPECIALIZED
 MODEL; V0.322 REJECTED AS INSUFFICIENT; V0.323 RETAINED AS THE LEADING
