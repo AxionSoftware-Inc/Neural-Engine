@@ -1478,6 +1478,13 @@ to‘siq targeted data/task coverage va route specialization. **V0.323 leading
 balanced OPT-IN**, seed18 reproduction kerak; P-003 `ACTIVE`, 700M/1B hali
 kechiktiriladi.
 
+V0.323 seed18 reproduction ham xuddi shu yo‘nalishni tasdiqladi: eval
+`98.0957%`, d4 `96.4844%`, ordinary d4 multiply `61.9141%`, high-value d4
+multiply `83.3984%`, add `100%`, subtract `99.8047%`. Ikki-seed o‘rtacha
+high-value d4 `81.9336%`, eval `98.2422%`, d4 `96.6797%`. Biroq targeted
+batch route entropy va active virtual-circuit coverage’ni pasaytiradi; shu
+sababli route specialization robustnessi hali ochiq.
+
 **Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
 
 ---

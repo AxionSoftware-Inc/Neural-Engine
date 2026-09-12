@@ -229,6 +229,8 @@ high-value-multiply-only control. V0.322 samples one value range per program
 | V0.321 high-value multiply only | 17 | diagnostic | diagnostic | — | 93.5547% |
 | V0.322 all depths + shared range | 17 | 92.5049% | 91.9922% | 50.7813% | 7.8125% |
 | V0.323 + targeted multiply 25% | 17 | 98.3887% | 96.8750% | 66.4063% | 80.4688% |
+| V0.323 + targeted multiply 25% | 18 | 98.0957% | 96.4844% | 61.9141% | 83.3984% |
+| V0.323 mean | 17/18 | 98.2422% | 96.6797% | 64.1602% | 81.9336% |
 
 V0.321 proves the architecture can learn the high-value multiply contract when
 the task is isolated, but it destroys add/subtract generality and is not a
@@ -240,6 +242,13 @@ Active parameters remain `1,964,480`; no extra circuit bank or router head was
 added. The targeted stream does reduce route entropy and virtual-circuit
 coverage, so a seed18 reproduction and route-specialization check remain
 necessary before default adoption.
+
+The seed18 reproduction confirms the direction: ordinary d4 multiply is
+`61.9141%`, high-value d4 multiply is `83.3984%`, add is `100%`, and subtract
+is `99.8047%`. Across seeds, the high-value d4 gain is therefore reproducible,
+but the route audit still shows specialization (lower entropy and fewer active
+virtual circuits than V0.320). This is a quality win with a routing-coverage
+tradeoff, not yet evidence that the current 25% fraction is optimal.
 
 **V0.320 RETAINED AS ALL-DEPTH CONTROL; V0.321 REJECTED AS A SPECIALIZED
 MODEL; V0.322 REJECTED AS INSUFFICIENT; V0.323 RETAINED AS THE LEADING
