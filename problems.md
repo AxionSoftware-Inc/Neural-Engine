@@ -1107,6 +1107,17 @@ state-to-output bridge, not more bank capacity.
 
 **Audit:** `results/V0_279_DYNAMIC_NONMOD_FIXED_FOURIER_OOD_AUDIT.md`.
 
+**Algebraic state + curriculum (2026-09-12):** V0.280 combined the leading
+`polynomial2_fourier` state bridge with the `0--7 → 0--31 → 0--63` schedule.
+On unseen `64--95`, two-seed mean accuracy was `54.834%`, below the existing
+four-seed no-curriculum algebraic reference `57.129%` (`−2.295 pp`); depth-3
+also fell `5.566 pp`, while depth-4 rose only `0.977 pp`. **V0.280 REJECTED
+FOR THE ALGEBRAIC OOD LANE.** Curriculum improves fit, not reusable value
+transfer in this lane. P-003/P-004 remain active; next is cross-digit
+interaction under the algebraic OOD protocol, not scale-up.
+
+**Audit:** `results/V0_280_DYNAMIC_NONMOD_ALGEBRAIC_CURRICULUM_OOD_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

@@ -1772,6 +1772,14 @@ alone is rejected as the range-safe fix**; the next target is an algebraic or
 numeric state-to-output bridge, not more routing capacity. See
 `V0_279_DYNAMIC_NONMOD_FIXED_FOURIER_OOD_AUDIT.md`.
 
+V0.280 combines the progressive curriculum with the existing
+`polynomial2_fourier` algebraic state lane. Two-seed unseen `64..95` mean is
+`54.834%`, below the matched no-curriculum algebraic reference `57.129%` by
+`2.295 pp`; depth-3 falls `5.566 pp`. **Curriculum is rejected for this
+algebraic OOD lane**; the next focused test is low-rank cross-digit
+interaction, not capacity scaling. See
+`V0_280_DYNAMIC_NONMOD_ALGEBRAIC_CURRICULUM_OOD_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
