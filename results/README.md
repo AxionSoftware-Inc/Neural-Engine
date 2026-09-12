@@ -1878,6 +1878,13 @@ not just router selection, is the dominant bottleneck. Next is multiply-focused
 training on the same body. See
 `V0_292_OPERATIONWISE_FIXED_CHECKPOINT_AUDIT.md`.
 
+V0.293 gives the V0.290 numeric bridge multiply-only training for a 2,000-step
+pilot. Fixed multiply accuracy is still only `3.711%/3.125%` at held-out
+depths 3/4; the result weakens but does not yet close the operation-coverage
+hypothesis because the budget is shorter than V0.290. **Diagnostic only; no
+default or scale-up.** A matched 5,000-step multiply-only run is next. See
+`V0_293_MULTIPLY_ONLY_2K_PILOT_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

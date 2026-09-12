@@ -1269,6 +1269,16 @@ The next test is multiply-focused training on the same body to distinguish
 operation coverage from structural insufficiency. See
 `results/V0_292_OPERATIONWISE_FIXED_CHECKPOINT_AUDIT.md`.
 
+V0.293 is a 2,000-step multiply-only training pilot on the V0.290 numeric
+bridge. Fixed multiply accuracy remains near chance at `3.711%` (depth 3) and
+`3.125%` (depth 4); random held-out accuracy is `0.488%`, while add/subtract
+collapse because they were intentionally never trained. This weakens the
+simple operation-coverage explanation but is not a final rejection because the
+budget is shorter than V0.290's 5,000 steps. **Diagnostic only; no default or
+scale-up.** Run the same body for a matched 5,000-step multiply-only pilot
+before closing this hypothesis. See
+`results/V0_293_MULTIPLY_ONLY_2K_PILOT_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
