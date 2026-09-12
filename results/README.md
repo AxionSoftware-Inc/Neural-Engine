@@ -1756,6 +1756,15 @@ boundaries, but `0..95` in every stage. Its four-seed mean is only `6.482%`
 as a causal control in subsequent schedule screens. See
 `V0_277_DYNAMIC_NONMOD_VALUE_RESET_CONTROL_AUDIT.md`.
 
+V0.278 tests whether the curriculum extrapolates to values it never saw.
+Training stops at `0..63`, then held-out-depth evaluation is run separately
+on seen `0..63` and unseen `64..95`. Mean accuracy is `25.757%` in-range but
+only `2.661%` OOD, with CE worsening from `9.2750` to `27.2762`. **The
+value-extrapolation gate fails; the curriculum is not yet a universal
+arithmetic solution and 700M/1B scaling remains deferred.** The next target is
+a range-safe value-state/readout codec. See
+`V0_278_DYNAMIC_NONMOD_VALUE_CURRICULUM_OOD_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

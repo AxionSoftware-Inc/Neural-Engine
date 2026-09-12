@@ -1085,6 +1085,17 @@ evaluation before any 700M/1B run.
 **Audits:** `results/V0_274_DYNAMIC_NONMOD_VALUE_CURRICULUM_AUDIT.md` and
 `results/V0_277_DYNAMIC_NONMOD_VALUE_RESET_CONTROL_AUDIT.md`.
 
+**Unseen-value curriculum gate (2026-09-12):** V0.278 trained with the same
+progressive schedule but stopped at `0--63`, then evaluated on unseen values
+`64--95`. In-range held-out-depth accuracy was `25.757%`, while the unseen
+range was only `2.661%` (`−23.096 pp`); CE rose `9.2750 → 27.2762` across two
+seeds. Thus the V0.274 gain is in-range training improvement, not yet a
+reusable value-composition circuit. **V0.278 FAILS THE VALUE-EXTRAPOLATION
+GATE.** Do not scale to 700M/1B until a range-safe value-state/readout path
+passes this test. P-003/P-004 remain active.
+
+**Audit:** `results/V0_278_DYNAMIC_NONMOD_VALUE_CURRICULUM_OOD_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
