@@ -1843,6 +1843,14 @@ The curriculum benefit is not codec-independent, so the next Native test must
 change the transition/dataflow contract. See
 `V0_288_DYNAMIC_NONMOD_BASE16_CURRICULUM_TYPED_CARRY_2X2_AUDIT.md`.
 
+V0.289 adds a shared cross-digit product convolution to the typed multiply
+transition. Both seeds improve over typed-carry plain (`18.018% → 19.043%`,
+`+1.025 pp`; CE `−0.0681`), but the result remains below the plain base-16
+control (`20.776%`) and below the adoption gate. **Diagnostic only; no scale-up.**
+This is evidence of a multiply dataflow gap, so the next test should target a
+compact partial-product/carry accumulator. See
+`V0_289_DYNAMIC_NONMOD_BASE16_MULTIPLY_CONVOLUTION_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

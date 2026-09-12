@@ -179,6 +179,7 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "typed_digit_count", "typed_digit_scale", "typed_digit_value_offset",
         "typed_digit_operand_offset",
         "typed_digit_carry_chain",
+        "typed_digit_multiply_convolution",
         "modular_prior_mode",
         "modular_template_init",
         "circuit_residual_scale",

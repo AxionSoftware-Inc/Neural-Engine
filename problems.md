@@ -1216,6 +1216,22 @@ active; next must target the transition/dataflow contract and beat the plain
 base-16 control on hard accuracy. See
 `results/V0_288_DYNAMIC_NONMOD_BASE16_CURRICULUM_TYPED_CARRY_2X2_AUDIT.md`.
 
+**V0.289 cross-digit multiply convolution (2026-09-12):** The typed carry
+transition previously saw only matching digit slots, which is structurally
+incomplete for multiplication. A shared least-significant-first convolution
+of learned `state_i × operand_j` slot features was added only to multiply.
+Across two 5,000-step seeds, typed-carry accuracy improved `18.018% → 19.043%`
+(`+1.025 pp`), CE `12.0666 → 11.9985`, depth-3 `23.731% → 24.756%`, and
+depth-4 `12.305% → 13.330%`; both seeds improved. Yet plain base-16 control
+remained at `20.776%`, so the new branch was `−1.733 pp` behind the simplest
+control and below the `+2 pp` gate. It adds only `3,808` active-estimate
+parameters but costs about `10.1%` more typed training time. **RETAINED AS
+DIAGNOSTIC; REJECTED FOR QUALITY ADOPTION.** This confirms a real multiply
+dataflow gap but does not solve the reusable transition or justify scaling.
+P-003/P-004 remain active; next is a compact partial-product/carry accumulator
+or operation-wise multiply transfer test. See
+`results/V0_289_DYNAMIC_NONMOD_BASE16_MULTIPLY_CONVOLUTION_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

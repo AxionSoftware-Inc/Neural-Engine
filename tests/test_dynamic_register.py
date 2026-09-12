@@ -1,4 +1,5 @@
 import torch
+import pytest
 
 from data.dynamic_composition import DynamicCompositionGenerator
 from neural_engine.dynamic_register import DynamicRegisterNeuralEngine
@@ -537,6 +538,62 @@ def test_dynamic_register_typed_teacher_forcing_is_opt_in_and_shape_safe():
     )
     assert logits.shape == (4, 4096)
     assert len(stats["typed_digit_logits"]) == 3
+
+
+def test_dynamic_register_typed_multiply_convolution_is_opt_in():
+    model = DynamicRegisterNeuralEngine(
+        vocab_size=128,
+        num_classes=4**4,
+        max_ops=2,
+        seq_len=1 + 2 + 3,
+        d_model=32,
+        state_dim=32,
+        num_circuits=16,
+        circuit_rank=4,
+        router_branch=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=2,
+        typed_digit_state=True,
+        typed_digit_dim=4,
+        typed_digit_base=4,
+        typed_digit_count=4,
+        typed_digit_carry_chain=True,
+        typed_digit_multiply_convolution=True,
+        output_mode="factorized_digits",
+        output_digit_base=4,
+        output_digit_count=4,
+        output_factor_rank=8,
+    )
+    assert model.typed_digit_multiply_transition is not None
+    assert model.parameter_report()["typed_digit_multiply_convolution"] is True
+    inputs = torch.tensor([
+        [1, 4, 2, 32, 33, 34],
+        [1, 2, 4, 35, 36, 0],
+    ])
+    logits, stats = model(inputs, return_full_logits=True)
+    assert logits.shape == (2, 4**4)
+    assert torch.isfinite(logits).all()
+    assert stats["typed_digit_logits"][0].shape[:2] == (2, 2)
+
+
+def test_dynamic_register_rejects_multiply_convolution_without_typed_carry():
+    with pytest.raises(ValueError, match="requires typed carry state"):
+        DynamicRegisterNeuralEngine(
+            vocab_size=128,
+            num_classes=2**8,
+            max_ops=1,
+            seq_len=1 + 1 + 2,
+            d_model=16,
+            state_dim=16,
+            num_circuits=8,
+            circuit_rank=2,
+            router_branch=2,
+            router_depth=1,
+            candidate_pool=4,
+            active_circuits=1,
+            typed_digit_multiply_convolution=True,
+        )
 
 
 def test_dynamic_register_structured_scalar_state_has_shared_value_format():
