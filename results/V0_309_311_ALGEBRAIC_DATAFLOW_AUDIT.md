@@ -230,7 +230,8 @@ high-value-multiply-only control. V0.322 samples one value range per program
 | V0.322 all depths + shared range | 17 | 92.5049% | 91.9922% | 50.7813% | 7.8125% |
 | V0.323 + targeted multiply 25% | 17 | 98.3887% | 96.8750% | 66.4063% | 80.4688% |
 | V0.323 + targeted multiply 25% | 18 | 98.0957% | 96.4844% | 61.9141% | 83.3984% |
-| V0.323 mean | 17/18 | 98.2422% | 96.6797% | 64.1602% | 81.9336% |
+| V0.323 + targeted multiply 25% | 19 | 98.7305% | 98.1445% | 64.8438% | 81.8359% |
+| V0.323 mean | 17/18/19 | 98.4050% | 97.1680% | 64.3880% | 81.9010% |
 | V0.324 + targeted multiply 12.5% | 17 | 98.4863% | 96.4844% | 63.2813% | 72.6563% |
 
 V0.321 proves the architecture can learn the high-value multiply contract when
@@ -246,10 +247,14 @@ necessary before default adoption.
 
 The seed18 reproduction confirms the direction: ordinary d4 multiply is
 `61.9141%`, high-value d4 multiply is `83.3984%`, add is `100%`, and subtract
-is `99.8047%`. Across seeds, the high-value d4 gain is therefore reproducible,
-but the route audit still shows specialization (lower entropy and fewer active
-virtual circuits than V0.320). This is a quality win with a routing-coverage
-tradeoff, not yet evidence that the current 25% fraction is optimal.
+is `99.8047%`. Seed19 independently gives eval `98.7305%`, d4 `98.1445%`,
+ordinary d4 multiply `64.8438%`, high-value d4 multiply `81.8359%`, add
+`99.6094%`, and subtract `100%`. Across three seeds, high-value d4 multiply
+averages `81.9010%` (80.4688/83.3984/81.8359), so the gain is reproducible.
+The route audit still shows specialization (seed19 eval: 1,130 unique
+virtual circuits, entropy `5.8698`), therefore this is a quality win with a
+routing-coverage tradeoff, not evidence that the current 25% fraction is
+optimal.
 
 V0.324 halves the targeted fraction and preserves the broad eval score, but
 high-value d4 multiply falls to `72.6563%` (seed17), below both V0.323 seeds.
@@ -258,10 +263,11 @@ This is still a positive lower-cost control, but it does not replace the
 
 **V0.320 RETAINED AS ALL-DEPTH CONTROL; V0.321 REJECTED AS A SPECIALIZED
 MODEL; V0.322 REJECTED AS INSUFFICIENT; V0.323 RETAINED AS THE LEADING
-BALANCED OPT-IN.** The main diagnosis is now data/task coverage and routing
-specialization around high-magnitude multiplication, not a simple capacity
-shortage. 700M/1B scaling is still deferred until reproduction and a
-cross-seed quality gate pass.
+BALANCED OPT-IN.** Three seeds now pass the basic quality reproduction gate,
+but route coverage remains a live risk. The main diagnosis is data/task
+coverage plus routing specialization around high-magnitude multiplication,
+not a simple capacity shortage. Before 700M/1B scaling, run a route-coverage
+control and keep the three-seed V0.323 mean as the acceptance baseline.
 
 Artifacts: V0.320–V0.323 configs, run reports, the `--include-trained-depths`
 benchmark control, and operationwise JSONs.
