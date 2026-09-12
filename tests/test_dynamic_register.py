@@ -82,6 +82,37 @@ def test_dynamic_register_forward_has_sparse_trajectory_stats():
     assert torch.equal(stats["executed_steps"], batch.stage_mask.sum(dim=1))
 
 
+def test_typed_digit_authoritative_output_is_opt_in_and_reported():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        num_classes=16 ** 2,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        output_mode="factorized_digits",
+        output_digit_base=16,
+        output_digit_count=2,
+        typed_digit_state=True,
+        typed_digit_dim=16,
+        typed_digit_base=16,
+        typed_digit_count=2,
+        typed_digit_carry_chain=True,
+        typed_digit_output_authoritative=True,
+    )
+    generator = DynamicCompositionGenerator(
+        max_ops=2, train_max_ops=2, modulus=None, value_min=0, value_max=7, seed=41,
+    )
+    _, stats = model(generator.batch(3).inputs)
+    assert model.parameter_report()["typed_digit_output_authoritative"] is True
+    assert len(stats["digit_logits"]) == 2
+
+
 def test_dynamic_register_handles_heldout_depths_without_attention():
     model = DynamicRegisterNeuralEngine(
         max_ops=6,

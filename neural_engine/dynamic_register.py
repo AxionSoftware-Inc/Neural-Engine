@@ -337,6 +337,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         typed_digit_carry_chain: bool = False,
         typed_digit_multiply_convolution: bool = False,
         typed_digit_multiply_numeric_convolution: bool = False,
+        typed_digit_output_authoritative: bool = False,
         modular_prior: bool = False,
         modular_prior_mode: str = "fixed",
         modular_template_init: str = "identity",
@@ -603,6 +604,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError(
                 "choose one typed digit multiply convolution mode"
             )
+        if typed_digit_output_authoritative and not typed_digit_state:
+            raise ValueError(
+                "typed_digit_output_authoritative requires typed_digit_state"
+            )
+        if typed_digit_output_authoritative and output_mode != "factorized_digits":
+            raise ValueError(
+                "typed_digit_output_authoritative requires factorized digit output"
+            )
         if macro_cell_count < 0:
             raise ValueError("macro_cell_count must be non-negative")
         if macro_cell_count:
@@ -721,6 +730,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
         )
         self.typed_digit_multiply_numeric_convolution = bool(
             typed_digit_multiply_numeric_convolution
+        )
+        self.typed_digit_output_authoritative = bool(
+            typed_digit_output_authoritative
         )
         self.modular_prior_enabled = bool(modular_prior)
         self.modular_prior_mode = modular_prior_mode
@@ -2061,7 +2073,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     algebraic_state_steps.append(algebraic_state.clone())
             if self.output_mode == "factorized_digits":
                 digits = None
-                if self.algebraic_integer_output_decoder_enabled:
+                if self.typed_digit_output_authoritative:
+                    # The normal path exposes typed state only as an additive
+                    # query feature.  Letting the learned accumulator/writer
+                    # produce the terminal logits can erase that state.  This
+                    # opt-in branch tests the typed register as the readout
+                    # source without adding a second decoder.
+                    digits = self._typed_digit_logits(typed_state)
+                elif self.algebraic_integer_output_decoder_enabled:
                     integer_output_state = self.algebraic_integer_output_decoder(
                         self._algebraic_integer_output_features(
                             algebraic_integer_state
@@ -2461,6 +2480,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
             ),
             "typed_digit_multiply_numeric_convolution": (
                 self.typed_digit_multiply_numeric_convolution
+            ),
+            "typed_digit_output_authoritative": (
+                self.typed_digit_output_authoritative
             ),
             "modular_prior": self.modular_prior_enabled,
             "modular_prior_mode": self.modular_prior_mode,
