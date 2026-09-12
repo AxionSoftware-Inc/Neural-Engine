@@ -1869,6 +1869,15 @@ benefit does not transfer to the numeric bridge. Next is operation-wise
 evaluation of existing checkpoints. See
 `V0_291_DYNAMIC_NONMOD_BASE16_NUMERIC_MULTIPLY_CURRICULUM_AUDIT.md`.
 
+V0.292 evaluates existing checkpoints on deterministic homogeneous add,
+subtract, and multiply programs at held-out depths 3/4. Multiply is near
+chance for all variants: V0.288 `3.613%/3.613%`, V0.290 `3.906%/4.199%`, and
+V0.291 `3.223%/2.734%` (depth 3/4), while add/subtract are much stronger.
+**Diagnostic complete; no default adoption.** The multiply-specific dataflow,
+not just router selection, is the dominant bottleneck. Next is multiply-focused
+training on the same body. See
+`V0_292_OPERATIONWISE_FIXED_CHECKPOINT_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

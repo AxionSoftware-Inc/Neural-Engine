@@ -1259,6 +1259,16 @@ numeric bridge. The next step is operation-wise evaluation of existing
 checkpoints, not another curriculum variant. See
 `results/V0_291_DYNAMIC_NONMOD_BASE16_NUMERIC_MULTIPLY_CURRICULUM_AUDIT.md`.
 
+V0.292 is an inference-only operation-wise screen over V0.288 typed plain,
+V0.290 numeric bridge, and V0.291 bridge+curriculum checkpoints. Homogeneous
+held-out multiply reaches only `3.613%`/`3.613%` (depth 3/4) for V0.288,
+`3.906%`/`4.199%` for V0.290, and `3.223%`/`2.734%` for V0.291. Add/subtract
+are much stronger (`~30–74%`), so multiply is the dominant bottleneck and the
+numeric bridge did not solve it. **Diagnostic complete; no default change.**
+The next test is multiply-focused training on the same body to distinguish
+operation coverage from structural insufficiency. See
+`results/V0_292_OPERATIONWISE_FIXED_CHECKPOINT_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
