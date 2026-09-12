@@ -182,6 +182,8 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "typed_digit_multiply_convolution",
         "typed_digit_multiply_numeric_convolution",
         "typed_digit_output_authoritative",
+        "typed_digit_write_scale",
+        "typed_digit_write_multiply_only",
         "modular_prior_mode",
         "modular_template_init",
         "circuit_residual_scale",

@@ -1288,6 +1288,15 @@ architecture test should make typed numeric state directly responsible for
 final digit readout instead of using it only as an additive query feature. See
 `results/V0_294_MULTIPLY_ONLY_5K_AUDIT.md`.
 
+V0.295 makes the typed register's digit heads the terminal readout source.
+Instead of recovering quality, mixed training collapses to `0.293%` held-out;
+fixed add/subtract are `0.195%/0.195%` and fixed multiply is `0.391%/0.000%`
+at depths 3/4. **REJECTED.** Typed state is not a stable learned range-safe
+representation by itself, so bypassing the learned accumulator is not the
+solution. The next test is a small multiply-only typed residual at the actual
+accumulator write boundary. See
+`results/V0_295_TYPED_OUTPUT_AUTHORITATIVE_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

@@ -338,6 +338,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         typed_digit_multiply_convolution: bool = False,
         typed_digit_multiply_numeric_convolution: bool = False,
         typed_digit_output_authoritative: bool = False,
+        typed_digit_write_scale: float = 0.0,
+        typed_digit_write_multiply_only: bool = False,
         modular_prior: bool = False,
         modular_prior_mode: str = "fixed",
         modular_template_init: str = "identity",
@@ -612,6 +614,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError(
                 "typed_digit_output_authoritative requires factorized digit output"
             )
+        if typed_digit_write_scale < 0.0:
+            raise ValueError("typed_digit_write_scale must be non-negative")
+        if typed_digit_write_scale and not typed_digit_state:
+            raise ValueError("typed_digit_write_scale requires typed_digit_state")
         if macro_cell_count < 0:
             raise ValueError("macro_cell_count must be non-negative")
         if macro_cell_count:
@@ -733,6 +739,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
         )
         self.typed_digit_output_authoritative = bool(
             typed_digit_output_authoritative
+        )
+        self.typed_digit_write_scale = float(typed_digit_write_scale)
+        self.typed_digit_write_multiply_only = bool(
+            typed_digit_write_multiply_only
         )
         self.modular_prior_enabled = bool(modular_prior)
         self.modular_prior_mode = modular_prior_mode
@@ -1892,6 +1902,13 @@ class DynamicRegisterNeuralEngine(nn.Module):
                         )
                     )
                 candidate = self._write_state(active_accumulator, write_input)
+                if self.typed_digit_write_scale:
+                    typed_write = self.typed_digit_projection(typed_candidate)
+                    if self.typed_digit_write_multiply_only:
+                        typed_write = typed_write * current_operation_ids.eq(
+                            2
+                        ).unsqueeze(-1)
+                    candidate = candidate + self.typed_digit_write_scale * typed_write
                 if self.state_update_mode == "residual":
                     candidate = active_accumulator + self.state_residual_scale * candidate
                 if self.operation_write_adapter_rank:
@@ -2484,6 +2501,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "typed_digit_output_authoritative": (
                 self.typed_digit_output_authoritative
             ),
+            "typed_digit_write_scale": self.typed_digit_write_scale,
+            "typed_digit_write_multiply_only": self.typed_digit_write_multiply_only,
             "modular_prior": self.modular_prior_enabled,
             "modular_prior_mode": self.modular_prior_mode,
             "modular_template_init": self.modular_template_init,

@@ -1892,6 +1892,13 @@ train depth-2 only `9.961%`; extra operation coverage does not improve V0.290's
 default or scale-up.** Next is a typed-state direct-readout architecture test.
 See `V0_294_MULTIPLY_ONLY_5K_AUDIT.md`.
 
+V0.295 makes typed digit heads authoritative for terminal output. Mixed
+training collapses to `0.293%` held-out; fixed add/subtract are
+`0.195%/0.195%`, and fixed multiply is `0.391%/0.000%` at depths 3/4.
+**Rejected.** The typed register is not stable enough to bypass the learned
+readout. Next is a small multiply-only typed residual at the accumulator write
+boundary. See `V0_295_TYPED_OUTPUT_AUTHORITATIVE_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
