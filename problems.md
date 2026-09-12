@@ -1140,6 +1140,17 @@ the prior-free learned circuit.
 
 **Audit:** `results/V0_282_DYNAMIC_NONMOD_GEOMETRIC_DIGIT_OUTPUT_AUDIT.md`.
 
+**V0.255 exact-overlay recheck (2026-09-12):** Existing V0.255 checkpoints
+were rerun through the current 1,024-example evaluator: two-seed mean
+accuracy `98.315%`, CE `0.0875`, depth-3 `99.121%`, depth-4 `97.510%`.
+**RETAINED AS QUALITY REFERENCE, NOT FULLY LEARNED-CIRCUIT EVIDENCE.** The
+exact integer packet supplies the arithmetic transition, so this is a strong
+numeric candidate but not proof that prior-free Neural Engine capacity scales
+the same way. Next is reducing/distilling the overlay representation while
+keeping the prior-free and unseen-value gates.
+
+**Audit:** `results/V0_283_DYNAMIC_NONMOD_V0255_RECHECK_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

@@ -1796,6 +1796,14 @@ validated exact-integer overlay remains a separate opt-in quality candidate;
 the prior-free learned path is not conflated with it. See
 `V0_282_DYNAMIC_NONMOD_GEOMETRIC_DIGIT_OUTPUT_AUDIT.md`.
 
+V0.283 rechecks the existing V0.255 exact-integer overlay checkpoints with the
+current 1,024-example evaluator. Mean accuracy is `98.315%`, CE `0.0875`,
+depth-3 `99.121%`, and depth-4 `97.510%`. **This remains the quality
+reference, but not evidence of a fully learned sparse circuit**, because the
+exact packet supplies arithmetic semantics. The next target is overlay
+compression/distillation with prior-free and unseen-value gates preserved. See
+`V0_283_DYNAMIC_NONMOD_V0255_RECHECK_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
