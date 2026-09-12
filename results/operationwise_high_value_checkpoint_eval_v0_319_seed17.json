@@ -1,0 +1,78 @@
+{
+  "benchmark": "operationwise_fixed_checkpoint_eval",
+  "device": "cuda",
+  "examples_per_case": 512,
+  "operations": [
+    "add",
+    "subtract",
+    "multiply"
+  ],
+  "records": [
+    {
+      "checkpoint": "results/checkpoints/v0_319_algebraic_double_ladder_train_depth3_edge_mix_seed17_2000.pt",
+      "variant": "v0_319_algebraic_double_ladder_train_depth3_edge_mix",
+      "seed": 17,
+      "operation": "add",
+      "depth": 4,
+      "count": 512,
+      "accuracy": 1.0,
+      "loss": 0.0013585988199338317,
+      "digit_accuracy": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "router_entropy": 3.7397336959838867,
+      "unique_virtual_circuits": 382
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_319_algebraic_double_ladder_train_depth3_edge_mix_seed17_2000.pt",
+      "variant": "v0_319_algebraic_double_ladder_train_depth3_edge_mix",
+      "seed": 17,
+      "operation": "subtract",
+      "depth": 4,
+      "count": 512,
+      "accuracy": 0.7578125,
+      "loss": 0.469137042760849,
+      "digit_accuracy": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.7578125,
+        1.0,
+        1.0
+      ],
+      "router_entropy": 3.6650662422180176,
+      "unique_virtual_circuits": 363
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_319_algebraic_double_ladder_train_depth3_edge_mix_seed17_2000.pt",
+      "variant": "v0_319_algebraic_double_ladder_train_depth3_edge_mix",
+      "seed": 17,
+      "operation": "multiply",
+      "depth": 4,
+      "count": 512,
+      "accuracy": 0.0,
+      "loss": 24.89282989501953,
+      "digit_accuracy": [
+        0.015625,
+        0.08203125,
+        0.166015625,
+        0.39453125,
+        0.494140625,
+        0.220703125,
+        0.32421875,
+        0.158203125
+      ],
+      "router_entropy": 3.62955904006958,
+      "unique_virtual_circuits": 438
+    }
+  ]
+}

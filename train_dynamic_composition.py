@@ -181,6 +181,8 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "algebraic_integer_output_digit_interaction_rank",
         "algebraic_integer_state_read_scale",
         "algebraic_state_value_scale", "algebraic_state_fourier_base",
+        "algebraic_state_double",
+        "algebraic_state_fourier_ladder",
         "operator_valued_product_encoder", "operator_valued_packet_width",
         "operator_valued_product_operation_conditioned",
         "operator_valued_basis_count",
@@ -191,7 +193,9 @@ def make_model(config: dict[str, Any]) -> DynamicRegisterNeuralEngine:
         "typed_digit_carry_chain",
         "typed_digit_multiply_convolution",
         "typed_digit_multiply_numeric_convolution",
+        "typed_digit_multiply_pair_table",
         "typed_digit_output_authoritative",
+        "typed_digit_output_multiply_only",
         "typed_digit_write_scale",
         "typed_digit_write_multiply_only",
         "modular_prior_mode",
@@ -431,6 +435,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         value_max=args.train_value_max,
         split="train" if args.heldout_depths else "all",
         fixed_operation=config.get("train_fixed_operation"),
+        value_ranges=config.get("train_value_ranges"),
+        value_range_weights=config.get("train_value_range_weights"),
     )
     value_curriculum = config.get("value_curriculum")
     normalized_curriculum = None
@@ -527,6 +533,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     value_max=stage["value_max"],
                     split="train" if args.heldout_depths else "all",
                     fixed_operation=config.get("train_fixed_operation"),
+                    value_ranges=config.get("train_value_ranges"),
+                    value_range_weights=config.get("train_value_range_weights"),
                 )
                 curriculum_stage_index = next_stage_index
         batch_size = args.batch_size or int(config["batch_size"])
@@ -652,6 +660,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "eval_value_range": [args.eval_value_min, args.eval_value_max],
         "train_value_curriculum": normalized_curriculum,
         "train_fixed_operation": config.get("train_fixed_operation"),
+        "train_value_ranges": config.get("train_value_ranges"),
+        "train_value_range_weights": config.get("train_value_range_weights"),
         "typed_digit_teacher_forcing": {
             "start": teacher_forcing_start,
             "end": teacher_forcing_end,

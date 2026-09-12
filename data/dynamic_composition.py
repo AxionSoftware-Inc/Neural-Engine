@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from itertools import product
+from typing import Sequence
 
 import numpy as np
 import torch
@@ -36,6 +37,8 @@ class DynamicCompositionGenerator:
         modulus: int | None = MODULUS,
         target_offset: int = 0,
         fixed_operation: str | None = None,
+        value_ranges: Sequence[Sequence[int]] | None = None,
+        value_range_weights: Sequence[float] | None = None,
     ) -> None:
         if max_ops < 1:
             raise ValueError("max_ops must be positive")
@@ -53,6 +56,40 @@ class DynamicCompositionGenerator:
             raise ValueError("split must be all, train, or heldout")
         if fixed_operation is not None and fixed_operation not in OPERATION_TOKENS:
             raise ValueError(f"unknown fixed operation: {fixed_operation}")
+        normalized_ranges = None
+        normalized_weights = None
+        if value_ranges is not None:
+            if not value_ranges:
+                raise ValueError("value_ranges must be non-empty")
+            normalized_ranges = tuple(
+                (int(value_range[0]), int(value_range[1]))
+                for value_range in value_ranges
+            )
+            if any(
+                range_min < value_min
+                or range_max > value_max
+                or range_min > range_max
+                for range_min, range_max in normalized_ranges
+            ):
+                raise ValueError(
+                    "value_ranges must fit within the configured value range"
+                )
+            if value_range_weights is None:
+                normalized_weights = tuple(
+                    1.0 / len(normalized_ranges) for _ in normalized_ranges
+                )
+            else:
+                if len(value_range_weights) != len(normalized_ranges):
+                    raise ValueError(
+                        "value_range_weights must match value_ranges"
+                    )
+                weights = tuple(float(weight) for weight in value_range_weights)
+                if any(weight <= 0.0 for weight in weights):
+                    raise ValueError("value_range_weights must be positive")
+                total_weight = sum(weights)
+                normalized_weights = tuple(
+                    weight / total_weight for weight in weights
+                )
         self.max_ops = max_ops
         self.train_max_ops = train_max_ops
         self.seq_len = 1 + max_ops + (max_ops + 1)
@@ -62,6 +99,8 @@ class DynamicCompositionGenerator:
         self.target_offset = int(target_offset)
         self.split = split
         self.fixed_operation = fixed_operation
+        self.value_ranges = normalized_ranges
+        self.value_range_weights = normalized_weights
         self.rng = np.random.default_rng(seed)
         self.operation_names = tuple(OPERATION_TOKENS)
 
@@ -95,9 +134,23 @@ class DynamicCompositionGenerator:
             ]
         else:
             operations = [self.fixed_operation] * depth
-        values = self.rng.integers(
-            self.value_min, self.value_max + 1, size=depth + 1
-        ).tolist()
+        if self.value_ranges is None:
+            values = self.rng.integers(
+                self.value_min, self.value_max + 1, size=depth + 1
+            ).tolist()
+        else:
+            range_indices = self.rng.choice(
+                len(self.value_ranges),
+                size=depth + 1,
+                p=self.value_range_weights,
+            )
+            values = [
+                int(self.rng.integers(
+                    self.value_ranges[int(range_index)][0],
+                    self.value_ranges[int(range_index)][1] + 1,
+                ))
+                for range_index in range_indices
+            ]
         accumulator = int(values[0])
         stage_targets: list[int] = []
         for operation, value in zip(operations, values[1:]):

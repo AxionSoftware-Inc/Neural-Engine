@@ -44,6 +44,25 @@ def test_dynamic_generator_wide_non_modular_targets_fit_declared_head():
     assert batch.stage_targets.max().item() < 32768
 
 
+def test_dynamic_generator_supports_weighted_value_range_mixture():
+    generator = DynamicCompositionGenerator(
+        max_ops=2,
+        train_max_ops=2,
+        modulus=None,
+        value_min=0,
+        value_max=95,
+        value_ranges=((0, 7), (88, 95)),
+        value_range_weights=(0.5, 0.5),
+        seed=341,
+    )
+    batch = generator.batch(128)
+    values = batch.inputs[:, 3:]
+    values = values[values.ne(0)] - 32
+    assert bool(((values <= 7) | (values >= 88)).all())
+    assert bool((values <= 7).any())
+    assert bool((values >= 88).any())
+
+
 def test_dynamic_register_supports_non_modular_forward_without_modular_prior():
     model = DynamicRegisterNeuralEngine(
         max_ops=4, num_classes=512, modulus=None, seq_len=10,
@@ -691,6 +710,150 @@ def test_dynamic_register_typed_numeric_multiply_convolution_is_opt_in():
     assert logits.shape == (2, 4**4)
     assert torch.isfinite(logits).all()
     assert torch.isfinite(stats["typed_digit_logits"][0]).all()
+
+
+def test_dynamic_register_typed_multiply_pair_table_is_opt_in():
+    model = DynamicRegisterNeuralEngine(
+        vocab_size=128,
+        num_classes=4**4,
+        max_ops=2,
+        seq_len=1 + 2 + 3,
+        d_model=32,
+        state_dim=32,
+        num_circuits=16,
+        circuit_rank=4,
+        router_branch=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=2,
+        typed_digit_state=True,
+        typed_digit_dim=4,
+        typed_digit_base=4,
+        typed_digit_count=4,
+        typed_digit_carry_chain=True,
+        typed_digit_multiply_pair_table=True,
+        output_mode="factorized_digits",
+        output_digit_base=4,
+        output_digit_count=4,
+        output_factor_rank=8,
+    )
+    assert model.typed_digit_multiply_transition is not None
+    assert model.typed_digit_multiply_pair_tables is not None
+    assert model.parameter_report()["typed_digit_multiply_pair_table"] is True
+    inputs = torch.tensor([
+        [1, 4, 2, 32, 33, 34],
+        [1, 2, 4, 35, 36, 0],
+    ])
+    logits, stats = model(inputs)
+    assert logits.shape == (2, 4**4)
+    assert torch.isfinite(logits).all()
+    assert torch.isfinite(stats["typed_digit_logits"][0]).all()
+
+
+def test_dynamic_register_typed_output_multiply_only_requires_authoritative():
+    with pytest.raises(ValueError, match="requires authoritative typed output"):
+        DynamicRegisterNeuralEngine(
+            max_ops=2,
+            seq_len=8,
+            d_model=16,
+            state_dim=16,
+            num_circuits=32,
+            circuit_rank=2,
+            router_depth=2,
+            candidate_pool=4,
+            active_circuits=2,
+            factor_count=6,
+            modulus=None,
+            typed_digit_output_multiply_only=True,
+        )
+
+
+def test_dynamic_register_typed_output_multiply_only_is_opt_in():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        num_classes=16**2,
+        d_model=16,
+        state_dim=16,
+        num_circuits=32,
+        circuit_rank=2,
+        router_depth=2,
+        candidate_pool=4,
+        active_circuits=2,
+        factor_count=6,
+        modulus=None,
+        typed_digit_state=True,
+        typed_digit_base=16,
+        typed_digit_count=2,
+        typed_digit_carry_chain=True,
+        typed_digit_output_authoritative=True,
+        typed_digit_output_multiply_only=True,
+        output_mode="factorized_digits",
+        output_digit_base=16,
+        output_digit_count=2,
+    )
+    assert model.parameter_report()["typed_digit_output_multiply_only"] is True
+    generator = DynamicCompositionGenerator(
+        max_ops=2,
+        train_max_ops=2,
+        value_min=0,
+        value_max=3,
+        seed=3453,
+    )
+    logits, _ = model(generator.batch(4).inputs)
+    assert logits.shape == (4, 16**2)
+
+
+def test_dynamic_register_algebraic_state_double_preserves_precision_path():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=16,
+        state_dim=16,
+        num_circuits=32,
+        circuit_rank=2,
+        router_depth=2,
+        candidate_pool=4,
+        active_circuits=2,
+        factor_count=6,
+        modulus=None,
+        algebraic_state_mode="polynomial2_fourier",
+        algebraic_state_double=True,
+    )
+    generator = DynamicCompositionGenerator(max_ops=2, train_max_ops=2, seed=3454)
+    logits, stats = model(generator.batch(4).inputs, collect_state_stats=True)
+    assert logits.shape == (4, 64)
+    assert stats["algebraic_state_features"].dtype == torch.float64
+    assert torch.isfinite(logits).all()
+    assert model.parameter_report()["algebraic_state_double"] is True
+
+
+def test_dynamic_register_algebraic_fourier_ladder_expands_digit_periods():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=16,
+        state_dim=16,
+        num_circuits=32,
+        circuit_rank=2,
+        router_depth=2,
+        candidate_pool=4,
+        active_circuits=2,
+        factor_count=6,
+        modulus=None,
+        output_mode="factorized_digits",
+        output_digit_base=4,
+        output_digit_count=3,
+        algebraic_state_mode="polynomial2_fourier",
+        algebraic_state_fourier_base=4,
+        algebraic_state_fourier_ladder=True,
+    )
+    generator = DynamicCompositionGenerator(max_ops=2, train_max_ops=2, seed=3455)
+    logits, stats = model(generator.batch(4).inputs, collect_state_stats=True)
+    assert logits.shape == (4, 4**3)
+    features = model._algebraic_state_features(stats["algebraic_state_features"][:, 0])
+    assert features.shape[-1] == 2 + 3 * 2 * 7
+    assert model.parameter_report()["algebraic_state_fourier_ladder"] is True
 
 
 def test_dynamic_register_structured_scalar_state_has_shared_value_format():

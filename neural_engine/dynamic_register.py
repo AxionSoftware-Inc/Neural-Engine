@@ -326,6 +326,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         algebraic_integer_state_read_scale: float = 0.0,
         algebraic_state_value_scale: float = 4096.0,
         algebraic_state_fourier_base: int = 128,
+        algebraic_state_double: bool = False,
+        algebraic_state_fourier_ladder: bool = False,
         operator_valued_product_encoder: bool = False,
         operator_valued_product_operation_conditioned: bool = False,
         operator_valued_packet_width: int = 16,
@@ -343,7 +345,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
         typed_digit_carry_chain: bool = False,
         typed_digit_multiply_convolution: bool = False,
         typed_digit_multiply_numeric_convolution: bool = False,
+        typed_digit_multiply_pair_table: bool = False,
         typed_digit_output_authoritative: bool = False,
+        typed_digit_output_multiply_only: bool = False,
         typed_digit_write_scale: float = 0.0,
         typed_digit_write_multiply_only: bool = False,
         modular_prior: bool = False,
@@ -619,7 +623,17 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError(
                 "typed_digit_multiply_numeric_convolution requires typed carry state"
             )
-        if typed_digit_multiply_convolution and typed_digit_multiply_numeric_convolution:
+        if typed_digit_multiply_pair_table and not (
+            typed_digit_state and typed_digit_carry_chain
+        ):
+            raise ValueError(
+                "typed_digit_multiply_pair_table requires typed carry state"
+            )
+        if sum((
+            bool(typed_digit_multiply_convolution),
+            bool(typed_digit_multiply_numeric_convolution),
+            bool(typed_digit_multiply_pair_table),
+        )) > 1:
             raise ValueError(
                 "choose one typed digit multiply convolution mode"
             )
@@ -630,6 +644,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
         if typed_digit_output_authoritative and output_mode != "factorized_digits":
             raise ValueError(
                 "typed_digit_output_authoritative requires factorized digit output"
+            )
+        if typed_digit_output_multiply_only and not typed_digit_output_authoritative:
+            raise ValueError(
+                "typed_digit_output_multiply_only requires authoritative typed output"
             )
         if typed_digit_write_scale < 0.0:
             raise ValueError("typed_digit_write_scale must be non-negative")
@@ -740,6 +758,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
         )
         self.algebraic_state_value_scale = float(algebraic_state_value_scale)
         self.algebraic_state_fourier_base = int(algebraic_state_fourier_base)
+        self.algebraic_state_double = bool(algebraic_state_double)
+        self.algebraic_state_fourier_ladder = bool(algebraic_state_fourier_ladder)
         self.operator_valued_product_encoder = bool(operator_valued_product_encoder)
         self.operator_valued_product_operation_conditioned = bool(
             operator_valued_product_operation_conditioned
@@ -763,8 +783,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.typed_digit_multiply_numeric_convolution = bool(
             typed_digit_multiply_numeric_convolution
         )
+        self.typed_digit_multiply_pair_table = bool(
+            typed_digit_multiply_pair_table
+        )
         self.typed_digit_output_authoritative = bool(
             typed_digit_output_authoritative
+        )
+        self.typed_digit_output_multiply_only = bool(
+            typed_digit_output_multiply_only
         )
         self.typed_digit_write_scale = float(typed_digit_write_scale)
         self.typed_digit_write_multiply_only = bool(
@@ -913,9 +939,11 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     nn.Linear(2 * self.typed_digit_dim, 2 * self.typed_digit_dim),
                     nn.Tanh(),
                 )
+                self.typed_digit_multiply_pair_tables = None
                 if (
                     self.typed_digit_multiply_convolution
                     or self.typed_digit_multiply_numeric_convolution
+                    or self.typed_digit_multiply_pair_table
                 ):
                     multiply_transition_dim = 5 * self.typed_digit_dim
                     self.typed_digit_multiply_transition = nn.Sequential(
@@ -925,7 +953,25 @@ class DynamicRegisterNeuralEngine(nn.Module):
                         nn.Linear(2 * self.typed_digit_dim, 2 * self.typed_digit_dim),
                         nn.Tanh(),
                     )
-                    if self.typed_digit_multiply_numeric_convolution:
+                    if self.typed_digit_multiply_pair_table:
+                        self.typed_digit_multiply_pair_tables = nn.ModuleList()
+                        for output_index in range(self.typed_digit_count):
+                            pair_tables = nn.ParameterList()
+                            for left_index in range(output_index + 1):
+                                state_slot = self.typed_digit_count - 1 - left_index
+                                operand_slot = self.typed_digit_count - 1 - (
+                                    output_index - left_index
+                                )
+                                table = nn.Parameter(torch.empty(
+                                    self.typed_digit_sizes[state_slot],
+                                    self.typed_digit_sizes[operand_slot],
+                                    self.typed_digit_dim,
+                                ))
+                                nn.init.normal_(table, std=0.02)
+                                pair_tables.append(table)
+                            self.typed_digit_multiply_pair_tables.append(pair_tables)
+                        self.typed_digit_multiply_numeric_projection = None
+                    elif self.typed_digit_multiply_numeric_convolution:
                         self.typed_digit_multiply_numeric_projection = nn.Linear(
                             1, self.typed_digit_dim
                         )
@@ -934,6 +980,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 else:
                     self.typed_digit_multiply_transition = None
                     self.typed_digit_multiply_numeric_projection = None
+                    self.typed_digit_multiply_pair_tables = None
                 self.typed_digit_transition = None
             else:
                 typed_transition_dim = 3 * self.typed_digit_state_dim
@@ -948,6 +995,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 self.typed_digit_carry_transition = None
                 self.typed_digit_multiply_transition = None
                 self.typed_digit_multiply_numeric_projection = None
+                self.typed_digit_multiply_pair_tables = None
             self.typed_digit_projection = nn.Sequential(
                 nn.LayerNorm(self.typed_digit_state_dim),
                 nn.Linear(self.typed_digit_state_dim, state_dim),
@@ -1044,7 +1092,11 @@ class DynamicRegisterNeuralEngine(nn.Module):
             # add/subtract/multiply; only its dense projection is learned.
             algebraic_input_dim = 2
             if self.algebraic_state_mode == "polynomial2_fourier":
-                algebraic_input_dim += 3 * 2 * 7
+                fourier_period_count = (
+                    self.output_digit_count
+                    if self.algebraic_state_fourier_ladder else 3
+                )
+                algebraic_input_dim += fourier_period_count * 2 * 7
             projection_factory = lambda: nn.Sequential(
                 nn.Linear(algebraic_input_dim, state_dim), nn.Tanh()
             )
@@ -1382,7 +1434,36 @@ class DynamicRegisterNeuralEngine(nn.Module):
             self.typed_digit_multiply_transition is not None
             and multiply_mask.any()
         ):
-            if self.typed_digit_multiply_convolution:
+            if self.typed_digit_multiply_pair_table:
+                # Learn a vector-valued partial-product table for each
+                # output slot and contributing digit pair.  The inputs are
+                # soft digit distributions, so this is a learned
+                # cross-digit interaction rather than an exact arithmetic
+                # lookup.
+                state_digit_logits = self._typed_digit_logits(state)
+                operand_digit_logits = self._typed_digit_logits(operand)
+                state_probs = [torch.softmax(logits, dim=-1) for logits in state_digit_logits]
+                operand_probs = [torch.softmax(logits, dim=-1) for logits in operand_digit_logits]
+                state_lsd = list(reversed(state_probs))
+                operand_lsd = list(reversed(operand_probs))
+                product_lsd = []
+                for output_index, pair_tables in enumerate(
+                    self.typed_digit_multiply_pair_tables
+                ):
+                    output = torch.zeros(
+                        *state.shape[:-1], self.typed_digit_dim,
+                        dtype=state.dtype, device=state.device
+                    )
+                    for left_index, table in enumerate(pair_tables):
+                        output = output + torch.einsum(
+                            "bi,bj,ijd->bd",
+                            state_lsd[left_index],
+                            operand_lsd[output_index - left_index],
+                            table,
+                        )
+                    product_lsd.append(output)
+                multiply_products = torch.stack(list(reversed(product_lsd)), dim=-2)
+            elif self.typed_digit_multiply_convolution:
                 # Multiplication is a cross-digit convolution.  In
                 # least-significant-first order, output position k depends on
                 # all pairs (i, k-i), whereas the ordinary carry chain only
@@ -1537,11 +1618,18 @@ class DynamicRegisterNeuralEngine(nn.Module):
             return state
         value = state[:, 0] * self.algebraic_state_value_scale
         features = [state]
-        for period in (
-            float(self.algebraic_state_fourier_base),
-            float(self.algebraic_state_fourier_base ** 2),
-            self.algebraic_state_value_scale,
-        ):
+        if self.algebraic_state_fourier_ladder:
+            periods = tuple(
+                float(self.algebraic_state_fourier_base ** power)
+                for power in range(1, self.output_digit_count + 1)
+            )
+        else:
+            periods = (
+                float(self.algebraic_state_fourier_base),
+                float(self.algebraic_state_fourier_base ** 2),
+                self.algebraic_state_value_scale,
+            )
+        for period in periods:
             angle = value.unsqueeze(-1) * (2.0 * math.pi / period)
             for harmonic in (1, 2, 4, 8, 16, 32, 64):
                 features.append(torch.sin(angle * harmonic))
@@ -1555,7 +1643,12 @@ class DynamicRegisterNeuralEngine(nn.Module):
     ) -> torch.Tensor:
         """Project algebraic features with an optional operation-specific map."""
         if not isinstance(self.algebraic_state_projection, nn.ModuleList):
-            projected = self.algebraic_state_projection(features)
+            projection_dtype = next(
+                self.algebraic_state_projection.parameters()
+            ).dtype
+            projected = self.algebraic_state_projection(
+                features.to(dtype=projection_dtype)
+            )
         else:
             if operation_ids is None:
                 raise ValueError(
@@ -1565,7 +1658,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
             for operation_id, projection in enumerate(self.algebraic_state_projection):
                 mask = operation_ids.eq(operation_id)
                 if mask.any():
-                    projected[mask] = projection(features[mask])
+                    projection_dtype = next(projection.parameters()).dtype
+                    projected[mask] = projection(
+                        features[mask].to(dtype=projection_dtype)
+                    )
         if self.algebraic_state_multiply_residual:
             if operation_ids is None:
                 raise ValueError(
@@ -1574,8 +1670,11 @@ class DynamicRegisterNeuralEngine(nn.Module):
             residual = features.new_zeros(projected.shape)
             multiply_mask = operation_ids.eq(2)
             if multiply_mask.any():
+                projection_dtype = next(
+                    self.algebraic_state_multiply_projection.parameters()
+                ).dtype
                 residual[multiply_mask] = self.algebraic_state_multiply_projection(
-                    features[multiply_mask]
+                    features[multiply_mask].to(dtype=projection_dtype)
                 )
             projected = projected + residual
         return projected
@@ -1659,7 +1758,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
             algebraic_operands = (
                 inputs[:, self.value_start:self.value_start + self.max_ops + 1]
                 - VALUE_TOKEN_OFFSET
-            ).to(operand_states.dtype)
+            ).to(
+                torch.float64 if self.algebraic_state_double else operand_states.dtype
+            )
             value_scale = self.algebraic_state_value_scale
             algebraic_state = torch.stack((
                 algebraic_operands[:, 0] / value_scale,
@@ -2179,7 +2280,18 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     # produce the terminal logits can erase that state.  This
                     # opt-in branch tests the typed register as the readout
                     # source without adding a second decoder.
-                    digits = self._typed_digit_logits(typed_state)
+                    typed_digits = self._typed_digit_logits(typed_state)
+                    if self.typed_digit_output_multiply_only:
+                        learned_digits = self.output[1].digit_logits(
+                            self.output[0](step_state)
+                        )
+                        multiply_mask = last_operation_ids.eq(2).unsqueeze(-1)
+                        digits = tuple(
+                            torch.where(multiply_mask, typed, learned)
+                            for typed, learned in zip(typed_digits, learned_digits)
+                        )
+                    else:
+                        digits = typed_digits
                 elif self.algebraic_integer_output_decoder_enabled:
                     integer_output_state = self.algebraic_integer_output_decoder(
                         self._algebraic_integer_output_features(
@@ -2339,6 +2451,11 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     + (
                         count_parameters(self.typed_digit_multiply_numeric_projection)
                         if self.typed_digit_multiply_numeric_projection is not None
+                        else 0
+                    )
+                    + (
+                        count_parameters(self.typed_digit_multiply_pair_tables)
+                        if self.typed_digit_multiply_pair_tables is not None
                         else 0
                     )
                     if self.typed_digit_carry_chain
@@ -2564,6 +2681,8 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "algebraic_integer_state_read_scale": self.algebraic_integer_state_read_scale,
             "algebraic_state_value_scale": self.algebraic_state_value_scale,
             "algebraic_state_fourier_base": self.algebraic_state_fourier_base,
+            "algebraic_state_double": self.algebraic_state_double,
+            "algebraic_state_fourier_ladder": self.algebraic_state_fourier_ladder,
             "operator_valued_product_encoder": self.operator_valued_product_encoder,
             "operator_valued_product_operation_conditioned": (
                 self.operator_valued_product_operation_conditioned
@@ -2591,8 +2710,14 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "typed_digit_multiply_numeric_convolution": (
                 self.typed_digit_multiply_numeric_convolution
             ),
+            "typed_digit_multiply_pair_table": (
+                self.typed_digit_multiply_pair_table
+            ),
             "typed_digit_output_authoritative": (
                 self.typed_digit_output_authoritative
+            ),
+            "typed_digit_output_multiply_only": (
+                self.typed_digit_output_multiply_only
             ),
             "typed_digit_write_scale": self.typed_digit_write_scale,
             "typed_digit_write_multiply_only": self.typed_digit_write_multiply_only,

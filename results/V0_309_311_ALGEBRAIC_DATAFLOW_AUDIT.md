@@ -105,3 +105,111 @@ does not create a persistent learned multiplication contract.
 
 Artifact: `results/runs/v0_312_typed_write025_multiply_only_seed17_2000.json`
 and its paired operationwise JSONs.
+
+## V0.313 learned cross-digit pair table
+
+V0.313 replaces the elementwise/soft-numeric multiply feature with learned
+vector-valued tables for every contributing typed-digit pair and output slot.
+The tables are evaluated against soft digit distributions; no exact
+arithmetic lookup is used. Seed17, 2,000 steps, produced:
+
+| Metric | V0.304 seed17 | V0.313 seed17 | Delta |
+|---|---:|---:|---:|
+| Held-out all | 39.5020% | 38.4766% | −1.0254 pp |
+| Depth 3 | 49.2188% | 48.0469% | −1.1719 pp |
+| Depth 4 | 29.7852% | 28.9062% | −0.8789 pp |
+| CE | 8.0427 | 9.19522 | +1.1525 |
+
+Total parameters rose to `7,392,375` and estimated active parameters to
+`2,093,216`; training time rose to `496.56 s`. Fixed multiply was only
+`1.7578%/0.9766%` at depths 3/4, and high-value multiply stayed `0%/0%`.
+**V0.313 REJECTED.** A richer cross-digit pair interaction alone does not
+repair the learned terminal value-to-digit path and adds avoidable inference
+cost.
+
+Artifact: `results/runs/v0_313_typed_pair_table_seed17_2000.json` and its
+paired operationwise JSONs.
+
+## V0.314–V0.316 precision and radix coverage
+
+### V0.314 — multiply-only typed terminal readout
+
+Switching the terminal output to the learned typed register only for multiply
+damaged the shared training interface. Seed17 held-out accuracy was `28.2227%`
+(`33.2031%/23.2422%` at depths 3/4) with CE `14.76864`; fixed and high-value
+multiply were both `0%/0%`. **V0.314 REJECTED.** The typed register cannot yet
+replace the learned terminal codec, even for one operation.
+
+### V0.315 — double-precision algebraic register
+
+The compact algebraic state was stored in float64 until Fourier feature
+construction, avoiding low-order value loss from float32 normalization. Seed17
+held-out accuracy was `41.0156%` (`50.3906%/31.6406%`) with CE `7.61083`.
+Ordinary fixed multiply remained `1.9531%/1.5625%`; high-value multiply was
+`0%/0%`. **V0.315 REJECTED AS A MULTIPLY FIX.** Precision affects aggregate
+fit, but is not the main deep-multiply bottleneck.
+
+### V0.316 — full radix-Fourier ladder
+
+The algebraic feature packet was expanded from periods `16, 256, 2^30` to
+all base-16 periods `16^1 ... 16^8`, while retaining float64 state storage.
+This is a parameter-free feature coverage change; the learned projection and
+sparse circuit body remain the same.
+
+| Metric | Seed17 | Seed18 | Mean |
+|---|---:|---:|---:|
+| Held-out all | 87.9883% | 88.9160% | 88.4521% |
+| Depth 3 | 93.0664% | 93.6523% | 93.3594% |
+| Depth 4 | 82.9102% | 84.1797% | 83.5450% |
+| CE | 2.12909 | 1.77765 | 1.95337 |
+
+Against the V0.304 two-seed mean (`38.5986%`), V0.316 gains `+49.8536 pp`.
+Fixed operationwise multiply rises to `26.7578%/6.8359%` for seed17 and
+`28.3203%/8.9844%` for seed18, i.e. a mean `27.5391%/7.9102%` at depths 3/4.
+Add and subtract are approximately `99–100%` in-range. However, homogeneous
+high-value `80..95` multiply remains `0%/0%` for both seeds and depths.
+
+**V0.316 RETAINED AS THE LEADING IN-RANGE LEARNED OPT-IN BRANCH, NOT YET A
+GENERAL SOLUTION.** It is the first reproducible large quality jump from a
+representation change, not from adding active circuits. The remaining issue
+is high-magnitude/deep multiply coverage and extrapolation; scaling the bank
+to 700M/1B is still premature until that gate is tested.
+
+Artifacts include the V0.314/V0.315/V0.316 configs, run reports, and paired
+operationwise JSONs.
+
+## V0.317–V0.319 training-distribution follow-up
+
+These screens keep the V0.316 full radix-Fourier ladder and test whether its
+remaining deep/high-value gap is caused by the training distribution rather
+than by the representation itself:
+
+- **V0.317:** edge-mixture operand sampling, with 40% of examples from
+  `80..95` and the remaining 60% from lower operand bands;
+- **V0.318:** train depths `1..3` instead of only `1..2`;
+- **V0.319:** both depth-3 training and edge-mixture sampling.
+
+### Results
+
+| Variant | Seed | Held-out all | Held-out d3 | Held-out d4 | CE |
+|---|---:|---:|---:|---:|---:|
+| V0.317 edge mix | 17 | 88.7207% | 92.9688% | 84.4727% | 1.81800 |
+| V0.318 train d1–d3 | 17 | — | — | 93.3594% | 0.40132 |
+| V0.319 train d1–d3 + edge mix | 17 | — | — | 95.1172% | 0.34604 |
+
+V0.317 did not materially change the V0.316 in-range result and high-value
+multiply remained `0%`. V0.318 and V0.319 show that exposing the model to
+depth-3 compositions improves ordinary depth-4 transfer; V0.319 reaches
+`95.1172%` on the aggregate depth-4 held-out set. This is a useful training
+protocol signal, not proof of a universal capacity law: the current
+operationwise high-value (`80..95`) multiply diagnostic is still `0%` for
+V0.317–V0.319. Thus the remaining failure is specifically magnitude/depth
+coverage or an extrapolating value contract, not simply insufficient total
+parameter count or candidate routing.
+
+**V0.317 RETAINED AS A DISTRIBUTION DIAGNOSTIC; V0.318/V0.319 RETAINED AS
+PROMISING TRAINING-PROTOCOL OPT-IN RESULTS. None is made default, and no
+700M/1B scale-up follows yet.** V0.319 should be reproduced on seed18 before
+any adoption decision.
+
+Artifacts: the V0.317–V0.319 configs, run reports, and operationwise JSONs.

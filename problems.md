@@ -1420,6 +1420,50 @@ P-003/P-004 `ACTIVE`; keyingi sinov cross-digit pair interaction kernel.
 
 **Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
 
+**V0.313 learned cross-digit pair table (2026-09-12):** har bir output slot
+va contributing typed-digit juftligi uchun o‘rganiladigan vektorli partial
+product table qo‘shildi. Seed17 2k held-out `38.4766%` bo‘lib, V0.304’dan
+`−1.0254 pp`, CE `9.19522`; fixed multiply `1.7578%/0.9766%`, high-value
+`0%/0%`. Parametrlar `7.392M`, active estimate `2.093M`, train time `496.56 s`.
+**V0.313 REJECTED.** Cross-digit interactionning o‘zi output/value contractni
+yaratmadi va inference xarajatini oshirdi. P-003/P-004 `ACTIVE`; keyingi
+test multiply-only typed readout gate bo‘ladi.
+
+**Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
+
+**V0.314–V0.315 precision/readout screens (2026-09-12):** typed terminalni
+faqat multiply’da authoritative qilish V0.314’da held-outni `28.2227%`gacha
+tushirdi, fixed/high multiply `0%/0%` bo‘ldi. V0.315 algebraic registerni
+float64’da saqlab `41.0156%` berdi, lekin fixed multiply faqat
+`1.9531%/1.5625%`, high-value `0%/0%` qoldi. **Ikkalasi REJECTED**; muammo
+oddiy typed readout yoki float32 precisionning o‘zi emas.
+
+**V0.316 full radix-Fourier ladder (2026-09-12):** algebraic packetga
+`16^1...16^8` periodlari qo‘shildi va double register saqlandi. Seed17/18
+held-out `87.9883%/88.9160%`, ikki-seed mean `88.4521%`; d3/d4 mean
+`93.3594%/83.5450%`, CE `1.95337`. Fixed multiply mean
+`27.5391%/7.9102%`gacha ko‘tarildi — oldingi ~`2%` ceilingdan katta signal.
+Lekin high-value `80..95` multiply ikki seed va ikki depthda ham `0%`.
+**V0.316 LEADING IN-RANGE OPT-IN branch sifatida RETAINED**, ammo P-003
+`ACTIVE`: bu hali high-magnitude generalization yoki 700M/1B scale trigger
+emas. Keyingi muammo training distribution/value extrapolation va deep
+multiply contractini ajratish.
+
+**Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
+
+**V0.317–V0.319 training distribution/depth screens (2026-09-12):** V0.317
+edge-mixture sampling V0.316 in-range natijasini deyarli o‘zgartirmadi va
+high-value multiply `0%` qoldi. V0.318 depth `1..3`ni train qilib depth-4da
+`93.3594%` berdi; V0.319 depth-3 trainingni edge mixture bilan birlashtirib
+depth-4 held-outni `95.1172%`gacha ko‘tardi. Bu katta ijobiy protocol signal,
+lekin operationwise high-value `80..95` multiply V0.317–V0.319da ham `0%`.
+Demak qolgan bottleneck oddiy capacity yoki routing emas, magnitude/depth
+coverage va extrapolating value contract. **V0.317 diagnostic, V0.318/V0.319
+PROMISING OPT-IN**, lekin seed18 reproduction tugamaguncha default emas;
+P-003 `ACTIVE` va 700M/1B scale boshlanmaydi.
+
+**Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
