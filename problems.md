@@ -1337,6 +1337,38 @@ not a multiply solution or default.** Next is operation-conditioned operator
 coefficients, especially for multiply. See
 `results/V0_302_DYNAMIC_NONMOD_OPERATOR_VALUED_PRODUCT_AUDIT.md`.
 
+V0.303 makes the product operator operation-conditioned while keeping one
+shared operator basis. Across two 5k seeds, held-out accuracy rises from the
+V0.298 mean `20.508%` to `24.072%` (`+3.564 pp`), depth-4 from `14.355%` to
+`17.188%`, and active parameters stay at `1.920M`. Fixed add/subtract depth-4
+improve to `42.969%/47.363%`, but multiply reaches only `4.883%` (`+0.684 pp`)
+and high-value `80..95` multiply remains `0%`. **RETAINED AS THE LEADING
+OPT-IN PRIOR-FREE LEARNED BRANCH, NOT A COMPLETE MULTIPLY SOLUTION OR A
+700M/1B SCALE TRIGGER.** The next problem is the high-range product/value
+codec and transition. See
+`results/V0_303_DYNAMIC_NONMOD_OPERATION_CONDITIONED_PRODUCT_AUDIT.md`.
+
+**Algebraic Fourier state/query screen (V0.304, 2026-09-12):** V0.303 ga
+`polynomial2_fourier` algebraic state packet qo‘shilib, learned terminal
+output saqlandi. Ikki matched 2k seedda held-out accuracy o‘rtachasi
+`38.5986%`, depth-3 `48.2422%`, depth-4 `28.9551%` bo‘ldi; seed17/18 natijasi
+`39.5020%/37.6953%`. Bu add/subtract uchun kuchli va takrorlanuvchi signal,
+lekin fixed multiply depth-3/4 faqat `1.5625%/1.6602%`, `80..95` high-value
+multiply esa `0%/0%`. **V0.304 RETAINED AS LEADING OPT-IN STATE/QUERY
+DIAGNOSTIC, NOT DEFAULT OR SCALE TRIGGER.** Muammo router sig‘imidan ko‘ra
+multiply transition va range-safe output codecda ekanini ko‘rsatadi.
+
+**Direct algebraic output decoder (V0.305, 2026-09-12):** algebraic Fourier
+packetdan learned terminal decoderga to‘g‘ridan-to‘g‘ri o‘tish seed17da
+held-out `20.1660%` berdi; V0.304 seed17dagi `39.5020%`dan `−19.3359 pp`.
+Add/subtract ham `37.3047%/17.9688%` va `23.6328%/5.6641%`gacha tushdi,
+multiply `3.9063%/4.6875%`, high-value barcha operatsiyalar esa `0%` bo‘ldi.
+**V0.305 REJECTED.** Algebraic packetni learned terminal state o‘rniga
+qo‘yish hozirgi output codec bilan mos emas; V0.304 query/state signali
+saqlanadi, lekin direct decoder default qilinmaydi.
+
+**Batafsil:** `results/V0_304_305_ALGEBRAIC_STATE_OUTPUT_DECODER_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

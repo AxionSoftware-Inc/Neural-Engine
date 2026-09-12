@@ -1,0 +1,144 @@
+{
+  "benchmark": "operationwise_fixed_checkpoint_eval",
+  "device": "cuda",
+  "examples_per_case": 512,
+  "operations": [
+    "add",
+    "subtract",
+    "multiply"
+  ],
+  "records": [
+    {
+      "checkpoint": "results/checkpoints/v0_303_operation_conditioned_product_seed17_2000.pt",
+      "variant": "v0_303_operation_conditioned_product",
+      "seed": 17,
+      "operation": "add",
+      "depth": 3,
+      "count": 512,
+      "accuracy": 0.64453125,
+      "loss": 1.6001791954040527,
+      "digit_accuracy": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.880859375,
+        0.703125,
+        0.98046875
+      ],
+      "router_entropy": 0.3540872633457184,
+      "unique_virtual_circuits": 949
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_303_operation_conditioned_product_seed17_2000.pt",
+      "variant": "v0_303_operation_conditioned_product",
+      "seed": 17,
+      "operation": "add",
+      "depth": 4,
+      "count": 512,
+      "accuracy": 0.302734375,
+      "loss": 4.195003509521484,
+      "digit_accuracy": [
+        1.0,
+        0.994140625,
+        0.994140625,
+        0.99609375,
+        0.9921875,
+        0.65625,
+        0.42578125,
+        0.94140625
+      ],
+      "router_entropy": 0.439938485622406,
+      "unique_virtual_circuits": 1114
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_303_operation_conditioned_product_seed17_2000.pt",
+      "variant": "v0_303_operation_conditioned_product",
+      "seed": 17,
+      "operation": "subtract",
+      "depth": 3,
+      "count": 512,
+      "accuracy": 0.6953125,
+      "loss": 1.2414757013320923,
+      "digit_accuracy": [
+        1.0,
+        0.98046875,
+        0.98046875,
+        0.98046875,
+        0.98046875,
+        0.96875,
+        0.7265625,
+        0.98046875
+      ],
+      "router_entropy": 0.4388509690761566,
+      "unique_virtual_circuits": 936
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_303_operation_conditioned_product_seed17_2000.pt",
+      "variant": "v0_303_operation_conditioned_product",
+      "seed": 17,
+      "operation": "subtract",
+      "depth": 4,
+      "count": 512,
+      "accuracy": 0.34765625,
+      "loss": 4.267120838165283,
+      "digit_accuracy": [
+        1.0,
+        0.90625,
+        0.90625,
+        0.91015625,
+        0.90625,
+        0.857421875,
+        0.43359375,
+        0.92578125
+      ],
+      "router_entropy": 0.5366957187652588,
+      "unique_virtual_circuits": 1245
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_303_operation_conditioned_product_seed17_2000.pt",
+      "variant": "v0_303_operation_conditioned_product",
+      "seed": 17,
+      "operation": "multiply",
+      "depth": 3,
+      "count": 512,
+      "accuracy": 0.037109375,
+      "loss": 27.01742935180664,
+      "digit_accuracy": [
+        1.0,
+        0.91796875,
+        0.373046875,
+        0.146484375,
+        0.08984375,
+        0.12890625,
+        0.162109375,
+        0.65234375
+      ],
+      "router_entropy": 0.3294256627559662,
+      "unique_virtual_circuits": 1234
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_303_operation_conditioned_product_seed17_2000.pt",
+      "variant": "v0_303_operation_conditioned_product",
+      "seed": 17,
+      "operation": "multiply",
+      "depth": 4,
+      "count": 512,
+      "accuracy": 0.04296875,
+      "loss": 42.89329528808594,
+      "digit_accuracy": [
+        0.650390625,
+        0.29296875,
+        0.119140625,
+        0.087890625,
+        0.111328125,
+        0.1015625,
+        0.228515625,
+        0.66015625
+      ],
+      "router_entropy": 0.4358038008213043,
+      "unique_virtual_circuits": 1383
+    }
+  ]
+}

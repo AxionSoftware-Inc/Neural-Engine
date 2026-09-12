@@ -1928,6 +1928,31 @@ and CE worsens. **Retained as opt-in efficiency diagnostic, not default or
 700M/1B multiply evidence.** Next is operation-conditioned operator
 coefficients. See `V0_302_DYNAMIC_NONMOD_OPERATOR_VALUED_PRODUCT_AUDIT.md`.
 
+V0.303 makes the product operator operation-conditioned while retaining a
+shared operator basis. Across two 5k seeds, held-out accuracy rises from the
+V0.298 mean `20.508%` to `24.072%` (`+3.564 pp`), with depth-4 at `17.188%`
+(`+2.832 pp`) and active parameters at `1.920M`. Fixed add/subtract depth-4
+become `42.969%/47.363%`, but multiply reaches only `4.883%` (`+0.684 pp`)
+and high-value `80..95` multiply remains `0%`. **Retained as the leading
+opt-in prior-free learned branch, not a complete multiply solution or a
+700M/1B scale trigger.** Next is the high-range product/value codec and
+transition. See `V0_303_DYNAMIC_NONMOD_OPERATION_CONDITIONED_PRODUCT_AUDIT.md`.
+
+V0.304 adds the fixed `polynomial2_fourier` algebraic state/query sidecar to
+V0.303 while preserving the learned terminal output. On matched 2k seed17/18
+runs it reaches `38.5986%` mean held-out accuracy, `48.2422%` at depth 3, and
+`28.9551%` at depth 4. This is a reproducible add/subtract improvement, but
+fixed multiply is only `1.5625%/1.6602%` at depths 3/4 and high-value multiply
+remains `0%`. V0.304 is retained as an opt-in state/query diagnostic, not a
+default or scale trigger.
+
+V0.305 replaces the learned terminal state with a direct decoder from the
+algebraic packet. Seed17 falls to `20.1660%` held-out accuracy versus V0.304's
+`39.5020%`, and high-value accuracy is `0%` for every operation. The direct
+decoder is rejected; the remaining bottleneck is multiply-specific transition
+and range-safe output coding rather than generic router/circuit capacity. See
+`V0_304_305_ALGEBRAIC_STATE_OUTPUT_DECODER_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
