@@ -496,6 +496,49 @@ def test_dynamic_register_structured_numeric_state_is_optional_and_recurrent():
     assert model.parameter_report()["numeric_state_dim"] == 8
 
 
+def test_dynamic_register_typed_teacher_forcing_is_opt_in_and_shape_safe():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=2,
+        seq_len=8,
+        d_model=32,
+        state_dim=32,
+        num_classes=4096,
+        modulus=None,
+        circuit_rank=4,
+        num_circuits=64,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        typed_digit_state=True,
+        typed_digit_dim=4,
+        typed_digit_base=16,
+        typed_digit_count=3,
+        typed_digit_value_offset=64,
+        typed_digit_carry_chain=True,
+        output_mode="factorized_digits",
+        output_digit_base=16,
+        output_digit_count=3,
+    )
+    generator = DynamicCompositionGenerator(
+        max_ops=2,
+        train_max_ops=2,
+        modulus=None,
+        value_min=0,
+        value_max=3,
+        target_offset=64,
+        seed=162,
+    )
+    batch = generator.batch(4)
+    logits, stats = model(
+        batch.inputs,
+        teacher_stage_targets=batch.stage_targets - 64,
+        teacher_forcing_probability=1.0,
+    )
+    assert logits.shape == (4, 4096)
+    assert len(stats["typed_digit_logits"]) == 3
+
+
 def test_dynamic_register_structured_scalar_state_has_shared_value_format():
     model = DynamicRegisterNeuralEngine(
         max_ops=2,

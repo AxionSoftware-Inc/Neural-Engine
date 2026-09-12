@@ -1186,6 +1186,21 @@ P-003/P-004 remain active; next is an explicit reusable transition or staged
 teacher-forced transition test, not another output-base split. See
 `results/V0_286_DYNAMIC_NONMOD_EIGHT_DIGIT_BASE16_TYPED_CARRY_AUDIT.md`.
 
+**V0.287 scheduled teacher-forcing transition screen (2026-09-12):** V0.286's
+typed base-16 carry model received ground-truth stage values only during
+training, with probability annealed from `1.0` to `0.0` across 2,000 steps and
+no teacher at evaluation. Against the matched V0.286 controls, two-seed held-out
+accuracy changed `2.930% → 3.809%` (`+0.879 pp`), CE `12.3192 → 12.2227`,
+depth-3 `3.564% → 4.834%`, and depth-4 `2.295% → 2.783%`. Against the already
+typed-carry treatment, the accuracy gain was only `+0.317 pp` and CE worsened
+`+0.2295`; seed 17 CE regressed. Training time was about `25.6%` above control,
+with the same `2,047,296` active-parameter estimate. **REJECTED FOR QUALITY
+ADOPTION; retained as an opt-in diagnostic.** Teacher forcing helps expose the
+transition problem but does not solve it or justify 700M/1B scaling. P-003/P-004
+remain active; next is a reusable operation-conditioned transition test, not a
+longer teacher-forcing schedule. See
+`results/V0_287_DYNAMIC_NONMOD_BASE16_SCHEDULED_TEACHER_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

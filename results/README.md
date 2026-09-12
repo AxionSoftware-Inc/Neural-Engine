@@ -1824,6 +1824,16 @@ depth-4 gain `+0.146 pp`, below the adoption gate with seed variance. The
 variant is retained as a diagnostic and does not justify scale-up. See
 `V0_286_DYNAMIC_NONMOD_EIGHT_DIGIT_BASE16_TYPED_CARRY_AUDIT.md`.
 
+V0.287 tests scheduled teacher forcing for the learned base-16 carry transition:
+stage targets are available only during training and are annealed from full to
+zero over 2,000 steps. Against V0.286 controls, two-seed held-out accuracy gains
+`+0.879 pp`, CE improves only `−0.0965`, depth-4 gains `+0.488 pp`, and training
+cost rises `25.6%`. Against the typed-carry treatment, accuracy is only `+0.317
+pp` and CE is worse. **Rejected for quality adoption; retained as an opt-in
+diagnostic.** This does not justify capacity scaling; the next experiment must
+change the reusable transition contract. See
+`V0_287_DYNAMIC_NONMOD_BASE16_SCHEDULED_TEACHER_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

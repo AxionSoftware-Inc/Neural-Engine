@@ -469,6 +469,25 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     )
     optimizer = make_optimizer(model, config)
     steps = args.steps
+    teacher_forcing_start = float(
+        config.get("typed_digit_teacher_forcing_start", 0.0)
+    )
+    teacher_forcing_end = float(
+        config.get("typed_digit_teacher_forcing_end", 0.0)
+    )
+    teacher_forcing_steps = int(
+        config.get("typed_digit_teacher_forcing_steps", steps)
+    )
+    if not 0.0 <= teacher_forcing_start <= 1.0:
+        raise ValueError("typed_digit_teacher_forcing_start must be in [0, 1]")
+    if not 0.0 <= teacher_forcing_end <= 1.0:
+        raise ValueError("typed_digit_teacher_forcing_end must be in [0, 1]")
+    if teacher_forcing_steps < 1:
+        raise ValueError("typed_digit_teacher_forcing_steps must be positive")
+    if (teacher_forcing_start or teacher_forcing_end) and not model.typed_digit_state:
+        raise ValueError(
+            "typed digit teacher forcing requires typed_digit_state"
+        )
     model.train()
     losses = []
     start = time.perf_counter()
@@ -497,10 +516,24 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         num_classes = int(model.output[-1].out_features)
         validate_class_targets(batch.targets, num_classes, "training targets")
         validate_class_targets(batch.stage_targets, num_classes, "stage targets")
+        teacher_forcing_fraction = min(
+            1.0,
+            max(0.0, (step - 1) / max(teacher_forcing_steps - 1, 1)),
+        )
+        teacher_forcing_probability = (
+            teacher_forcing_start
+            + teacher_forcing_fraction
+            * (teacher_forcing_end - teacher_forcing_start)
+        )
+        teacher_targets = None
+        if teacher_forcing_probability > 0.0:
+            teacher_targets = batch.stage_targets - target_offset
         optimizer.zero_grad(set_to_none=True)
         logits, stats = model(
             batch.inputs,
             return_full_logits=(model.output_mode != "factorized_digits"),
+            teacher_stage_targets=teacher_targets,
+            teacher_forcing_probability=teacher_forcing_probability,
         )
         loss = output_loss(model, logits, stats, batch.targets)
         stage_weight = float(config.get("stage_loss_weight", 0.0))
@@ -600,6 +633,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "train_value_range": [args.train_value_min, args.train_value_max],
         "eval_value_range": [args.eval_value_min, args.eval_value_max],
         "train_value_curriculum": normalized_curriculum,
+        "typed_digit_teacher_forcing": {
+            "start": teacher_forcing_start,
+            "end": teacher_forcing_end,
+            "steps": teacher_forcing_steps,
+        },
         "generator_modulus": generator_modulus,
         "target_offset": target_offset,
         "compact_factorized_eval": compact_factorized_eval,

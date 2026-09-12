@@ -1401,10 +1401,25 @@ class DynamicRegisterNeuralEngine(nn.Module):
         adaptive: bool | None = None,
         collect_state_stats: bool = False,
         return_full_logits: bool = True,
+        teacher_stage_targets: torch.Tensor | None = None,
+        teacher_forcing_probability: float = 0.0,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         del adaptive
         batch_size = inputs.shape[0]
         device = inputs.device
+        if not 0.0 <= teacher_forcing_probability <= 1.0:
+            raise ValueError("teacher_forcing_probability must be in [0, 1]")
+        if teacher_stage_targets is not None:
+            if not self.typed_digit_state:
+                raise ValueError(
+                    "teacher_stage_targets require typed_digit_state"
+                )
+            if tuple(teacher_stage_targets.shape) != (
+                batch_size, self.max_ops
+            ):
+                raise ValueError(
+                    "teacher_stage_targets must have shape [batch, max_ops]"
+                )
         encoded = self.encode_program(inputs)
         operation_tokens = inputs[:, 1:1 + self.max_ops]
         operation_ids = (operation_tokens - 2).clamp(0, 2)
@@ -1777,6 +1792,28 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     next_typed_state = typed_state.clone()
                     next_typed_state[active_indices] = typed_candidate
                     typed_state = next_typed_state
+                    if (
+                        teacher_stage_targets is not None
+                        and teacher_forcing_probability > 0.0
+                    ):
+                        teacher_values = teacher_stage_targets[
+                            active_indices, step
+                        ].to(dtype=torch.long)
+                        teacher_state = self._typed_digit_state_from_values(
+                            teacher_values, self.typed_digit_value_offset
+                        )
+                        if teacher_forcing_probability >= 1.0:
+                            typed_state[active_indices] = teacher_state
+                        else:
+                            use_teacher = torch.rand(
+                                teacher_state.shape[0],
+                                device=device,
+                            ).lt(teacher_forcing_probability)
+                            typed_state[active_indices] = torch.where(
+                                use_teacher.unsqueeze(-1),
+                                teacher_state,
+                                typed_state[active_indices],
+                            )
                 if self.structured_scalar_state:
                     next_scalar_state = scalar_state.clone()
                     next_scalar_state[active_indices] = scalar_candidate

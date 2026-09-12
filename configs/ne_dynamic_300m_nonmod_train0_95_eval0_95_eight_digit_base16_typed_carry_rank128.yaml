@@ -39,6 +39,9 @@ typed_digit_value_offset: 134217728
 typed_digit_operand_offset: 0
 typed_digit_carry_chain: true
 typed_digit_contract_loss_weight: 0.5
+typed_digit_teacher_forcing_start: 1.0
+typed_digit_teacher_forcing_end: 0.0
+typed_digit_teacher_forcing_steps: 2000
 output_mode: factorized_digits
 output_digit_base: 16
 output_digit_count: 8
