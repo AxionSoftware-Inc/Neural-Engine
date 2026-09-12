@@ -1859,6 +1859,16 @@ candidate, not default or scale-up evidence.** Next is numeric bridge plus
 curriculum and operation-wise multiply evaluation. See
 `V0_290_DYNAMIC_NONMOD_BASE16_NUMERIC_MULTIPLY_CONVOLUTION_AUDIT.md`.
 
+V0.291 combines the V0.290 numeric bridge with progressive value curriculum
+(`0..7 → 0..31 → 0..95`). Two-seed held-out accuracy falls to `18.286%`,
+`−2.222 pp` versus V0.290 and `−2.490 pp` versus plain control; depth-4 falls
+to `12.061%`. Mean CE is `11.7944`, slightly worse than V0.290's `11.7713`, so
+the loss does not represent a hard-selection gain. **Rejected for default
+adoption and scaling; retained as a negative opt-in control.** The curriculum
+benefit does not transfer to the numeric bridge. Next is operation-wise
+evaluation of existing checkpoints. See
+`V0_291_DYNAMIC_NONMOD_BASE16_NUMERIC_MULTIPLY_CURRICULUM_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

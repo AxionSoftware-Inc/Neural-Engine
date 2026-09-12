@@ -1248,6 +1248,17 @@ P-004 remain active; next is numeric bridge plus curriculum and an operation-
 wise multiply evaluation. See
 `results/V0_290_DYNAMIC_NONMOD_BASE16_NUMERIC_MULTIPLY_CONVOLUTION_AUDIT.md`.
 
+V0.291 combines the V0.290 numeric bridge with the progressive value curriculum
+(`0..7 → 0..31 → 0..95`). Across two fresh 5,000-step seeds, held-out accuracy
+falls to `18.286%` (`−2.222 pp` versus V0.290 and `−2.490 pp` versus the plain
+base-16 control); depth-4 falls to `12.061%`. Mean CE is marginally worse than
+V0.290 (`11.7944` versus `11.7713`, `+0.0231`), and the hard decision quality
+regresses substantially. **REJECTED FOR ADOPTION AND SCALING; retained as a
+negative opt-in control.** The curriculum benefit does not transfer to the
+numeric bridge. The next step is operation-wise evaluation of existing
+checkpoints, not another curriculum variant. See
+`results/V0_291_DYNAMIC_NONMOD_BASE16_NUMERIC_MULTIPLY_CURRICULUM_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
