@@ -1496,6 +1496,18 @@ LOWER-COVERAGE CONTROL; hozirgi eng yaxshi balanced tanlov V0.323 25%.**
 
 **Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
 
+**V0.325 route-exploration control (2026-09-12):** V0.323 dagi 25% targeted
+oqim saqlanib, training `route_exploration_prob` `0.05`dan `0.15`ga oshirildi.
+Bu eval route qamrovini `569`dan `861` unique virtual circuitga, entropy’ni
+`5.2588`dan `5.4292`ga, unique factor row’larni `33`dan `44`ga oshirdi.
+Lekin high-value d4 multiply `80.4688%`dan `79.1016%`ga tushdi; ordinary d4
+multiply `66.4063%`dan `66.6016%`ga ozgina oshdi, eval d4 esa `96.8750%`dan
+`96.7773%`ga tushdi. **V0.325 route-coverage diagnostic sifatida saqlandi,
+defaultga olinmadi:** exploration coverage muammosini yumshatadi, ammo hozirgi
+sifat mezonida katta sakrash bermaydi.
+
+**Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

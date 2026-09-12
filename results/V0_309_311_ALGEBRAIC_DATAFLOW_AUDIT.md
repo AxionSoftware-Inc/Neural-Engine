@@ -234,6 +234,25 @@ high-value-multiply-only control. V0.322 samples one value range per program
 | V0.323 mean | 17/18/19 | 98.4050% | 97.1680% | 64.3880% | 81.9010% |
 | V0.324 + targeted multiply 12.5% | 17 | 98.4863% | 96.4844% | 63.2813% | 72.6563% |
 
+## V0.325 route-exploration control
+
+V0.325 keeps the V0.323 25% targeted high-value multiply stream and raises
+training-time `route_exploration_prob` from `0.05` to `0.15`. The purpose is
+to test whether the V0.323 quality gain is paid for by excessive route
+specialization. The inference path and active parameter budget are unchanged.
+
+| Variant | Seed | Eval all | Eval d4 | Ordinary d4 multiply | High-value d4 multiply | Eval unique virtual circuits | Eval route entropy |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| V0.323 targeted 25% | 17 | 98.3887% | 96.8750% | 66.4063% | 80.4688% | 569 | 5.2588 |
+| V0.325 targeted 25% + route15 | 17 | 98.7305% | 96.7773% | 66.6016% | 79.1016% | 861 | 5.4292 |
+
+The control increases route coverage and factor-row coverage (33 to 44 unique
+factor rows in the eval audit), while high-value d4 multiply falls by 1.3672
+percentage points. This is evidence that exploration addresses the
+specialization/coverage trade-off, but the tested probability is too costly
+for the current quality objective. **V0.325 is retained as a diagnostic
+coverage control, not as the default and not as a replacement for V0.323.**
+
 V0.321 proves the architecture can learn the high-value multiply contract when
 the task is isolated, but it destroys add/subtract generality and is not a
 usable model. V0.322 shows that merely sharing the range per program is not
@@ -267,7 +286,8 @@ BALANCED OPT-IN.** Three seeds now pass the basic quality reproduction gate,
 but route coverage remains a live risk. The main diagnosis is data/task
 coverage plus routing specialization around high-magnitude multiplication,
 not a simple capacity shortage. Before 700M/1B scaling, run a route-coverage
-control and keep the three-seed V0.323 mean as the acceptance baseline.
+control and keep the three-seed V0.323 mean as the acceptance baseline. V0.325
+is the route-coverage reference for that follow-up.
 
-Artifacts: V0.320–V0.323 configs, run reports, the `--include-trained-depths`
+Artifacts: V0.320–V0.325 configs, run reports, the `--include-trained-depths`
 benchmark control, and operationwise JSONs.
