@@ -1279,6 +1279,15 @@ scale-up.** Run the same body for a matched 5,000-step multiply-only pilot
 before closing this hypothesis. See
 `results/V0_293_MULTIPLY_ONLY_2K_PILOT_AUDIT.md`.
 
+V0.294 repeats multiply-only training for a matched 5,000-step seed17 run.
+Fixed multiply accuracy remains `3.906%` at depth 3 and `2.734%` at depth 4;
+train depth-2 is only `9.961%`. Compared with V0.290's `3.906%/4.199%`, the
+extra multiply coverage gives `0.000 pp/−1.465 pp`, not a gain. **Operation
+coverage is rejected as the primary fix; no default or scale-up.** The next
+architecture test should make typed numeric state directly responsible for
+final digit readout instead of using it only as an additive query feature. See
+`results/V0_294_MULTIPLY_ONLY_5K_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
