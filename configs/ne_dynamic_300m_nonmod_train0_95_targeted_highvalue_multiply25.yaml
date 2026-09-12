@@ -1,0 +1,80 @@
+model: ne_dynamic_300m_nonmod_train0_95_targeted_highvalue_multiply25
+architecture: dynamic_register
+vocab_size: 128
+num_classes: 8589934592
+modulus: null
+target_offset: 134217728
+max_ops: 4
+train_max_ops: 4
+seq_len: 10
+d_model: 384
+state_dim: 384
+num_circuits: 23600
+circuit_rank: 16
+router_branch: 8
+router_depth: 6
+candidate_pool: 32
+active_circuits: 8
+circuit_bank_mode: factorized
+factor_count: 154
+factor_candidate_pool: 8
+factor_mix_mode: shared
+circuit_mode: serial
+route_context_mode: full
+route_exploration_prob: 0.05
+value_encoder_mode: learned
+value_encoder_modulus: 128
+operation_adapter_rank: 16
+operation_adapter_scale: 1.0
+operation_write_adapter_rank: 16
+operation_write_adapter_scale: 1.0
+operation_circuit_bank: true
+circuit_residual_scale: 1.0
+operator_valued_product_encoder: true
+operator_valued_product_operation_conditioned: true
+operator_valued_packet_width: 16
+operator_valued_basis_count: 8
+algebraic_state_mode: polynomial2_fourier
+algebraic_state_scale: 1.0
+algebraic_state_value_scale: 1073741824.0
+algebraic_state_fourier_base: 16
+algebraic_state_double: true
+algebraic_state_fourier_ladder: true
+train_value_ranges:
+  - [0, 15]
+  - [16, 47]
+  - [48, 79]
+  - [80, 95]
+train_value_range_weights: [0.2, 0.2, 0.2, 0.4]
+targeted_train_fraction: 0.25
+targeted_train_fixed_operation: multiply
+targeted_train_value_min: 80
+targeted_train_value_max: 95
+targeted_train_value_ranges:
+  - [80, 95]
+targeted_train_value_range_weights: [1.0]
+targeted_train_value_range_mode: shared_per_program
+typed_digit_state: true
+typed_digit_dim: 16
+typed_digit_base: 16
+typed_digit_count: 8
+typed_digit_scale: 1.0
+typed_digit_value_offset: 134217728
+typed_digit_operand_offset: 0
+typed_digit_carry_chain: true
+typed_digit_multiply_numeric_convolution: true
+typed_digit_contract_loss_weight: 0.5
+output_mode: factorized_digits
+output_digit_base: 16
+output_digit_count: 8
+output_factor_rank: 128
+output_digit_interaction_rank: 16
+output_digit_context_mode: straight_through_hard
+stage_loss_weight: 0.5
+compact_factorized_eval: true
+batch_size: 128
+learning_rate: 0.0003
+weight_decay: 0.01
+grad_clip: 1.0
+optimizer: adamw
+seed: 17

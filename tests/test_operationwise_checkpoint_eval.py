@@ -78,3 +78,16 @@ def test_operationwise_depths_are_not_duplicated_when_train_and_max_touch():
     config = {**_config(), "train_max_ops": 3, "max_ops": 4}
     depths = tuple(dict.fromkeys((int(config["train_max_ops"]) + 1, int(config["max_ops"]))))
     assert depths == (4,)
+
+
+def test_fixed_operation_batch_can_explicitly_include_trained_depth():
+    batch = fixed_operation_batch(
+        {**_config(), "train_max_ops": 4},
+        "multiply",
+        depth=4,
+        count=2,
+        seed=23,
+        device=torch.device("cpu"),
+        allow_trained_depth=True,
+    )
+    assert batch.inputs.shape == (2, 10)

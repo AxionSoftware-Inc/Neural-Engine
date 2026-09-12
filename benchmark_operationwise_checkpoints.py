@@ -43,15 +43,21 @@ def fixed_operation_batch(
     device: torch.device,
     value_min: int | None = None,
     value_max: int | None = None,
+    allow_trained_depth: bool = False,
 ) -> Batch:
-    """Build a deterministic batch of homogeneous non-modular programs."""
+    """Build a deterministic batch of homogeneous non-modular programs.
+
+    By default this remains a held-out-depth diagnostic.  The explicit
+    ``allow_trained_depth`` escape hatch is for measuring whether a failure
+    disappears when the same depth is included in training.
+    """
     if operation not in OPERATIONS:
         raise ValueError(f"unknown operation: {operation}")
     max_ops = int(config["max_ops"])
     train_max_ops = int(config.get("train_max_ops", max_ops))
     if depth < 1 or depth > max_ops:
         raise ValueError("depth must be within max_ops")
-    if depth <= train_max_ops:
+    if depth <= train_max_ops and not allow_trained_depth:
         raise ValueError("operation-wise diagnostic expects held-out depth")
     value_min = int(config.get("operationwise_value_min", 0) if value_min is None else value_min)
     value_max = int(config.get("operationwise_value_max", 95) if value_max is None else value_max)
@@ -154,7 +160,10 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         model.load_state_dict(payload["model_state"])
         model.eval()
         for operation_index, operation in enumerate(OPERATIONS):
-            depths = tuple(dict.fromkeys((int(config["train_max_ops"]) + 1, int(config["max_ops"]))))
+            if args.include_trained_depths:
+                depths = tuple(range(1, int(config["max_ops"]) + 1))
+            else:
+                depths = tuple(dict.fromkeys((int(config["train_max_ops"]) + 1, int(config["max_ops"]))))
             for depth in depths:
                 batch = fixed_operation_batch(
                     config,
@@ -165,6 +174,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     device=device,
                     value_min=args.value_min,
                     value_max=args.value_max,
+                    allow_trained_depth=args.include_trained_depths,
                 )
                 metrics = evaluate_fixed_batch(
                     model, batch, int(config["output_digit_base"])
@@ -184,6 +194,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "benchmark": "operationwise_fixed_checkpoint_eval",
         "device": str(device),
         "examples_per_case": args.examples_per_case,
+        "include_trained_depths": args.include_trained_depths,
         "operations": list(OPERATIONS),
         "records": records,
     }
@@ -204,6 +215,11 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=17)
     parser.add_argument("--value-min", type=int, default=None)
     parser.add_argument("--value-max", type=int, default=None)
+    parser.add_argument(
+        "--include-trained-depths",
+        action="store_true",
+        help="also evaluate the configured train depth (for seen-depth controls)",
+    )
     parser.add_argument(
         "--output",
         default="results/operationwise_fixed_checkpoint_eval_v0_292.json",

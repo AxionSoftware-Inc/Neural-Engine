@@ -28,6 +28,7 @@
 - [V0.313 — Learned cross-digit pair table](V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md)
 - [V0.314–V0.316 — Precision and radix coverage](V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md)
 - [V0.317–V0.319 — Training distribution and depth coverage](V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md)
+- [V0.320–V0.323 — Magnitude-coverage controls](V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md)
 - [P-004 — Route-conditioned state adapter audit](P004_ROUTE_STATE_ADAPTER_AUDIT_20260910.md)
 - [P-002 — Shared reusable residual bank audit](P002_SHARED_RESIDUAL_AUDIT.md)
 - [P-003/P-002 — Native route-causal diagnostic](P003_ROUTE_CAUSAL_DIAGNOSTIC_20260907.md)

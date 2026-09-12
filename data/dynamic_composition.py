@@ -39,6 +39,7 @@ class DynamicCompositionGenerator:
         fixed_operation: str | None = None,
         value_ranges: Sequence[Sequence[int]] | None = None,
         value_range_weights: Sequence[float] | None = None,
+        value_range_mode: str = "independent",
     ) -> None:
         if max_ops < 1:
             raise ValueError("max_ops must be positive")
@@ -56,6 +57,10 @@ class DynamicCompositionGenerator:
             raise ValueError("split must be all, train, or heldout")
         if fixed_operation is not None and fixed_operation not in OPERATION_TOKENS:
             raise ValueError(f"unknown fixed operation: {fixed_operation}")
+        if value_range_mode not in {"independent", "shared_per_program"}:
+            raise ValueError(
+                "value_range_mode must be independent or shared_per_program"
+            )
         normalized_ranges = None
         normalized_weights = None
         if value_ranges is not None:
@@ -90,6 +95,10 @@ class DynamicCompositionGenerator:
                 normalized_weights = tuple(
                     weight / total_weight for weight in weights
                 )
+        if value_range_mode == "shared_per_program" and normalized_ranges is None:
+            raise ValueError(
+                "shared_per_program value_range_mode requires value_ranges"
+            )
         self.max_ops = max_ops
         self.train_max_ops = train_max_ops
         self.seq_len = 1 + max_ops + (max_ops + 1)
@@ -101,6 +110,7 @@ class DynamicCompositionGenerator:
         self.fixed_operation = fixed_operation
         self.value_ranges = normalized_ranges
         self.value_range_weights = normalized_weights
+        self.value_range_mode = value_range_mode
         self.rng = np.random.default_rng(seed)
         self.operation_names = tuple(OPERATION_TOKENS)
 
@@ -139,11 +149,17 @@ class DynamicCompositionGenerator:
                 self.value_min, self.value_max + 1, size=depth + 1
             ).tolist()
         else:
-            range_indices = self.rng.choice(
-                len(self.value_ranges),
-                size=depth + 1,
-                p=self.value_range_weights,
-            )
+            if self.value_range_mode == "shared_per_program":
+                shared_index = int(self.rng.choice(
+                    len(self.value_ranges), p=self.value_range_weights
+                ))
+                range_indices = [shared_index] * (depth + 1)
+            else:
+                range_indices = self.rng.choice(
+                    len(self.value_ranges),
+                    size=depth + 1,
+                    p=self.value_range_weights,
+                )
             values = [
                 int(self.rng.integers(
                     self.value_ranges[int(range_index)][0],

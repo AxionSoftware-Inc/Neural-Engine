@@ -213,3 +213,40 @@ PROMISING TRAINING-PROTOCOL OPT-IN RESULTS. None is made default, and no
 any adoption decision.
 
 Artifacts: the V0.317–V0.319 configs, run reports, and operationwise JSONs.
+
+## V0.320–V0.323 magnitude-coverage controls
+
+These controls isolate the remaining high-value multiply failure without
+changing the V0.316/V0.319 model body. V0.320 trains all depths with the
+existing independent range mixture. V0.321 is a deliberately specialized
+high-value-multiply-only control. V0.322 samples one value range per program
+(`shared_per_program`). V0.323 keeps the broad training stream and adds a
+25% targeted batch of homogeneous `80..95` multiply programs.
+
+| Variant | Seed | Eval all | Eval d4 | Ordinary d4 multiply | High-value d4 multiply |
+|---|---:|---:|---:|---:|---:|
+| V0.320 all depths + independent mix | 17 | 98.7061% | 97.3633% | 49.2188% | 0.0000% |
+| V0.321 high-value multiply only | 17 | diagnostic | diagnostic | — | 93.5547% |
+| V0.322 all depths + shared range | 17 | 92.5049% | 91.9922% | 50.7813% | 7.8125% |
+| V0.323 + targeted multiply 25% | 17 | 98.3887% | 96.8750% | 66.4063% | 80.4688% |
+
+V0.321 proves the architecture can learn the high-value multiply contract when
+the task is isolated, but it destroys add/subtract generality and is not a
+usable model. V0.322 shows that merely sharing the range per program is not
+enough. V0.323 is the first balanced control that substantially raises
+high-value multiply while preserving the broad task score: fixed depth-4 add
+is `100%`, subtract is `99.6094%`, and high-value multiply is `80.4688%`.
+Active parameters remain `1,964,480`; no extra circuit bank or router head was
+added. The targeted stream does reduce route entropy and virtual-circuit
+coverage, so a seed18 reproduction and route-specialization check remain
+necessary before default adoption.
+
+**V0.320 RETAINED AS ALL-DEPTH CONTROL; V0.321 REJECTED AS A SPECIALIZED
+MODEL; V0.322 REJECTED AS INSUFFICIENT; V0.323 RETAINED AS THE LEADING
+BALANCED OPT-IN.** The main diagnosis is now data/task coverage and routing
+specialization around high-magnitude multiplication, not a simple capacity
+shortage. 700M/1B scaling is still deferred until reproduction and a
+cross-seed quality gate pass.
+
+Artifacts: V0.320–V0.323 configs, run reports, the `--include-trained-depths`
+benchmark control, and operationwise JSONs.

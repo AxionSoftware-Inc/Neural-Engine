@@ -13,6 +13,7 @@ import yaml
 from torch import nn
 
 from data.dynamic_composition import DynamicCompositionGenerator
+from data.generator import Batch
 from neural_engine.dynamic_register import DynamicRegisterNeuralEngine
 from neural_engine.instrumentation import count_parameters
 from neural_engine.optim import LazyAdamW
@@ -129,6 +130,22 @@ def typed_digit_contract_loss(
     if not terms:
         return stage_targets.new_zeros((), dtype=torch.float32)
     return torch.stack(terms).mean()
+
+
+def concatenate_batches(*batches: Batch) -> Batch:
+    """Concatenate compatible dynamic-composition batches for mixed training."""
+    if not batches:
+        raise ValueError("at least one batch is required")
+    return Batch(
+        inputs=torch.cat([batch.inputs for batch in batches], dim=0),
+        targets=torch.cat([batch.targets for batch in batches], dim=0),
+        task_ids=torch.cat([batch.task_ids for batch in batches], dim=0),
+        depths=torch.cat([batch.depths for batch in batches], dim=0),
+        stage_targets=torch.cat(
+            [batch.stage_targets for batch in batches], dim=0
+        ),
+        stage_mask=torch.cat([batch.stage_mask for batch in batches], dim=0),
+    )
 
 
 def seed_everything(seed: int) -> None:
@@ -437,7 +454,35 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         fixed_operation=config.get("train_fixed_operation"),
         value_ranges=config.get("train_value_ranges"),
         value_range_weights=config.get("train_value_range_weights"),
+        value_range_mode=config.get("train_value_range_mode", "independent"),
     )
+    targeted_fraction = float(config.get("targeted_train_fraction", 0.0))
+    if not 0.0 <= targeted_fraction < 1.0:
+        raise ValueError("targeted_train_fraction must be in [0, 1)")
+    targeted_generator = None
+    if targeted_fraction:
+        targeted_value_min = int(
+            config.get("targeted_train_value_min", args.train_value_min)
+        )
+        targeted_value_max = int(
+            config.get("targeted_train_value_max", args.train_value_max)
+        )
+        targeted_generator = DynamicCompositionGenerator(
+            max_ops=int(config["max_ops"]),
+            train_max_ops=int(config.get("train_max_ops", config["max_ops"])),
+            seed=run_seed + 2001,
+            modulus=generator_modulus,
+            target_offset=target_offset,
+            value_min=targeted_value_min,
+            value_max=targeted_value_max,
+            split="train" if args.heldout_depths else "all",
+            fixed_operation=config.get("targeted_train_fixed_operation"),
+            value_ranges=config.get("targeted_train_value_ranges"),
+            value_range_weights=config.get("targeted_train_value_range_weights"),
+            value_range_mode=config.get(
+                "targeted_train_value_range_mode", "independent"
+            ),
+        )
     value_curriculum = config.get("value_curriculum")
     normalized_curriculum = None
     if value_curriculum is not None:
@@ -478,6 +523,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             value_max=first_stage["value_max"],
             split="train" if args.heldout_depths else "all",
             fixed_operation=config.get("train_fixed_operation"),
+            value_ranges=config.get("train_value_ranges"),
+            value_range_weights=config.get("train_value_range_weights"),
+            value_range_mode=config.get("train_value_range_mode", "independent"),
         )
     curriculum_stage_index = 0
     eval_generator = DynamicCompositionGenerator(
@@ -535,10 +583,22 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     fixed_operation=config.get("train_fixed_operation"),
                     value_ranges=config.get("train_value_ranges"),
                     value_range_weights=config.get("train_value_range_weights"),
+                    value_range_mode=config.get("train_value_range_mode", "independent"),
                 )
                 curriculum_stage_index = next_stage_index
         batch_size = args.batch_size or int(config["batch_size"])
-        batch = train_generator.task_balanced_batch(batch_size, device)
+        targeted_count = int(round(batch_size * targeted_fraction))
+        base_count = batch_size - targeted_count
+        batches = []
+        if base_count:
+            batches.append(train_generator.task_balanced_batch(base_count, device))
+        if targeted_count:
+            if targeted_generator is None:
+                raise RuntimeError("targeted generator was not initialized")
+            batches.append(
+                targeted_generator.task_balanced_batch(targeted_count, device)
+            )
+        batch = concatenate_batches(*batches)
         num_classes = int(model.output[-1].out_features)
         validate_class_targets(batch.targets, num_classes, "training targets")
         validate_class_targets(batch.stage_targets, num_classes, "stage targets")
@@ -662,6 +722,20 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "train_fixed_operation": config.get("train_fixed_operation"),
         "train_value_ranges": config.get("train_value_ranges"),
         "train_value_range_weights": config.get("train_value_range_weights"),
+        "train_value_range_mode": config.get("train_value_range_mode", "independent"),
+        "targeted_train_fraction": targeted_fraction,
+        "targeted_train_fixed_operation": config.get(
+            "targeted_train_fixed_operation"
+        ),
+        "targeted_train_value_min": config.get("targeted_train_value_min"),
+        "targeted_train_value_max": config.get("targeted_train_value_max"),
+        "targeted_train_value_ranges": config.get("targeted_train_value_ranges"),
+        "targeted_train_value_range_weights": config.get(
+            "targeted_train_value_range_weights"
+        ),
+        "targeted_train_value_range_mode": config.get(
+            "targeted_train_value_range_mode", "independent"
+        ),
         "typed_digit_teacher_forcing": {
             "start": teacher_forcing_start,
             "end": teacher_forcing_end,

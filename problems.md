@@ -1464,6 +1464,22 @@ P-003 `ACTIVE` va 700M/1B scale boshlanmaydi.
 
 **Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
 
+**V0.320–V0.323 magnitude-coverage controls (2026-09-12):** V0.320 barcha
+depthlarni train qilganda ordinary d4 multiply `49.2188%`, high-value d4
+multiply `0%` bo‘ldi; demak muammo faqat unseen depth emas. V0.321 faqat
+high-value multiplyga o‘qitilganda d4 `93.5547%` berdi, lekin add/sub umumiy
+qobiliyati buzildi. V0.322 shared-per-program range bilan high multiply faqat
+`7.8125%`ga chiqdi. V0.323 esa batchning `25%`ini high-value homogeneous
+multiplyga ajratib, umumiy evalni `98.3887%`, d4ni `96.8750%`, ordinary d4
+multiplyni `66.4063%` va high-value d4 multiplyni **`80.4688%`**ga ko‘tardi;
+add `100%`, subtract `99.6094%`. Active parametr `1.964M` bo‘lib qoldi.
+Bu katta ijobiy signal: arxitektura high-value multiplyni o‘rganadi, asosiy
+to‘siq targeted data/task coverage va route specialization. **V0.323 leading
+balanced OPT-IN**, seed18 reproduction kerak; P-003 `ACTIVE`, 700M/1B hali
+kechiktiriladi.
+
+**Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

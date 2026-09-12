@@ -5,7 +5,7 @@ from data.dynamic_composition import DynamicCompositionGenerator
 from neural_engine.dynamic_register import DynamicRegisterNeuralEngine
 from neural_engine.macro_growth import expand_macro_model
 from neural_engine.modular_templates import TrainableModularTemplateRegister
-from train_dynamic_composition import evaluate
+from train_dynamic_composition import concatenate_batches, evaluate
 
 
 def test_dynamic_generator_layout_and_depth_split():
@@ -61,6 +61,37 @@ def test_dynamic_generator_supports_weighted_value_range_mixture():
     assert bool(((values <= 7) | (values >= 88)).all())
     assert bool((values <= 7).any())
     assert bool((values >= 88).any())
+
+
+def test_dynamic_generator_can_share_one_value_range_per_program():
+    generator = DynamicCompositionGenerator(
+        max_ops=4,
+        train_max_ops=4,
+        modulus=None,
+        value_min=0,
+        value_max=95,
+        value_ranges=((0, 7), (88, 95)),
+        value_range_weights=(0.5, 0.5),
+        value_range_mode="shared_per_program",
+        seed=7,
+    )
+    batch = generator.task_balanced_batch(64)
+    for row, depth in zip(batch.inputs, batch.depths):
+        values = row[5 : 5 + int(depth) + 1] - 32
+        assert bool((values.max() <= 7) or (values.min() >= 88))
+
+
+def test_concatenate_batches_preserves_dynamic_composition_fields():
+    generator = DynamicCompositionGenerator(
+        max_ops=4, train_max_ops=4, modulus=None, value_min=0, value_max=3,
+        seed=8,
+    )
+    first = generator.task_balanced_batch(2)
+    second = generator.task_balanced_batch(3)
+    combined = concatenate_batches(first, second)
+    assert combined.inputs.shape[0] == 5
+    assert combined.stage_targets.shape[0] == 5
+    assert combined.stage_mask.shape[0] == 5
 
 
 def test_dynamic_register_supports_non_modular_forward_without_modular_prior():
