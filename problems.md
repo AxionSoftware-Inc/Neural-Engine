@@ -1096,6 +1096,17 @@ passes this test. P-003/P-004 remain active.
 
 **Audit:** `results/V0_278_DYNAMIC_NONMOD_VALUE_CURRICULUM_OOD_AUDIT.md`.
 
+**Fixed-Fourier OOD screen (2026-09-12):** V0.279 replaced the learned value
+projection with the parameter-free fixed Fourier encoder while keeping the
+`0--7 → 0--31 → 0--63` curriculum. On unseen `64--95`, two-seed accuracy was
+only `0.562%` with CE `40.3432`, below the learned-value V0.278 result
+`2.661%`. **V0.279 REJECTED AS A RANGE-SAFE QUALITY SOLUTION.** Periodic input
+features alone do not make the learned circuit/state and categorical digit
+readout extrapolate. P-003/P-004 remain active; next is an algebraic/numeric
+state-to-output bridge, not more bank capacity.
+
+**Audit:** `results/V0_279_DYNAMIC_NONMOD_FIXED_FOURIER_OOD_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

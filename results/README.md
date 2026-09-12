@@ -1765,6 +1765,13 @@ arithmetic solution and 700M/1B scaling remains deferred.** The next target is
 a range-safe value-state/readout codec. See
 `V0_278_DYNAMIC_NONMOD_VALUE_CURRICULUM_OOD_AUDIT.md`.
 
+V0.279 tests the existing parameter-free fixed-Fourier value encoder under
+the same OOD curriculum. Two-seed unseen `64..95` accuracy is only `0.562%`
+(CE `40.3432`), worse than V0.278's learned-value `2.661%`. **Fixed Fourier
+alone is rejected as the range-safe fix**; the next target is an algebraic or
+numeric state-to-output bridge, not more routing capacity. See
+`V0_279_DYNAMIC_NONMOD_FIXED_FOURIER_OOD_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/
