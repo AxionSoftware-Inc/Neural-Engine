@@ -1851,6 +1851,14 @@ This is evidence of a multiply dataflow gap, so the next test should target a
 compact partial-product/carry accumulator. See
 `V0_289_DYNAMIC_NONMOD_BASE16_MULTIPLY_CONVOLUTION_AUDIT.md`.
 
+V0.290 converts typed slots to learned soft digit values before the multiply
+partial-product convolution. It reaches `20.508%` two-seed held-out accuracy,
+`+2.490 pp` over typed plain and `+1.465 pp` over V0.289, but remains `−0.269
+pp` below plain base-16 control and below the adoption gate. **Strong opt-in
+candidate, not default or scale-up evidence.** Next is numeric bridge plus
+curriculum and operation-wise multiply evaluation. See
+`V0_290_DYNAMIC_NONMOD_BASE16_NUMERIC_MULTIPLY_CONVOLUTION_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

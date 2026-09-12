@@ -596,6 +596,44 @@ def test_dynamic_register_rejects_multiply_convolution_without_typed_carry():
         )
 
 
+def test_dynamic_register_typed_numeric_multiply_convolution_is_opt_in():
+    model = DynamicRegisterNeuralEngine(
+        vocab_size=128,
+        num_classes=4**4,
+        max_ops=2,
+        seq_len=1 + 2 + 3,
+        d_model=32,
+        state_dim=32,
+        num_circuits=16,
+        circuit_rank=4,
+        router_branch=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=2,
+        typed_digit_state=True,
+        typed_digit_dim=4,
+        typed_digit_base=4,
+        typed_digit_count=4,
+        typed_digit_carry_chain=True,
+        typed_digit_multiply_numeric_convolution=True,
+        output_mode="factorized_digits",
+        output_digit_base=4,
+        output_digit_count=4,
+        output_factor_rank=8,
+    )
+    assert model.typed_digit_multiply_transition is not None
+    assert model.typed_digit_multiply_numeric_projection is not None
+    assert model.parameter_report()["typed_digit_multiply_numeric_convolution"] is True
+    inputs = torch.tensor([
+        [1, 4, 2, 32, 33, 34],
+        [1, 2, 4, 35, 36, 0],
+    ])
+    logits, stats = model(inputs)
+    assert logits.shape == (2, 4**4)
+    assert torch.isfinite(logits).all()
+    assert torch.isfinite(stats["typed_digit_logits"][0]).all()
+
+
 def test_dynamic_register_structured_scalar_state_has_shared_value_format():
     model = DynamicRegisterNeuralEngine(
         max_ops=2,

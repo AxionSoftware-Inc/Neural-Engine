@@ -1232,6 +1232,22 @@ P-003/P-004 remain active; next is a compact partial-product/carry accumulator
 or operation-wise multiply transfer test. See
 `results/V0_289_DYNAMIC_NONMOD_BASE16_MULTIPLY_CONVOLUTION_AUDIT.md`.
 
+**V0.290 learned numeric multiply bridge (2026-09-12):** The typed state was
+read through its learned digit heads to form soft digit values; multiply then
+used a least-significant-first numeric partial-product convolution. Across two
+5,000-step seeds, held-out accuracy rose `18.018% → 20.508%` (`+2.490 pp`)
+versus typed-carry plain, CE improved `12.0666 → 11.7713`, depth-3 rose
+`+2.930 pp`, and depth-4 `+2.051 pp`; both seeds improved. It also beat the
+learned embedding convolution by `+1.465 pp`, but plain base-16 control remained
+the leader at `20.776%` (`−0.269 pp` gap), with depth-4 still `−0.781 pp` and
+the gain below the project gate against control. The branch adds only `3,840`
+active-estimate parameters but costs about `12.5%` more typed training time.
+**RETAINED AS STRONG OPT-IN CANDIDATE; REJECTED FOR DEFAULT ADOPTION.** This
+supports the multiply dataflow diagnosis but does not justify scaling. P-003/
+P-004 remain active; next is numeric bridge plus curriculum and an operation-
+wise multiply evaluation. See
+`results/V0_290_DYNAMIC_NONMOD_BASE16_NUMERIC_MULTIPLY_CONVOLUTION_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

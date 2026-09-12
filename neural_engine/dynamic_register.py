@@ -336,6 +336,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         typed_digit_operand_offset: int = 0,
         typed_digit_carry_chain: bool = False,
         typed_digit_multiply_convolution: bool = False,
+        typed_digit_multiply_numeric_convolution: bool = False,
         modular_prior: bool = False,
         modular_prior_mode: str = "fixed",
         modular_template_init: str = "identity",
@@ -592,6 +593,16 @@ class DynamicRegisterNeuralEngine(nn.Module):
             raise ValueError(
                 "typed_digit_multiply_convolution requires typed carry state"
             )
+        if typed_digit_multiply_numeric_convolution and not (
+            typed_digit_state and typed_digit_carry_chain
+        ):
+            raise ValueError(
+                "typed_digit_multiply_numeric_convolution requires typed carry state"
+            )
+        if typed_digit_multiply_convolution and typed_digit_multiply_numeric_convolution:
+            raise ValueError(
+                "choose one typed digit multiply convolution mode"
+            )
         if macro_cell_count < 0:
             raise ValueError("macro_cell_count must be non-negative")
         if macro_cell_count:
@@ -707,6 +718,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.typed_digit_carry_chain = bool(typed_digit_carry_chain)
         self.typed_digit_multiply_convolution = bool(
             typed_digit_multiply_convolution
+        )
+        self.typed_digit_multiply_numeric_convolution = bool(
+            typed_digit_multiply_numeric_convolution
         )
         self.modular_prior_enabled = bool(modular_prior)
         self.modular_prior_mode = modular_prior_mode
@@ -843,7 +857,10 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     nn.Linear(2 * self.typed_digit_dim, 2 * self.typed_digit_dim),
                     nn.Tanh(),
                 )
-                if self.typed_digit_multiply_convolution:
+                if (
+                    self.typed_digit_multiply_convolution
+                    or self.typed_digit_multiply_numeric_convolution
+                ):
                     multiply_transition_dim = 5 * self.typed_digit_dim
                     self.typed_digit_multiply_transition = nn.Sequential(
                         nn.LayerNorm(multiply_transition_dim),
@@ -852,8 +869,15 @@ class DynamicRegisterNeuralEngine(nn.Module):
                         nn.Linear(2 * self.typed_digit_dim, 2 * self.typed_digit_dim),
                         nn.Tanh(),
                     )
+                    if self.typed_digit_multiply_numeric_convolution:
+                        self.typed_digit_multiply_numeric_projection = nn.Linear(
+                            1, self.typed_digit_dim
+                        )
+                    else:
+                        self.typed_digit_multiply_numeric_projection = None
                 else:
                     self.typed_digit_multiply_transition = None
+                    self.typed_digit_multiply_numeric_projection = None
                 self.typed_digit_transition = None
             else:
                 typed_transition_dim = 3 * self.typed_digit_state_dim
@@ -867,6 +891,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 self.typed_digit_carry_position = None
                 self.typed_digit_carry_transition = None
                 self.typed_digit_multiply_transition = None
+                self.typed_digit_multiply_numeric_projection = None
             self.typed_digit_projection = nn.Sequential(
                 nn.LayerNorm(self.typed_digit_state_dim),
                 nn.Linear(self.typed_digit_state_dim, state_dim),
@@ -1293,23 +1318,71 @@ class DynamicRegisterNeuralEngine(nn.Module):
             self.typed_digit_multiply_transition is not None
             and multiply_mask.any()
         ):
-            # Multiplication is a cross-digit convolution.  In
-            # least-significant-first order, output position k depends on all
-            # pairs (i, k-i), whereas the ordinary carry chain only sees
-            # matching slots.
-            state_lsd = state_slots.flip(-2)
-            operand_lsd = operand_slots.flip(-2)
-            product_lsd = torch.zeros_like(state_lsd)
-            for output_index in range(self.typed_digit_count):
-                product_lsd[..., output_index, :] = torch.stack(
+            if self.typed_digit_multiply_convolution:
+                # Multiplication is a cross-digit convolution.  In
+                # least-significant-first order, output position k depends on
+                # all pairs (i, k-i), whereas the ordinary carry chain only
+                # sees matching slots.
+                state_lsd = state_slots.flip(-2)
+                operand_lsd = operand_slots.flip(-2)
+                product_lsd = torch.zeros_like(state_lsd)
+                for output_index in range(self.typed_digit_count):
+                    product_lsd[..., output_index, :] = torch.stack(
+                        [
+                            state_lsd[..., left_index, :]
+                            * operand_lsd[..., output_index - left_index, :]
+                            for left_index in range(output_index + 1)
+                        ],
+                        dim=-2,
+                    ).sum(dim=-2)
+                multiply_products = product_lsd.flip(-2)
+            else:
+                # Read the learned slot classifiers back as soft numeric
+                # digits.  This preserves a reusable learned state while
+                # exposing the scalar information needed by partial products.
+                state_digit_logits = self._typed_digit_logits(state)
+                operand_digit_logits = self._typed_digit_logits(operand)
+                state_values = torch.stack(
                     [
-                        state_lsd[..., left_index, :]
-                        * operand_lsd[..., output_index - left_index, :]
-                        for left_index in range(output_index + 1)
+                        torch.softmax(logits, dim=-1).matmul(
+                            torch.arange(
+                                logits.shape[-1], device=logits.device,
+                                dtype=logits.dtype,
+                            )
+                        )
+                        for logits in state_digit_logits
                     ],
-                    dim=-2,
-                ).sum(dim=-2)
-            multiply_products = product_lsd.flip(-2)
+                    dim=-1,
+                )
+                operand_values = torch.stack(
+                    [
+                        torch.softmax(logits, dim=-1).matmul(
+                            torch.arange(
+                                logits.shape[-1], device=logits.device,
+                                dtype=logits.dtype,
+                            )
+                        )
+                        for logits in operand_digit_logits
+                    ],
+                    dim=-1,
+                )
+                state_lsd = state_values.flip(-1)
+                operand_lsd = operand_values.flip(-1)
+                product_scalars = torch.zeros_like(state_lsd)
+                normalization = float(self.typed_digit_base ** 2)
+                for output_index in range(self.typed_digit_count):
+                    product_scalars[..., output_index] = torch.stack(
+                        [
+                            state_lsd[..., left_index]
+                            * operand_lsd[..., output_index - left_index]
+                            for left_index in range(output_index + 1)
+                        ],
+                        dim=-1,
+                    ).sum(dim=-1) / normalization
+                product_scalars = product_scalars.flip(-1)
+                multiply_products = self.typed_digit_multiply_numeric_projection(
+                    product_scalars.unsqueeze(-1)
+                )
         carry = operation
         updated_slots = [None] * self.typed_digit_count
         for index in reversed(range(self.typed_digit_count)):
@@ -2143,6 +2216,11 @@ class DynamicRegisterNeuralEngine(nn.Module):
                         if self.typed_digit_multiply_transition is not None
                         else 0
                     )
+                    + (
+                        count_parameters(self.typed_digit_multiply_numeric_projection)
+                        if self.typed_digit_multiply_numeric_projection is not None
+                        else 0
+                    )
                     if self.typed_digit_carry_chain
                     else count_parameters(self.typed_digit_transition)
                 )
@@ -2380,6 +2458,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "typed_digit_carry_chain": self.typed_digit_carry_chain,
             "typed_digit_multiply_convolution": (
                 self.typed_digit_multiply_convolution
+            ),
+            "typed_digit_multiply_numeric_convolution": (
+                self.typed_digit_multiply_numeric_convolution
             ),
             "modular_prior": self.modular_prior_enabled,
             "modular_prior_mode": self.modular_prior_mode,
