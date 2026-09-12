@@ -35,6 +35,7 @@ class DynamicCompositionGenerator:
         split: str = "all",
         modulus: int | None = MODULUS,
         target_offset: int = 0,
+        fixed_operation: str | None = None,
     ) -> None:
         if max_ops < 1:
             raise ValueError("max_ops must be positive")
@@ -50,6 +51,8 @@ class DynamicCompositionGenerator:
             raise ValueError("value range must be non-negative and ordered")
         if split not in {"all", "train", "heldout"}:
             raise ValueError("split must be all, train, or heldout")
+        if fixed_operation is not None and fixed_operation not in OPERATION_TOKENS:
+            raise ValueError(f"unknown fixed operation: {fixed_operation}")
         self.max_ops = max_ops
         self.train_max_ops = train_max_ops
         self.seq_len = 1 + max_ops + (max_ops + 1)
@@ -58,6 +61,7 @@ class DynamicCompositionGenerator:
         self.modulus = modulus
         self.target_offset = int(target_offset)
         self.split = split
+        self.fixed_operation = fixed_operation
         self.rng = np.random.default_rng(seed)
         self.operation_names = tuple(OPERATION_TOKENS)
 
@@ -84,10 +88,13 @@ class DynamicCompositionGenerator:
             depth = self._sample_depth()
         if depth not in self.allowed_depths:
             raise ValueError(f"depth {depth} is not allowed for split {self.split}")
-        operations = [
-            self.operation_names[int(self.rng.integers(0, len(self.operation_names)))]
-            for _ in range(depth)
-        ]
+        if self.fixed_operation is None:
+            operations = [
+                self.operation_names[int(self.rng.integers(0, len(self.operation_names)))]
+                for _ in range(depth)
+            ]
+        else:
+            operations = [self.fixed_operation] * depth
         values = self.rng.integers(
             self.value_min, self.value_max + 1, size=depth + 1
         ).tolist()

@@ -2,6 +2,7 @@ import torch
 
 from benchmark_operationwise_checkpoints import fixed_operation_batch
 from data.composition import apply_operation
+from data.dynamic_composition import DynamicCompositionGenerator
 
 
 def _config():
@@ -39,3 +40,16 @@ def test_fixed_operation_batch_marks_only_executed_stages():
         [True, True, True, False],
     ]))
     assert torch.equal(batch.inputs[:, 1:4], torch.full((2, 3), 3))
+
+
+def test_dynamic_generator_can_focus_training_on_one_operation():
+    generator = DynamicCompositionGenerator(
+        max_ops=4, train_max_ops=2, split="train", seed=13,
+        modulus=None, value_min=0, value_max=7, fixed_operation="multiply",
+    )
+    batch = generator.task_balanced_batch(12)
+    active_operation_tokens = batch.inputs[:, 1:3][batch.stage_mask[:, :2]]
+    assert torch.equal(
+        active_operation_tokens,
+        torch.full_like(active_operation_tokens, 4),
+    )

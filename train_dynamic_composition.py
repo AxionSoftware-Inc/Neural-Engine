@@ -417,6 +417,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         value_min=args.train_value_min,
         value_max=args.train_value_max,
         split="train" if args.heldout_depths else "all",
+        fixed_operation=config.get("train_fixed_operation"),
     )
     value_curriculum = config.get("value_curriculum")
     normalized_curriculum = None
@@ -457,6 +458,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             value_min=first_stage["value_min"],
             value_max=first_stage["value_max"],
             split="train" if args.heldout_depths else "all",
+            fixed_operation=config.get("train_fixed_operation"),
         )
     curriculum_stage_index = 0
     eval_generator = DynamicCompositionGenerator(
@@ -511,6 +513,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     value_min=stage["value_min"],
                     value_max=stage["value_max"],
                     split="train" if args.heldout_depths else "all",
+                    fixed_operation=config.get("train_fixed_operation"),
                 )
                 curriculum_stage_index = next_stage_index
         batch_size = args.batch_size or int(config["batch_size"])
@@ -635,6 +638,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "train_value_range": [args.train_value_min, args.train_value_max],
         "eval_value_range": [args.eval_value_min, args.eval_value_max],
         "train_value_curriculum": normalized_curriculum,
+        "train_fixed_operation": config.get("train_fixed_operation"),
         "typed_digit_teacher_forcing": {
             "start": teacher_forcing_start,
             "end": teacher_forcing_end,
