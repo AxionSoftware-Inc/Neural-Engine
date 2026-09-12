@@ -1811,6 +1811,13 @@ the exact integer packet supplies arithmetic semantics. The next task is
 compressing/distilling that numeric representation into the learned state.
 See `V0_284_DYNAMIC_NONMOD_V0260_RECHECK_AUDIT.md`.
 
+V0.285 tests exact-packet prefix logit distillation into the prior-free
+student. The matched two-seed mean hard accuracy moves only `+0.293 pp` while
+mean CE worsens by `+2.2790`; the teacher is absent during evaluation, but the
+student does not absorb a reusable numeric state contract. **Rejected; no
+scale-up follows.** See
+`V0_285_DYNAMIC_NONMOD_NUMERIC_STATE_DISTILLATION_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

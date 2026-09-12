@@ -1161,6 +1161,20 @@ state while keeping prior-free results separate.
 
 **Audit:** `results/V0_284_DYNAMIC_NONMOD_V0260_RECHECK_AUDIT.md`.
 
+**V0.285 exact-packet logit distillation (2026-09-12):** a frozen
+V0.260/V0.261 exact-integer teacher was used only during training to distill
+four digit distributions at every executed prefix stage into V0.264's
+prior-free student. In a matched two-seed 2,000-step continuation, hard
+accuracy changed `9.644% → 9.937%` (`+0.293 pp`), but CE regressed
+`12.1620 → 14.4410` (`+2.2790`); seed17 regressed and seed18 improved.
+**REJECTED FOR ADOPTION.** The student had no integer decoder at evaluation,
+so output-logit distillation does not make the learned recurrent state carry
+the exact numeric contract. P-003/P-004 remain active; the next transfer test
+must distill an explicit state/transition representation or staged
+teacher-forcing schedule, not another terminal logit loss. No 700M/1B scaling
+follows. See
+`results/V0_285_DYNAMIC_NONMOD_NUMERIC_STATE_DISTILLATION_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
