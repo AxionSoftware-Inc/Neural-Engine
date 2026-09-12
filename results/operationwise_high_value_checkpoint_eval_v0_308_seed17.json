@@ -1,0 +1,144 @@
+{
+  "benchmark": "operationwise_fixed_checkpoint_eval",
+  "device": "cuda",
+  "examples_per_case": 512,
+  "operations": [
+    "add",
+    "subtract",
+    "multiply"
+  ],
+  "records": [
+    {
+      "checkpoint": "results/checkpoints/v0_308_operation_conditioned_algebraic_state_seed17_2000.pt",
+      "variant": "v0_308_operation_conditioned_algebraic_state",
+      "seed": 17,
+      "operation": "add",
+      "depth": 3,
+      "count": 512,
+      "accuracy": 0.021484375,
+      "loss": 2.166895866394043,
+      "digit_accuracy": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.021484375,
+        1.0,
+        1.0
+      ],
+      "router_entropy": 0.3816787004470825,
+      "unique_virtual_circuits": 80
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_308_operation_conditioned_algebraic_state_seed17_2000.pt",
+      "variant": "v0_308_operation_conditioned_algebraic_state",
+      "seed": 17,
+      "operation": "add",
+      "depth": 4,
+      "count": 512,
+      "accuracy": 0.0,
+      "loss": 3.550919532775879,
+      "digit_accuracy": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "router_entropy": 0.5113409757614136,
+      "unique_virtual_circuits": 82
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_308_operation_conditioned_algebraic_state_seed17_2000.pt",
+      "variant": "v0_308_operation_conditioned_algebraic_state",
+      "seed": 17,
+      "operation": "subtract",
+      "depth": 3,
+      "count": 512,
+      "accuracy": 1.0,
+      "loss": 0.044958438724279404,
+      "digit_accuracy": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "router_entropy": 0.264779657125473,
+      "unique_virtual_circuits": 82
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_308_operation_conditioned_algebraic_state_seed17_2000.pt",
+      "variant": "v0_308_operation_conditioned_algebraic_state",
+      "seed": 17,
+      "operation": "subtract",
+      "depth": 4,
+      "count": 512,
+      "accuracy": 0.28125,
+      "loss": 6.369265079498291,
+      "digit_accuracy": [
+        1.0,
+        0.998046875,
+        0.998046875,
+        0.998046875,
+        1.0,
+        0.28515625,
+        0.998046875,
+        1.0
+      ],
+      "router_entropy": 0.26481491327285767,
+      "unique_virtual_circuits": 88
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_308_operation_conditioned_algebraic_state_seed17_2000.pt",
+      "variant": "v0_308_operation_conditioned_algebraic_state",
+      "seed": 17,
+      "operation": "multiply",
+      "depth": 3,
+      "count": 512,
+      "accuracy": 0.0,
+      "loss": 36.384368896484375,
+      "digit_accuracy": [
+        1.0,
+        0.0,
+        0.046875,
+        0.072265625,
+        0.064453125,
+        0.08203125,
+        0.923828125,
+        0.220703125
+      ],
+      "router_entropy": 0.004638888407498598,
+      "unique_virtual_circuits": 65
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_308_operation_conditioned_algebraic_state_seed17_2000.pt",
+      "variant": "v0_308_operation_conditioned_algebraic_state",
+      "seed": 17,
+      "operation": "multiply",
+      "depth": 4,
+      "count": 512,
+      "accuracy": 0.0,
+      "loss": 46.28010559082031,
+      "digit_accuracy": [
+        0.0,
+        0.078125,
+        0.060546875,
+        0.0625,
+        0.08203125,
+        0.068359375,
+        0.087890625,
+        0.0390625
+      ],
+      "router_entropy": 0.022853761911392212,
+      "unique_virtual_circuits": 69
+    }
+  ]
+}

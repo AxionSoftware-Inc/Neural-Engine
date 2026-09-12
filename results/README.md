@@ -1953,6 +1953,22 @@ decoder is rejected; the remaining bottleneck is multiply-specific transition
 and range-safe output coding rather than generic router/circuit capacity. See
 `V0_304_305_ALGEBRAIC_STATE_OUTPUT_DECODER_AUDIT.md`.
 
+V0.306 freezes the V0.304 learned body/router and trains only a 136,466-
+parameter exact-integer multiply output overlay. Two 2k seeds reach `58.8623%`
+mean held-out accuracy, with ordinary fixed multiply at `47.0703%` depth 3
+and `20.5078%` depth 4. A 5k seed17 extension reaches `100%/56.25%` on those
+two depths. High-value depth-4 multiply remains `0%`. This is a strong
+numeric-readout diagnostic, not fully learned circuit evidence, because the
+exact integer register supplies the arithmetic transition.
+
+V0.307 is the prior-free learned V0.304 branch trained for 5k steps. Seed17
+held-out accuracy is `41.1133%`, only `+1.61 pp` over V0.304 at 2k; fixed and
+high-value multiply remain near zero. V0.308 then gives the algebraic Fourier
+bridge separate operation-specific projections, but held-out accuracy falls
+to `36.3281%` and multiply stays near chance. The projection split is rejected;
+the remaining target is the learned multiply write/dataflow transition. See
+`V0_306_308_MULTIPLY_CODEC_PROJECTION_AUDIT.md`.
+
 V0.201 rejects injecting the learned scalar lane into the next operation's
 read accumulator: the two-seed factorized-control mean is `71.97%`, while the
 persistent-read treatment is `71.68%` (`-0.29 pp`). The scalar-only query/

@@ -1369,6 +1369,33 @@ saqlanadi, lekin direct decoder default qilinmaydi.
 
 **Batafsil:** `results/V0_304_305_ALGEBRAIC_STATE_OUTPUT_DECODER_AUDIT.md`.
 
+**Exact-integer multiply overlay on V0.304 (V0.306, 2026-09-12):** V0.304
+body/router muzlatilib, faqat multiply terminali uchun `136,466` parametrli
+exact-integer decoder/head o‘qitildi. Ikki seedli 2k held-out o‘rtacha
+`58.8623%`, depth-3 `69.2383%`, depth-4 `48.4863%` bo‘ldi. Ordinary fixed
+multiply depth-3/4 o‘rtachasi `47.0703%/20.5078%`; seed17 5k extensionda
+`100%/56.25%`ga chiqdi. Add/subtract body muzlagani uchun saqlandi. Lekin
+`80..95` high-value multiply 2kda depth-3/4 `27.8320%/0%`, 5k seed17da
+`100%/0%` bo‘ldi. **V0.306 STRONG EXACT-NUMERIC DIAGNOSTIC, DEFAULT EMAS:**
+exact integer register known arithmetic transitionni beradi, shuning uchun bu
+prior-free circuit learning dalili emas.
+
+**V0.307 prior-free learned 5k continuation (2026-09-12):** V0.304 algebraic
+Fourier state/query branch seed17da 5k qadamda held-out `41.1133%` berdi;
+V0.304 2k `39.5020%`dan faqat `+1.61 pp`. Depth-3/4 `50.7813%/31.4453%`,
+fixed multiply `1.1719%/1.3672%`, high-value multiply `0%/0%`. **Ko‘proq qadam
+asosiy multiply transitionni tuzatmadi; scale-up rad.**
+
+**V0.308 operation-conditioned algebraic projection (2026-09-12):** shared
+algebraic projection o‘rniga add/subtract/multiply uchun uchta projection
+qo‘yildi. Seed17 2k held-out `36.3281%` bo‘lib, V0.304 `39.5020%`dan
+`−3.17 pp`; fixed multiply depth-3/4 `1.7578%/1.1719%`, high-value
+`0%/0%`. **V0.308 REJECTED:** projectionni ko‘paytirish shared-bridge
+muammosini hal qilmadi. Keyingi active muammo learned multiply write/dataflow
+transitionidir.
+
+**Batafsil:** `results/V0_306_308_MULTIPLY_CODEC_PROJECTION_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

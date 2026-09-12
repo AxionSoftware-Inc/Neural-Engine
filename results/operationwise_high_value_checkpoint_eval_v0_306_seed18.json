@@ -1,0 +1,144 @@
+{
+  "benchmark": "operationwise_fixed_checkpoint_eval",
+  "device": "cuda",
+  "examples_per_case": 512,
+  "operations": [
+    "add",
+    "subtract",
+    "multiply"
+  ],
+  "records": [
+    {
+      "checkpoint": "results/checkpoints/v0_306_v304_integer_overlay_seed18_2000.pt",
+      "variant": "v0_306_v304_integer_overlay",
+      "seed": 18,
+      "operation": "add",
+      "depth": 3,
+      "count": 512,
+      "accuracy": 0.0,
+      "loss": 6.69540548324585,
+      "digit_accuracy": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "router_entropy": 0.16493850946426392,
+      "unique_virtual_circuits": 78
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_306_v304_integer_overlay_seed18_2000.pt",
+      "variant": "v0_306_v304_integer_overlay",
+      "seed": 18,
+      "operation": "add",
+      "depth": 4,
+      "count": 512,
+      "accuracy": 0.0,
+      "loss": 5.034825801849365,
+      "digit_accuracy": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0
+      ],
+      "router_entropy": 0.1308881938457489,
+      "unique_virtual_circuits": 83
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_306_v304_integer_overlay_seed18_2000.pt",
+      "variant": "v0_306_v304_integer_overlay",
+      "seed": 18,
+      "operation": "subtract",
+      "depth": 3,
+      "count": 512,
+      "accuracy": 1.0,
+      "loss": 0.010722247883677483,
+      "digit_accuracy": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "router_entropy": 0.1449669450521469,
+      "unique_virtual_circuits": 56
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_306_v304_integer_overlay_seed18_2000.pt",
+      "variant": "v0_306_v304_integer_overlay",
+      "seed": 18,
+      "operation": "subtract",
+      "depth": 4,
+      "count": 512,
+      "accuracy": 0.294921875,
+      "loss": 5.690707206726074,
+      "digit_accuracy": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.294921875,
+        1.0,
+        1.0
+      ],
+      "router_entropy": 0.16815531253814697,
+      "unique_virtual_circuits": 59
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_306_v304_integer_overlay_seed18_2000.pt",
+      "variant": "v0_306_v304_integer_overlay",
+      "seed": 18,
+      "operation": "multiply",
+      "depth": 3,
+      "count": 512,
+      "accuracy": 0.279296875,
+      "loss": 2.945364475250244,
+      "digit_accuracy": [
+        1.0,
+        1.0,
+        0.6484375,
+        0.69921875,
+        0.85546875,
+        0.814453125,
+        0.875,
+        0.962890625
+      ],
+      "router_entropy": 0.17798495292663574,
+      "unique_virtual_circuits": 64
+    },
+    {
+      "checkpoint": "results/checkpoints/v0_306_v304_integer_overlay_seed18_2000.pt",
+      "variant": "v0_306_v304_integer_overlay",
+      "seed": 18,
+      "operation": "multiply",
+      "depth": 4,
+      "count": 512,
+      "accuracy": 0.0,
+      "loss": 18.82596778869629,
+      "digit_accuracy": [
+        0.0,
+        0.2890625,
+        0.51953125,
+        0.666015625,
+        0.8671875,
+        0.900390625,
+        0.908203125,
+        0.982421875
+      ],
+      "router_entropy": 0.20285329222679138,
+      "unique_virtual_circuits": 75
+    }
+  ]
+}

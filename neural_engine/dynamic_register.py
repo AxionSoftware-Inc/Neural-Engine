@@ -310,6 +310,7 @@ class DynamicRegisterNeuralEngine(nn.Module):
         structured_scalar_read_scale: float = 0.0,
         structured_scalar_authoritative: bool = False,
         algebraic_state_mode: str = "none",
+        algebraic_state_operation_conditioned: bool = False,
         algebraic_state_scale: float = 1.0,
         algebraic_output_bridge_scale: float = 0.0,
         algebraic_state_write_scale: float = 0.0,
@@ -700,6 +701,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
         self.structured_scalar_read_scale = float(structured_scalar_read_scale)
         self.structured_scalar_authoritative = bool(structured_scalar_authoritative)
         self.algebraic_state_mode = algebraic_state_mode
+        self.algebraic_state_operation_conditioned = bool(
+            algebraic_state_operation_conditioned
+        )
         self.algebraic_state_scale = float(algebraic_state_scale)
         self.algebraic_output_bridge_scale = float(algebraic_output_bridge_scale)
         self.algebraic_state_write_scale = float(algebraic_state_write_scale)
@@ -1033,9 +1037,15 @@ class DynamicRegisterNeuralEngine(nn.Module):
             algebraic_input_dim = 2
             if self.algebraic_state_mode == "polynomial2_fourier":
                 algebraic_input_dim += 3 * 2 * 7
-            self.algebraic_state_projection = nn.Sequential(
+            projection_factory = lambda: nn.Sequential(
                 nn.Linear(algebraic_input_dim, state_dim), nn.Tanh()
             )
+            if self.algebraic_state_operation_conditioned:
+                self.algebraic_state_projection = nn.ModuleList(
+                    projection_factory() for _ in range(3)
+                )
+            else:
+                self.algebraic_state_projection = projection_factory()
             if self.algebraic_output_decoder_enabled:
                 # Separate output codec: do not force the recurrent learned
                 # state to serve as the value-to-digit representation.
@@ -1528,6 +1538,25 @@ class DynamicRegisterNeuralEngine(nn.Module):
                 features.append(torch.cos(angle * harmonic))
         return torch.cat(features, dim=-1)
 
+    def _project_algebraic_state(
+        self,
+        features: torch.Tensor,
+        operation_ids: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """Project algebraic features with an optional operation-specific map."""
+        if not isinstance(self.algebraic_state_projection, nn.ModuleList):
+            return self.algebraic_state_projection(features)
+        if operation_ids is None:
+            raise ValueError(
+                "operation_ids are required for operation-conditioned algebraic state"
+            )
+        projected = features.new_empty(*features.shape[:-1], self.state_dim)
+        for operation_id, projection in enumerate(self.algebraic_state_projection):
+            mask = operation_ids.eq(operation_id)
+            if mask.any():
+                projected[mask] = projection(features[mask])
+        return projected
+
     def _algebraic_integer_output_features(
         self, values: torch.Tensor
     ) -> torch.Tensor:
@@ -1722,10 +1751,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     # pass.  This opt-in path changes only which representation
                     # the pair/router reads; the learned accumulator still
                     # receives the normal sparse writer update below.
-                    read_accumulator = self.algebraic_state_projection(
-                        self._algebraic_state_features(
-                            algebraic_state[active_indices]
-                        )
+                    read_accumulator = self._project_algebraic_state(
+                        self._algebraic_state_features(algebraic_state[active_indices]),
+                        current_operation_ids,
                     )
                 elif (
                     self.structured_scalar_state
@@ -1813,8 +1841,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     )
                 if self.algebraic_state_mode in {"polynomial2", "polynomial2_fourier"}:
                     query = query + self.algebraic_state_scale * (
-                        self.algebraic_state_projection(
-                            self._algebraic_state_features(algebraic_state[active_indices])
+                        self._project_algebraic_state(
+                            self._algebraic_state_features(algebraic_state[active_indices]),
+                            current_operation_ids,
                         )
                     )
                 if self.algebraic_integer_state_read_scale:
@@ -1924,10 +1953,11 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     # bridge tests whether repeated state writes need the same
                     # persistent value signal.
                     write_input = write_input + self.algebraic_state_write_scale * (
-                        self.algebraic_state_projection(
+                        self._project_algebraic_state(
                             self._algebraic_state_features(
                                 algebraic_state[active_indices]
-                            )
+                            ),
+                            current_operation_ids,
                         )
                     )
                 candidate = self._write_state(active_accumulator, write_input)
@@ -2097,8 +2127,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     )
             if self.algebraic_state_mode in {"polynomial2", "polynomial2_fourier"}:
                 step_state = step_state + self.algebraic_state_scale * (
-                    self.algebraic_state_projection(
-                        self._algebraic_state_features(algebraic_state)
+                    self._project_algebraic_state(
+                        self._algebraic_state_features(algebraic_state),
+                        last_operation_ids,
                     )
                 )
             if self.modular_prior_enabled:
@@ -2170,8 +2201,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
                     if self.algebraic_output_bridge_scale:
                         output_state = output_state + (
                             self.algebraic_output_bridge_scale
-                            * self.algebraic_state_projection(
-                                self._algebraic_state_features(algebraic_state)
+                            * self._project_algebraic_state(
+                                self._algebraic_state_features(algebraic_state),
+                                last_operation_ids,
                             )
                         )
                 if digits is None:
@@ -2489,6 +2521,9 @@ class DynamicRegisterNeuralEngine(nn.Module):
             "structured_scalar_read_scale": self.structured_scalar_read_scale,
             "structured_scalar_authoritative": self.structured_scalar_authoritative,
             "algebraic_state_mode": self.algebraic_state_mode,
+            "algebraic_state_operation_conditioned": (
+                self.algebraic_state_operation_conditioned
+            ),
             "algebraic_state_scale": self.algebraic_state_scale,
             "algebraic_output_bridge_scale": self.algebraic_output_bridge_scale,
             "algebraic_state_write_scale": self.algebraic_state_write_scale,
