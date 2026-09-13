@@ -1562,7 +1562,11 @@ solishtirganda high-value `80.8594% → 92.7734%`, ordinary `65.4297% → 82.421
 route qamrovi `668 → 1751`, entropy `5.2550 → 6.0381` bo‘ldi. Add/sub d4
 `100%/100%`, active parametr `1.964M` bo‘lib qoldi. **Bu hozirgi leading 500M
 candidate:** capacity foyda beradi, lekin 2000 qadamda under-trained bo‘lgan.
-Ikkinchi seed reproduction hali kerak.
+Seed18 reproduction ham tasdiqladi: eval `99.4629%`, d4 `98.4375%`, ordinary
+d4 multiply `81.8359%`, high-value d4 multiply `91.6016%`; route qamrovi `2746`,
+entropy `6.6254`. Ikki-seed o‘rtacha eval `99.5117%`, d4 `98.6816%`, ordinary
+d4 multiply `82.1289%`, high-value d4 multiply **`92.1875%`**. V0.330 endi
+reproduction gate’dan o‘tdi va leading 500M candidate sifatida saqlandi.
 
 **Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
 

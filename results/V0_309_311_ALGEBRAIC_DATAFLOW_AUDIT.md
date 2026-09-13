@@ -336,16 +336,21 @@ limited.
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | V0.329 500M stable factor growth | 17 | 2,000 | 98.1934% | 96.5820% | 65.4297% | 80.8594% | 668 | 5.2550 |
 | V0.330 500M stable factor growth | 17 | 4,000 | 99.5605% | 98.9258% | 82.4219% | 92.7734% | 1,751 | 6.0381 |
+| V0.330 500M stable factor growth | 18 | 4,000 | 99.4629% | 98.4375% | 81.8359% | 91.6016% | 2,746 | 6.6254 |
+| V0.330 mean | 17/18 | 4,000 | 99.5117% | 98.6816% | 82.1289% | 92.1875% | 2,249 | 6.3318 |
 
 The longer run produces the first large capacity-related quality gain in this
 track: high-value d4 multiply rises by `11.9140` percentage points over the
 2,000-step V0.329 control and by `12.3046` points over the 300M V0.323 seed17
 baseline. Ordinary d4 multiply, broad eval, route coverage, and entropy all
 improve as well; add and subtract d4 are both `100%`. Active parameters remain
-`1,964,480`. **V0.330 is promoted to the leading 500M candidate, pending a
-second seed reproduction.** This result changes the diagnosis: capacity can
-help, but only after the router/factor system receives enough optimization
-steps; a 2,000-step scale comparison was under-trained.
+`1,964,480`. The seed18 reproduction gives eval all `99.4629%`, eval d4
+`98.4375%`, ordinary d4 multiply `81.8359%`, and high-value d4 multiply
+`91.6016%`. The two-seed mean is `99.5117%` eval all, `98.6816%` eval d4,
+`82.1289%` ordinary d4 multiply, and `92.1875%` high-value d4 multiply.
+**V0.330 is promoted to the leading 500M candidate.** This result changes the
+diagnosis: capacity can help, but only after the router/factor system receives
+enough optimization steps; a 2,000-step scale comparison was under-trained.
 
 V0.321 proves the architecture can learn the high-value multiply contract when
 the task is isolated, but it destroys add/subtract generality and is not a
