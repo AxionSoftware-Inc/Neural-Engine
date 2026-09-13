@@ -132,6 +132,30 @@ def test_dynamic_register_forward_has_sparse_trajectory_stats():
     assert torch.equal(stats["executed_steps"], batch.stage_mask.sum(dim=1))
 
 
+def test_factorized_serial_bmm_dispatch_matches_einsum():
+    model = DynamicRegisterNeuralEngine(
+        max_ops=4,
+        seq_len=10,
+        d_model=32,
+        state_dim=32,
+        num_circuits=64,
+        circuit_rank=4,
+        router_depth=2,
+        candidate_pool=8,
+        active_circuits=4,
+        factor_count=8,
+        circuit_mode="serial",
+    ).eval()
+    generator = DynamicCompositionGenerator(max_ops=4, train_max_ops=4, seed=55)
+    inputs = generator.task_balanced_batch(6).inputs
+    with torch.no_grad():
+        model.circuits.serial_dispatch = "einsum"
+        reference, _ = model(inputs)
+        model.circuits.serial_dispatch = "bmm"
+        optimized, _ = model(inputs)
+    assert torch.allclose(reference, optimized, atol=1e-5, rtol=1e-5)
+
+
 def test_typed_digit_authoritative_output_is_opt_in_and_reported():
     model = DynamicRegisterNeuralEngine(
         max_ops=2,

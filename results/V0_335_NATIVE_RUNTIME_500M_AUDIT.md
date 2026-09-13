@@ -80,6 +80,22 @@ Profiler reproduksiyasi:
 python profile_native_runtime.py --checkpoint results/checkpoints/v0_334_500m_nonmod_targeted_highvalue_multiply25_stable_factor_growth_seed19_4000.pt --batch-size 1 --warmup 5 --row-limit 35 --no-stats
 ```
 
+## V0.336 serial dispatch implementation A/B
+
+Serial factor update uchun `einsum` o‘rniga `torch.bmm` opt-in yo‘li qo‘shildi.
+Eski checkpoint va model matematikasi o‘zgarmadi. V0.334 seed19da ayni processda
+dispatchlar navbatma-navbat uch raund o‘lchandi:
+
+| Batch | `einsum` mean | `bmm` mean | Farq | Output max abs diff |
+|---:|---:|---:|---:|---:|
+| 1 | 36.714 ms | 36.395 ms | −0.87% | 0.0 |
+| 128 | 113.194 ms | 113.005 ms | −0.17% | 0.0 |
+
+`bmm` numerical equivalence testidan o‘tdi, lekin paired timingda ikkala
+workloadda ham 1%lik amaliy gatega yetmadi. **V0.336 REJECTED AS A SPEED
+FIX**; implementation A/B va test qoldi, eski `einsum` default saqlandi.
+To‘liq paired JSON: `results/runs/v0_336_serial_dispatch_paired_ab.json`.
+
 ## Qaror
 
 **V0.335: runtime muammosi tasdiqlandi, quality default o‘zgarmadi.**

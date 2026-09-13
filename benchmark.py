@@ -28,6 +28,9 @@ def main() -> None:
                         help="Use a near-uniform task mix for reproducible adaptive-step statistics")
     parser.add_argument("--no-stats", action="store_true",
                         help="Skip diagnostic route tensors for serving-style latency")
+    parser.add_argument("--serial-dispatch", choices=("einsum", "bmm"),
+                        default="einsum",
+                        help="Implementation A/B for serial circuit updates")
     parser.add_argument("--matmul-precision", choices=("highest", "high", "medium"),
                         default="highest",
                         help="Float32 matmul precision mode for the runtime A/B")
@@ -59,6 +62,10 @@ def main() -> None:
     if checkpoint_payload is not None:
         state_dict = checkpoint_payload.get("model_state", checkpoint_payload)
         model.load_state_dict(state_dict)
+    if model_kind == "dynamic":
+        for module in model.modules():
+            if hasattr(module, "serial_dispatch"):
+                module.serial_dispatch = args.serial_dispatch
     generator = SyntheticTaskGenerator(
         config["seq_len"], seed=int(config["seed"]) + 9,
         value_min=int(config.get("eval_value_min", 0)),

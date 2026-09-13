@@ -21,6 +21,9 @@ class MicroCircuitBank(nn.Module):
         nn.init.normal_(self.down, std=0.02)
         nn.init.normal_(self.up, std=0.02)
         self.cache = None
+        # Keep the original einsum path as the checkpoint-compatible default.
+        # ``bmm`` is an opt-in implementation A/B for small-batch serving.
+        self.serial_dispatch = "einsum"
 
     def set_cache(self, cache) -> None:
         self.cache = cache
@@ -53,9 +56,15 @@ class MicroCircuitBank(nn.Module):
                 bias = self.bias[circuit_ids[:, slot]]
             else:
                 down, up, bias = self.cache.gather(circuit_ids[:, slot])
-            hidden = torch.einsum("bd,bdr->br", current, down)
+            if self.serial_dispatch == "bmm":
+                hidden = torch.bmm(current.unsqueeze(1), down).squeeze(1)
+            else:
+                hidden = torch.einsum("bd,bdr->br", current, down)
             hidden = F.gelu(hidden)
-            output = torch.einsum("br,brd->bd", hidden, up) + bias
+            if self.serial_dispatch == "bmm":
+                output = torch.bmm(hidden.unsqueeze(1), up).squeeze(1) + bias
+            else:
+                output = torch.einsum("br,brd->bd", hidden, up) + bias
             current = current + weights[:, slot].unsqueeze(-1) * output
         return current - state
 
@@ -182,6 +191,9 @@ class FactorizedMicroCircuitBank(nn.Module):
         nn.init.normal_(self.down_factors, std=0.02)
         nn.init.normal_(self.up_factors, std=0.02)
         self.cache = None
+        # See MicroCircuitBank.serial_dispatch. This attribute is deliberately
+        # not a parameter or config field, so old checkpoints are unchanged.
+        self.serial_dispatch = "einsum"
 
     def set_cache(self, cache) -> None:
         # The existing CPU cache stores complete circuit rows and cannot be
@@ -272,8 +284,14 @@ class FactorizedMicroCircuitBank(nn.Module):
         current = state
         for slot in range(circuit_ids.shape[1]):
             down, up, bias = self._gather(circuit_ids[:, slot], current)
-            hidden = torch.einsum("bd,bdr->br", current, down)
+            if self.serial_dispatch == "bmm":
+                hidden = torch.bmm(current.unsqueeze(1), down).squeeze(1)
+            else:
+                hidden = torch.einsum("bd,bdr->br", current, down)
             hidden = F.gelu(hidden)
-            output = torch.einsum("br,brd->bd", hidden, up) + bias
+            if self.serial_dispatch == "bmm":
+                output = torch.bmm(hidden.unsqueeze(1), up).squeeze(1) + bias
+            else:
+                output = torch.einsum("br,brd->bd", hidden, up) + bias
             current = current + weights[:, slot].unsqueeze(-1) * output
         return current - state

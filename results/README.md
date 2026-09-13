@@ -40,6 +40,7 @@
 - [V0.332 — Matched 700M capacity control](V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md)
 - [V0.333 — 700M seed18 reproduction](V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md)
 - [V0.335 — Native dynamic-register 500M runtime audit](V0_335_NATIVE_RUNTIME_500M_AUDIT.md)
+- [V0.336 — Serial dispatch BMM A/B](V0_335_NATIVE_RUNTIME_500M_AUDIT.md)
 - [P-004 — Route-conditioned state adapter audit](P004_ROUTE_STATE_ADAPTER_AUDIT_20260910.md)
 - [P-002 — Shared reusable residual bank audit](P002_SHARED_RESIDUAL_AUDIT.md)
 - [P-003/P-002 — Native route-causal diagnostic](P003_ROUTE_CAUSAL_DIAGNOSTIC_20260907.md)

@@ -1899,6 +1899,15 @@ compiled dispatch; yana router/capacity tuning boshlanmaydi.
 
 **Audit:** `results/V0_335_NATIVE_RUNTIME_500M_AUDIT.md`.
 
+**V0.336 serial dispatch A/B (2026-09-13):** Factorized serial circuit update’da
+`einsum` o‘rniga BMM opt-in qilindi. V0.334 seed19da bir processdagi paired
+uch raund o‘lchovida batch-1 `36.714 → 36.395 ms` (`0.87%`), batch-128
+`113.194 → 113.005 ms` (`0.17%`) bo‘ldi; output max absolute difference `0.0`.
+Numerical ekvivalent bo‘lsa ham amaliy speed gate bajarilmadi. **V0.336
+REJECTED AS A SPEED FIX**; BMM A/B kodi va testi qoldi, default `einsum`.
+Keyingi ish serial step ichidagi gather/index va ko‘p kernel launchni haqiqiy
+packed/fused yo‘lga birlashtirish.
+
 ## Yopilgan yoki rad qilingan yo‘llar
 
 Bu bo‘lim aktiv muammolarni to‘ldiradi; muvaffaqiyatsiz tajribalar o‘chirilmaydi.

@@ -20,6 +20,9 @@ def main() -> None:
     parser.add_argument("--row-limit", type=int, default=40)
     parser.add_argument("--no-stats", action="store_true",
                         help="Profile serving-style forward without diagnostic tensors")
+    parser.add_argument("--serial-dispatch", choices=("einsum", "bmm"),
+                        default="einsum",
+                        help="Implementation A/B for serial circuit updates")
     args = parser.parse_args()
     if not torch.cuda.is_available():
         raise RuntimeError("this profile requires CUDA")
@@ -33,6 +36,9 @@ def main() -> None:
     else:
         model = make_model(config).to(device).eval()
     model.load_state_dict(payload["model_state"])
+    for module in model.modules():
+        if hasattr(module, "serial_dispatch"):
+            module.serial_dispatch = args.serial_dispatch
     generator = SyntheticTaskGenerator(
         config["seq_len"],
         seed=int(config["seed"]) + 9,
