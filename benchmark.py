@@ -9,6 +9,7 @@ import torch
 
 from data.generator import SyntheticTaskGenerator
 from neural_engine.instrumentation import estimate_neural_engine_macs, estimate_transformer_macs
+from train_dynamic_composition import make_model as make_dynamic_model
 from train import load_config, make_model, seed_everything
 
 
@@ -45,12 +46,16 @@ def main() -> None:
     else:
         config_path = args.config or ("configs/ne_v0.yaml" if args.model == "ne" else "configs/transformer_30m.yaml")
         config = load_config(config_path, args.smoke)
-    model_kind = "baseline" if config["model"] == "baseline" else "ne"
+    if config.get("architecture") == "dynamic_register":
+        model_kind = "dynamic"
+    else:
+        model_kind = "baseline" if config["model"] == "baseline" else "ne"
     seed_everything(int(config["seed"]))
     device = torch.device("cuda" if args.device == "auto" and torch.cuda.is_available() else args.device)
     if args.device == "auto":
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = make_model(config).to(device).eval()
+    model_factory = make_dynamic_model if model_kind == "dynamic" else make_model
+    model = model_factory(config).to(device).eval()
     if checkpoint_payload is not None:
         state_dict = checkpoint_payload.get("model_state", checkpoint_payload)
         model.load_state_dict(state_dict)
@@ -67,6 +72,12 @@ def main() -> None:
     def run_model():
         if model_kind == "ne":
             return model(batch.inputs, collect_stats=not args.no_stats)
+        if model_kind == "dynamic":
+            return model(
+                batch.inputs,
+                collect_state_stats=not args.no_stats,
+                return_full_logits=model.output_mode != "factorized_digits",
+            )
         return model(batch.inputs)
 
     for _ in range(3):
@@ -103,10 +114,10 @@ def main() -> None:
             result["avg_executed_steps"] = float(executed.mean().cpu())
             result["active_step_fraction"] = float((executed / stats["internal_steps"].float()).mean().cpu())
             result["adaptive_inference"] = bool(getattr(model, "adaptive_inference", False))
-            if model_kind == "ne":
+            if model_kind in {"ne", "dynamic"}:
                 value_tokens = ((batch.inputs >= 32) & (batch.inputs < 96)).sum(dim=1).float().mean().item()
                 result.update(estimate_neural_engine_macs(model, float(executed.mean().cpu()), value_tokens))
-        elif model_kind == "ne":
+        elif model_kind in {"ne", "dynamic"}:
             result.update(estimate_neural_engine_macs(model, float(model.internal_steps), 0.0))
     if model_kind == "baseline":
         result.update(estimate_transformer_macs(config))

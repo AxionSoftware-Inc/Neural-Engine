@@ -8,6 +8,7 @@ from pathlib import Path
 import torch
 
 from data.generator import SyntheticTaskGenerator
+from train_dynamic_composition import make_model as make_dynamic_model
 from train import make_model, seed_everything
 
 
@@ -27,7 +28,10 @@ def main() -> None:
     config = dict(payload["config"])
     seed_everything(int(config["seed"]))
     device = torch.device("cuda")
-    model = make_model(config).to(device).eval()
+    if config.get("architecture") == "dynamic_register":
+        model = make_dynamic_model(config).to(device).eval()
+    else:
+        model = make_model(config).to(device).eval()
     model.load_state_dict(payload["model_state"])
     generator = SyntheticTaskGenerator(
         config["seq_len"],
@@ -39,7 +43,14 @@ def main() -> None:
     batch = generator.task_balanced_batch(args.batch_size, device)
     with torch.inference_mode():
         for _ in range(args.warmup):
-            model(batch.inputs, collect_stats=not args.no_stats)
+            if config.get("architecture") == "dynamic_register":
+                model(
+                    batch.inputs,
+                    collect_state_stats=not args.no_stats,
+                    return_full_logits=model.output_mode != "factorized_digits",
+                )
+            else:
+                model(batch.inputs, collect_stats=not args.no_stats)
         torch.cuda.synchronize()
         with torch.profiler.profile(
             activities=[
@@ -49,7 +60,14 @@ def main() -> None:
             record_shapes=True,
             profile_memory=True,
         ) as profile:
-            model(batch.inputs, collect_stats=not args.no_stats)
+            if config.get("architecture") == "dynamic_register":
+                model(
+                    batch.inputs,
+                    collect_state_stats=not args.no_stats,
+                    return_full_logits=model.output_mode != "factorized_digits",
+                )
+            else:
+                model(batch.inputs, collect_stats=not args.no_stats)
             torch.cuda.synchronize()
     print(f"checkpoint={args.checkpoint}")
     print(f"batch_size={args.batch_size}")

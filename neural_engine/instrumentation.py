@@ -66,8 +66,34 @@ def estimate_neural_engine_macs(model: nn.Module, executed_steps: float,
     gru_macs = 6 * state_dim * state_dim
     memory_write_macs = (2 * state_dim * state_dim
                          if getattr(model, "memory_write", None) is not None else 0)
-    output_width = 1 if getattr(model, "output_mode", "learned") == "scalar_gaussian" else num_classes
-    output_macs = state_dim * output_width
+    output_mode = getattr(model, "output_mode", "learned")
+    if output_mode == "scalar_gaussian":
+        output_macs = state_dim
+    elif output_mode == "factorized_digits" and hasattr(output_layer, "digit_heads"):
+        # Dynamic register checkpoints use a factorized digit codec.  The
+        # forward path scores each digit head and, in compact mode, does not
+        # materialize the Cartesian ``num_classes`` logits.  Counting the
+        # Cartesian class space here would overstate both MACs and parameter
+        # traffic by orders of magnitude.
+        classifier_dim = state_dim
+        shared_projection = getattr(output_layer, "shared_projection", None)
+        if shared_projection is not None:
+            classifier_dim = int(shared_projection.out_features)
+            output_macs = state_dim * classifier_dim
+        else:
+            output_macs = 0
+        output_macs += classifier_dim * sum(
+            int(head.out_features) for head in output_layer.digit_heads
+        )
+        context_rank = int(getattr(output_layer, "interaction_rank", 0))
+        if context_rank:
+            output_macs += (
+                max(len(output_layer.digit_heads) - 1, 0)
+                * context_rank
+                * classifier_dim
+            )
+    else:
+        output_macs = state_dim * num_classes
     per_step_macs = (router_macs + circuit_macs + state_adapter_macs + gru_macs
                      + memory_write_macs + output_macs)
     full_macs = fixed_macs + int(model.internal_steps) * per_step_macs
@@ -84,9 +110,9 @@ def estimate_neural_engine_macs(model: nn.Module, executed_steps: float,
     # large capacity component that changes with the route.
     router_step_params = (router.num_addresses * router.depth * state_dim * router.branch
                           + router.candidate_pool * state_dim)
+    output_step_params = count_parameters(model.output)
     step_shared_params = (router_step_params + 6 * state_dim * state_dim
-                          + num_classes * state_dim + 2 * num_classes
-                          + state_dim)
+                          + output_step_params + state_dim)
     if getattr(model, "memory_write", None) is not None:
         step_shared_params += 2 * state_dim * state_dim + state_dim
     path_read_params = fixed_path_params + float(executed_steps) * (

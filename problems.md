@@ -1885,6 +1885,20 @@ mikro-foyda berdi. `torch.compile` qayta sinovida Triton topilmadi; bu Windows
 toolchain cheklovi, model rejection emas. Fused decode kernel muammosi ochiq
 qoladi.
 
+**V0.335 dynamic-register 500M runtime audit (2026-09-13):** Sifat bo‘yicha
+yetakchi V0.330 seed17 va V0.334 seed19 checkpointlari bir xil serving
+protokolida qayta o‘lchandi. Batch-1 latency `59.072/57.702 ms`, batch-128
+`84.342/92.765 ms`; ikki-seed o‘rtacha mos ravishda `58.387/88.553 ms` bo‘ldi.
+Peak VRAM atigi `43/85 MiB`, stored model `8.99M` parametr, active estimate
+`1.964M` parametr. Factorized-digit outputdagi analytical MAC hisoblagich ham
+Cartesian `2^33` klasslarni dense deb sanamaslik uchun tuzatildi. Natija:
+active-path qisqarishi bor, ammo unfused PyTorch dispatch batch-1da tezlikni
+ta’minlamaydi. **V0.335 runtime diagnosis sifatida qabul qilindi; quality
+default o‘zgarmadi.** Keyingi yo‘l profiler va numerical-equivalent fused yoki
+compiled dispatch; yana router/capacity tuning boshlanmaydi.
+
+**Audit:** `results/V0_335_NATIVE_RUNTIME_500M_AUDIT.md`.
+
 ## Yopilgan yoki rad qilingan yo‘llar
 
 Bu bo‘lim aktiv muammolarni to‘ldiradi; muvaffaqiyatsiz tajribalar o‘chirilmaydi.
