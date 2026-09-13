@@ -1578,7 +1578,13 @@ active capacity `154`) ko‘chirildi. Seed17 natijasi: eval `99.3652%`, d4
 active `1.964M`. 500M ikki-seed o‘rtachasiga nisbatan high-value `−0.7812`
 punkt, eval d4 `−0.2441` punkt; oddiy multiply faqat `+0.0977` punkt.
 **Birinchi 700M seedda katta capacity sakrashi yo‘q;** seed18 reproduction
-yakuniy qaror uchun kerak.
+yakuniy qaror uchun kerak. Seed18 ham xuddi shuni tasdiqladi: eval `99.4385%`,
+d4 `98.4375%`, ordinary d4 multiply `80.4688%`, high-value d4 multiply
+`91.4063%`, route qamrovi `1118`, entropy `6.2187`. Ikki-seed 700M o‘rtachasi
+eval `99.4019%`, d4 `98.4375%`, ordinary d4 `81.3477%`, high-value d4
+**`91.4062%`** bo‘lib, 500M V0.330 o‘rtachasidan mos ravishda `−0.1098`,
+`−0.2441`, `−0.7812`, `−0.7813` punkt past. **700M current budgetda upgrade
+emas deb yopildi; 1B ga shoshilmaymiz.**
 
 **Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
 

@@ -365,12 +365,16 @@ active estimate remains `1,964,480`.
 | V0.330 500M stable factor growth | 18 | 4,000 | 99.4629% | 98.4375% | 81.8359% | 91.6016% | 2,746 | 6.6254 |
 | V0.330 mean | 17/18 | 4,000 | 99.5117% | 98.6816% | 82.1289% | 92.1875% | 2,249 | 6.3318 |
 | V0.332 700M stable factor growth | 17 | 4,000 | 99.3652% | 98.4375% | 82.2266% | 91.4063% | 2,187 | 5.5572 |
+| V0.333 700M stable factor growth | 18 | 4,000 | 99.4385% | 98.4375% | 80.4688% | 91.4063% | 1,118 | 6.2187 |
+| V0.332/333 mean | 17/18 | 4,000 | 99.4019% | 98.4375% | 81.3477% | 91.4062% | 1,653 | 5.8879 |
 
-The first 700M seed does not beat the 500M mean: broad eval d4 is `0.2441`
-points lower and high-value d4 multiply is `0.7812` points lower, while
-ordinary d4 multiply is only `0.0977` points higher. Route entropy is also
-lower than the 500M mean. This is a provisional result pending seed18, but it
-is not a capacity-scaling jump in the first seed.
+The two-seed 700M mean does not beat the 500M mean: broad eval d4 is `0.2441`
+points lower, ordinary d4 multiply is `0.7812` points lower, and high-value
+d4 multiply is also `0.7813` points lower. Route entropy is lower by `0.4439`
+and route coverage is lower on average. **700M is rejected as an upgrade at
+the current 4,000-step budget.** The result suggests that the 500M bank is a
+better optimization/capacity point for this architecture; 1B scaling is
+deferred rather than attempted blindly.
 
 V0.321 proves the architecture can learn the high-value multiply contract when
 the task is isolated, but it destroys add/subtract generality and is not a
