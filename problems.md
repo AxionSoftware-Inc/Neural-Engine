@@ -1518,6 +1518,19 @@ saqlanadi.
 
 **Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
 
+**V0.327 matched 500M capacity control (2026-09-13):** V0.323 task va
+training protokoli saqlanib, virtual bank `23,600/154`dan `39,300/199`ga
+oshirildi. Total parametr `7.264M`dan `8.992M`ga chiqdi, lekin active budget
+`1.964M` bo‘lib qoldi. High-value d4 multiply `80.4688%`dan `81.6406%`ga faqat
+`+1.1718` punkt oshdi; ordinary d4 multiply `66.4063%`dan `63.6719%`ga,
+eval d4 `96.8750%`dan `96.4844%`ga tushdi. Eng muhim signal: eval route
+qamrovi `569`dan `192` unique virtual circuitga, entropy `5.2588`dan `3.2928`ga
+quladi. **Capacity alone yechim emas; V0.327 default upgrade sifatida rad
+etildi.** P-003 ochiq qoladi: kattaroq bank uchun router specialization va
+training budget masalasi alohida yechilishi kerak.
+
+**Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

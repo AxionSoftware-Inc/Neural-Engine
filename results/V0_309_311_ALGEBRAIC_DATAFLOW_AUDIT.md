@@ -261,6 +261,29 @@ does not recover the V0.323 quality peak, even though coverage is higher than
 V0.323. The route-exploration sweep is closed for now: V0.323 remains the
 quality baseline, while V0.325/V0.326 remain coverage diagnostics.
 
+## V0.327 matched 500M virtual-capacity control
+
+V0.327 keeps the V0.323 task, representation, and training protocol while
+increasing the virtual bank from `23,600` circuits / `154` factor rows to
+`39,300` circuits / `199` factor rows. This raises total parameters from
+`7,263,639` to `8,991,639`, but the hard active estimate remains
+`1,964,480` because inference still selects eight circuits.
+
+| Variant | Seed | Total params | Active params | Eval all | Eval d4 | Ordinary d4 multiply | High-value d4 multiply | Eval unique virtual circuits | Eval route entropy |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| V0.323 300M targeted 25% | 17 | 7,263,639 | 1,964,480 | 98.3887% | 96.8750% | 66.4063% | 80.4688% | 569 | 5.2588 |
+| V0.327 500M targeted 25% | 17 | 8,991,639 | 1,964,480 | 98.2422% | 96.4844% | 63.6719% | 81.6406% | 192 | 3.2928 |
+
+The 500M control gives only a `+1.1718` percentage-point gain on high-value
+d4 multiply, while ordinary d4 multiply drops `2.7344` points, broad eval d4
+drops `0.3906` points, and route coverage collapses from 569 to 192 unique
+virtual circuits. Therefore capacity alone does not solve the remaining
+problem under this training budget; it makes specialization worse in this
+seed. **V0.327 is rejected as a default upgrade.** The 300M V0.323 checkpoint
+remains the quality baseline; larger scaling is deferred until the route and
+capacity interaction is addressed or a matched longer-training experiment is
+designed.
+
 V0.321 proves the architecture can learn the high-value multiply contract when
 the task is isolated, but it destroys add/subtract generality and is not a
 usable model. V0.322 shows that merely sharing the range per program is not
