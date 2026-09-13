@@ -305,6 +305,26 @@ default.** The next 500M screen constrains the active factor capacity and
 warms up routing, testing whether the larger virtual bank can be stabilized
 without adding active inference cost.
 
+## V0.329 stabilized 500M factor-growth control
+
+V0.329 keeps the 500M virtual bank but constrains active factor capacity to
+`154` (the 300M baseline) and adds `1,000` routing warmup steps. This is meant
+to separate virtual capacity from the optimization burden of exposing all
+`199` factor rows at once.
+
+| Variant | Seed | Eval all | Eval d4 | Ordinary d4 multiply | High-value d4 multiply | Eval unique virtual circuits | Eval route entropy | Eval unique factor rows |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| V0.323 300M targeted 25% | 17 | 98.3887% | 96.8750% | 66.4063% | 80.4688% | 569 | 5.2588 | 33 |
+| V0.329 500M stable factor growth | 17 | 98.1934% | 96.5820% | 65.4297% | 80.8594% | 668 | 5.2550 | 38 |
+
+V0.329 largely restores route coverage and matches V0.323 route entropy. It
+also raises high-value d4 multiply by only `0.3906` points, while ordinary d4
+multiply remains `0.9766` points below V0.323 and broad eval d4 is `0.2930`
+points lower. **V0.329 is retained as the most stable 500M diagnostic, not as
+a default upgrade.** The remaining question is whether the 500M bank needs a
+longer matched training budget; no 700M/1B conclusion follows from this
+2,000-step screen.
+
 V0.321 proves the architecture can learn the high-value multiply contract when
 the task is isolated, but it destroys add/subtract generality and is not a
 usable model. V0.322 shows that merely sharing the range per program is not

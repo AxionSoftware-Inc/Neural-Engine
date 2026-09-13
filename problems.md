@@ -1542,6 +1542,18 @@ cheklovi va routing warmup bilan bo‘ladi.
 
 **Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
 
+**V0.329 stabilized 500M control (2026-09-13):** `factor_count=199` saqlanib,
+active `factor_capacity=154` va `routing_warmup_steps=1000` qo‘shildi. Eval
+route qamrovi `668`, entropy `5.2550`, unique factor row `38` bo‘ldi — V0.323
+baseline (`569`, `5.2588`, `33`)ga yaqin. High-value d4 multiply `80.8594%`,
+ordinary d4 `65.4297%`, eval d4 `96.5820%`, umumiy eval `98.1934%` bo‘ldi.
+Demak 500M routing collapse yumshadi, lekin ordinary quality va umumiy eval
+V0.323’dan past; high-value foyda faqat `+0.3906` punkt. **V0.329 eng stabil
+500M diagnostic sifatida saqlandi, default upgrade emas.** Keyingi tekshiruv
+uzoqroq matched training budget bo‘lishi mumkin; 700M/1B ga hali o‘tilmaydi.
+
+**Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
