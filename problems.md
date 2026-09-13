@@ -1887,26 +1887,57 @@ qoladi.
 
 **V0.335 dynamic-register 500M runtime audit (2026-09-13):** Sifat bo‘yicha
 yetakchi V0.330 seed17 va V0.334 seed19 checkpointlari bir xil serving
-protokolida qayta o‘lchandi. Batch-1 latency `59.072/57.702 ms`, batch-128
-`84.342/92.765 ms`; ikki-seed o‘rtacha mos ravishda `58.387/88.553 ms` bo‘ldi.
+protokolida qayta o‘lchandi. Dynamic task generator bilan batch-1 latency
+`39.984/39.912 ms`, batch-128 `126.520/121.450 ms`; ikki-seed o‘rtacha mos
+ravishda `39.948/123.985 ms` bo‘ldi.
 Peak VRAM atigi `43/85 MiB`, stored model `8.99M` parametr, active estimate
-`1.964M` parametr. Factorized-digit outputdagi analytical MAC hisoblagich ham
-Cartesian `2^33` klasslarni dense deb sanamaslik uchun tuzatildi. Natija:
-active-path qisqarishi bor, ammo unfused PyTorch dispatch batch-1da tezlikni
-ta’minlamaydi. **V0.335 runtime diagnosis sifatida qabul qilindi; quality
-default o‘zgarmadi.** Keyingi yo‘l profiler va numerical-equivalent fused yoki
-compiled dispatch; yana router/capacity tuning boshlanmaydi.
+`1.964M` parametr. Tuzatilgan factorized-digit analytical MAC hisoblagich
+Cartesian `2^33` klasslarni dense deb sanamaydi. Natija: active-path qisqarishi
+bor, ammo unfused PyTorch dispatch batch-1da hali sekin. **V0.335 runtime
+diagnosis sifatida qabul qilindi; quality default o‘zgarmadi.** Keyingi yo‘l
+profiler va numerical-equivalent fused yoki compiled dispatch; yana
+router/capacity tuning boshlanmaydi.
 
 **Audit:** `results/V0_335_NATIVE_RUNTIME_500M_AUDIT.md`.
 
-**V0.336 serial dispatch A/B (2026-09-13):** Factorized serial circuit update’da
-`einsum` o‘rniga BMM opt-in qilindi. V0.334 seed19da bir processdagi paired
-uch raund o‘lchovida batch-1 `36.714 → 36.395 ms` (`0.87%`), batch-128
-`113.194 → 113.005 ms` (`0.17%`) bo‘ldi; output max absolute difference `0.0`.
-Numerical ekvivalent bo‘lsa ham amaliy speed gate bajarilmadi. **V0.336
-REJECTED AS A SPEED FIX**; BMM A/B kodi va testi qoldi, default `einsum`.
-Keyingi ish serial step ichidagi gather/index va ko‘p kernel launchni haqiqiy
-packed/fused yo‘lga birlashtirish.
+**V0.340 dynamic torch.compile smoke (2026-09-13):** Dynamic-register compact
+serving wrapperi V0.334 seed19da tekshirildi. Eager accuracy `100%`, ammo
+Inductor `15.84 s` kompilyatsiyadan keyin `BackendCompilerFailed` va
+`Cannot find a working triton installation` xatosini berdi. Compiled latency
+olchanmadi; bu quality yoki model rejection emas, Windows/PyTorch toolchain
+to‘sig‘i. **V0.340 TOOLCHAIN-BLOCKED**; default va circuit matematikasi
+o‘zgarmadi.
+
+**Audit:** `results/V0_335_NATIVE_RUNTIME_500M_AUDIT.md`.
+
+**V0.337 serial dispatch A/B (2026-09-13):** Factorized serial circuit update’da
+`einsum` o‘rniga BMM va factor-row prefetch opt-in qilindi. V0.334 seed19da
+dynamic generator bilan paired uch raund o‘lchovida baseline `37.932/115.882
+ms` (batch-1/128) bo‘ldi; BMM `38.274/119.970 ms`, prefetch
+`38.885/116.971 ms`, prefetch+BMM `39.242/116.582 ms` chiqdi. Barcha output
+farqi `0.0`, ammo hech biri tezlik gatega yetmadi. **V0.337 REJECTED AS A
+SPEED FIX**; A/B kodi va testlari qoldi, default `einsum`.
+
+**V0.338 serial/parallel composition control (2026-09-13):** Mavjud V0.334
+checkpointi qayta o‘qitilmasdan parallel composition bilan tekshirildi. All-task
+paired batch-1da `34.613 → 31.497 ms` (`9.0%`), batch-128da `107.030 → 78.845
+ms` (`26.3%`) tezlashdi; 4096 all-taskda `+0.6%`, high-value multiplyda
+`+6.9%` sekinlashdi. Prediction agreement sinovlarda `100%`, lekin raw digit
+logit farqi nol emas va speedup batch-size bo‘yicha monotonik emas. **V0.338
+REJECTED FOR DEFAULT RUNTIME**; parallel faqat qayta training talab qiladigan
+candidate sifatida ochiq.
+
+**V0.339 parallel-continuation quality control (2026-09-13):** V0.334 seed19
+parallel composition bilan 1,000 qadam davom ettirildi. Bir xil `d=4`,
+`multiply`, `80..95`, batch-4096 hard slice’da accuracy `90.161% → 91.528%`
+(`+1.367 pp`) bo‘ldi; parallel rejimning o‘zi serialdan tez emas (`V0.334`
+`451.383 → 466.611 ms`, `V0.339` `449.176 → 452.146 ms`). Lekin umumiy eval
+accuracy `V0.334 ~99.512%`dan `V0.339 99.414%`ga pasaydi. Demak bu hard-slice
+quality signal, ammo umumiy model upgrade yoki runtime fix emas. **V0.339
+DEFAULTGA OLINMADI**; parallel composition faqat keyingi targeted-training
+nomzodi sifatida saqlandi.
+
+**Audit:** `results/V0_335_NATIVE_RUNTIME_500M_AUDIT.md`.
 
 ## Yopilgan yoki rad qilingan yo‘llar
 

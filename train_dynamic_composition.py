@@ -432,6 +432,9 @@ def set_lazy_active_rows(
 def run(args: argparse.Namespace) -> dict[str, Any]:
     with open(args.config, "r", encoding="utf-8") as handle:
         config = yaml.safe_load(handle)
+    if args.circuit_mode is not None:
+        config = dict(config)
+        config["circuit_mode"] = args.circuit_mode
     run_seed = int(config["seed"]) if args.seed is None else int(args.seed)
     seed_everything(run_seed)
     if args.device == "auto":
@@ -439,6 +442,12 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     else:
         device = torch.device(args.device)
     model = make_model(config).to(device)
+    if args.init_checkpoint:
+        init_payload = torch.load(
+            Path(args.init_checkpoint), map_location="cpu", weights_only=True
+        )
+        init_state = init_payload.get("model_state", init_payload)
+        model.load_state_dict(init_state)
     modulus_config = config.get("generator_modulus", config.get("modulus", 64))
     generator_modulus = None if modulus_config is None else int(modulus_config)
     target_offset = int(config.get("target_offset", 0))
@@ -782,6 +791,10 @@ def main() -> None:
     parser.add_argument("--run-id", default="ne_dynamic_20m_smoke")
     parser.add_argument("--output", default="results/runs")
     parser.add_argument("--checkpoint", default=None)
+    parser.add_argument("--init-checkpoint", default=None,
+                        help="Initialize weights from an existing checkpoint")
+    parser.add_argument("--circuit-mode", choices=("serial", "parallel"), default=None,
+                        help="Opt-in circuit composition override")
     parser.add_argument("--examples-per-depth", type=int, default=128)
     parser.add_argument("--log-every", type=int, default=250)
     parser.add_argument("--heldout-depths", action="store_true")

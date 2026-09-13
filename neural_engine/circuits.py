@@ -22,7 +22,7 @@ class MicroCircuitBank(nn.Module):
         nn.init.normal_(self.up, std=0.02)
         self.cache = None
         # Keep the original einsum path as the checkpoint-compatible default.
-        # ``bmm`` is an opt-in implementation A/B for small-batch serving.
+        # ``bmm`` and ``prefetch`` are opt-in implementation A/Bs for serving.
         self.serial_dispatch = "einsum"
 
     def set_cache(self, cache) -> None:
@@ -282,14 +282,25 @@ class FactorizedMicroCircuitBank(nn.Module):
     def forward_serial(self, state: torch.Tensor, circuit_ids: torch.Tensor,
                        weights: torch.Tensor) -> torch.Tensor:
         current = state
+        prefetched = None
+        if (
+            self.serial_dispatch in {"prefetch", "prefetch_bmm"}
+            and self.query_factor_mix_scale == 0.0
+        ):
+            prefetched = self._gather(circuit_ids)
         for slot in range(circuit_ids.shape[1]):
-            down, up, bias = self._gather(circuit_ids[:, slot], current)
-            if self.serial_dispatch == "bmm":
+            if prefetched is None:
+                down, up, bias = self._gather(circuit_ids[:, slot], current)
+            else:
+                down = prefetched[0][:, slot]
+                up = prefetched[1][:, slot]
+                bias = prefetched[2][:, slot]
+            if self.serial_dispatch in {"bmm", "prefetch_bmm"}:
                 hidden = torch.bmm(current.unsqueeze(1), down).squeeze(1)
             else:
                 hidden = torch.einsum("bd,bdr->br", current, down)
             hidden = F.gelu(hidden)
-            if self.serial_dispatch == "bmm":
+            if self.serial_dispatch in {"bmm", "prefetch_bmm"}:
                 output = torch.bmm(hidden.unsqueeze(1), up).squeeze(1) + bias
             else:
                 output = torch.einsum("br,brd->bd", hidden, up) + bias

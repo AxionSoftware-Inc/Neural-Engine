@@ -22,16 +22,15 @@ xarajatini o‘lchash.
 
 | Checkpoint | Batch | Iterations | Latency / batch | Throughput | Peak VRAM | Avg executed steps |
 |---|---:|---:|---:|---:|---:|---:|
-| V0.330 seed17 | 1 | 500 | **59.072 ms** | 16.93 samples/s | 43 MiB | 2.000 / 4 |
-| V0.330 seed17 | 128 | 100 | **84.342 ms** | 1,517.64 samples/s | 85 MiB | 2.828 / 4 |
-| V0.334 seed19 | 1 | 500 | **57.702 ms** | 17.33 samples/s | 43 MiB | 2.000 / 4 |
-| V0.334 seed19 | 128 | 100 | **92.765 ms** | 1,379.83 samples/s | 85 MiB | 2.828 / 4 |
-| V0.330/334 mean | 1 | — | **58.387 ms** | 17.13 samples/s | — | 2.000 / 4 |
-| V0.330/334 mean | 128 | — | **88.553 ms** | 1,448.73 samples/s | — | 2.828 / 4 |
+| V0.330 seed17 | 1 | 500 | **39.984 ms** | 25.01 samples/s | 43 MiB | 1.000 / 4 |
+| V0.330 seed17 | 128 | 100 | **126.520 ms** | 1,011.70 samples/s | 84 MiB | 2.500 / 4 |
+| V0.334 seed19 | 1 | 500 | **39.912 ms** | 25.05 samples/s | 43 MiB | 1.000 / 4 |
+| V0.334 seed19 | 128 | 100 | **121.450 ms** | 1,053.93 samples/s | 84 MiB | 2.500 / 4 |
+| V0.330/334 mean | 1 | — | **39.948 ms** | 25.03 samples/s | — | 1.000 / 4 |
+| V0.330/334 mean | 128 | — | **123.985 ms** | 1,032.38 samples/s | — | 2.500 / 4 |
 
-Seedlar orasidagi farq batch-128da taxminan 10% bo‘ldi; bu sifat farqidan ko‘ra
-router route patterni va GPU kernel shovqinini alohida tekshirish kerakligini
-ko‘rsatadi.
+Seedlar orasidagi farq batch-128da taxminan 4% bo‘ldi; bu route patterni va GPU
+kernel shovqinini alohida tekshirish kerakligini ko‘rsatadi.
 
 ## Active-path hisoboti
 
@@ -45,8 +44,8 @@ qilinmaydi. Tuzatilgan analytical estimate:
 
 | Workload | Active MAC/sample | Full 4-step MAC/sample | Active fraction | Parameter-read proxy/sample |
 |---|---:|---:|---:|---:|
-| Batch-1 | 2.496M | 4.688M | 53.25% | 18.25 MiB |
-| Batch-128 | 3.408M | 4.692M | 72.63% | 23.58 MiB |
+| Batch-1 | 1.401M | 4.688M | 29.88% | 11.81 MiB |
+| Batch-128 | 3.052M | 4.695M | 65.00% | 21.47 MiB |
 
 Bu raqamlar wall-clock kafolati emas: indexing, top-k, softmax, Python loop,
 mayda CUDA launchlar va factorized gather analytical MAC hisobiga kirmaydi.
@@ -58,14 +57,14 @@ eng katta operatorlar quyidagicha chiqdi:
 
 | Operator | Self CUDA |
 |---|---:|
-| `aten::mul` | 12.756 ms |
-| `aten::as_strided` | 10.090 ms |
-| `aten::addmm` | 7.052 ms |
-| `aten::select` | 5.860 ms |
-| `aten::index` | 5.272 ms |
-| `aten::linear` | 5.206 ms |
-| `aten::einsum` | 4.775 ms |
-| `aten::cos` / `aten::sin` | 4.616 / 3.864 ms |
+| `aten::mul` | 9.966 ms |
+| `aten::as_strided` | 5.752 ms |
+| `aten::addmm` | 5.623 ms |
+| `aten::linear` | 4.222 ms |
+| `aten::select` | 3.871 ms |
+| `aten::sin` / `aten::cos` | 3.866 / 3.452 ms |
+| `aten::einsum` | 2.473 ms |
+| `aten::index` | 2.358 ms |
 
 Profiler launch overhead sabab bu summalar benchmark latency bilan bir xil
 emas, ammo signal aniq: bottleneck bitta katta GEMM emas, balki ko‘p mayda
@@ -80,28 +79,94 @@ Profiler reproduksiyasi:
 python profile_native_runtime.py --checkpoint results/checkpoints/v0_334_500m_nonmod_targeted_highvalue_multiply25_stable_factor_growth_seed19_4000.pt --batch-size 1 --warmup 5 --row-limit 35 --no-stats
 ```
 
-## V0.336 serial dispatch implementation A/B
+## V0.337 serial dispatch implementation A/B
 
-Serial factor update uchun `einsum` o‘rniga `torch.bmm` opt-in yo‘li qo‘shildi.
-Eski checkpoint va model matematikasi o‘zgarmadi. V0.334 seed19da ayni processda
-dispatchlar navbatma-navbat uch raund o‘lchandi:
+Serial factor update uchun `einsum` o‘rniga `torch.bmm` va factor-row prefetch
+opt-in yo‘llari qo‘shildi. Eski checkpoint va model matematikasi o‘zgarmadi.
+V0.334 seed19da dynamic generator bilan ayni processda dispatchlar
+navbatma-navbat uch raund o‘lchandi:
 
-| Batch | `einsum` mean | `bmm` mean | Farq | Output max abs diff |
+| Batch | `einsum` | `bmm` | `prefetch` | `prefetch_bmm` |
 |---:|---:|---:|---:|---:|
-| 1 | 36.714 ms | 36.395 ms | −0.87% | 0.0 |
-| 128 | 113.194 ms | 113.005 ms | −0.17% | 0.0 |
+| 1 | 37.932 ms | 38.274 ms (+0.90%) | 38.885 ms (+2.51%) | 39.242 ms (+3.46%) |
+| 128 | 115.882 ms | 119.970 ms (+3.53%) | 116.971 ms (+0.94%) | 116.582 ms (+0.60%) |
 
-`bmm` numerical equivalence testidan o‘tdi, lekin paired timingda ikkala
-workloadda ham 1%lik amaliy gatega yetmadi. **V0.336 REJECTED AS A SPEED
-FIX**; implementation A/B va test qoldi, eski `einsum` default saqlandi.
-To‘liq paired JSON: `results/runs/v0_336_serial_dispatch_paired_ab.json`.
+`bmm` va prefetch variantlari output max absolute difference `0.0` bilan
+numerical equivalence testidan o‘tdi, lekin paired timingda baseline’dan
+sekinroq chiqdi. **V0.337 REJECTED AS A SPEED FIX**; implementation A/B va
+testlar qoldi, eski `einsum` default saqlandi. To‘liq paired JSON:
+`results/runs/v0_337_serial_dispatch_paired_ab.json`.
+
+## V0.338 serial versus parallel composition control
+
+Mavjud V0.334 checkpointida serial composition o‘rniga mavjud parallel
+composition inference-only tekshirildi. Bu yangi train qilinmagan semantic
+ablation; checkpoint va default config o‘zgarmadi.
+
+| Workload | Serial | Parallel | Parallel delta | Accuracy | Digit-logit max diff |
+|---|---:|---:|---:|---:|---:|
+| Batch-1, all tasks | 34.613 ms | 31.497 ms | **−9.0%** | 100% / 100% | 8.4e−05 |
+| Batch-128, all tasks | 107.030 ms | 78.845 ms | **−26.3%** | 100% / 100% | 0.00663 |
+| Batch-4096, all tasks | 288.928 ms | 290.647 ms | +0.6% | 99.805% / 99.805% | not retained |
+| Batch-4096, high-value multiply | 287.910 ms | 307.792 ms | +6.9% | 97.314% / 97.314% | 0.0536 |
+
+Batch-1, batch-128 va high-value 4096 samplelarda prediction agreement `100%`.
+Shunga qaramay parallel raw digit logitslari serial bilan aynan teng emas,
+batch-size bo‘yicha speedup monotonik emas va high-value workloadda regress
+qiladi. **V0.338 REJECTED FOR DEFAULT RUNTIME**, lekin parallel composition
+qayta o‘qitiladigan alohida quality/runtime candidate sifatida ochiq qoldi.
+
+To‘liq paired JSONlar: `results/runs/v0_338_serial_parallel_control_128_paired.json`,
+`results/runs/v0_338_serial_parallel_control_b1_paired.json` va
+`results/runs/v0_338_serial_parallel_highvalue_multiply_4096.json`.
+
+## V0.339 parallel-continuation quality control
+
+V0.334 seed19 checkpointi parallel composition bilan 1,000 qadam davom ettirildi.
+Bu tajriba parallel dispatchning o‘zini tezlashtirish emas, parallel rejimda
+qayta moslashtirilgan weightlar hard composition sifatini yaxshilaydimi degan
+savolga javob beradi. Keyin V0.334 baseline va V0.339 checkpoint bir xil
+seedlangan `d=4`, `multiply`, `80..95` batchda serial/parallel inference bilan
+paired o‘lchandi (`4096` sample, `3` round, `3` iteration).
+
+| Checkpoint | Inference mode | Accuracy | Mean latency / batch |
+|---|---|---:|---:|
+| V0.334 seed19 | serial | 90.161% | 451.383 ms |
+| V0.334 seed19 | parallel | 90.161% | 466.611 ms |
+| V0.339, 1k-step parallel continuation | serial | **91.528%** | 449.176 ms |
+| V0.339, 1k-step parallel continuation | parallel | **91.528%** | 452.146 ms |
+
+Hard fixed-depth slice `+1.367` percentage points yaxshilandi, prediction
+agreement har checkpointda `100%` bo‘ldi. Ammo bu natija umumiy evalga hali
+ko‘chmadi: V0.339 1k-step eval accuracy `99.414%`, V0.334 esa taxminan
+`99.512%` edi. Parallel mode ham ikkala checkpointda serialdan tezroq emas
+(V0.334da `+3.37%`, V0.339da `+0.66%`). Shuning uchun V0.339 **defaultga
+promote qilinmadi**; u hard multiply uchun qayta trening signali sifatida
+saqlandi, lekin parallel composition runtime yechimi deb qabul qilinmadi.
+
+To‘liq JSONlar: `results/runs/v0_338_baseline_highvalue_d4_4096.json` va
+`results/runs/v0_339_parallel_candidate_highvalue_d4_4096.json`.
+
+## V0.340 dynamic torch.compile smoke
+
+Dynamic-register serving wrapperi factorized digit logitsni qaytaradigan
+compact output bilan `torch.compile(mode="reduce-overhead")` orqali tekshirildi.
+V0.334 seed19, serial mode, batch-1 eager accuracy `100%` bo‘ldi. Inductor
+kompilyatsiyasi `15.84 s`dan keyin `BackendCompilerFailed` bilan tugadi:
+`Cannot find a working triton installation`. Shuning uchun compiled latency
+va numerical-equivalence raqamlari mavjud emas; fallback bilan o‘lchash
+compiled speedupni isbotlamaydi.
+
+**V0.340 TOOLCHAIN-BLOCKED, DEFAULT O‘ZGARMADI.** Keyingi runtime tajribasi
+Triton/MSVC mos build muhiti yoki modelning dynamic route/gather yo‘lini
+qamrab oladigan native CUDA kernel talab qiladi.
 
 ## Qaror
 
 **V0.335: runtime muammosi tasdiqlandi, quality default o‘zgarmadi.**
 
 500M model sifatda yetakchi bo‘lsa ham, hozirgi PyTorch dispatch yo‘li
-batch-1da taxminan `58 ms` turadi. Peak VRAM atigi `43 MiB`, shuning uchun
+batch-1da taxminan `40 ms` turadi. Peak VRAM atigi `43 MiB`, shuning uchun
 cheklov model sig‘imi yoki xotira yetishmasligi emas; asosiy gumon —
 active circuitlarni tanlash, factorized gather va recurrent step ichidagi
 ko‘p kichik kernel/dispatchlar.

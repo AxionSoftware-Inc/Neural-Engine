@@ -153,7 +153,13 @@ def test_factorized_serial_bmm_dispatch_matches_einsum():
         reference, _ = model(inputs)
         model.circuits.serial_dispatch = "bmm"
         optimized, _ = model(inputs)
-    assert torch.allclose(reference, optimized, atol=1e-5, rtol=1e-5)
+        model.circuits.serial_dispatch = "prefetch"
+        prefetched, _ = model(inputs)
+        model.circuits.serial_dispatch = "prefetch_bmm"
+        prefetched_bmm, _ = model(inputs)
+    assert torch.equal(reference, optimized)
+    assert torch.equal(reference, prefetched)
+    assert torch.equal(reference, prefetched_bmm)
 
 
 def test_typed_digit_authoritative_output_is_opt_in_and_reported():

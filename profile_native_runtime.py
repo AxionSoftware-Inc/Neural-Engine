@@ -8,6 +8,7 @@ from pathlib import Path
 import torch
 
 from data.generator import SyntheticTaskGenerator
+from data.dynamic_composition import DynamicCompositionGenerator
 from train_dynamic_composition import make_model as make_dynamic_model
 from train import make_model, seed_everything
 
@@ -20,7 +21,7 @@ def main() -> None:
     parser.add_argument("--row-limit", type=int, default=40)
     parser.add_argument("--no-stats", action="store_true",
                         help="Profile serving-style forward without diagnostic tensors")
-    parser.add_argument("--serial-dispatch", choices=("einsum", "bmm"),
+    parser.add_argument("--serial-dispatch", choices=("einsum", "bmm", "prefetch", "prefetch_bmm"),
                         default="einsum",
                         help="Implementation A/B for serial circuit updates")
     args = parser.parse_args()
@@ -39,13 +40,26 @@ def main() -> None:
     for module in model.modules():
         if hasattr(module, "serial_dispatch"):
             module.serial_dispatch = args.serial_dispatch
-    generator = SyntheticTaskGenerator(
-        config["seq_len"],
-        seed=int(config["seed"]) + 9,
-        value_min=int(config.get("eval_value_min", 0)),
-        value_max=int(config.get("eval_value_max", 63)),
-        split=str(config.get("eval_split", "all")),
-    )
+    if config.get("architecture") == "dynamic_register":
+        modulus = config.get("modulus")
+        generator = DynamicCompositionGenerator(
+            max_ops=int(config["max_ops"]),
+            train_max_ops=int(config.get("train_max_ops", config["max_ops"])),
+            seed=int(config["seed"]) + 9,
+            value_min=int(config.get("eval_value_min", 0)),
+            value_max=int(config.get("eval_value_max", 63)),
+            split=str(config.get("eval_split", "all")),
+            modulus=None if modulus is None else int(modulus),
+            target_offset=int(config.get("target_offset", 0)),
+        )
+    else:
+        generator = SyntheticTaskGenerator(
+            config["seq_len"],
+            seed=int(config["seed"]) + 9,
+            value_min=int(config.get("eval_value_min", 0)),
+            value_max=int(config.get("eval_value_max", 63)),
+            split=str(config.get("eval_split", "all")),
+        )
     batch = generator.task_balanced_batch(args.batch_size, device)
     with torch.inference_mode():
         for _ in range(args.warmup):

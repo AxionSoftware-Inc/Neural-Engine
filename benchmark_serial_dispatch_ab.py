@@ -68,6 +68,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             seed=int(config["seed"]) + 1700 + batch_size,
             value_min=int(config.get("eval_value_min", 0)),
             value_max=int(config.get("eval_value_max", 63)),
+            modulus=(
+                None if config.get("modulus") is None
+                else int(config["modulus"])
+            ),
+            target_offset=int(config.get("target_offset", 0)),
         )
         inputs = generator.task_balanced_batch(batch_size, torch.device("cuda")).inputs
         model.circuits.serial_dispatch = "einsum"
@@ -79,12 +84,14 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         difference = (reference - optimized).abs()
         paired = []
         for round_index in range(args.rounds):
-            order = ("einsum", "bmm") if round_index % 2 == 0 else ("bmm", "einsum")
+            order = tuple(args.dispatch)
+            if round_index % 2:
+                order = tuple(reversed(order))
             for dispatch in order:
                 paired.append(measure(model, inputs, dispatch, args.warmup, iterations))
         by_dispatch = {
             dispatch: [row for row in paired if row["dispatch"] == dispatch]
-            for dispatch in ("einsum", "bmm")
+            for dispatch in args.dispatch
         }
         summary = {}
         for dispatch, rows in by_dispatch.items():
@@ -104,7 +111,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             "summary": summary,
         })
     output = {
-        "benchmark": "v0.336_serial_dispatch_paired_ab",
+        "benchmark": "v0.337_serial_dispatch_paired_ab",
         "checkpoint": args.checkpoint,
         "device": "cuda",
         "total_params": report["total_params"],
@@ -127,7 +134,13 @@ def main() -> None:
     parser.add_argument("--iterations", type=int, nargs="+", default=[100, 30])
     parser.add_argument("--rounds", type=int, default=3)
     parser.add_argument("--warmup", type=int, default=5)
-    parser.add_argument("--output", default="results/runs/v0_336_serial_dispatch_paired_ab.json")
+    parser.add_argument(
+        "--dispatch", nargs="+",
+        choices=("einsum", "bmm", "prefetch", "prefetch_bmm"),
+        default=["einsum", "prefetch"],
+        help="Serial dispatch implementations to compare",
+    )
+    parser.add_argument("--output", default="results/runs/v0_337_serial_dispatch_paired_ab.json")
     args = parser.parse_args()
     if len(args.batch_size) != len(args.iterations):
         parser.error("--batch-size and --iterations must have equal lengths")
