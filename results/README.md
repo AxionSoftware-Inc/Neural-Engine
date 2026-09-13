@@ -33,6 +33,7 @@
 - [V0.325 — Route-exploration coverage control](V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md)
 - [V0.326 — Intermediate route-exploration control](V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md)
 - [V0.327 — Matched 500M virtual-capacity control](V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md)
+- [V0.328 — 500M route-exploration interaction control](V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md)
 - [P-004 — Route-conditioned state adapter audit](P004_ROUTE_STATE_ADAPTER_AUDIT_20260910.md)
 - [P-002 — Shared reusable residual bank audit](P002_SHARED_RESIDUAL_AUDIT.md)
 - [P-003/P-002 — Native route-causal diagnostic](P003_ROUTE_CAUSAL_DIAGNOSTIC_20260907.md)

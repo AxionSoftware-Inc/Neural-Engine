@@ -284,6 +284,27 @@ remains the quality baseline; larger scaling is deferred until the route and
 capacity interaction is addressed or a matched longer-training experiment is
 designed.
 
+## V0.328 500M plus route10 control
+
+V0.328 combines the 500M bank with the intermediate `route_exploration_prob`
+of `0.10`, keeping the V0.323 targeted task mix unchanged. It improves the
+500M ordinary d4 multiply result and route coverage relative to V0.327, but
+still remains below the 300M baseline on broad quality and coverage.
+
+| Variant | Seed | Eval all | Eval d4 | Ordinary d4 multiply | High-value d4 multiply | Eval unique virtual circuits | Eval route entropy |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| V0.323 300M targeted 25% | 17 | 98.3887% | 96.8750% | 66.4063% | 80.4688% | 569 | 5.2588 |
+| V0.327 500M targeted 25% | 17 | 98.2422% | 96.4844% | 63.6719% | 81.6406% | 192 | 3.2928 |
+| V0.328 500M targeted 25% + route10 | 17 | 97.9492% | 95.6055% | 66.9922% | 81.6406% | 367 | 4.3160 |
+
+V0.328 restores ordinary d4 multiply above V0.323 by `0.5859` points and
+raises the 500M route coverage from 192 to 367 circuits, but high-value d4
+does not improve over V0.327 and broad eval d4 falls by `1.2695` points versus
+V0.323. **V0.328 is retained as a diagnostic interaction control, not as a
+default.** The next 500M screen constrains the active factor capacity and
+warms up routing, testing whether the larger virtual bank can be stabilized
+without adding active inference cost.
+
 V0.321 proves the architecture can learn the high-value multiply contract when
 the task is isolated, but it destroys add/subtract generality and is not a
 usable model. V0.322 shows that merely sharing the range per program is not

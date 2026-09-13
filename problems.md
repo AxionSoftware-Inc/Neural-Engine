@@ -1531,6 +1531,17 @@ training budget masalasi alohida yechilishi kerak.
 
 **Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
 
+**V0.328 500M + route10 control (2026-09-13):** V0.327 ga `route_exploration_prob
+0.10` qo‘shilganda ordinary d4 multiply `63.6719%`dan `66.9922%`ga qaytdi,
+high-value d4 `81.6406%` bo‘lib qoldi. Route qamrovi `192`dan `367` unique
+virtual circuitga oshdi, ammo V0.323 baseline’dagi `569`ga yetmadi; umumiy
+eval `97.9492%`, d4 `95.6055%` bo‘lib, V0.323’dan past qoldi. **V0.328 ham
+default emas, diagnostic control:** exploration 500M collapse’ni qisman
+yumshatadi, lekin sifatni to‘liq qaytarmaydi. Keyingi screen factor capacity
+cheklovi va routing warmup bilan bo‘ladi.
+
+**Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
