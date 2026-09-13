@@ -245,6 +245,7 @@ specialization. The inference path and active parameter budget are unchanged.
 |---|---:|---:|---:|---:|---:|---:|---:|
 | V0.323 targeted 25% | 17 | 98.3887% | 96.8750% | 66.4063% | 80.4688% | 569 | 5.2588 |
 | V0.325 targeted 25% + route15 | 17 | 98.7305% | 96.7773% | 66.6016% | 79.1016% | 861 | 5.4292 |
+| V0.326 targeted 25% + route10 | 17 | 98.6084% | 96.6797% | 66.0156% | 80.0781% | 669 | 5.6073 |
 
 The control increases route coverage and factor-row coverage (33 to 44 unique
 factor rows in the eval audit), while high-value d4 multiply falls by 1.3672
@@ -252,6 +253,13 @@ percentage points. This is evidence that exploration addresses the
 specialization/coverage trade-off, but the tested probability is too costly
 for the current quality objective. **V0.325 is retained as a diagnostic
 coverage control, not as the default and not as a replacement for V0.323.**
+
+V0.326 tests an intermediate exploration probability. It gives high-value d4
+multiply `80.0781%`, ordinary d4 multiply `66.0156%`, eval d4 `96.6797%`,
+and `669` unique virtual circuits with route entropy `5.6073`. It therefore
+does not recover the V0.323 quality peak, even though coverage is higher than
+V0.323. The route-exploration sweep is closed for now: V0.323 remains the
+quality baseline, while V0.325/V0.326 remain coverage diagnostics.
 
 V0.321 proves the architecture can learn the high-value multiply contract when
 the task is isolated, but it destroys add/subtract generality and is not a

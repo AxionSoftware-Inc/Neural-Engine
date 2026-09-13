@@ -1508,6 +1508,16 @@ sifat mezonida katta sakrash bermaydi.
 
 **Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
 
+**V0.326 intermediate route exploration (2026-09-13):** `route_exploration_prob`
+`0.10` sinovida high-value d4 multiply `80.0781%`, ordinary d4 multiply
+`66.0156%`, eval d4 `96.6797%` bo‘ldi. Route qamrovi V0.323 dagi `569`dan
+`669` unique virtual circuitga oshdi, entropy `5.6073` bo‘ldi, lekin V0.323
+quality peak (`80.4688%`) qaytmadi. **Exploration sweep hozircha yopildi:**
+V0.323 quality baseline, V0.325/V0.326 esa coverage diagnostic sifatida
+saqlanadi.
+
+**Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
