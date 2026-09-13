@@ -352,6 +352,26 @@ improve as well; add and subtract d4 are both `100%`. Active parameters remain
 diagnosis: capacity can help, but only after the router/factor system receives
 enough optimization steps; a 2,000-step scale comparison was under-trained.
 
+## V0.332 matched 700M capacity control
+
+V0.332 applies the V0.330 4,000-step stabilized protocol to a larger virtual
+bank: `55,000` circuits and `235` factor rows, with active factor capacity
+still constrained to `154`. Total parameters rise to `10,374,039`, while the
+active estimate remains `1,964,480`.
+
+| Variant | Seed | Steps | Eval all | Eval d4 | Ordinary d4 multiply | High-value d4 multiply | Eval unique virtual circuits | Eval route entropy |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| V0.330 500M stable factor growth | 17 | 4,000 | 99.5605% | 98.9258% | 82.4219% | 92.7734% | 1,751 | 6.0381 |
+| V0.330 500M stable factor growth | 18 | 4,000 | 99.4629% | 98.4375% | 81.8359% | 91.6016% | 2,746 | 6.6254 |
+| V0.330 mean | 17/18 | 4,000 | 99.5117% | 98.6816% | 82.1289% | 92.1875% | 2,249 | 6.3318 |
+| V0.332 700M stable factor growth | 17 | 4,000 | 99.3652% | 98.4375% | 82.2266% | 91.4063% | 2,187 | 5.5572 |
+
+The first 700M seed does not beat the 500M mean: broad eval d4 is `0.2441`
+points lower and high-value d4 multiply is `0.7812` points lower, while
+ordinary d4 multiply is only `0.0977` points higher. Route entropy is also
+lower than the 500M mean. This is a provisional result pending seed18, but it
+is not a capacity-scaling jump in the first seed.
+
 V0.321 proves the architecture can learn the high-value multiply contract when
 the task is isolated, but it destroys add/subtract generality and is not a
 usable model. V0.322 shows that merely sharing the range per program is not

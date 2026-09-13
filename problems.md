@@ -1570,6 +1570,18 @@ reproduction gate’dan o‘tdi va leading 500M candidate sifatida saqlandi.
 
 **Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
 
+**V0.332 matched 700M capacity control (2026-09-13):** V0.330 dagi stabil
+4000-step protokol 700M virtual bankka (`55,000` circuit, `235` factor row,
+active capacity `154`) ko‘chirildi. Seed17 natijasi: eval `99.3652%`, d4
+`98.4375%`, ordinary d4 multiply `82.2266%`, high-value d4 multiply
+`91.4063%`, route qamrovi `2187`, entropy `5.5572`. Total parametr `10.374M`,
+active `1.964M`. 500M ikki-seed o‘rtachasiga nisbatan high-value `−0.7812`
+punkt, eval d4 `−0.2441` punkt; oddiy multiply faqat `+0.0977` punkt.
+**Birinchi 700M seedda katta capacity sakrashi yo‘q;** seed18 reproduction
+yakuniy qaror uchun kerak.
+
+**Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift
