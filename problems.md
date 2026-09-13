@@ -1567,6 +1567,12 @@ d4 multiply `81.8359%`, high-value d4 multiply `91.6016%`; route qamrovi `2746`,
 entropy `6.6254`. Ikki-seed o‘rtacha eval `99.5117%`, d4 `98.6816%`, ordinary
 d4 multiply `82.1289%`, high-value d4 multiply **`92.1875%`**. V0.330 endi
 reproduction gate’dan o‘tdi va leading 500M candidate sifatida saqlandi.
+Seed19 reproduksiyasi ham tasdiqladi: eval `99.5117%`, d4 `98.7305%`, ordinary
+d4 multiply `80.8594%`, high-value d4 multiply `92.1875%`, route qamrovi `2731`,
+entropy `6.3390`. Uch-seed V0.330/V0.334 o‘rtachasi eval `99.5117%`, d4
+`98.6979%`, ordinary d4 `81.7057%`, high-value d4 **`92.1875%`** bo‘ldi.
+Shunday qilib high-value sakrash reproduksiya qilindi va 500M leading baseline
+endi ishonchli.
 
 **Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
 

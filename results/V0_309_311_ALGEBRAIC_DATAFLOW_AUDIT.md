@@ -338,6 +338,8 @@ limited.
 | V0.330 500M stable factor growth | 17 | 4,000 | 99.5605% | 98.9258% | 82.4219% | 92.7734% | 1,751 | 6.0381 |
 | V0.330 500M stable factor growth | 18 | 4,000 | 99.4629% | 98.4375% | 81.8359% | 91.6016% | 2,746 | 6.6254 |
 | V0.330 mean | 17/18 | 4,000 | 99.5117% | 98.6816% | 82.1289% | 92.1875% | 2,249 | 6.3318 |
+| V0.334 500M stable factor growth | 19 | 4,000 | 99.5117% | 98.7305% | 80.8594% | 92.1875% | 2,731 | 6.3390 |
+| V0.330/334 mean | 17/18/19 | 4,000 | 99.5117% | 98.6979% | 81.7057% | 92.1875% | 2,409 | 6.3342 |
 
 The longer run produces the first large capacity-related quality gain in this
 track: high-value d4 multiply rises by `11.9140` percentage points over the
@@ -351,6 +353,13 @@ improve as well; add and subtract d4 are both `100%`. Active parameters remain
 **V0.330 is promoted to the leading 500M candidate.** This result changes the
 diagnosis: capacity can help, but only after the router/factor system receives
 enough optimization steps; a 2,000-step scale comparison was under-trained.
+
+The third-seed reproduction (V0.334, seed19) gives eval all `99.5117%`, eval
+d4 `98.7305%`, ordinary d4 multiply `80.8594%`, and high-value d4 multiply
+`92.1875%`. Across three seeds, the stable 500M protocol averages `99.5117%`
+eval all, `98.6979%` eval d4, `81.7057%` ordinary d4 multiply, and `92.1875%`
+high-value d4 multiply, with average route coverage `2,409` and entropy
+`6.3342`. The large high-value gain is therefore not a one-seed artifact.
 
 ## V0.332 matched 700M capacity control
 

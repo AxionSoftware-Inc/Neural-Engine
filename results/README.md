@@ -36,6 +36,7 @@
 - [V0.328 — 500M route-exploration interaction control](V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md)
 - [V0.329 — Stabilized 500M factor-growth control](V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md)
 - [V0.330 — Matched 500M long-training control](V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md)
+- [V0.334 — 500M seed19 reproduction](V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md)
 - [V0.332 — Matched 700M capacity control](V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md)
 - [V0.333 — 700M seed18 reproduction](V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md)
 - [P-004 — Route-conditioned state adapter audit](P004_ROUTE_STATE_ADAPTER_AUDIT_20260910.md)
