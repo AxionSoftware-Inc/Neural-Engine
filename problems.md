@@ -1554,6 +1554,18 @@ uzoqroq matched training budget bo‘lishi mumkin; 700M/1B ga hali o‘tilmaydi.
 
 **Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
 
+**V0.330 500M long-training control (2026-09-13):** V0.329 bilan bir xil
+stabil factor capacity va routing warmup saqlanib, training `2000`dan `4000`
+qadamga oshirildi. Natija katta: umumiy eval `99.5605%`, d4 `98.9258%`, oddiy
+d4 multiply `82.4219%`, high-value d4 multiply **`92.7734%`**. V0.329 bilan
+solishtirganda high-value `80.8594% → 92.7734%`, ordinary `65.4297% → 82.4219%`;
+route qamrovi `668 → 1751`, entropy `5.2550 → 6.0381` bo‘ldi. Add/sub d4
+`100%/100%`, active parametr `1.964M` bo‘lib qoldi. **Bu hozirgi leading 500M
+candidate:** capacity foyda beradi, lekin 2000 qadamda under-trained bo‘lgan.
+Ikkinchi seed reproduction hali kerak.
+
+**Batafsil:** `results/V0_309_311_ALGEBRAIC_DATAFLOW_AUDIT.md`.
+
 ---
 
 ### P-004 — Sparse training credit assignment va cascade shift

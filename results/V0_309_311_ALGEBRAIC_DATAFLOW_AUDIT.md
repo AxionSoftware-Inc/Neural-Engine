@@ -325,6 +325,28 @@ a default upgrade.** The remaining question is whether the 500M bank needs a
 longer matched training budget; no 700M/1B conclusion follows from this
 2,000-step screen.
 
+## V0.330 matched 500M long-training control
+
+V0.330 repeats V0.329 with the same 500M bank, `factor_capacity=154`, and
+routing warmup, but doubles the training budget from `2,000` to `4,000` steps.
+This directly tests whether the earlier capacity result was optimization-time
+limited.
+
+| Variant | Seed | Steps | Eval all | Eval d4 | Ordinary d4 multiply | High-value d4 multiply | Eval unique virtual circuits | Eval route entropy |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| V0.329 500M stable factor growth | 17 | 2,000 | 98.1934% | 96.5820% | 65.4297% | 80.8594% | 668 | 5.2550 |
+| V0.330 500M stable factor growth | 17 | 4,000 | 99.5605% | 98.9258% | 82.4219% | 92.7734% | 1,751 | 6.0381 |
+
+The longer run produces the first large capacity-related quality gain in this
+track: high-value d4 multiply rises by `11.9140` percentage points over the
+2,000-step V0.329 control and by `12.3046` points over the 300M V0.323 seed17
+baseline. Ordinary d4 multiply, broad eval, route coverage, and entropy all
+improve as well; add and subtract d4 are both `100%`. Active parameters remain
+`1,964,480`. **V0.330 is promoted to the leading 500M candidate, pending a
+second seed reproduction.** This result changes the diagnosis: capacity can
+help, but only after the router/factor system receives enough optimization
+steps; a 2,000-step scale comparison was under-trained.
+
 V0.321 proves the architecture can learn the high-value multiply contract when
 the task is isolated, but it destroys add/subtract generality and is not a
 usable model. V0.322 shows that merely sharing the range per program is not
